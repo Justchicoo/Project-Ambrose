@@ -71,7 +71,7 @@ The name of the test that runs it, or the tool run and what it printed, or the s
 2. `git fetch upstream`, branch from `upstream/main` with the name the table below gives, and **open the draft pull request straight away**, with the plan in its description rather than an empty body. That shows everyone within minutes that the milestone is being built and, more importantly, puts the approach where a reviewer can see it before a week of work rests on it. One milestone here was rebuilt from scratch after review because nobody saw the design until it was finished.
 3. Read the milestone's whole section in its phase file, then the phase's review notes, then whatever `doc/TOOLS.md` and `src/tools` already have for the format it touches.
 4. Write the plan out for me: each acceptance check, what will earn it, and which I cannot earn on this machine. That list is the pull request description at the end, so writing it now costs nothing.
-5. Install whatever the setup section's first step lists that I lack, then build, so a broken toolchain surfaces before the work, not after it: `cmake --preset windows-msvc-x64` then `cmake --build --preset windows-debug` and `ctest --preset windows-debug --output-on-failure > ctest.log 2>&1`, started so the tool does not wait on it, then read the end of `ctest.log`. A whole run outlasts most assistants' command wait, and the wait ending is not CTest timing out: read the log rather than starting the suite again.
+5. Install whatever the setup section's first step lists that I lack, then build, so a broken toolchain surfaces before the work, not after it: `cmake --preset windows-msvc-ninja` then `cmake --build --preset windows-ninja-debug` and `ctest --preset windows-ninja-debug --output-on-failure > ctest.log 2>&1`, from the developer prompt the setup section names, started so the tool does not wait on it, then read the end of `ctest.log`. A whole run outlasts most assistants' command wait, and the wait ending is not CTest timing out: read the log rather than starting the suite again.
 6. Then write the failing test, then the code.
 
 ## How I want you to work
@@ -135,19 +135,15 @@ echo 'export VCPKG_ROOT="$HOME/vcpkg"' >> ~/.bashrc
 
 Clone vcpkg whole, never with `--depth 1`: `vcpkg.json` pins a baseline commit, and a shallow clone cannot find it. Open a new terminal afterwards so `VCPKG_ROOT` and the docker group take effect. Node 20 or newer is needed only for panel work: `winget install -e --id OpenJS.NodeJS.LTS` on Windows, `sudo snap install node --classic --channel=22` on Ubuntu, whose own package is too old. Then build and test:
 
-```
-cmake --preset windows-msvc-x64
-cmake --build --preset windows-debug
-ctest --preset windows-debug
-```
-
-The build compiles through ccache whenever it is installed, which the Ubuntu line above does, so a rebuild after a rebase, a branch switch or a merge from main recompiles only the files that changed instead of all of them; an existing build tree picks it up after `cmake --preset <preset>` is run again. For the same on Windows, install ccache (`winget install -e --id Ccache.Ccache`) and build from a "Developer PowerShell for VS" or "x64 Native Tools" prompt with the Ninja presets, which keep a separate tree in `build/windows-msvc-ninja` and only recompile what changed after a rebase or a branch switch:
+On Windows, install ccache too (`winget install -e --id Ccache.Ccache`), open the "x64 Native Tools Command Prompt for VS" (or run `vcvars64.bat`), and build with the Ninja presets from there. Every Windows command in this prompt uses them:
 
 ```
 cmake --preset windows-msvc-ninja
 cmake --build --preset windows-ninja-debug
 ctest --preset windows-ninja-debug
 ```
+
+The build compiles through ccache whenever it is installed, which the Ubuntu line above and the winget line here do, so a rebuild after a rebase, a branch switch or a merge from main recompiles only the files that changed instead of all of them: on a 16-core machine a warm Windows rebuild took 23 seconds where a full Visual Studio compile took 225. The first build fills the cache and is the slow one. An existing build tree picks ccache up after `cmake --preset <preset>` is run again. Only the Ninja generator hands each compile to ccache, so the Visual Studio presets (`windows-msvc-x64`, `windows-debug`), which work from any terminal, are the fallback when a developer prompt is not available, and recompile everything after each switch.
 
 On Linux the presets are `linux-gcc` and `linux-gcc-debug`, and `doc/guides/linux.md` is a guide somebody walked on Ubuntu 24.04. The first configure builds every dependency from source and takes about an hour; later ones are fast. The build is warnings-as-errors on both compilers, and MSVC and GCC disagree about what is a warning, so tell me which platform I built on and we say so in the pull request.
 
@@ -190,23 +186,23 @@ A branch named `milestone/<id>-<short-name>` builds the Linux GCC leg in CI by i
 The suite builds into one executable, so a single test is a filter rather than a separate target:
 
 ```
-cmake --build --preset windows-debug --target unit_tests
-./build/windows-msvc-x64/bin/Debug/unit_tests.exe --gtest_filter=MovementPackingTest.*
-ctest --preset windows-debug -R MovementPacking
+cmake --build --preset windows-ninja-debug --target unit_tests
+./build/windows-msvc-ninja/bin/Debug/unit_tests.exe --gtest_filter=MovementPackingTest.*
+ctest --preset windows-ninja-debug -R MovementPacking
 ```
 
 Tests that need my installation are a second executable, `client_tests`, and skip unless `AMBROSE_CLIENT_DIR` names the install; ones that need my type dump read `AMBROSE_TYPE_DUMP_PATH`; database ones run only when `AMBROSE_TEST_DB` holds a connection string. A test that skips prints why, and a skipped test is not a passed one, so read the count.
 
 **Running the whole suite without hitting a time limit.** The suite is about 2,300 tests, and the presets run four at a time. Two different limits get mistaken for each other. Most assistants' tools wait a fixed time for one command, often 2 to 30 minutes, then give up and report a timeout although CTest is still running; rerunning the suite after that starts it over and never finishes. CTest's own limit is 600 seconds per test, and 1,800 for the `client` tests, which only a Debug build reading the install comes near. So:
 
-- Start the whole suite so the tool does not wait on it, writing to a file, and read the end of the file when it is done: `ctest --preset windows-debug --output-on-failure > ctest.log 2>&1` in a terminal of my own or as a background command, then the last 40 lines of `ctest.log`. Never start the whole suite again because a tool stopped waiting; read the log it was writing.
-- While building, run only the tests the change touches, such as `ctest --preset windows-debug -j 8 -R "ChildProcess|Supervisor"`, and leave the whole suite for once before the pull request and for CI. A whole run after every commit spends most of its time on tests the change cannot reach.
-- On a machine with more cores, raise the parallelism to about half of them: `ctest --preset windows-debug -j 8 --output-on-failure > ctest.log 2>&1`.
-- The tests labelled `client` are the slow ones, because several run the whole client in an emulator for minutes each. Run everything else with `ctest --preset windows-debug -j 8 -LE client`, which takes under two minutes on the maintainer's machine, and run the client ones on their own when my change touches anything that reads the install, from a RelWithDebInfo build: `cmake --build --preset windows-release --target client_tests` then `ctest --preset windows-release -j 4 -L client`. Reading the install in a Debug build is about thirteen times slower: the template extractor and object template manager client tests took 247 seconds in Debug and 19 in RelWithDebInfo on the maintainer's machine. With both, the maintainer's full run takes about 11 minutes at `-j 12`.
+- Start the whole suite so the tool does not wait on it, writing to a file, and read the end of the file when it is done: `ctest --preset windows-ninja-debug --output-on-failure > ctest.log 2>&1` in a terminal of my own or as a background command, then the last 40 lines of `ctest.log`. Never start the whole suite again because a tool stopped waiting; read the log it was writing.
+- While building, run only the tests the change touches, such as `ctest --preset windows-ninja-debug -j 8 -R "ChildProcess|Supervisor"`, and leave the whole suite for once before the pull request and for CI. A whole run after every commit spends most of its time on tests the change cannot reach.
+- On a machine with more cores, raise the parallelism to about half of them: `ctest --preset windows-ninja-debug -j 8 --output-on-failure > ctest.log 2>&1`.
+- The tests labelled `client` are the slow ones, because several run the whole client in an emulator for minutes each. Run everything else with `ctest --preset windows-ninja-debug -j 8 -LE client`, which takes under two minutes on the maintainer's machine, and run the client ones on their own when my change touches anything that reads the install, from a RelWithDebInfo build: `cmake --build --preset windows-release --target client_tests` then `ctest --preset windows-release -j 4 -L client`. Reading the install in a Debug build is about thirteen times slower: the template extractor and object template manager client tests took 247 seconds in Debug and 19 in RelWithDebInfo on the maintainer's machine. With both, the maintainer's full run takes about 11 minutes at `-j 12`.
 - Check the database before a full run. With `AMBROSE_TEST_DB` set, a stopped database makes every database test wait for its connection to time out, which looks exactly like CTest hanging. After a reboot, `docker start ambrose-mysql` brings it back. The database named at the end of the connection string has to exist, because some tests use it directly while others create and drop their own: `docker exec ambrose-mysql mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ambrose_test"`.
 - If the test database runs inside WSL and CTest runs from Windows, set `AMBROSE_TEST_DB_WSL` to the distribution's name, such as `Ubuntu-24.04`. WSL stops a distribution, and the database in it, once no `wsl.exe` is attached, so without it a run loses its database about 20 seconds in and every database test after that waits out its timeout, 300 seconds for the supervisor's login tests. With it each test process keeps the distribution running. A database in Docker Desktop is not affected.
 - Give a disposable test server `innodb_flush_log_at_trx_commit=2`, as the `docker run` line above does, or as a line in the server's own configuration. Every database test builds fresh tables, and each one waits for a log flush, so a parallel run on a slow disk spends most of its time there: one test went from about 40 seconds to about 15 at `-j 16`. Never set it on a server that holds data you keep.
-- A test with a time limit can fail only because a parallel run left it too little of the machine. Rerun what failed alone with `ctest --preset windows-debug --rerun-failed --output-on-failure` before treating it as broken, and say in the pull request if something only fails under load.
+- A test with a time limit can fail only because a parallel run left it too little of the machine. Rerun what failed alone with `ctest --preset windows-ninja-debug --rerun-failed --output-on-failure` before treating it as broken, and say in the pull request if something only fails under load.
 - If the full suite still cannot finish, say so in the description and list the tests that did run. CI runs everything except the `client` tests on every platform, so the client ones are the part only my own run covers.
 
 Three build traps on Windows, each of which has cost somebody an hour here:
@@ -296,9 +292,9 @@ The review runs exactly these, so running them first means the review has little
 
 ```
 python apps/ci/ci_local.py --branch <my branch>
-cmake --build --preset windows-debug
-ctest --preset windows-debug -R "<every test a ticked check names>" --output-on-failure
-ctest --preset windows-debug -LE client -j 8 --output-on-failure > ctest.log 2>&1
+cmake --build --preset windows-ninja-debug
+ctest --preset windows-ninja-debug -R "<every test a ticked check names>" --output-on-failure
+ctest --preset windows-ninja-debug -LE client -j 8 --output-on-failure > ctest.log 2>&1
 ```
 
 The first runs every step of CI's checks job, read from the same workflow file CI uses, over what my next push sends. On Linux or WSL the build is `cmake --preset linux-gcc -DAMBROSE_WARNINGS_AS_ERRORS=ON` then `cmake --build --preset linux-gcc-debug`, the leg CI builds for every milestone branch. A panel change also runs `npx vitest run --project dashboard` and `npx vitest run --project dashboard-browser`, and one the end-to-end specs cover runs `npx playwright test --project=e2e`. Each whole-suite line writes to `ctest.log`; start it so the tool does not wait on it, read the last 40 lines when it ends, and never start it again because a tool stopped waiting. Then break the milestone's central claim on purpose, watch a test fail, and put it back: that is what the reviewer does next, and a test that cannot fail is the most common thing a review finds. A check that needs something I do not have, such as a real client or a second machine, stays unticked and is named in the pull request, and the maintainer runs it.
@@ -323,7 +319,7 @@ curl -s https://justchicoo.github.io/Project-Ambrose/state.json | python -c "imp
 python apps/ci/ci_contrib_paths.py --range upstream/main...HEAD --branch <my branch>
 python apps/codestyle/codestyle.py
 python apps/ci/ci_forbidden_files.py
-ctest --preset windows-debug -j 8 --output-on-failure > ctest.log 2>&1
+ctest --preset windows-ninja-debug -j 8 --output-on-failure > ctest.log 2>&1
 git status --porcelain
 ```
 
@@ -331,7 +327,7 @@ That first line is the board again: my milestone should say `building` with my n
 
 Three dots, and the remote branch my pull request targets, never a local `main`, because a stale or moved-on `main` makes that check flag files I never touched. `upstream` is whichever of my remotes is github.com/Justchicoo/Project-Ambrose; a clone of my own fork has none until I add it with `git remote add upstream https://github.com/Justchicoo/Project-Ambrose.git`. `git status` must be clean: an extracted file, a dump or a generated database file left in the tree is the thing rule 2 exists to stop, and several milestones generate exactly those.
 
-**Never chase `main`.** It moves several times a day, and CI builds my pull request merged with the current `main` on every push, so it is always tested against today's tree without a rebase. Bring `main` in only when GitHub shows a conflict, a review asks for it, or I need something that just landed, and then once, just before my last push. Keep one build folder and build incrementally with `cmake --build --preset windows-debug`: CMake reconfigures itself only when a CMake file, `vcpkg.json` or the list of source files changed, and many commits on `main` touch only documentation, which rebuilds nothing. Never delete the build folder or run the whole configure again to pick up an update. While working, run the tests my change touches with `ctest --preset windows-debug -R <pattern>`, and the full `ctest` once before the push.
+**Never chase `main`.** It moves several times a day, and CI builds my pull request merged with the current `main` on every push, so it is always tested against today's tree without a rebase. Bring `main` in only when GitHub shows a conflict, a review asks for it, or I need something that just landed, and then once, just before my last push. Keep one build folder and build incrementally with `cmake --build --preset windows-ninja-debug`: CMake reconfigures itself only when a CMake file, `vcpkg.json` or the list of source files changed, and many commits on `main` touch only documentation, which rebuilds nothing. Never delete the build folder or run the whole configure again to pick up an update. While working, run the tests my change touches with `ctest --preset windows-ninja-debug -R <pattern>`, and the full `ctest` once before the push.
 
 Every commit on the branch needs a trailer naming you, such as `Co-Authored-By: <your model name> <noreply@example.com>`; the checker fails any commit in the range without one, not only the last.
 
