@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Splits names into lower-case words at every break between letters, digits and case, drops the words every door and target shares, scores each candidate by the destination zone the door names twice, the door's own zone the target names twice and any other word they share once, and keeps the best candidate per door at or above the minimum score, ties going to the first in data order.
+ * Splits names into lower-case words at every break between letters, digits and case, drops the words every door and target shares, takes a word of four letters or more as the same as one it begins, scores each candidate by the destination zone the door names twice, the door's own zone the target names twice, any other word they share once and a destination in the door's own world once, and keeps the best candidate per door at or above the minimum score, ties going to the first in data order.
  */
 
 #include "TeleportProposer.h"
@@ -16,12 +16,26 @@ namespace
     std::set<std::string> const Common = { "teleport", "teleporter", "to", "trigger", "location", "target", "exit", "entrance", "volume", "activator", "the", "wc", "vol",
         "teleportvol", "interiors", "wizard", "city", "from" };
 
+    bool Alike(std::string const& a, std::string const& b)
+    {
+        if (a == b)
+            return true;
+        std::string const& shorter = a.size() < b.size() ? a : b;
+        std::string const& longer = a.size() < b.size() ? b : a;
+        return shorter.size() >= 4 && longer.starts_with(shorter);
+    }
+
     int Shared(std::set<std::string> const& a, std::set<std::string> const& b)
     {
         int count = 0;
         for (std::string const& word : a)
-            count += b.contains(word) ? 1 : 0;
+            count += std::any_of(b.begin(), b.end(), [&word](std::string const& other) { return Alike(word, other); }) ? 1 : 0;
         return count;
+    }
+
+    std::string_view WorldOf(std::string_view path)
+    {
+        return path.substr(0, path.find('/'));
     }
 
     bool HoldsDoor(ExtractedTrigger const& trigger)
@@ -94,7 +108,7 @@ std::vector<TeleportProposal> TeleportProposer::Propose(std::vector<ExtractedZon
             {
                 if (to == from)
                     continue;
-                int const named = 2 * Shared(doorWords, zoneWords[to]);
+                int const named = 2 * Shared(doorWords, zoneWords[to]) + (WorldOf(zones[to].Path) == WorldOf(zones[from].Path) ? 1 : 0);
                 for (ExtractedLocation const& location : zones[to].Locations)
                 {
                     if (!location.Name.starts_with("Target"))

@@ -450,6 +450,7 @@ namespace
 
             RealmHeartbeatSettings const realmSettings = RealmHeartbeatSettings::Load(Config());
             GameSession::SetTransferEndpoint(realmSettings.Address, realmSettings.Port);
+            GameSession::SetOnlookerSource([] { return sWorld.GetSessions(); });
             _heartbeat.Configure(realmSettings,
                 [](std::string const& realm, uint32 population, int64 heartbeat, bool online)
                 {

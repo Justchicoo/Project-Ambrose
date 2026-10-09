@@ -32,6 +32,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -75,7 +76,10 @@ public:
 
     static void SetRealmId(uint32 realmId) noexcept;
     static uint32 GetRealmId() noexcept;
+    using OnlookerSource = std::function<std::vector<std::shared_ptr<GameSession>>()>;
+
     static void SetTransferEndpoint(std::string address, uint16 port);
+    static void SetOnlookerSource(OnlookerSource source);
 
     uint64 GetAccountId() const noexcept { return _accountId.load(std::memory_order_relaxed); }
     void SetAccountId(uint64 accountId) noexcept { _accountId.store(accountId, std::memory_order_relaxed); }

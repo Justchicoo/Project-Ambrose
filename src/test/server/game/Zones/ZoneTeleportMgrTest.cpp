@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The doors of zone_teleport: when several doors fire on one event only the first in data order that has a destination sends the wizard, a door behind requirements fires only while Zone.DoorsIgnoreRequirements lets doors pass and never a gated trigger that is not a door; and, with AMBROSE_TEST_DB set, the rows load against the zones, a row naming a missing zone, location or the wrong same_zone flag fails the load and keeps the old rows, and an edited destination takes hold at `.reload zone_teleport` with nothing restarted.
+ * The doors of zone_teleport: when several doors fire on one event only the first in data order that has a destination sends the wizard, a door behind requirements fires only while Zone.DoorsIgnoreRequirements lets doors pass and never a gated trigger that is not a door; and, with AMBROSE_TEST_DB set, the rows load against the zones, a row naming a missing zone or location, or a door within its own zone not flagged same_zone, fails the load and keeps the old rows, and an edited destination takes hold at `.reload zone_teleport` with nothing restarted.
  */
 
 #include "DBUpdater.h"
@@ -143,7 +143,7 @@ TEST_F(ZoneTeleportDatabaseTest, AnEditedDestinationTakesHoldAtTheReloadAndABadR
     EXPECT_EQ(sZoneTeleportMgr.Find(Hub, "TeleportToRavenwoodTrigger")->DestLocation, ZoneLocations::StartName) << "an empty destination location means Start";
 
     Insert(fmt::format("INSERT INTO `zone_teleport` (`zone`, `trigger_name`, `dest_zone`, `dest_location`, `transition_id`, `same_zone`) VALUES "
-        "('{}', 'Lost door', 'Nowhere/NoSuchZone', '', 0, 0), ('{}', 'Bad place', '{}', 'No such place', 0, 0), ('{}', 'Wrong flag', '{}', '', 0, 1)", Hub, Hub, Ravenwood, Hub, Ravenwood));
+        "('{}', 'Lost door', 'Nowhere/NoSuchZone', '', 0, 0), ('{}', 'Bad place', '{}', 'No such place', 0, 0), ('{}', 'Wrong flag', '{}', '', 0, 0)", Hub, Hub, Ravenwood, Hub, Hub));
     ReloadOutcome const bad = sReloadMgr.Reload(ZoneTeleportMgr::ReloadTarget);
     EXPECT_FALSE(bad.Ok);
     EXPECT_EQ(bad.Errors.size(), 3u) << "every bad row is reported, not only the first";

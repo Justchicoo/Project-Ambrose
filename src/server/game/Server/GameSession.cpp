@@ -36,7 +36,6 @@
 #include "StringHash.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
-#include "World.h"
 #include "ZoneMgr.h"
 #include "ZoneTeleportMgr.h"
 
@@ -61,6 +60,8 @@ namespace
     std::string TransferAddress;
     uint16 TransferPort = 0;
     constexpr int64 TransferKeyLifetimeSeconds = 120;
+    std::mutex OnlookerMutex;
+    GameSession::OnlookerSource Onlookers;
 
     struct PendingTransfer
     {
@@ -120,6 +121,12 @@ void GameSession::SetTransferEndpoint(std::string address, uint16 port)
     std::lock_guard const lock(TransferEndpointMutex);
     TransferAddress = std::move(address);
     TransferPort = port;
+}
+
+void GameSession::SetOnlookerSource(OnlookerSource source)
+{
+    std::lock_guard const lock(OnlookerMutex);
+    Onlookers = std::move(source);
 }
 
 std::shared_ptr<GameSession> GameSession::SharedSelf()
@@ -1222,7 +1229,13 @@ void GameSession::WalkThroughDoor(std::vector<std::string> const& doors)
     }
     PlayerPosition const target{ place.Location.X, place.Location.Y, place.Location.Z, place.Location.Yaw };
     std::string problem;
-    bool const moved = door->SameZone ? TeleportWithinMap(target, sWorld.GetSessions(), problem)
+    GameSession::OnlookerSource source;
+    {
+        std::lock_guard const lock(OnlookerMutex);
+        source = Onlookers;
+    }
+    std::vector<std::shared_ptr<GameSession>> const onlookers = source ? source() : std::vector<std::shared_ptr<GameSession>>{ SharedSelf() };
+    bool const moved = door->SameZone ? TeleportWithinMap(target, onlookers, problem)
                                       : RequestZoneTransfer(ZoneTransfer{ door->DestZone, door->DestZone, door->DestLocation, target }, problem);
     LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {} to {} in {}{}", GetSessionId(), _worldGuid, door->TriggerName, Ambrose::ForLog(_zonePath, 128),
         door->DestLocation, door->DestZone, moved ? std::string() : fmt::format(", which did not happen: {}", problem));

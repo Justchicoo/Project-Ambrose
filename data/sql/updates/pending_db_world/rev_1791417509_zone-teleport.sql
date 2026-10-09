@@ -1,15 +1,5 @@
 -- Project Ambrose by Imjustchico
--- Adds zone_teleport, where each door, a zone trigger whose results hold a ResTeleport, leads: the zone and trigger name, the destination zone and location by their client identifiers, the transition id and whether the door stays in its own zone; and the hand-reviewed doors of the Wizard City starting area, the Commons to and from Ravenwood, the Shopping District, Golem Court, the Library, Unicorn Way and the Headmistress House.
-CREATE TABLE IF NOT EXISTS `zone_teleport` (
-    `zone` VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    `trigger_name` VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    `dest_zone` VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    `dest_location` VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '',
-    `transition_id` INT UNSIGNED NOT NULL DEFAULT 0,
-    `same_zone` TINYINT UNSIGNED NOT NULL DEFAULT 0,
-    PRIMARY KEY (`zone`, `trigger_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- The hand-reviewed doors of the Wizard City starting area in zone_teleport, by client identifiers only: the Commons to and from Ravenwood, the Shopping District, Golem Court, the Library, Unicorn Way and the Headmistress House.
 DELETE FROM `zone_teleport` WHERE `zone` IN ('WizardCity/WC_Hub', 'WizardCity/WC_Ravenwood', 'WizardCity/WC_Shop_Area', 'WizardCity/WC_Golem_Tower', 'WizardCity/Interiors/WC_Library',
     'WizardCity/WC_Streets/WC_Unicorn', 'WizardCity/Interiors/WC_Headmistress_House');
 INSERT INTO `zone_teleport` (`zone`, `trigger_name`, `dest_zone`, `dest_location`, `transition_id`, `same_zone`) VALUES
