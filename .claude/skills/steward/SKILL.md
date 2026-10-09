@@ -12,7 +12,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 
 - `python apps/codestyle/codestyle.py`: branding header on every file, and no other comments.
 - `python apps/ci/ci_local.py` runs CI's checks job over the commits the push would send: self-tests, forbidden files, findings, roadmap summary, commit trailers, and the track path check when `--branch` is given.
-- Build and run the tests the change touches. Run the full `ctest --preset <preset>` before the push that should turn green.
+- Build and run the tests the change touches. Run the full `ctest --preset <preset>` before the push that should turn green, into a log as ambrose-lean says, or leave it to CI's `ci:` legs.
 - For front-end changes, `npm run verify`.
 - For a CI fix, reproduce the failure first, then show the same check passing.
 - Every commit carries the AI attribution trailer. `ci_commit_trailer.py` refuses a commit without one.

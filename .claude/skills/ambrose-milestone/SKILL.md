@@ -35,7 +35,7 @@ This follows CLAUDE.md, doc/MILESTONE-TRACK.md and doc/REVIEWING.md. Those files
 ## 4. Verify by running
 
 - Build with the presets and run the tests that prove each check. On Linux: `cmake --preset linux-gcc`, `cmake --build --preset linux-gcc-debug`, then `ctest --preset linux-gcc-debug -R <tests>`. On Windows use `windows-msvc-x64` and `windows-debug`.
-- Before the landing commit, run the full `ctest` and `python apps/ci/ci_local.py`.
+- Before the landing commit, run the full `ctest` into a log as ambrose-lean says, and `python apps/ci/ci_local.py`.
 - Real-client checks run on the owner's PC with `python apps/clientdriver/drive.py run` and a scenario, following the rules for heavy jobs there. If a check can't be run, leave it unticked and say which one and why.
 
 ## 5. Tick and land

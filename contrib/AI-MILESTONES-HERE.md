@@ -71,7 +71,7 @@ The name of the test that runs it, or the tool run and what it printed, or the s
 2. `git fetch upstream`, branch from `upstream/main` with the name the table below gives, and **open the draft pull request straight away**, with the plan in its description rather than an empty body. That shows everyone within minutes that the milestone is being built and, more importantly, puts the approach where a reviewer can see it before a week of work rests on it. One milestone here was rebuilt from scratch after review because nobody saw the design until it was finished.
 3. Read the milestone's whole section in its phase file, then the phase's review notes, then whatever `doc/TOOLS.md` and `src/tools` already have for the format it touches.
 4. Write the plan out for me: each acceptance check, what will earn it, and which I cannot earn on this machine. That list is the pull request description at the end, so writing it now costs nothing.
-5. Install whatever the setup section's first step lists that I lack, then build, so a broken toolchain surfaces before the work, not after it: `cmake --preset windows-msvc-x64` then `cmake --build --preset windows-debug` and `ctest --preset windows-debug`.
+5. Install whatever the setup section's first step lists that I lack, then build, so a broken toolchain surfaces before the work, not after it: `cmake --preset windows-msvc-x64` then `cmake --build --preset windows-debug` and `ctest --preset windows-debug --output-on-failure > ctest.log 2>&1`, started so the tool does not wait on it, then read the end of `ctest.log`. A whole run outlasts most assistants' command wait, and the wait ending is not CTest timing out: read the log rather than starting the suite again.
 6. Then write the failing test, then the code.
 
 ## How I want you to work
@@ -85,7 +85,7 @@ So, before I write: name the format, say what in this repository already reads i
 3. **Plan before writing.** What each acceptance check will be satisfied by, which file each deliverable lands in, and what the smallest failing test is. Put the cheapest experiment that could kill the approach first, so I do not spend a week on something wrong.
 4. **Ask whose behaviour each check is about before deciding what would earn it.** A check about the client, the archive or the dump is about something outside my code, so a test that builds that input itself cannot earn it, however green it is: asserting fields arrive unchanged after setting them from the same source proves only that my test copies fields. If I cannot produce the real input, the honest move is to earn the narrower check my work does prove, leave the other unticked, and say which and why.
 5. **Write the test before or with the code**, and make it fail first for the right reason. A check says the exact numbers to expect, such as packing (-2408.09, 2609.10, -7.13) landing within 4 units, or the first bytes of a written table. Assert those numbers, not a re-derivation of them, because a test that computes its own expectation proves only that the code agrees with itself.
-6. **Verify by running, never by reading.** Build it, run the test, run the whole `ctest` suite, and run the tool on real input where there is one. Read the output rather than assuming it. When I paste output, read that too rather than agreeing with it.
+6. **Verify by running, never by reading.** Build it, run the test, run the whole `ctest` suite into a log as "Running one test rather than all of them" says, and run the tool on real input where there is one. Read the output rather than assuming it. When I paste output, read that too rather than agreeing with it.
 7. **If the milestone's point is that something gets faster, smaller or quieter, measure it against what it replaces, and write the test that fails when it does not.** The first milestone sent here was a startup cache that loaded correctly and took twice as long as the JSON file it was replacing, because its payload was decoded and then handed back through the same parser. Nothing in it was careless; there was simply no measurement, so the one thing the milestone existed for was the one thing nobody checked. Time the old way and the new way on real input, print both, and keep the comparison as a test.
 8. **Make it fail usefully.** Name the file and the reason, return a typed error rather than a bare code, carry on past what can be skipped rather than losing a whole run to one unreadable input, and say what would make the output wrong. A decoder that reports zero problems on a corrupt file is worse than one that stops.
 9. **Respect the limits already in the code.** Decoding is bounded by depth, object, list, memory and inflation limits read from settings; a new path through it keeps those bounds. New settings go in the app's `.conf.dist` with the same naming as its neighbours.
@@ -290,10 +290,10 @@ The review runs exactly these, so running them first means the review has little
 python apps/ci/ci_local.py --branch <my branch>
 cmake --build --preset windows-debug
 ctest --preset windows-debug -R "<every test a ticked check names>" --output-on-failure
-ctest --preset windows-debug -LE client -j 8 --output-on-failure
+ctest --preset windows-debug -LE client -j 8 --output-on-failure > ctest.log 2>&1
 ```
 
-The first runs every step of CI's checks job, read from the same workflow file CI uses, over what my next push sends. On Linux or WSL the build is `cmake --preset linux-gcc -DAMBROSE_WARNINGS_AS_ERRORS=ON` then `cmake --build --preset linux-gcc-debug`, the leg CI builds for every milestone branch. A panel change also runs `npx vitest run --project dashboard` and `npx vitest run --project dashboard-browser`, and one the end-to-end specs cover runs `npx playwright test --project=e2e`. Then break the milestone's central claim on purpose, watch a test fail, and put it back: that is what the reviewer does next, and a test that cannot fail is the most common thing a review finds. A check that needs something I do not have, such as a real client or a second machine, stays unticked and is named in the pull request, and the maintainer runs it.
+The first runs every step of CI's checks job, read from the same workflow file CI uses, over what my next push sends. On Linux or WSL the build is `cmake --preset linux-gcc -DAMBROSE_WARNINGS_AS_ERRORS=ON` then `cmake --build --preset linux-gcc-debug`, the leg CI builds for every milestone branch. A panel change also runs `npx vitest run --project dashboard` and `npx vitest run --project dashboard-browser`, and one the end-to-end specs cover runs `npx playwright test --project=e2e`. Each whole-suite line writes to `ctest.log`; start it so the tool does not wait on it, read the last 40 lines when it ends, and never start it again because a tool stopped waiting. Then break the milestone's central claim on purpose, watch a test fail, and put it back: that is what the reviewer does next, and a test that cannot fail is the most common thing a review finds. A check that needs something I do not have, such as a real client or a second machine, stays unticked and is named in the pull request, and the maintainer runs it.
 
 ## When the review comes back
 
@@ -315,7 +315,7 @@ curl -s https://justchicoo.github.io/Project-Ambrose/state.json | python -c "imp
 python apps/ci/ci_contrib_paths.py --range upstream/main...HEAD --branch <my branch>
 python apps/codestyle/codestyle.py
 python apps/ci/ci_forbidden_files.py
-ctest --preset windows-debug -j 8 --output-on-failure
+ctest --preset windows-debug -j 8 --output-on-failure > ctest.log 2>&1
 git status --porcelain
 ```
 

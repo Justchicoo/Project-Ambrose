@@ -75,7 +75,9 @@ Run the unit tests before starting a server:
 ctest --preset linux-gcc-debug
 ```
 
-The test preset also runs repository style and CI checks, 1077 tests in all. Run it from a git clone rather than an exported copy of the tree: the forbidden-file scan lists files with `git ls-files` and fails outright without a `.git` directory, and a copied tree can carry stray build artefacts that the style check then reports as unknown file types. Both are checks doing their job, not failures of the build.
+The preset runs four tests at a time. An AI assistant running it should write the output to a file, `ctest --preset linux-gcc-debug --output-on-failure > ctest.log 2>&1`, and read the end of that file, because a whole run outlasts most assistants' wait for one command and the wait ending is not CTest timing out.
+
+The test preset also runs repository style and CI checks, about 2,300 tests in all. Run it from a git clone rather than an exported copy of the tree: the forbidden-file scan lists files with `git ls-files` and fails outright without a `.git` directory, and a copied tree can carry stray build artefacts that the style check then reports as unknown file types. Both are checks doing their job, not failures of the build.
 
 If you only need to compile without tests, configure a separate build with `-DBUILD_TESTING=OFF`; do not use that result as test evidence.
 
