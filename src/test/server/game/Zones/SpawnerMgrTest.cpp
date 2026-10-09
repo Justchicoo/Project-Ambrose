@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone spawners on the zone object classes the fixtures lay out: an instance fills each spawner to its count, a despawned object comes back after its respawn time and not before, and no number of passes ever holds more than the count; Rate.Respawn changed as a live setting scales the delay of the next despawn with nothing restarted; a new set with a raised count spawns only the difference and a lowered one takes the extra away; a spawner with requirements places nothing; a game master's spawn is placed and deleted with its despawn effect while a zone's own object cannot be; a set with a broken row fails its build and names the row; ResSpawn and ResDespawn decode from the bytes a trigger holds, a ResSpawn starts an inactive spawner and a ResDespawn takes its objects away with its effect and keeps it stopped; entries that all have no chance share the spawns equally; and with AMBROSE_TEST_DB set, `.reload zone_spawner` with a raised count spawns the difference and a reload over a broken row keeps the old spawners serving.
+ * Tests the zone spawners on the zone object classes the fixtures lay out: an instance fills each spawner to its count, a despawned object comes back after its respawn time and not before, and no number of passes ever holds more than the count; Rate.Respawn changed as a live setting scales the delay of the next despawn with nothing restarted; a new set with a raised count spawns only the difference and a lowered one takes the extra away; a spawner with requirements places nothing; an entry on a path with no place of its own places nothing and leaves the spawns to entries that have one; a game master's spawn is placed and deleted with its despawn effect while a zone's own object cannot be; a set with a broken row fails its build and names the row; ResSpawn and ResDespawn decode from the bytes a trigger holds, a ResSpawn starts an inactive spawner and a ResDespawn takes its objects away with its effect and keeps it stopped; entries that all have no chance share the spawns equally; and with AMBROSE_TEST_DB set, `.reload zone_spawner` with a raised count spawns the difference a reload over a broken row keeps the old spawners serving, an entry with a scale of 0 loads at full size and one on a path with no place loads but places nothing.
  */
 
 #include "ConfigMgr.h"
@@ -277,6 +277,23 @@ TEST_F(SpawnerMgrTest, ASpawnerWithRequirementsOrAnInactiveOnePlacesNothing)
     EXPECT_TRUE(map.GetObjects().empty());
 }
 
+TEST_F(SpawnerMgrTest, AnEntryOnAPathWithNoPlaceOfItsOwnPlacesNothingAndLeavesTheSpawnsToEntriesThatHaveOne)
+{
+    Map map(1, Hub, true);
+    ZoneSpawner wisps = Spawner(0, 3, 30);
+    wisps.Entries.front().PathId = 7690151;
+    EXPECT_FALSE(SpawnerMgr::Update(map, { wisps }, 1, Context(_start)).Changed()) << "nothing piles up at the zone's origin";
+    EXPECT_TRUE(map.GetObjects().empty());
+
+    ZoneSpawnEntry placed = Spawner(1, 1, 30).Entries.front();
+    placed.PathId = 7690151;
+    wisps.Entries.push_back(placed);
+    MapObjectChanges const changes = SpawnerMgr::Update(map, { wisps }, 2, Context(_start + 1s));
+    ASSERT_EQ(changes.Added.size(), 3u) << "an entry on a path that names its own place still spawns";
+    for (MapObject const& object : map.GetObjects())
+        EXPECT_EQ(object.Spawn.Position, placed.Object.Position);
+}
+
 TEST_F(SpawnerMgrTest, AGameMastersSpawnIsDeletedWithItsDespawnEffectAndAZoneObjectIsNot)
 {
     Map map(1, Hub, true);
@@ -362,6 +379,30 @@ TEST_F(SpawnerMgrDatabaseTest, AReloadWithARaisedCountSpawnsTheDifferenceAndABro
     EXPECT_EQ(sSpawnerMgr.Get()->In(Hub)->front().MaxSpawns, 3u);
     EXPECT_FALSE(Update(map, _start + 2s).Changed());
     EXPECT_EQ(Alive(map, 0), 3u);
+}
+
+TEST_F(SpawnerMgrDatabaseTest, AnEntryWithNoScaleLoadsAtFullSizeAndOneOnAPathWithNoPlaceLoadsButPlacesNothing)
+{
+    Execute(fmt::format("UPDATE `zone_spawner_entry` SET `scale` = 0 WHERE `zone_path` = '{}'", Hub));
+    Execute(fmt::format("INSERT INTO `zone_spawner` (`zone_path`, `spawner_index`, `name`, `max_spawns`, `spawn_time`) VALUES ('{}', 1, 'WispSpawner', 2, 30)", Hub));
+    Execute(fmt::format("INSERT INTO `zone_spawner_entry` (`zone_path`, `spawner_index`, `position`, `percent_chance`, `template_id`, `loading_type`, `path_id`) "
+        "VALUES ('{}', 1, 0, 100, {}, 3, 7690151)", Hub, KioskTemplate));
+    std::vector<std::string> errors;
+    ASSERT_TRUE(sSpawnerMgr.Load(errors)) << errors.front();
+    std::vector<ZoneSpawner> const* const list = sSpawnerMgr.Get()->In(Hub);
+    ASSERT_NE(list, nullptr);
+    ASSERT_EQ(list->size(), 2u);
+    for (ZoneSpawner const& spawner : *list)
+    {
+        EXPECT_EQ(spawner.Entries.front().Object.Scale, 1.0f) << "a scale of 0 is read as full size";
+        EXPECT_EQ(spawner.Entries.front().HasPlace(), spawner.Index == 0);
+    }
+
+    Map map(1, Hub, true);
+    EXPECT_EQ(Update(map, _start).Added.size(), 1u) << "only the spawner with a place fills";
+    EXPECT_EQ(Alive(map, 1), 0u);
+    for (MapObject const& object : map.GetObjects())
+        EXPECT_EQ(object.Spawn.Scale, 1.0f);
 }
 
 TEST_F(SpawnerMgrTest, ResSpawnAndResDespawnDecodeFromTheBytesATriggerHolds)

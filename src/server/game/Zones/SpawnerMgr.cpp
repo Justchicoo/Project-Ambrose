@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the spawners and their entries zone by zone and refuses a spawner whose zone no template holds, whose count or respawn time is past what a zone can mean, or whose entry names no template, a loading type the client does not have or a chance above a hundred, and an entry of a spawner that is not there; a spawner or entry with requirements fails closed until the requirement engine exists, so it places nothing. In an instance, a new set of spawners is met by keeping each spawner's live objects that its entries still place, up to its count, and taking away the rest; then every spawner tops itself up to its count, less the respawns still waiting, at once, which is how an instance first fills and how a raised count spawns only the difference. A placement that fails waits a minute before it is tried again rather than every tick. Entries are chosen by their chances, and when none of a spawner's entries has one, as in the shipped zones, by equal shares. A trigger's ResSpawn result starts its spawner in that instance and fills it at once; a ResDespawn stops it and takes its objects, or only those of the template it names, away with the effect it names, the KiStringHash of that name with the wizard who fired the trigger as killer, or plainly when it names none. Spawn results whose bytes the zones were extracted without are counted and skipped, and one that does not decode fails the load.
+ * Reads the spawners and their entries zone by zone and refuses a spawner whose zone no template holds, whose count or respawn time is past what a zone can mean, or whose entry names no template, a loading type the client does not have or a chance above a hundred, and an entry of a spawner that is not there; a spawner or entry with requirements fails closed until the requirement engine exists, so it places nothing. In an instance, a new set of spawners is met by keeping each spawner's live objects that its entries still place, up to its count, and taking away the rest; then every spawner tops itself up to its count, less the respawns still waiting, at once, which is how an instance first fills and how a raised count spawns only the difference. A placement that fails waits a minute before it is tried again rather than every tick. Entries are chosen by their chances, and when none of a spawner's entries has one, as in the shipped zones, by equal shares. An entry that stands on a path and names no place of its own, as every shipped entry does, places nothing until the zones' paths are read, so nothing piles up at the zone's origin, and a scale of 0 reads as full size. A trigger's ResSpawn result starts its spawner in that instance and fills it at once; a ResDespawn stops it and takes its objects, or only those of the template it names, away with the effect it names, the KiStringHash of that name with the wizard who fired the trigger as killer, or plainly when it names none. Spawn results whose bytes the zones were extracted without are counted and skipped, and one that does not decode fails the load.
  */
 
 #include "SpawnerMgr.h"
@@ -25,7 +25,7 @@ namespace
 
     bool Eligible(ZoneSpawnEntry const& entry) noexcept
     {
-        return !entry.Object.HasSpawnRequirements;
+        return !entry.Object.HasSpawnRequirements && entry.HasPlace();
     }
 
     std::optional<bool> SwitchOf(MapSpawnerState const& state, uint32 index)
@@ -100,6 +100,11 @@ namespace
             ++live;
         }
     }
+}
+
+bool ZoneSpawnEntry::HasPlace() const noexcept
+{
+    return PathId == 0 || Object.Position.X != 0.0f || Object.Position.Y != 0.0f || Object.Position.Z != 0.0f;
 }
 
 bool ZoneSpawner::Spawns(std::optional<bool> active) const noexcept
@@ -277,7 +282,7 @@ bool SpawnerMgr::Load(std::vector<std::string>& errors)
             object.ObjectId = row[6].Get<uint32>();
             object.Position = { row[7].Get<float>(), row[8].Get<float>(), row[9].Get<float>() };
             object.Orientation = { row[10].Get<float>(), row[11].Get<float>(), row[12].Get<float>() };
-            object.Scale = row[13].Get<float>();
+            object.Scale = row[13].Get<float>() > 0.0f ? row[13].Get<float>() : 1.0f;
             object.Tag = row[14].Get<std::string>();
             object.StartState = row[15].Get<std::string>();
             object.OverrideName = row[16].Get<std::string>();
@@ -333,10 +338,13 @@ bool SpawnerMgr::Load(std::vector<std::string>& errors)
             results[zone].push_back(std::move(*result));
         } while (rows->NextRow());
     }
+    std::size_t const unplaced = static_cast<std::size_t>(std::count_if(entries.begin(), entries.end(), [](auto const& entry) { return !entry.second.second.HasPlace(); }));
     std::optional<ZoneSpawners> built = Build(std::move(spawners), std::move(entries), zones, errors);
     if (!built)
         return false;
     built->SetResults(std::move(results));
+    if (unplaced > 0)
+        LOG_INFO("server.world", "{} zone spawner entries stand on a path and name no place of their own, and place nothing until the zones' paths are read", unplaced);
     if (unread > 0)
         LOG_WARN("server.world", "{} spawn result(s) of the zone triggers hold no bytes, since the zones were extracted before their classes were known; run `extractor zones` again "
             "to read them", unread);
