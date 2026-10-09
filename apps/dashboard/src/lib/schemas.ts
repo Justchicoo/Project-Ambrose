@@ -652,6 +652,19 @@ export const ActivityAnswer = v.looseObject({
     activity: v.array(ActivityRow),
 });
 
+export const AuditChainAnswer = v.looseObject({
+    schema: v.number(),
+    valid: v.boolean(),
+    rows_checked: v.number(),
+    elapsed_ms: v.number(),
+    budget_ms: v.number(),
+    pending_events: v.number(),
+    collector_enabled: v.boolean(),
+    first_invalid_id: v.nullable(v.number()),
+    last_row_id: v.number(),
+    problem: v.string(),
+});
+
 export const ClientAnswer = v.looseObject({
     schema: v.number(),
     install: v.looseObject({
@@ -825,6 +838,7 @@ export type TickProfileAnswer = v.InferOutput<typeof TickProfileAnswer>;
 export type TickProfileTraceAnswer = v.InferOutput<typeof TickProfileTraceAnswer>;
 export type ActivityRow = v.InferOutput<typeof ActivityRow>;
 export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
+export type AuditChainAnswer = v.InferOutput<typeof AuditChainAnswer>;
 export type ClientAnswer = v.InferOutput<typeof ClientAnswer>;
 export type FileOperationState = v.InferOutput<typeof FileOperationState>;
 export type FilePolicy = v.InferOutput<typeof FilePolicy>;
