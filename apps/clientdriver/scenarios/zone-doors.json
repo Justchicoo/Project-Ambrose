@@ -1,0 +1,605 @@
+{
+  "title": "Walking through the Wizard City starting area's doors: the Commons to Ravenwood and back, into the Headmistress House and out, and an edited door after .reload zone_teleport",
+  "include": "parts/common.json",
+  "notes": [
+    "6.14: the game master is put just before a door facing it, at the arrival point of the door that leads back, turned a half turn, and walks forward.",
+    "The server logs the door it walked through and where zone_teleport sends it; a door to another zone shows the loading screen and the wizard",
+    "attaches again there. The Commons' Ravenwood gate is behind quest requirements, so Zone.DoorsIgnoreRequirements is set for this run;",
+    "the Headmistress House entrance has none. Updates.AllowPending applies the pending zone_teleport SQL while this milestone is open.",
+    "Last, the house entrance's row is changed in the world database and .reload zone_teleport sends the next walk-through to the new place."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "server_settings": [
+    "Updates.AllowPending=1"
+  ],
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Updates.AllowPending=1",
+    "Zone.DoorsIgnoreRequirements=1"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added",
+    "zone_teleport was not reloaded and generation 0 goes on serving: WizardCity/WC_Hub trigger 'Lost door' leads to Nowhere/NoSuchZone, which the zones do not hold"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz before the Ravenwood gate",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz before the Ravenwood gate",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz before the Ravenwood gate",
+      "text": ".go xyz -86.6 1414.7 -30.5 3.171"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz before the Ravenwood gate",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands before the Ravenwood gate",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within (\\S+) to",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles before the Ravenwood gate",
+      "file": "facing-before-the-Ravenwood-gate",
+      "settle": 2
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward before the Ravenwood gate",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "walking into the Ravenwood gate sends the wizard through it",
+      "pattern": "wizard {wizard_guid} walked through TeleportToRavenwoodTrigger in WizardCity/WC_Hub to (.+) in WizardCity/WC_Ravenwood$",
+      "timeout": 15,
+      "expect": "Target location (Ravenwood Hub Exit)",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the loading screen after the Ravenwood gate",
+      "file": "in-ravenwood-loading",
+      "settle": 1
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client attaches again after the Ravenwood gate",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in WizardCity/WC_Ravenwood through the Ravenwood gate",
+      "pattern": "put wizard {wizard_guid} in (\\S+) instance \\d+ at",
+      "timeout": 60,
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads WizardCity/WC_Ravenwood through the Ravenwood gate",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood"
+    },
+    {
+      "action": "shot",
+      "name": "the wizard arrives through the Ravenwood gate",
+      "file": "in-ravenwood",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz before Ravenwood's way to the Commons",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz before Ravenwood's way to the Commons",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz before Ravenwood's way to the Commons",
+      "text": ".go xyz -5.7 -1536.5 -47.4 6.254"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz before Ravenwood's way to the Commons",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands before Ravenwood's way to the Commons",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within (\\S+) to",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles before Ravenwood's way to the Commons",
+      "file": "facing-before-Ravenwoods-way-to-the-Commons",
+      "settle": 2
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward before Ravenwood's way to the Commons",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "walking into Ravenwood's way to the Commons sends the wizard through it",
+      "pattern": "wizard {wizard_guid} walked through Teleport location \\(to Commons\\) in WizardCity/WC_Ravenwood to (.+) in WizardCity/WC_Hub$",
+      "timeout": 15,
+      "expect": "Target location(WC_Hub Ravenwood)",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the loading screen after Ravenwood's way to the Commons",
+      "file": "back-in-commons-loading",
+      "settle": 1
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client attaches again after Ravenwood's way to the Commons",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in WizardCity/WC_Hub through Ravenwood's way to the Commons",
+      "pattern": "put wizard {wizard_guid} in (\\S+) instance \\d+ at",
+      "timeout": 60,
+      "expect": "WizardCity/WC_Hub",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads WizardCity/WC_Hub through Ravenwood's way to the Commons",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the wizard arrives through Ravenwood's way to the Commons",
+      "file": "back-in-commons",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz before the Headmistress House",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz before the Headmistress House",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz before the Headmistress House",
+      "text": ".go xyz -488.7 -2421.5 154.3 1.396"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz before the Headmistress House",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands before the Headmistress House",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within (\\S+) to",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles before the Headmistress House",
+      "file": "facing-before-the-Headmistress-House",
+      "settle": 2
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward before the Headmistress House",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "walking into the Headmistress House entrance sends the wizard through it",
+      "pattern": "wizard {wizard_guid} walked through Teleport location \\(WC_Hub WC_Headmistress_House Entrance\\) in WizardCity/WC_Hub to (.+) in WizardCity/Interiors/WC_Headmistress_House$",
+      "timeout": 15,
+      "expect": "Target location (WC_Hub WC_Headmistress Entrance)",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the loading screen after the Headmistress House entrance",
+      "file": "in-headmistress-house-loading",
+      "settle": 1
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client attaches again after the Headmistress House entrance",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in WizardCity/Interiors/WC_Headmistress_House through the Headmistress House entrance",
+      "pattern": "put wizard {wizard_guid} in (\\S+) instance \\d+ at",
+      "timeout": 60,
+      "expect": "WizardCity/Interiors/WC_Headmistress_House",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads WizardCity/Interiors/WC_Headmistress_House through the Headmistress House entrance",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/Interiors/WC_Headmistress_House"
+    },
+    {
+      "action": "shot",
+      "name": "the wizard arrives through the Headmistress House entrance",
+      "file": "in-headmistress-house",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz before the house's way out",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz before the house's way out",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz before the house's way out",
+      "text": ".go xyz -2.3 -464.7 0 0.017"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz before the house's way out",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands before the house's way out",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within (\\S+) to",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles before the house's way out",
+      "file": "facing-before-the-houses-way-out",
+      "settle": 2
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward before the house's way out",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "walking into the house's way out sends the wizard through it",
+      "pattern": "wizard {wizard_guid} walked through Trigger Teleport Outside in WizardCity/Interiors/WC_Headmistress_House to (.+) in WizardCity/WC_Hub$",
+      "timeout": 15,
+      "expect": "Target location (WC_Headmistress_House WC_Hub Exit)",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the loading screen after the house's way out",
+      "file": "out-of-headmistress-house-loading",
+      "settle": 1
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client attaches again after the house's way out",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in WizardCity/WC_Hub through the house's way out",
+      "pattern": "put wizard {wizard_guid} in (\\S+) instance \\d+ at",
+      "timeout": 60,
+      "expect": "WizardCity/WC_Hub",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads WizardCity/WC_Hub through the house's way out",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the wizard arrives through the house's way out",
+      "file": "out-of-headmistress-house",
+      "settle": 3
+    },
+    {
+      "action": "game_command",
+      "name": ".zone teleports lists the Commons' doors and counts those with no destination",
+      "command": "zone teleports WizardCity/WC_Hub",
+      "pattern": "WizardCity/WC_Hub has (\\d+) door\\(s\\), (\\d+) with no destination",
+      "timeout": 20
+    },
+    {
+      "action": "db_exec",
+      "name": "a row naming a missing zone is added",
+      "database": "world",
+      "statement": "INSERT INTO `zone_teleport` (`zone`, `trigger_name`, `dest_zone`, `dest_location`, `transition_id`, `same_zone`) VALUES ('WizardCity/WC_Hub', 'Lost door', 'Nowhere/NoSuchZone', '', 0, 0)"
+    },
+    {
+      "action": "game_command",
+      "name": ".reload zone_teleport refuses the missing zone and keeps the old doors",
+      "command": "reload zone_teleport",
+      "pattern": "zone_teleport was not reloaded and generation (\\d+) goes on serving",
+      "timeout": 30
+    },
+    {
+      "action": "db_exec",
+      "name": "the row naming a missing zone is taken out",
+      "database": "world",
+      "statement": "DELETE FROM `zone_teleport` WHERE `zone` = 'WizardCity/WC_Hub' AND `trigger_name` = 'Lost door'"
+    },
+    {
+      "action": "db_exec",
+      "name": "the house entrance's row is pointed at another place in the house",
+      "database": "world",
+      "statement": "UPDATE `zone_teleport` SET `dest_location` = 'Target location (Headmaster Tower to Headmaster Office)' WHERE `zone` = 'WizardCity/WC_Hub' AND `trigger_name` = 'Teleport location (WC_Hub WC_Headmistress_House Entrance)'"
+    },
+    {
+      "action": "game_command",
+      "name": ".reload zone_teleport takes the edit",
+      "command": "reload zone_teleport",
+      "pattern": "zone_teleport is now generation (\\d+)",
+      "timeout": 30
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz before the Headmistress House again",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz before the Headmistress House again",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz before the Headmistress House again",
+      "text": ".go xyz -488.7 -2421.5 154.3 1.396"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz before the Headmistress House again",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands before the Headmistress House again",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within (\\S+) to",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles before the Headmistress House again",
+      "file": "facing-before-the-Headmistress-House-again",
+      "settle": 2
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward before the Headmistress House again",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "walking into the edited house entrance sends the wizard through it",
+      "pattern": "wizard {wizard_guid} walked through Teleport location \\(WC_Hub WC_Headmistress_House Entrance\\) in WizardCity/WC_Hub to (.+) in WizardCity/Interiors/WC_Headmistress_House$",
+      "timeout": 15,
+      "expect": "Target location (Headmaster Tower to Headmaster Office)",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the loading screen after the edited house entrance",
+      "file": "in-house-after-reload-loading",
+      "settle": 1
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client attaches again after the edited house entrance",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in WizardCity/Interiors/WC_Headmistress_House through the edited house entrance",
+      "pattern": "put wizard {wizard_guid} in (\\S+) instance \\d+ at",
+      "timeout": 60,
+      "expect": "WizardCity/Interiors/WC_Headmistress_House",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads WizardCity/Interiors/WC_Headmistress_House through the edited house entrance",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/Interiors/WC_Headmistress_House"
+    },
+    {
+      "action": "shot",
+      "name": "the wizard arrives through the edited house entrance",
+      "file": "in-house-after-reload",
+      "settle": 3
+    }
+  ]
+}

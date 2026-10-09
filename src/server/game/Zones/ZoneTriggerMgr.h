@@ -36,6 +36,7 @@ public:
     static constexpr std::string_view EnterZoneEvent = "EnterZone";
 
     static constexpr std::string_view NotifyTextClass = "class ResClientNotifyText";
+    static constexpr std::string_view TeleportClass = "class ResTeleport";
 
     static ZoneTriggerMgr& Instance();
     static std::optional<ZoneNotifyText> ReadNotifyText(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string& error);
@@ -50,7 +51,7 @@ public:
 
     std::shared_ptr<ZoneTriggerData const> Find(std::string_view zone) const;
     std::vector<std::string> Post(uint32 mapId, std::string_view zone, std::string_view event, uint64 wizard, ZoneTriggers::Clock::time_point now,
-        std::vector<ZoneNotifyText>* texts = nullptr);
+        std::vector<ZoneNotifyText>* texts = nullptr, std::vector<std::string>* doors = nullptr, bool doorsIgnoreRequirements = false);
     void ForgetMap(uint32 mapId);
 
 private:

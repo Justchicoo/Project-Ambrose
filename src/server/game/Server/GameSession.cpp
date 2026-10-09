@@ -40,6 +40,7 @@
 #include "StringUtil.h"
 #include "TypeRegistry.h"
 #include "ZoneMgr.h"
+#include "ZoneTeleportMgr.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -62,6 +63,8 @@ namespace
     std::string TransferAddress;
     uint16 TransferPort = 0;
     constexpr int64 TransferKeyLifetimeSeconds = 120;
+    std::mutex OnlookerMutex;
+    GameSession::OnlookerSource Onlookers;
 
     struct PendingTransfer
     {
@@ -148,6 +151,12 @@ void GameSession::SetTransferEndpoint(std::string address, uint16 port)
     std::lock_guard const lock(TransferEndpointMutex);
     TransferAddress = std::move(address);
     TransferPort = port;
+}
+
+void GameSession::SetOnlookerSource(OnlookerSource source)
+{
+    std::lock_guard const lock(OnlookerMutex);
+    Onlookers = std::move(source);
 }
 
 std::shared_ptr<GameSession> GameSession::SharedSelf()
@@ -1215,7 +1224,8 @@ void GameSession::ArriveInVolumes()
 std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now)
 {
     std::vector<ZoneNotifyText> texts;
-    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts);
+    std::vector<std::string> doors;
+    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts, &doors, sSettings.Get<bool>("Zone.DoorsIgnoreRequirements"));
     for (std::string const& trigger : fired)
         sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
     for (ZoneNotifyText const& text : texts)
@@ -1230,7 +1240,39 @@ std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std:
         if (Map* const map = sMapMgr.Find(*_mapId))
             sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, fired, _worldGuid, now,
                 std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
+    if (!doors.empty() && event != ZoneTriggerMgr::EnterZoneEvent)
+        WalkThroughDoor(doors);
     return fired;
+}
+
+void GameSession::WalkThroughDoor(std::vector<std::string> const& doors)
+{
+    std::optional<ZoneTeleport> const door = sZoneTeleportMgr.FirstWithDestination(_zonePath, doors);
+    if (!door)
+    {
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {}, which zone_teleport gives no destination", GetSessionId(), _worldGuid,
+            fmt::format("{}", fmt::join(doors, ", ")), Ambrose::ForLog(_zonePath, 128));
+        return;
+    }
+    ZonePlace const place = sZoneMgr.FindPlace(door->DestZone, door->DestLocation);
+    if (place.Result != ZoneLookup::Ok)
+    {
+        LOG_WARN("server.gamesession", "Session {}'s door {} in {} leads to {} in {}, which the zones no longer hold", GetSessionId(), door->TriggerName,
+            Ambrose::ForLog(_zonePath, 128), door->DestLocation, door->DestZone);
+        return;
+    }
+    PlayerPosition const target{ place.Location.X, place.Location.Y, place.Location.Z, place.Location.Yaw };
+    std::string problem;
+    GameSession::OnlookerSource source;
+    {
+        std::lock_guard const lock(OnlookerMutex);
+        source = Onlookers;
+    }
+    std::vector<std::shared_ptr<GameSession>> const onlookers = source ? source() : std::vector<std::shared_ptr<GameSession>>{ SharedSelf() };
+    bool const moved = door->SameZone ? TeleportWithinMap(target, onlookers, problem)
+                                      : RequestZoneTransfer(ZoneTransfer{ door->DestZone, door->DestZone, door->DestLocation, target }, problem);
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {} to {} in {}{}", GetSessionId(), _worldGuid, door->TriggerName, Ambrose::ForLog(_zonePath, 128),
+        door->DestLocation, door->DestZone, moved ? std::string() : fmt::format(", which did not happen: {}", problem));
 }
 
 void GameSession::FollowReloadedVolumes()

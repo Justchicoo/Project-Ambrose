@@ -666,10 +666,10 @@ Walking into a zone volume fires its enter and exit events into the zone's trigg
 
 **Acceptance**
 
-- [ ] Real client: WC_Hub Ravenwood gate lands in Ravenwood; back lands at 'Target location(WC_Hub Ravenwood)'
-- [ ] 'Teleport location (WC_Hub WC_Headmistress_House Entrance)' works
-- [ ] Two triggers on one event give one transfer; '.zone teleports' flags missing destinations
-- [ ] `.reload zone_teleport` sends the next walk-through to an edited destination
+- [x] Real client: WC_Hub Ravenwood gate lands in Ravenwood; back lands at 'Target location(WC_Hub Ravenwood)' (client driver run 20261009-130539, zone-doors.json, on r806919 with Zone.DoorsIgnoreRequirements set: the game server logged TeleportToRavenwoodTrigger sending the wizard to 'Target location (Ravenwood Hub Exit)' and 'Teleport location (to Commons)' sending it back to 'Target location(WC_Hub Ravenwood)'; shots 13-in-ravenwood.png and 20-back-in-commons.png)
+- [x] 'Teleport location (WC_Hub WC_Headmistress_House Entrance)' works (client driver run 20261009-130539, zone-doors.json, on r806919 with Zone.DoorsIgnoreRequirements set: shot 27-in-headmistress-house.png, and 'Trigger Teleport Outside' brings the wizard back to the Commons in 34-out-of-headmistress-house.png)
+- [x] Two triggers on one event give one transfer; '.zone teleports' flags missing destinations (ZoneTeleportTest.TwoDoorsOnOneEventSendTheWizardThroughOnlyTheFirstWithADestination; in client driver run 20261009-130539, zone-doors.json, on r806919 with Zone.DoorsIgnoreRequirements set, `.zone teleports WizardCity/WC_Hub` answered 'WizardCity/WC_Hub has 16 door(s), 10 with no destination')
+- [x] `.reload zone_teleport` sends the next walk-through to an edited destination (client driver run 20261009-130539, zone-doors.json, on r806919 with Zone.DoorsIgnoreRequirements set: after the house entrance's row was pointed at 'Target location (Headmaster Tower to Headmaster Office)', the next walk-through went there; shot 41-in-house-after-reload.png)
 
 ### Detailed spec from WLD-15: Zone doors: teleport destination table and walk-in transfers
 
@@ -697,15 +697,16 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 
 **Acceptance**
 
-- [ ] Real client: in WC_Hub, walking through the Ravenwood gate shows the loading screen and lands in Ravenwood facing away from the gate; walking back lands at 'Target location(WC_Hub Ravenwood)' in WC_Hub
-- [ ] Real client: walking into 'Teleport location (WC_Hub WC_Headmistress_House Entrance)' works
-- [ ] Unit: two triggers on one event with teleport results produce exactly one transfer
-- [ ] '.zone teleports <zone>' lists each teleport trigger and flags any with no destination row
-- [ ] Real client: editing a zone_teleport destination, then `.reload zone_teleport`, sends the next walk-through to the new destination without a restart; a row naming a missing zone keeps the old rows
+- [x] Real client: in WC_Hub, walking through the Ravenwood gate shows the loading screen and lands in Ravenwood facing away from the gate; walking back lands at 'Target location(WC_Hub Ravenwood)' in WC_Hub (client driver run 20261009-130539, zone-doors.json, on r806919 with Zone.DoorsIgnoreRequirements set: shot 11-the-wizard-walks-forward-before-the-ravenwood-gate.png shows the loading screen, 13-in-ravenwood.png the wizard in Ravenwood facing Bartleby with the gate behind, and the game server sent it back to 'Target location(WC_Hub Ravenwood)' in WizardCity/WC_Hub, shot 20-back-in-commons.png. The gate is behind quest requirements, which fail closed until 7.04, so without Zone.DoorsIgnoreRequirements the gate does not fire)
+- [x] Real client: walking into 'Teleport location (WC_Hub WC_Headmistress_House Entrance)' works (client driver run 20261009-130539, zone-doors.json, on r806919 with Zone.DoorsIgnoreRequirements set: the wizard went through the loading screen to 'Target location (WC_Hub WC_Headmistress Entrance)' in WizardCity/Interiors/WC_Headmistress_House, shot 27-in-headmistress-house.png)
+- [x] Unit: two triggers on one event with teleport results produce exactly one transfer (ZoneTeleportTest.TwoDoorsOnOneEventSendTheWizardThroughOnlyTheFirstWithADestination)
+- [x] '.zone teleports <zone>' lists each teleport trigger and flags any with no destination row (client driver run 20261009-130539, zone-doors.json, on r806919 with Zone.DoorsIgnoreRequirements set: `.zone teleports WizardCity/WC_Hub` listed each door with where it leads and answered 'WizardCity/WC_Hub has 16 door(s), 10 with no destination')
+- [x] Real client: editing a zone_teleport destination, then `.reload zone_teleport`, sends the next walk-through to the new destination without a restart; a row naming a missing zone keeps the old rows (client driver run 20261009-130539, zone-doors.json, on r806919 with Zone.DoorsIgnoreRequirements set: a row leading to Nowhere/NoSuchZone made the reload answer 'zone_teleport was not reloaded and generation 0 goes on serving'; with it removed and the house entrance pointed at 'Target location (Headmaster Tower to Headmaster Office)', the reload made generation 1 and the next walk-through went there, shot 41-in-house-after-reload.png; ZoneTeleportDatabaseTest.AnEditedDestinationTakesHoldAtTheReloadAndABadRowKeepsTheOldDoors)
 
 **Risks**
 
 - Destination data is not in the client: authoring rows for ~3356 zones is a large manual content job. Committed rows come only from a name-matching heuristic plus human review, which keeps them clean-room. An opt-in importer that reads another project's teleport data from a copy the user has, into that user's local world database only, is planned, not yet scheduled; imported rows are never committed or redistributed.
+- A door behind requirements, such as the Commons' Ravenwood gate, fails closed until 7.04's requirement engine exists; Zone.DoorsIgnoreRequirements lets doors pass on a test server.
 - Decided on 2026-09-16 at the maintainer's direction: a destination table that names zones, locations and triggers by their client identifiers may be committed as hand-reviewed zone_teleport rows, like key-only quest SQL. No client file or client text is copied into them.
 
 ## 6.15 AOI grid and visibility sets, unit level (WLD-11 part 1)

@@ -29,6 +29,7 @@
 #include "SpawnerMgr.h"
 #include "SpellMgr.h"
 #include "ZoneMgr.h"
+#include "ZoneTeleportMgr.h"
 #include "ZoneTriggerMgr.h"
 #include "CharacterNameScript.h"
 #include "ClientExtractionScript.h"
@@ -409,6 +410,11 @@ namespace
                 for (std::string const& error : triggerErrors)
                     LOG_ERROR("server.world", "Zone volumes and triggers: {}", error);
             sZoneTriggerMgr.RegisterReloadTargets();
+            std::vector<std::string> teleportErrors;
+            if (WorldDatabase.IsOpen() && !sZoneTeleportMgr.Load(teleportErrors))
+                for (std::string const& error : teleportErrors)
+                    LOG_ERROR("server.world", "Door destinations: {}", error);
+            sZoneTeleportMgr.RegisterReloadTargets();
             LoadQuests();
             std::vector<std::string> spawnerErrors;
             if (WorldDatabase.IsOpen() && !sSpawnerMgr.Load(spawnerErrors))
@@ -451,6 +457,7 @@ namespace
 
             RealmHeartbeatSettings const realmSettings = RealmHeartbeatSettings::Load(Config());
             GameSession::SetTransferEndpoint(realmSettings.Address, realmSettings.Port);
+            GameSession::SetOnlookerSource([] { return sWorld.GetSessions(); });
             _heartbeat.Configure(realmSettings,
                 [](std::string const& realm, uint32 population, int64 heartbeat, bool online)
                 {

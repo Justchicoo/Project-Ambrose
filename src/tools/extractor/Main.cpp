@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels, every zone's settings, locations, placed objects, volumes and triggers from its own archive for zones, every template the manifest lists for templates, with each item template's own fields, requirements and equip effects and each item set bonus, those two read through the server classes of the world database when one is named, and for classes the classes the install's archives hold that the type dump does not describe, from the class file schemaprobe builds once per revision in the Ambrose data folder on the authored classes the world database holds when one is named, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
+ * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels, every zone's settings, locations, placed objects, volumes and triggers from its own archive for zones, with a review CSV of where each door leads when --propose-teleports names one, every template the manifest lists for templates, with each item template's own fields, requirements and equip effects and each item set bonus, those two read through the server classes of the world database when one is named, and for classes the classes the install's archives hold that the type dump does not describe, from the class file schemaprobe builds once per revision in the Ambrose data folder on the authored classes the world database holds when one is named, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
  */
 
 #include "CharacterNameExtractor.h"
@@ -19,6 +19,7 @@
 #include "ObjectViews.h"
 #include "ServerClassCache.h"
 #include "ServerClassScript.h"
+#include "TeleportProposer.h"
 #include "TemplateExtractor.h"
 #include "TemplateScript.h"
 #include "TypedView.h"
@@ -81,6 +82,11 @@ Options:
                       optionally followed by ";tls;ca-file"
                       (default: AMBROSE_WORLD_DATABASE_INFO)
   --sql <file>        write the SQL to this file instead of the database
+  --propose-teleports <file>
+                      with zones, also write a review CSV that suggests where each
+                      door, a trigger holding a ResTeleport, leads; never written
+                      to the database, for a person to check before authoring
+                      zone_teleport rows
   --dry-run           extract and check everything, print the counts, write nothing;
                       checks the world tables when a world database is named
   --help              print this text
@@ -99,6 +105,7 @@ database fails, 2 on bad usage.
         std::optional<std::string> TypeDump;
         std::optional<std::string> WorldDatabase;
         std::optional<std::string> SqlFile;
+        std::optional<std::string> ProposalFile;
         bool DryRun = false;
         bool Help = false;
         std::vector<std::string> Words;
@@ -122,7 +129,7 @@ database fails, 2 on bad usage.
                 parsed.Help = true;
             else if (arg == "--dry-run")
                 parsed.DryRun = true;
-            else if (arg == "--client" || arg == "--type-dump" || arg == "--world-db" || arg == "--sql")
+            else if (arg == "--client" || arg == "--type-dump" || arg == "--world-db" || arg == "--sql" || arg == "--propose-teleports")
             {
                 if (index + 1 >= args.size())
                 {
@@ -135,7 +142,7 @@ database fails, 2 on bad usage.
                     error = fmt::format("{} needs a value, not the option {}", arg, value);
                     return std::nullopt;
                 }
-                (arg == "--client" ? parsed.Client : arg == "--type-dump" ? parsed.TypeDump : arg == "--world-db" ? parsed.WorldDatabase : parsed.SqlFile) = value;
+                (arg == "--client" ? parsed.Client : arg == "--type-dump" ? parsed.TypeDump : arg == "--world-db" ? parsed.WorldDatabase : arg == "--sql" ? parsed.SqlFile : parsed.ProposalFile) = value;
             }
             else if (arg.starts_with("--"))
             {
@@ -468,7 +475,20 @@ database fails, 2 on bad usage.
             else if (command == "templates")
                 Collect<TemplateScript>(TemplateExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
             else
-                Collect<ZoneSqlScript>(ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
+            {
+                ZoneExtraction const zoneExtraction = ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog());
+                if (arguments->ProposalFile)
+                {
+                    std::vector<TeleportProposal> const proposals = TeleportProposer::Propose(zoneExtraction.Zones);
+                    if (!TeleportProposer::WriteCsv(LogConfig::Utf8Path(*arguments->ProposalFile), proposals, error))
+                    {
+                        std::cerr << fmt::format("extractor: cannot write {}: {}\n", *arguments->ProposalFile, error);
+                        return Failure;
+                    }
+                    std::cout << fmt::format("proposed {} door destination(s) for review in {}\n", proposals.size(), *arguments->ProposalFile);
+                }
+                Collect<ZoneSqlScript>(zoneExtraction, extracted);
+            }
         }
         if (extracted.ErrorCount != 0)
         {
