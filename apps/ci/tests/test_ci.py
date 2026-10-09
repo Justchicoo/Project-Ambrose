@@ -261,7 +261,8 @@ class SelectLegsTests(unittest.TestCase):
         text = ci_select_legs.matrix_json(["windows-msvc-x64", "linux-gcc"])
         self.assertNotIn(" ", text)
         matrix = json.loads(text)
-        self.assertEqual([entry["configure"] for entry in matrix["include"]], ["windows-msvc-x64", "linux-gcc"])
+        self.assertEqual([entry["leg"] for entry in matrix["include"]], ["windows-msvc-x64", "linux-gcc"])
+        self.assertEqual([entry["configure"] for entry in matrix["include"]], ["windows-msvc-ninja", "linux-gcc"])
         for entry in matrix["include"]:
             self.assertEqual(entry["job_timeout"], entry["configure_timeout"] + entry["build_timeout"] + ci_select_legs.JOB_TIMEOUT_MARGIN)
         lines = ci_select_legs.output_lines({"legs": [], "windows_keepalive": True})
@@ -426,7 +427,7 @@ class WorkflowDriftTests(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(ROOT, ".github", "workflows", ci_select_legs.WORKFLOW_FILE)))
         self.assertIn("actions: read", self.workflow)
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", self.workflow)
-        self.assertIn("name: build (${{ matrix.configure }})", self.workflow)
+        self.assertIn("name: build (${{ matrix.leg }})", self.workflow)
         self.assertIn("--stage build-test", self.workflow)
         self.assertEqual(self.workflow.count("--setup-vcpkg"), 1)
 
