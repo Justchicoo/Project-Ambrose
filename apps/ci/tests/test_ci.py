@@ -775,6 +775,66 @@ class SqlTests(unittest.TestCase):
                 "data/sql/updates/pending_db_world/rev_1790241513_zone-teleport.sql"])
             self.assertEqual(ci_sql.databases(root), ["login", "world"])
 
+    def test_a_refused_file_carries_the_servers_error_code(self):
+        refused = subprocess.CompletedProcess([], 1, b"", b"mysql: [Warning] a note\nERROR 1064 (42000) at line 3: You have an error\n")
+        with mock.patch.object(ci_sql, "mysql", return_value=refused):
+            self.assertEqual(ci_sql.run_file("mysql", {}, "schema", "a.sql"), ("error", 1064, "ERROR 1064 (42000) at line 3: You have an error"))
+        with mock.patch.object(ci_sql, "mysql", return_value=subprocess.CompletedProcess([], 0, b"", b"")):
+            self.assertEqual(ci_sql.run_file("mysql", {}, "schema", "a.sql"), ("ok", None, ""))
+
+    def test_duality_names_the_update_only_one_server_accepts_and_the_one_both_refuse(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for path in ("data/sql/base/db_world/tables.sql", "data/sql/updates/db_world/2026_10_01_00.sql", "data/sql/updates/pending_db_world/rev_1790000000_doors.sql",
+                         "data/sql/base/db_login/tables.sql", "data/sql/updates/db_login/2026_10_01_00.sql", "data/sql/base/db_characters/tables.sql"):
+                self.write(root, path, self.HEADER)
+            refusals = {("mysql", "world"): "rev_1790000000_doors.sql", ("mysql", "login"): "2026_10_01_00.sql", ("mariadb", "login"): "2026_10_01_00.sql"}
+
+            def run(name, database, files):
+                refused = refusals.get((name, database))
+                return next(((file, ("error", 1064, f"ERROR 1064 from {name}")) for file in files if file.name == refused), None)
+
+            problems = ci_sql.duality_updates(root, ["mysql", "mariadb"], run)
+            self.assertEqual(problems, [
+                "data/sql/updates/db_login/2026_10_01_00.sql: refused by every server (mysql: ERROR 1064 from mysql; mariadb: ERROR 1064 from mariadb)",
+                "data/sql/updates/pending_db_world/rev_1790000000_doors.sql: only mariadb accepts it (mysql: ERROR 1064 from mysql)"])
+
+    def test_duality_flags_files_only_one_server_accepts_and_corpus_verdicts_that_differ(self):
+        verdicts = {("mysql", "both.sql"): ("ok", None, ""), ("mariadb", "both.sql"): ("ok", None, ""),
+                    ("mysql", "maria.sql"): ("error", 1064, "ERROR 1064"), ("mariadb", "maria.sql"): ("ok", None, ""),
+                    ("mysql", "broken.sql"): ("error", 1064, "ERROR 1064"), ("mariadb", "broken.sql"): ("error", 1146, "ERROR 1146")}
+        run = lambda name, file: verdicts[(name, file.name)]
+        files = [Path("both.sql"), Path("maria.sql"), Path("broken.sql")]
+        with mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(ci_sql.duality_files(files, ["mysql", "mariadb"], run), ["maria.sql: only mariadb accepts it (mysql=error 1064 mariadb=ok)"])
+            expected = {"both.sql": {"mysql": {"verdict": "ok"}, "mariadb": {"verdict": "ok"}},
+                        "maria.sql": {"mysql": {"verdict": "error", "code": 1064}, "mariadb": {"verdict": "ok"}},
+                        "broken.sql": {"mysql": {"verdict": "error", "code": 1064}, "mariadb": {"verdict": "error", "code": 1064}}}
+            self.assertEqual(ci_sql.duality_files(files, ["mysql", "mariadb"], run, expected),
+                             ["broken.sql: mysql=error 1064 mariadb=error 1146, the corpus says mysql=error 1064 mariadb=error 1064"])
+            self.assertEqual(ci_sql.duality_files([Path("unlisted.sql")], ["mysql"], lambda name, file: ("ok", None, ""), expected), ["unlisted.sql: the corpus gives no verdict for it"])
+
+    def test_duality_finds_every_c81_corpus_case_and_needs_its_servers_named(self):
+        root = Path(__file__).resolve().parents[3]
+        corpus = root / "contrib/fixtures/c81-sql-duality-corpus.json"
+        cases = {Path(case["file"]).name: case for case in json.loads(corpus.read_text(encoding="utf-8"))["cases"]}
+        seen = []
+
+        def sequence(client, connection, schema, files, keep=False, report=None):
+            file = files[0]
+            self.assertTrue(file.is_file(), file)
+            seen.append(file.name)
+            want = cases[file.name][{3306: "mysql", 3307: "mariadb"}[connection["port"]]]
+            return (None if want["verdict"] == "ok" else (file, ("error", want["code"], "ERROR"))), None
+
+        servers = [("mysql", "127.0.0.1", 3306), ("mariadb", "127.0.0.1", 3307)]
+        with mock.patch.object(ci_sql, "run_sequence", side_effect=sequence), mock.patch("sys.stdout", new_callable=io.StringIO):
+            problems = ci_sql.duality(root, "mysql", servers, "root", "", "test", [], corpus)
+        self.assertEqual(problems, [])
+        self.assertEqual(sorted(set(seen)), sorted(cases))
+        self.assertEqual(ci_sql.duality(root, "mysql", [("mysql", "h", 1), ("postgres", "h", 2)], "root", "", "test", [], corpus),
+                         [f"{corpus.as_posix()}: the corpus has no verdicts for postgres"])
+
 
 class StressTests(unittest.TestCase):
     RACE = "\n".join([
