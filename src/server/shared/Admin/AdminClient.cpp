@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Sends one request over standalone Asio, through TLS when the listener serves it, with Connection: close and waits for the listener to close, all inside one deadline that closes the socket when it passes; a listener bound to every address is reached on loopback, an IPv6 host is bracketed, an answer larger than MaxResponseBytes is refused, and the body is read by its Content-Length or its chunks.
+ * Sends one request over standalone Asio, through TLS when the listener serves it, with Connection: close and waits for the listener to close, all inside one deadline that closes the socket when it passes; a listener bound to every address is reached on loopback, an IPv6 host is bracketed, an answer larger than MaxResponseBytes is refused, and the body is read by its Content-Length or its chunks; when the peer is verified a host name is resolved first, the system's trusted authorities are loaded and the handshake fails unless the certificate names the host or address asked for.
  */
 
 #include "AdminClient.h"
@@ -13,6 +13,7 @@
 #include <asio/read.hpp>
 #include <asio/ssl.hpp>
 #include <asio/write.hpp>
+#include <openssl/x509v3.h>
 
 #include <fmt/format.h>
 
@@ -81,7 +82,7 @@ namespace
     }
 }
 
-AdminClient::AdminClient(std::string host, uint16 port, std::string token, bool tls) : _host(std::move(host)), _port(port), _token(std::move(token)), _tls(tls)
+AdminClient::AdminClient(std::string host, uint16 port, std::string token, bool tls, bool verifyPeer) : _host(std::move(host)), _port(port), _token(std::move(token)), _tls(tls), _verifyPeer(verifyPeer)
 {
 }
 
@@ -161,12 +162,13 @@ AdminClientResponse AdminClient::Send(AdminClientRequest const& request, std::ch
     AdminClientResponse response;
     std::error_code addressError;
     asio::ip::address const address = asio::ip::make_address(_host, addressError);
-    if (addressError)
+    bool const named = static_cast<bool>(addressError);
+    if (named && !_verifyPeer)
     {
         response.Error = fmt::format("{} is not an IP address", _host);
         return response;
     }
-    std::string const host = address.is_v6() ? fmt::format("[{}]:{}", _host, _port) : fmt::format("{}:{}", _host, _port);
+    std::string const host = !named && address.is_v6() ? fmt::format("[{}]:{}", _host, _port) : fmt::format("{}:{}", _host, _port);
     std::string wire = fmt::format("{} {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\n", Ambrose::ToUpper(request.Method), request.Path, host);
     if (!_token.empty())
         wire += fmt::format("Authorization: Bearer {}\r\n", _token);
@@ -181,9 +183,37 @@ AdminClientResponse AdminClient::Send(AdminClientRequest const& request, std::ch
 
     asio::io_context context;
     asio::ip::tcp::socket socket(context);
+    asio::ip::tcp::resolver resolver(context);
     asio::ssl::context secure(asio::ssl::context::tls_client);
-    secure.set_verify_mode(asio::ssl::verify_none);
+    if (_verifyPeer)
+    {
+        std::error_code trustError;
+        secure.set_default_verify_paths(trustError);
+        if (trustError)
+        {
+            response.Error = "the system's trusted certificate authorities could not be loaded";
+            return response;
+        }
+        secure.set_verify_mode(asio::ssl::verify_peer);
+    }
+    else
+        secure.set_verify_mode(asio::ssl::verify_none);
     asio::ssl::stream<asio::ip::tcp::socket&> encrypted(socket, secure);
+    if (_verifyPeer && named)
+        encrypted.set_verify_callback(asio::ssl::host_name_verification(_host));
+    else if (_verifyPeer)
+    {
+        encrypted.set_verify_callback([expected = _host](bool preverified, asio::ssl::verify_context& verifying)
+        {
+            if (!preverified)
+                return false;
+            X509_STORE_CTX* const store = verifying.native_handle();
+            if (X509_STORE_CTX_get_error_depth(store) != 0)
+                return true;
+            X509* const certificate = X509_STORE_CTX_get_current_cert(store);
+            return certificate != nullptr && X509_check_ip_asc(certificate, expected.c_str(), 0) == 1;
+        });
+    }
     std::string raw;
     std::array<char, 16384> buffer{};
     std::string failure;
@@ -224,7 +254,7 @@ AdminClientResponse AdminClient::Send(AdminClientRequest const& request, std::ch
             readMore();
         });
     };
-    socket.async_connect(asio::ip::tcp::endpoint(address, _port), [&](std::error_code const& error)
+    auto const connected = [&](std::error_code const& error)
     {
         if (error)
         {
@@ -263,11 +293,27 @@ AdminClientResponse AdminClient::Send(AdminClientRequest const& request, std::ch
             }
             exchange(encrypted);
         });
-    });
+    };
+    if (named)
+    {
+        resolver.async_resolve(_host, std::to_string(_port), [&](std::error_code const& resolveError, asio::ip::tcp::resolver::results_type const& results)
+        {
+            if (resolveError)
+            {
+                failure = fmt::format("{} could not be resolved: {}", _host, resolveError.message());
+                finished = true;
+                return;
+            }
+            asio::async_connect(socket, results, [&connected](std::error_code const& error, asio::ip::tcp::endpoint const&) { connected(error); });
+        });
+    }
+    else
+        socket.async_connect(asio::ip::tcp::endpoint(address, _port), connected);
     context.run_for(timeout);
     if (!finished)
     {
         std::error_code ignored;
+        resolver.cancel();
         socket.close(ignored);
         context.restart();
         context.poll();
