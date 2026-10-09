@@ -38,7 +38,7 @@ CLAUDE.md asks you to read README.md, CONTRIBUTING.md and doc/ARCHITECTURE.md fi
   - Linux: `cmake --build --preset linux-gcc-debug 2>&1 | grep -E "error|FAILED" | head -40`
   - Windows (PowerShell): `cmake --build --preset windows-debug 2>&1 | Select-String -Pattern 'error|FAILED' | Select-Object -First 40`
 - Run only the tests you touched. ctest test names are GoogleTest `Suite.Name`. For example, `ctest --preset linux-gcc-debug -R "MovementPacking" --output-on-failure 2>&1 | tail -30`.
-- Run the full `ctest` once, before the commit that lands, not after every edit.
+- Run the full `ctest` once, before the commit that lands, not after every edit, and into a log: `ctest --preset linux-gcc-debug --output-on-failure > ctest.log 2>&1` as a background command, then `tail -40 ctest.log`. A tool's wait ending is not CTest timing out; read the log rather than starting the suite again, and rerun only what failed with `--rerun-failed`.
 - Send a long run's output to a log file in the background, then read the tail and grep it for failures. Don't stream it.
 - `python apps/ci/ci_local.py` runs every check CI's checks job runs. On success, read only its last lines.
 

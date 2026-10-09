@@ -6,9 +6,9 @@ Project Ambrose is built with AI tools under human direction. An AI assistant ca
 
 ## Start with the prompt that already exists
 
-There are two prompts, one per track. `contrib/AI-START-HERE.md` is for the contributor track, which adds files in folders no milestone touches, and everything below describes that track. `contrib/AI-MILESTONES-HERE.md` is for a roadmap milestone, where the work lands in `src/` and is judged against that milestone's own acceptance checks, and its rules differ: the board at https://justchicoo.github.io/Project-Ambrose/ says which milestones are open, and the branch has to be named `milestone/<id>-<short-name>`.
+There is one prompt, `contrib/AI-MILESTONES-HERE.md`, for every contributor and every kind of work. It is written for a roadmap milestone, where the work lands in `src/` and is judged against that milestone's own acceptance checks, and it covers a contributor-track item too, which adds files in folders no milestone touches; everything below describes that track. The board at https://justchicoo.github.io/Project-Ambrose/ says what is being built, every milestone is open to anyone, and a milestone's branch has to be named `milestone/<id>-<short-name>`.
 
-`contrib/AI-START-HERE.md` holds a prompt written to be pasted whole into any assistant. It already carries the document list below, the state of the project, every rule in the form its checker enforces, and what each open item needs of your machine. Paste it rather than assembling the same thing by hand, and use this guide for the part it cannot do: driving the assistant and judging what it gives back.
+The prompt is written to be pasted whole into any assistant. It already carries the state of the project, every rule in the form its checker enforces, and how to run the tests without an assistant's wait cutting them short. Paste it rather than assembling the same thing by hand, and use this guide for the part it cannot do: driving the assistant and judging what it gives back.
 
 ## The repository rules it works from
 

@@ -100,6 +100,11 @@ Run the matching test preset:
 ctest --preset windows-debug
 ```
 
+The preset runs four tests at a time. An AI assistant running it should write
+the output to a file, `ctest --preset windows-debug --output-on-failure > ctest.log 2>&1`,
+and read the end of that file, because a whole run outlasts most assistants'
+wait for one command and the wait ending is not CTest timing out.
+
 The test preset includes the repository codestyle and CI checks. Run it from a
 real git checkout, not an exported folder: the forbidden-file check uses
 `git ls-files`, and build artifacts copied into the tree are reported as

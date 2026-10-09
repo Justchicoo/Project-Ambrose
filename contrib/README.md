@@ -14,8 +14,6 @@ Work from outside the maintainer's own milestones lands here. doc/CONTRIBUTOR-TR
 
 A track change may also add client driver scenarios in `apps/clientdriver/scenarios/`, world rows as a pending update in `data/sql/updates/pending_db_world/`, fuzz seeds in `data/fuzz/` and guides in `doc/guides/`. `python apps/ci/ci_contrib_paths.py` checks a change against that list.
 
-Contributing with an AI assistant is expected here: `AI-START-HERE.md` is a prompt to paste into yours, and it carries what that assistant needs to know about this repository before it writes anything.
-
-The roadmap's own milestones are the other track. `AI-MILESTONES-HERE.md` is the prompt for those, and doc/MILESTONE-TRACK.md says which ones are open, how one is claimed and what finishing one means. That work lands in `src/`, not here.
+Contributing with an AI assistant is expected here. `AI-MILESTONES-HERE.md` is the one prompt to paste into yours, for any roadmap milestone or any item of this track, and it carries what that assistant needs to know about this repository before it writes anything. doc/MILESTONE-TRACK.md says how a milestone is started and what finishing one means; that work lands in `src/`, not here.
 
 Nothing here is built by the repository's own CMake, and nothing here is loaded by a server. A tool that the project later needs inside a server is rebuilt in `src/` under the architecture's rules, with your note kept.
