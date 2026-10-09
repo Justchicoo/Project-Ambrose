@@ -90,8 +90,8 @@ A tool fills world.object_template from the user's ObjectData, so the server kno
 **Acceptance**
 
 - [ ] Blobs decode back identically; class hashes match the dump (ActorDialog 0x39e3afab)
-- [ ] Every STR blob has the SerializerBinary header
-- [ ] 3-of-5 bounty GOAL block has COUNT=3, TOTAL=5, TALLYTEXT
+- [x] Every STR blob has the SerializerBinary header (`QuestWireEncoderTest.EveryEncodedBlobStartsWithAStoredSerializerBinaryHeader` in unit_tests: a GOAL madlib block encoded through `QuestWireEncoder::Encode`, the one path every quest blob leaves by, against a type fixture the test writes itself starts with `0x80000000 | (size - 4)` little-endian)
+- [x] 3-of-5 bounty GOAL block has COUNT=3, TOTAL=5, TALLYTEXT (`QuestWireEncoderTest.AThreeOfFiveBountyGoalBlockCarriesCountTotalAndTallyText` in unit_tests: a `BountyGoalTemplate` with BountyTotal 5 built at count 3 gives COUNT=3, TOTAL=5 and TALLYTEXT=BOUNTY_TOTAL)
 
 ### Detailed spec from QST-2: Quest, dialog and madlib content model with client blob encoders
 
@@ -112,8 +112,8 @@ The server holds quests, goals, dialogs and NPC menus as its own C++ types and c
 **Acceptance**
 
 - [ ] Round-trip test: each encoded blob decodes with the OBJ codec back to identical field values, and its class hashes match the dump (ServiceMementoBase, PrepEntry, GoalEntryFull, MadlibBlock, ActorDialog 0x39e3afab).
-- [ ] Wrapper test: every blob placed in a message STR field has the SerializerBinary header (bit31 set = raw length, else zlib with uncompressed size). A missing header makes the client crash, per the a local packet capture tool README.
-- [ ] Madlib test: a GOAL block for a 3-of-5 bounty carries COUNT=3, TOTAL=5 and a TALLYTEXT key.
+- [x] Wrapper test: every blob placed in a message STR field has the SerializerBinary header (bit31 set = raw length, else zlib with uncompressed size). A missing header makes the client crash, per the a local packet capture tool README. (`QuestWireEncoderTest.EveryEncodedBlobStartsWithAStoredSerializerBinaryHeader` in unit_tests: a GOAL madlib block encoded through `QuestWireEncoder::Encode`, the one path every quest blob leaves by, against a type fixture the test writes itself starts with `0x80000000 | (size - 4)` little-endian)
+- [x] Madlib test: a GOAL block for a 3-of-5 bounty carries COUNT=3, TOTAL=5 and a TALLYTEXT key. (`QuestWireEncoderTest.AThreeOfFiveBountyGoalBlockCarriesCountTotalAndTallyText` in unit_tests: a `BountyGoalTemplate` with BountyTotal 5 built at count 3 gives COUNT=3, TOTAL=5 and TALLYTEXT=BOUNTY_TOTAL)
 
 **Risks**
 
