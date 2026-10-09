@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The guest process heap: a deterministic bump allocator in one mapped region that never reuses memory, remembers each block's size for reallocation and size queries, zero-fills on request, and throws when the region is exhausted.
+ * The guest process heap: a deterministic bump allocator in one mapped region that never reuses memory, remembers each block's size for reallocation and size queries, zero-fills on request, throws when the region is exhausted, and saves and restores its used bytes with its bookkeeping.
  */
 
 #ifndef AMBROSE_GUESTHEAP_H
@@ -10,6 +10,7 @@
 
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 class Machine;
 
@@ -31,6 +32,17 @@ public:
     uint64 GetTop() const noexcept;
     uint64 GetLimit() const noexcept;
     uint64 GetAllocationCount() const noexcept;
+
+    struct Snapshot
+    {
+        uint64 Top = 0;
+        uint64 Allocations = 0;
+        std::unordered_map<uint64, uint64> Sizes;
+        std::vector<uint8> Bytes;
+    };
+
+    Snapshot Save() const;
+    void Restore(Snapshot const& snapshot);
 
 private:
     Machine& _machine;

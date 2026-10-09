@@ -3,8 +3,9 @@
   "include": "parts/common.json",
   "notes": [
     "6.13: the wizard enters the Commons standing inside its home volume, which fires no enter, even as it walks about inside it. As a game master",
-    "it is put just outside Ravenwood's POI sphere four times, facing each quarter turn, and walks forward each time; whichever way leads in,",
-    "the server logs the volume's Enter_Ravenwood POI event and the trigger it fires, Trigger POI Ravenwood."
+    "it is put just outside Ravenwood's POI sphere four times, facing each quarter turn with the half turn last, and walks forward each time; whichever way leads in,",
+    "the server logs the volume's Enter_Ravenwood POI event and the trigger it fires, Trigger POI Ravenwood, whose ResClientNotifyText result",
+    "sends MSG_CLIENTNOTIFYTEXT with WizardPOI_00000001, which the client shows as the POI's zone-entry text."
   ],
   "requires": {
     "gameserver": true
@@ -251,45 +252,6 @@
     },
     {
       "action": "key",
-      "name": "open the chat line to type .go xyz facing a half turn",
-      "vk": "0xBF"
-    },
-    {
-      "action": "char",
-      "name": "take out the slash the key writes before .go xyz facing a half turn",
-      "code": 8
-    },
-    {
-      "action": "type",
-      "name": "type .go xyz facing a half turn",
-      "text": ".go xyz -45 722 -30 3.1416"
-    },
-    {
-      "action": "char",
-      "name": "send .go xyz facing a half turn",
-      "code": 13
-    },
-    {
-      "action": "wait_game_log",
-      "name": "the wizard stands just outside Ravenwood's POI facing a half turn",
-      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing",
-      "timeout": 20
-    },
-    {
-      "action": "shot",
-      "name": "the camera settles facing a half turn",
-      "file": "facing-half-turn",
-      "settle": 2
-    },
-    {
-      "action": "hold_key",
-      "name": "the wizard walks forward facing a half turn",
-      "vk": "0x57",
-      "seconds": 1.5,
-      "moves": true
-    },
-    {
-      "action": "key",
       "name": "open the chat line to type .go xyz facing three quarter turns",
       "vk": "0xBF"
     },
@@ -328,12 +290,60 @@
       "moves": true
     },
     {
+      "action": "key",
+      "name": "open the chat line to type .go xyz facing a half turn",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz facing a half turn",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz facing a half turn",
+      "text": ".go xyz -45 722 -30 3.1416"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz facing a half turn",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands just outside Ravenwood's POI facing a half turn",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles facing a half turn",
+      "file": "facing-half-turn",
+      "settle": 2
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward facing a half turn",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
       "action": "wait_game_log",
       "name": "walking into Ravenwood's POI posts its enter event, which fires its trigger",
       "pattern": "wizard {wizard_guid} entered volume 0 \\(Ravenwood POI\\) in WizardCity/WC_Hub, posting Enter_Ravenwood POI, which fired (.+)$",
       "timeout": 10,
       "from": "start",
       "expect": "Trigger POI Ravenwood",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the trigger's result shows the POI's zone-entry text",
+      "pattern": "showed wizard {wizard_guid} the notify text (\\S+) of type",
+      "timeout": 10,
+      "from": "start",
+      "expect": "WizardPOI_00000001",
       "record": true
     },
     {
