@@ -183,10 +183,10 @@ Quests authored as SQL rows load into an immutable sQuestMgr snapshot built on t
 
 **Acceptance**
 
-- [ ] Each type incl. ROP_OR, apply_not, nesting
-- [ ] ReqHasEntry(Q1 'Complete') gates the quest until Q1 completes
-- [ ] Unknown types evaluate false and log once
-- [ ] `.reload requirement` applies an edit to the next evaluation; a bad reload keeps the old lists
+- [x] Each type incl. ROP_OR, apply_not, nesting (`RequirementTest.EveryBuiltInTypeUsesItsMatchingWizardFact` passes ReqHasQuest, ReqHasGoal, ReqHasEntry, ReqEntryValue, ReqGlobalRegistryValue, ReqMagicLevel, ReqSchoolOfFocus, ReqIsSchool, ReqInZone, ReqIsGender and ReqHasBadge each the field it names, `EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold` turns each fact false in turn and the list fails, `NumericOperatorsMatchTheClientValues` holds operators 0 to 4, `NestedOrListsAndApplyNotCompose` an OR list and a negated list nested under an AND root, and `RequirementApplyNotInvertsTheLeafResult` a negated requirement, all in unit_tests)
+- [x] ReqHasEntry(Q1 'Complete') gates the quest until Q1 completes (`QuestMgrTest.QuestRegistryCompletionGatesQuestAvailability`: a quest whose requirement list holds ReqHasEntry on Q1's quest registry entry Complete is neither offerable nor offered by its starter until the wizard's context has that entry, then is both)
+- [x] Unknown types evaluate false and log once (`RequirementTest.UnknownTypeFailsClosedAndLogsOnlyOnce`: a type no evaluator or ConditionScript knows evaluates false twice and logs one warning; `UnknownTypeDoesNotPassWhenNegated`: apply_not does not turn it true. Every row, authored or extracted, reaches the evaluator as the same RequirementRow)
+- [x] `.reload requirement` applies an edit to the next evaluation; a bad reload keeps the old lists (`RequirementTest.ReloadAppliesEditsAndMalformedReloadKeepsServingLists` through sReloadMgr's requirement target, which `.reload requirement` runs: an edited quest name changes the next evaluation and raises the generation, and a list whose operator is XOR is refused with the old generation still serving)
 
 ### Detailed spec from QST-6: Requirement engine v1
 
@@ -212,10 +212,10 @@ Quest availability, goal activation, dialog entries, spawns and triggers can all
 
 **Acceptance**
 
-- [ ] Unit tests for each type against a fake character context, including ROP_OR lists, apply_not, and nested lists.
-- [ ] Unit test: a quest with ReqHasEntry(m_questName=Q1, entry 'Complete', is_quest_registry) is unavailable until Q1 is completed.
-- [ ] Unknown requirement types from extracted trigger or spawn data evaluate to false and log once per type.
-- [ ] Unit test: `.reload requirement` applies an edited requirement to the next evaluation, and a reload with a malformed list keeps the old lists serving.
+- [x] Unit tests for each type against a fake character context, including ROP_OR lists, apply_not, and nested lists. (`RequirementTest.EveryBuiltInTypeUsesItsMatchingWizardFact` passes ReqHasQuest, ReqHasGoal, ReqHasEntry, ReqEntryValue, ReqGlobalRegistryValue, ReqMagicLevel, ReqSchoolOfFocus, ReqIsSchool, ReqInZone, ReqIsGender and ReqHasBadge each the field it names, `EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold` turns each fact false in turn and the list fails, `NumericOperatorsMatchTheClientValues` holds operators 0 to 4, `NestedOrListsAndApplyNotCompose` an OR list and a negated list nested under an AND root, and `RequirementApplyNotInvertsTheLeafResult` a negated requirement, all in unit_tests)
+- [x] Unit test: a quest with ReqHasEntry(m_questName=Q1, entry 'Complete', is_quest_registry) is unavailable until Q1 is completed. (`QuestMgrTest.QuestRegistryCompletionGatesQuestAvailability`: a quest whose requirement list holds ReqHasEntry on Q1's quest registry entry Complete is neither offerable nor offered by its starter until the wizard's context has that entry, then is both)
+- [x] Unknown requirement types from extracted trigger or spawn data evaluate to false and log once per type. (`RequirementTest.UnknownTypeFailsClosedAndLogsOnlyOnce`: a type no evaluator or ConditionScript knows evaluates false twice and logs one warning; `UnknownTypeDoesNotPassWhenNegated`: apply_not does not turn it true. Every row, authored or extracted, reaches the evaluator as the same RequirementRow)
+- [x] Unit test: `.reload requirement` applies an edited requirement to the next evaluation, and a reload with a malformed list keeps the old lists serving. (`RequirementTest.ReloadAppliesEditsAndMalformedReloadKeepsServingLists` through sReloadMgr's requirement target, which `.reload requirement` runs: an edited quest name changes the next evaluation and raises the generation, and a list whose operator is XOR is refused with the old generation still serving)
 
 **Risks**
 

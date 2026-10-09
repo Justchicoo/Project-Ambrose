@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the hook framework every later domain hangs off: a script registers itself by being constructed, the loader CMake wrote brings in the scripts that are merely present in the source tree, every hook reaches every script in the order they registered, player hooks hear gold and health changes, a module under modules/ arrives by the same loader with no edit to anything in the core, a script that throws from a hook is reported and the scripts after it still run, and unloading frees them and leaves the manager empty.
+ * Tests the hook framework every later domain hangs off: a script registers itself by being constructed, the loader CMake wrote brings in the scripts that are merely present in the source tree, every hook reaches every script in the order they registered, player hooks hear gold and health changes, ConditionScript answers custom requirement types, a module under modules/ arrives by the same loader with no edit to anything in the core, a script that throws from a hook is reported and the scripts after it still run, and unloading frees them and leaves the manager empty.
  */
 
 #include "Player.h"
+#include "RequirementMgr.h"
 #include "ScriptLoader.h"
 #include "ScriptMgr.h"
 
@@ -50,6 +51,19 @@ namespace
         void OnHealthChanged(Player&, int32 oldValue, int32 newValue) override
         {
             Calls.push_back("health:" + std::to_string(oldValue) + ":" + std::to_string(newValue));
+        }
+    };
+
+    class CustomConditionScript : public ConditionScript
+    {
+    public:
+        CustomConditionScript() : ConditionScript("custom_condition") {}
+
+        std::optional<bool> OnConditionCheck(RequirementRow const& requirement, RequirementContext const&) const override
+        {
+            if (requirement.Type == "ReqTestCustom")
+                return true;
+            return std::nullopt;
         }
     };
 
@@ -126,6 +140,18 @@ TEST_F(ScriptMgrTest, PlayerChangesReachEveryPlayerScript)
     EXPECT_EQ(Calls, (std::vector<std::string>{
         "gold:10:20", "gold:10:20", "health:30:40", "health:30:40",
     }));
+}
+
+TEST_F(ScriptMgrTest, ConditionScriptsCanAnswerCustomRequirementTypes)
+{
+    new CustomConditionScript();
+    RequirementRow requirement;
+    requirement.Type = "ReqTestCustom";
+    RequirementContext context;
+
+    EXPECT_EQ(sScriptMgr.EvaluateCondition(requirement, context), std::optional<bool>(true));
+    requirement.Type = "ReqNotHandled";
+    EXPECT_EQ(sScriptMgr.EvaluateCondition(requirement, context), std::nullopt);
 }
 
 TEST_F(ScriptMgrTest, UnloadingFreesEveryScriptAndLeavesNothingBehind)
