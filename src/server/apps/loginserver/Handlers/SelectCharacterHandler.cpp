@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers MSG_SELECTCHARACTER by sending the client to a gameserver: loads the chosen wizard without blocking the network thread, refuses one that is not this account's, one that is deleted and one picked when no realm is online, and otherwise mints a single-use handoff key, writes it to login_key and waits for that write to commit before saying a word, so the gameserver can never be handed a key the login server has not finished writing down, then replies MSG_CHARACTERSELECTED with the realm's address and port, the wizard's zone and place, and Error=0; every refusal sends Error=1 and writes no key, so a failed pick leaves nothing behind that anybody could present later.
+ * Answers MSG_SELECTCHARACTER by sending the client to a gameserver: loads the chosen wizard without blocking the network thread, refuses one that is not this account's, one that is deleted and one picked when no realm is online, queues a full realm without making a key, and otherwise mints a single-use handoff key and waits for its database commit before replying with the realm, wizard and key; every refusal writes no key.
  */
 
 #include "Base64.h"
@@ -8,11 +8,13 @@
 #include "CharacterRepository.h"
 #include "CryptoRandom.h"
 #include "DatabaseEnv.h"
+#include "AdmissionQueue.h"
 #include "LocationString.h"
 #include "Log.h"
 #include "LoginMgr.h"
 #include "LoginSession.h"
 #include "RealmList.h"
+#include "Settings.h"
 #include "StringUtil.h"
 
 #include <fmt/format.h>
@@ -84,7 +86,7 @@ void LoginSession::SelectCharacter(uint64 charId, std::string const& realmName, 
     }
 
     int64 const now = NowEpochSeconds();
-    std::optional<Realm> const realm = sRealmList.Choose(realmName, now);
+    std::optional<Realm> const realm = sRealmList.ChooseForAdmission(realmName, now);
     if (!realm)
     {
         FailCharacterSelect(charId, realmName.empty()
@@ -93,28 +95,10 @@ void LoginSession::SelectCharacter(uint64 charId, std::string const& realmName, 
         return;
     }
 
-    std::string const key = Base64::Encode(Ambrose::Crypto::GetRandomBytes(KeyBytes));
-    int64 const expires = now + sLoginMgr.GetSettings()->KeyTtl.count();
-
-    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> insert = LoginDatabase.IsOpen() ? LoginDatabase.GetPreparedStatement(LOGIN_INS_LOGIN_KEY) : nullptr;
-    if (!insert)
-    {
-        FailCharacterSelect(charId, "the login database is not open, so no handoff key could be written");
-        return;
-    }
-    insert->SetData(0, key);
-    insert->SetData(1, GetAccountId());
-    insert->SetData(2, character.Guid);
-    insert->SetData(3, realm->Id);
-    insert->SetData(4, _machineId);
-    insert->SetData(5, static_cast<uint64>(now));
-    insert->SetData(6, static_cast<uint64>(expires));
-
     LoginMessages::CharacterSelected reply;
     reply.Ip = GetRemoteAddress().is_loopback() ? realm->LocalAddress : realm->Address;
     reply.TcpPort = static_cast<int32>(realm->Port);
     reply.UdpPort = static_cast<int32>(realm->Port);
-    reply.Key = key;
     reply.UserId = GetAccountId();
     reply.CharId = character.Guid;
     reply.ZoneId = 0;
@@ -126,16 +110,60 @@ void LoginSession::SelectCharacter(uint64 charId, std::string const& realmName, 
     reply.LoginServer = sLoginMgr.GetSettings()->Name;
     reply.PlatformType = 0;
 
-    std::string const chosenRealm = realm->Name;
+    bool const bypass = GetSecurityLevel() >= sSettings.Get<uint32>("Queue.BypassSecurityLevel");
+    AdmissionQueueRequest const request = sAdmissionQueue.Request(*realm, SharedSelf(), reply, bypass);
+    if (!request.Admitted)
+    {
+        reply.PrepPhase = 1;
+        reply.Slot = static_cast<int32>(request.Position);
+        SendDmlMessage(reply);
+        LOG_INFO(SelectLog, "Session {} queued account {} with wizard {} for realm {} at position {}", GetSessionId(), GetAccountId(), reply.CharId, realm->Name,
+            request.Position);
+        return;
+    }
+
+    IssueCharacterSelected(std::move(reply), realm->Name, realm->Id);
+}
+
+void LoginSession::IssueCharacterSelected(LoginMessages::CharacterSelected reply, std::string realmName, uint32 realmId)
+{
+    uint64 const charId = reply.CharId;
+    int64 const now = NowEpochSeconds();
+    std::string const key = Base64::Encode(Ambrose::Crypto::GetRandomBytes(KeyBytes));
+    int64 const expires = now + sLoginMgr.GetSettings()->KeyTtl.count();
+
+    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> insert = LoginDatabase.IsOpen() ? LoginDatabase.GetPreparedStatement(LOGIN_INS_LOGIN_KEY) : nullptr;
+    if (!insert)
+    {
+        sAdmissionQueue.CancelReservation(realmId, charId);
+        FailCharacterSelect(charId, "the login database is not open, so no handoff key could be written");
+        return;
+    }
+    insert->SetData(0, key);
+    insert->SetData(1, GetAccountId());
+    insert->SetData(2, charId);
+    insert->SetData(3, realmId);
+    insert->SetData(4, _machineId);
+    insert->SetData(5, static_cast<uint64>(now));
+    insert->SetData(6, static_cast<uint64>(expires));
+
+    reply.Key = key;
+    reply.PrepPhase = 0;
+    reply.Slot = 0;
+
     auto transaction = LoginDatabase.BeginTransaction();
     transaction->Append(std::move(insert));
     _transactionCallbacks.AddCallback(LoginDatabase.AsyncCommitTransaction(std::move(transaction), MakeCompletionHandler())
-        .AfterComplete([this, charId, chosenRealm, reply = std::move(reply)](bool committed)
+        .AfterComplete([this, charId, realmId, realmName = std::move(realmName), reply = std::move(reply)](bool committed)
     {
         if (!IsOpen() || IsKicked())
+        {
+            sAdmissionQueue.CancelReservation(realmId, charId);
             return;
+        }
         if (!committed)
         {
+            sAdmissionQueue.CancelReservation(realmId, charId);
             FailCharacterSelect(charId, "the handoff key could not be written, so the client was not sent anywhere it could not get in");
             return;
         }
@@ -143,7 +171,7 @@ void LoginSession::SelectCharacter(uint64 charId, std::string const& realmName, 
         SetStatus(SessionStatus::CharacterSelected);
         _handoffAt.store(sLoginMgr.Now().time_since_epoch().count(), std::memory_order_relaxed);
         LOG_INFO(SelectLog, "Session {} sent account {} with wizard {} to realm {} at {}:{}, zone {} at {}, on a key good for {} second(s)",
-            GetSessionId(), GetAccountId(), reply.CharId, chosenRealm, reply.Ip, reply.TcpPort, Ambrose::ForLog(reply.ZoneName, 128), reply.Location,
+            GetSessionId(), GetAccountId(), reply.CharId, realmName, reply.Ip, reply.TcpPort, Ambrose::ForLog(reply.ZoneName, 128), reply.Location,
             sLoginMgr.GetSettings()->KeyTtl.count());
     }));
 }

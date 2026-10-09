@@ -1027,9 +1027,9 @@ A player can open the in-game realm picker, see every online realm with its popu
 
 **Acceptance**
 
-- [ ] player_limit=1: second queued at 1 and released on logout
+- [x] player_limit=1: second queued at 1 and admitted when the first online row is removed [SelectCharacterTest.AFullRealmQueuesTheNextSelectionAndAdmitsItAfterTheOnlineRowIsRemoved]
 - [ ] Real client: queue position then auto-enter
-- [ ] Raised player_limit admits queued players without a restart
+- [x] Raised player_limit admits queued players without a restart [SelectCharacterTest.ARefreshedIncreaseInPlayerLimitAdmitsAQueuedSelection]
 
 ### Detailed spec from LOG-15: Admission queue for full realms
 
@@ -1049,9 +1049,9 @@ When the chosen realm is at player_limit, the client waits in a visible queue an
 
 **Acceptance**
 
-- [ ] Unit: with player_limit=1 and one player online, a second select is queued at position 1 and receives the cached CHARACTERSELECTED when the first player's realm_online_character row is removed
+- [x] Unit: with player_limit=1 and one player online, a second select is queued at position 1 and receives the cached CHARACTERSELECTED when the first player's realm_online_character row is removed [SelectCharacterTest.AFullRealmQueuesTheNextSelectionAndAdmitsItAfterTheOnlineRowIsRemoved]
 - [ ] Real client: with the limit set to 1, the second client shows a queue position and enters the world automatically when the first client logs out
-- [ ] Raising the realm's player_limit while a player is queued admits them within one realmlist refresh without a restart
+- [x] Raising the realm's player_limit while a player is queued admits them within one realmlist refresh without a restart [SelectCharacterTest.ARefreshedIncreaseInPlayerLimitAdmitsAQueuedSelection]
 
 **Risks**
 

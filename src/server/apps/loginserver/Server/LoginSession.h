@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 and validates MSG_USER_VALIDATE's PassKey3 against the login database without blocking its network thread, holds the account it claimed and admitted, deletes one of its wizards for MSG_DELETECHARACTER, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, creates a wizard the same way again and answers only that it did or did not, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
+ * The login server's session: routes client messages, authenticates and validates accounts without blocking its network thread, retains the account security level for queue bypass, posts admission queue updates and handoffs onto its own executor, removes closed sessions from queues, manages character operations, drops an idle client before character selection, and tells it when the login server shuts down.
  */
 
 #ifndef AMBROSE_LOGINSESSION_H
@@ -32,6 +32,7 @@ public:
     LoginSession(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context);
 
     uint64 GetAccountId() const noexcept { return _accountId.load(std::memory_order_relaxed); }
+    uint8 GetSecurityLevel() const noexcept { return _securityLevel.load(std::memory_order_relaxed); }
     LoginSalt GetLoginSalt() const noexcept;
     std::chrono::steady_clock::time_point GetLastActivity() const noexcept { return std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(_lastActivity.load(std::memory_order_relaxed))); }
     uint64 GetAfkCheckCount() const noexcept { return _afkChecks.load(std::memory_order_relaxed); }
@@ -51,6 +52,9 @@ public:
     void HandleCreateCharacter(LoginMessages::CreateCharacter& message);
     void HandleDeleteCharacter(LoginMessages::DeleteCharacter& message);
     void HandleLoginLogCharacterCreation(LoginMessages::LoginLogCharacterCreation& message);
+    void NotifyAdmissionQueuePosition(LoginMessages::CharacterSelected reply);
+    void AdmitQueuedCharacter(LoginMessages::CharacterSelected reply, std::string realmName, uint32 realmId);
+    void FailQueuedCharacter(uint64 characterGuid, std::string detail);
 
 protected:
     void OnAccepted() override;
@@ -71,6 +75,7 @@ private:
     void FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate = 0);
     void StartCharacterList();
     void SelectCharacter(uint64 charId, std::string const& realmName, PreparedQueryResult result);
+    void IssueCharacterSelected(LoginMessages::CharacterSelected reply, std::string realmName, uint32 realmId);
     void FailCharacterSelect(uint64 charId, std::string_view detail);
     void ListCharacters(uint32 purchasedSlots, uint32 expected);
     void FinishCharacterList(uint32 purchasedSlots, PreparedQueryResult result);
@@ -104,6 +109,7 @@ private:
     uint32 _failedResponses = 0;
     uint64 _claimedAccountId = 0;
     std::atomic<uint64> _accountId{ 0 };
+    std::atomic<uint8> _securityLevel{ 0 };
     uint64 _machineId = 0;
     std::atomic<std::chrono::steady_clock::rep> _handoffAt{ 0 };
     std::string _accountName;

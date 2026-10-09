@@ -37,6 +37,7 @@ struct LoginSession::ValidateAttempt
     bool Finished = true;
     LoginSalt Salt;
     uint64 AccountId = 0;
+    uint8 SecurityLevel = 0;
     uint64 MachineId = 0;
     std::string PassKey3;
     std::string Username;
@@ -135,6 +136,7 @@ void LoginSession::ContinueValidation(std::shared_ptr<ValidateAttempt> const& at
         return;
     }
     attempt->Username = row[1].Get<std::string>();
+    attempt->SecurityLevel = row[10].Get<uint8>();
     if (row[4].IsNull())
     {
         FailValidation(attempt.get(), AuthResult::ValidateFailed, "the account holds no session key", true);
@@ -242,6 +244,7 @@ void LoginSession::CompleteValidation(std::shared_ptr<ValidateAttempt> const& at
     _failedResponses = 0;
     _accountName = attempt->Username;
     _accountId.store(attempt->AccountId, std::memory_order_relaxed);
+    _securityLevel.store(attempt->SecurityLevel, std::memory_order_relaxed);
     _machineId = attempt->MachineId;
     SetStatus(SessionStatus::Authenticated);
 

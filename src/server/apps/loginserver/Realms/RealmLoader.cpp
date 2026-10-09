@@ -1,16 +1,19 @@
 /*
  * Project Ambrose by Imjustchico
- * Reading realmlist and handing it to sRealmList with the moment it was read, so a list that has stopped being refreshed can say so rather than only turning players away. The read is synchronous because it runs on the server's own timer rather than on a player's request, and a player who arrives mid-refresh is answered from the list already in place rather than waiting on a database. What comes back is swapped in whole, so a realm is never half-updated: a reader sees the list as it was or as it is.
+ * Reading realmlist and handing it to sRealmList with online-character counts and the moment it was read, then refreshing admission queues from the new limits and population. The read is synchronous because it runs on the server's own timer rather than on a player's request, and a player who arrives mid-refresh is answered from the list already in place rather than waiting on a database.
  */
 
 #include "RealmLoader.h"
 
+#include "AdmissionQueue.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
 #include "StringUtil.h"
 
 #include <chrono>
+#include <limits>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -73,24 +76,41 @@ void RealmLoader::LoadNow()
     }
 
     std::vector<Realm> realms;
+    std::unordered_set<uint64> onlineCharacterGuids;
+    uint32 currentRealmId = 0;
     do
     {
         Field const* fields = result->Fetch();
-        Realm realm;
-        realm.Id = fields[0].Get<uint32>();
-        realm.Name = fields[1].Get<std::string>();
-        realm.Address = fields[2].Get<std::string>();
-        realm.LocalAddress = fields[3].Get<std::string>();
-        realm.Port = fields[4].Get<uint16>();
-        realm.Flags = fields[5].Get<uint32>();
-        realm.Population = fields[6].Get<uint32>();
-        realm.PlayerLimit = fields[7].Get<uint32>();
-        realm.LastHeartbeatEpoch = static_cast<int64>(fields[8].Get<uint64>());
-        realms.push_back(std::move(realm));
+        uint32 const realmId = fields[0].Get<uint32>();
+        if (realms.empty() || realmId != currentRealmId)
+        {
+            Realm realm;
+            realm.Id = realmId;
+            realm.Name = fields[1].Get<std::string>();
+            realm.Address = fields[2].Get<std::string>();
+            realm.LocalAddress = fields[3].Get<std::string>();
+            realm.Port = fields[4].Get<uint16>();
+            realm.Flags = fields[5].Get<uint32>();
+            realm.Population = fields[6].Get<uint32>();
+            realm.PlayerLimit = fields[7].Get<uint32>();
+            realm.LastHeartbeatEpoch = static_cast<int64>(fields[8].Get<uint64>());
+            realms.push_back(std::move(realm));
+            currentRealmId = realmId;
+        }
+
+        if (!fields[9].IsNull())
+        {
+            uint64 const characterGuid = fields[9].Get<uint64>();
+            onlineCharacterGuids.insert(characterGuid);
+            Realm& realm = realms.back();
+            if (realm.OnlineCharacters < std::numeric_limits<uint32>::max())
+                ++realm.OnlineCharacters;
+        }
     } while (result->NextRow());
 
     std::size_t const count = realms.size();
     sRealmList.Replace(std::move(realms), NowEpochSeconds());
+    sAdmissionQueue.OnRealmRefresh(sRealmList.All(), onlineCharacterGuids);
     if (_loads == 0)
         LOG_INFO("server.loginserver", "The realm list holds {} realm(s), read again every {} second(s)", count, _settings.RefreshSeconds);
     ++_loads;

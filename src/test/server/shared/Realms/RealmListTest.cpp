@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests which realm a player is sent to: one whose heartbeat is older than the missed runs the policy allows is gone from the list, one marked offline by hand is gone whatever its heartbeat says, and one that has never beaten at all is not treated as alive. Choosing reads the named realm first, the operator's default second and the least full of the rest last, a named realm that is down is refused rather than replaced by another, a full realm is not chosen by the least-full rule though it can still be asked for by name, and when nothing is online the answer is none rather than any.
+ * Tests which realm a player is sent to: one whose heartbeat is older than the missed runs the policy allows is gone from the list, one marked offline by hand is gone whatever its heartbeat says, and one that has never beaten at all is not treated as alive. Ordinary selection uses the named realm, operator default or least heartbeat population; admission selection uses online character capacity and still returns a full realm for queueing.
  */
 
 #include "RealmList.h"
@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -100,6 +101,27 @@ TEST(RealmListTest, AFullRealmIsNotChosenByTheLeastFullRuleAndNoneOnlineAnswersN
     EXPECT_FALSE(RealmList::Choose(down, Policy(), "", Now).has_value());
     EXPECT_FALSE(RealmList::Choose(down, Policy("Ambrose"), "", Now).has_value());
     EXPECT_FALSE(RealmList::Choose({}, Policy(), "", Now).has_value());
+}
+
+TEST(RealmListTest, AdmissionChoosesCapacityAndStillReturnsAFullRealmForQueueing)
+{
+    Realm available = Make(1, "Ambrose", 100, Now, REALM_FLAG_NONE, 2);
+    available.OnlineCharacters = 1;
+    Realm full = Make(2, "Wysteria", 0, Now, REALM_FLAG_NONE, 1);
+    full.OnlineCharacters = 1;
+    std::vector<Realm> const realms{ full, available };
+
+    std::optional<Realm> const availableRealm = RealmList::ChooseForAdmission(realms, Policy(), "", Now);
+    ASSERT_TRUE(availableRealm.has_value());
+    EXPECT_EQ(availableRealm->Id, 1u);
+
+    std::optional<Realm> const fullNamedRealm = RealmList::ChooseForAdmission({ full }, Policy(), "Wysteria", Now);
+    ASSERT_TRUE(fullNamedRealm.has_value());
+    EXPECT_EQ(fullNamedRealm->Id, 2u);
+
+    std::optional<Realm> const fullRealm = RealmList::ChooseForAdmission({ full }, Policy(), "", Now);
+    ASSERT_TRUE(fullRealm.has_value());
+    EXPECT_EQ(fullRealm->Id, 2u) << "a full realm is retained so its admission queue can accept the selection";
 }
 
 TEST(RealmListTest, TheStoreKeepsWhatItWasGivenAndReadsItBackByPolicy)
