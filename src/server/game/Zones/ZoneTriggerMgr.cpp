@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the volumes, triggers, their events and the zone-entry texts their ResClientNotifyText results show zone by zone, a result read through the server classes and refused when it does not decode, taking a volume with no shape and only a radius as a sphere, refusing a volume whose shape is unknown or whose size or place is not a usable number, a trigger whose cooldown is not, and an event that names a trigger the zone does not hold; swaps a whole good set in at once, dropping each instance's counts and cooldowns with it, and keeps each zone instance's trigger state until its map is forgotten.
+ * Reads the volumes, triggers, their events, the zone-entry texts their ResClientNotifyText results show and which of them are doors, holding a ResTeleport, zone by zone, a result read through the server classes and refused when it does not decode, taking a volume with no shape and only a radius as a sphere, refusing a volume whose shape is unknown or whose size or place is not a usable number, a trigger whose cooldown is not, and an event that names a trigger the zone does not hold; swaps a whole good set in at once, dropping each instance's counts and cooldowns with it, and keeps each zone instance's trigger state until its map is forgotten.
  */
 
 #include "ZoneTriggerMgr.h"
@@ -103,7 +103,7 @@ bool ZoneTriggerMgr::Load(std::vector<std::string>& errors)
         do
         {
             Field const* row = rows->Fetch();
-            ZoneTrigger trigger{ row[1].Get<uint32>(), row[2].Get<std::string>(), row[3].Get<int32>(), row[4].Get<float>(), row[5].Get<int64>() != 0, {}, {} };
+            ZoneTrigger trigger{ row[1].Get<uint32>(), row[2].Get<std::string>(), row[3].Get<int32>(), row[4].Get<float>(), row[5].Get<int64>() != 0, {}, {}, false };
             if (!std::isfinite(trigger.CooldownSeconds) || trigger.CooldownSeconds < 0.0f)
                 errors.push_back(fmt::format("{} trigger {} ({}) has a cooldown that is not a number of seconds", row[0].Get<std::string>(), trigger.Index, trigger.Name));
             else
@@ -169,6 +169,24 @@ bool ZoneTriggerMgr::Load(std::vector<std::string>& errors)
                 errors.push_back(fmt::format("{} trigger {} ({}) has a notify text result at {} that does not read: {}", zone, index, trigger->Name, row[2].Get<uint32>(), error));
             else
                 trigger->NotifyTexts.push_back(std::move(*text));
+        } while (rows->NextRow());
+    }
+    if (!WorldDatabase.TryQuery(fmt::format("SELECT DISTINCT `zone_path`, `trigger_index` FROM `zone_trigger_result` WHERE `list` = 'results' AND `class_name` = '{}'", TeleportClass),
+        rows))
+    {
+        errors.push_back("zone_trigger_result could not be read for its doors");
+        return false;
+    }
+    if (rows)
+    {
+        do
+        {
+            Field const* row = rows->Fetch();
+            ZoneTriggerData& data = zones[row[0].Get<std::string>()];
+            uint32 const index = row[1].Get<uint32>();
+            auto const trigger = std::find_if(data.Triggers.begin(), data.Triggers.end(), [index](ZoneTrigger const& candidate) { return candidate.Index == index; });
+            if (trigger != data.Triggers.end())
+                trigger->Teleports = true;
         } while (rows->NextRow());
     }
     if (!WorldDatabase.TryQuery("SELECT `zone_path`, `event_name` FROM `zone_client_event`", rows))
@@ -239,7 +257,7 @@ std::shared_ptr<ZoneTriggerData const> ZoneTriggerMgr::Find(std::string_view zon
 }
 
 std::vector<std::string> ZoneTriggerMgr::Post(uint32 mapId, std::string_view zone, std::string_view event, uint64 wizard, ZoneTriggers::Clock::time_point now,
-    std::vector<ZoneNotifyText>* texts)
+    std::vector<ZoneNotifyText>* texts, std::vector<std::string>* doors, bool doorsIgnoreRequirements)
 {
     std::lock_guard const lock(_mutex);
     auto const data = _zones.find(zone);
@@ -249,11 +267,13 @@ std::vector<std::string> ZoneTriggerMgr::Post(uint32 mapId, std::string_view zon
     if (instance == _instances.end())
         instance = _instances.emplace(mapId, ZoneTriggers(data->second->Triggers)).first;
     std::vector<std::string> names;
-    for (ZoneTrigger const* trigger : instance->second.Post(event, wizard, now))
+    for (ZoneTrigger const* trigger : instance->second.Post(event, wizard, now, doorsIgnoreRequirements))
     {
         names.push_back(trigger->Name);
         if (texts)
             texts->insert(texts->end(), trigger->NotifyTexts.begin(), trigger->NotifyTexts.end());
+        if (doors && trigger->Teleports)
+            doors->push_back(trigger->Name);
     }
     return names;
 }

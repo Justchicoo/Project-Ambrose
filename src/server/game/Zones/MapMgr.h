@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Every running zone instance (sMapMgr): the public instance of a zone is found or made by its path, a private one is made on request, and each is given a dynamic zone id no other running instance holds. An instance whose last wizard left is taken down on the first tick after its delay has passed. The delays are read from the settings each time they are needed, the unload delay when an instance empties and the mobile id delay when an id is given back, so changing either applies to the next one with nothing restarted. The clock and the settings are handed in, so a test can move time and change a setting between two steps without a server running, and so is what fills an instance with its zone's objects: it runs when an instance is made and again on each refresh, which hands back what changed in every instance whose objects did so the wizards in it can be told, and each problem it reports is logged once for as long as the manager runs, however many instances of the zone and refreshes meet it again. Only the world thread touches it.
+ * Every running zone instance (sMapMgr): the public instance of a zone is found or made by its path, a private one is made on request, and each is given a dynamic zone id no other running instance holds. An instance whose last wizard left is taken down on the first tick after its delay has passed. The delays are read from the settings each time they are needed, the unload delay when an instance empties and the mobile id delay when an id is given back, so changing either applies to the next one with nothing restarted. The clock and the settings are handed in, so a test can move time and change a setting between two steps without a server running, and so is what fills an instance with its zone's objects: it runs when an instance is made and again on each refresh, which hands back what changed in every instance whose objects did so the wizards in it can be told, along with what a command changed in an instance since the last refresh, and each problem it reports is logged once for as long as the manager runs, however many instances of the zone and refreshes meet it again. Only the world thread touches it.
  */
 
 #ifndef AMBROSE_MAPMGR_H
@@ -57,6 +57,7 @@ public:
 
     std::vector<uint32> Update();
     std::vector<MapObjectChanges> RefreshObjects();
+    void QueueChanges(MapObjectChanges changes);
     std::size_t GetMapCount() const noexcept;
     void Clear();
 
@@ -75,6 +76,7 @@ private:
     ClockReader _clock;
     ObjectPopulator _populator;
     std::set<std::string, std::less<>> _reported;
+    std::vector<MapObjectChanges> _queued;
 };
 
 #define sMapMgr MapMgr::Instance()

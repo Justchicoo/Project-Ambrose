@@ -928,7 +928,7 @@ Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as 
 
 - [ ] A restart requested while a backup restore holds the app is refused with 409 naming the restore
 - [ ] A restart inside protected hours is refused naming the window, an owner's override with a reason goes through and is audited, and a scheduled restart inside the window is refused the same way
-- [ ] Kill during a stuck stop ends the process and records a requested exit, not a crash
+- [x] Kill during a stuck stop ends the process and records a requested exit, not a crash (SupervisorTest.KillingAnAppStuckStoppingRecordsARequestedExit holds shutdown at the helper, kills it while stopping, and proves the exit is requested with zero crashes)
 - [ ] Restarting the stack stops gameservers before the loginserver and starts the loginserver before gameservers
 - [ ] A power request answers 202 with an operation id, and its progress and final result arrive on the socket and in the audit log
 - [ ] Disabling an app stops it and refuses a start with the disable reason named, and enabling it allows the next start
@@ -1122,10 +1122,10 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] The mail test reaches only the signed-in user's address, and a bad SMTP password shows the server's error
+- [x] The mail test reaches only the signed-in user's address, and a bad SMTP password shows the server's error (PanelSettingsTest.MailTestReachesOnlyTheSignedInUser sends through a fake SMTP server and sees the one RCPT TO it got, the signed-in user's address, with a `to` naming someone else in the request body ignored; PanelSettingsTest.MailTestShowsTheSmtpServersErrorOnABadPassword answers 502 carrying the fake server's `535 5.7.8 Authentication credentials invalid`)
 - [x] The saved SMTP password never appears in any response, log or audit row (PanelSettingsTest.KeepsSavedSecretsOutOfAnswersLogsAndAuditRows)
 - [x] With `AMBROSE_PANEL_TRUSTED_PROXIES` set, the key shows as locked and a live edit is refused naming the layer (PanelSettingsTest.KeepsTrustedProxiesLockedToTheEnvironmentLayer)
-- [ ] With the captcha on and its provider unreachable, sign-in after repeated failures is refused with a clear error rather than allowed through
+- [x] With the captcha on and its provider unreachable, sign-in after repeated failures is refused with a clear error rather than allowed through (PanelSettingsTest.CaptchaUnreachableRefusesSignInWithAClearError fails three sign-ins, then a correct password with a captcha answer answers 503 naming the unreachable provider; a sign-in with no failures before them needs no captcha)
 - [x] A user without `panel.settings` gets 403 on every group and sees no page in navigation (PanelSettingsTest.RequiresPanelSettingsForEveryGroupAndBothMethods, which an operator holding settings.read but not panel.settings fails on every group for both GET and PATCH, and routes.test.ts, which keeps the page out of navigation without panel.settings)
 
 ## 17.36 Personal API keys
@@ -1557,10 +1557,12 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 **Acceptance**
 
 - [ ] An upload larger than the limit is refused before the limit's worth of bytes plus one reaches the disk, and leaves no partial file
-- [ ] A viewer can read and download but cannot upload, move or delete
-- [ ] A batch with one refused entry changes nothing and names the refused entry
-- [ ] A ranged download of a large log returns the same bytes as the whole file
-- [ ] A move from the config root into the read-only install root is refused naming the target root's policy
+- [x] A viewer can read and download but cannot upload, move or delete (FilesServiceTest.DownloadsAFileOrExactRangeAndRefusesClientDerivedRoots, FilesServiceTest.UploadChecksTheLimitBeforeCreatingAndRequiresTheUploadRight, FilesServiceTest.UploadLinksAreSignedSingleUseAndKeepTheIssuersPermission, FilesServiceTest.BatchValidatesEveryEntryBeforeMovingAnyAndNamesTheRefusedTarget and PanelPermissionsTest.AViewerLooksAndDoesNotAct)
+- [x] A batch with one refused entry changes nothing and names the refused entry (FilesServiceTest.BatchValidatesEveryEntryBeforeMovingAnyAndNamesTheRefusedTarget, FilesServiceTest.BatchKeepsSecretsInTheirRootAndRefusesAFileAnEarlierEntryMoved)
+- [x] A ranged download of a large log returns the same bytes as the whole file (FilesServiceTest.DownloadsAFileOrExactRangeAndRefusesClientDerivedRoots: a 256 KiB log is byte-identical over the requested range)
+- [x] A move from the config root into the read-only install root is refused naming the target root's policy (FilesServiceTest.BatchValidatesEveryEntryBeforeMovingAnyAndNamesTheRefusedTarget)
+
+**Left open at landing (#118):** the first check stays unticked because the first deliverable's limit is not yet enforced while streaming. The listener buffers the whole request body, up to the listener's MaxRequestBytes, before the router dispatches it, and `FilesService::Upload` then refuses a body over `Files.UploadMaxBytes` before `FileJail::Create` or `FileJail::Replace` writes anything (FilesServiceTest.UploadChecksTheLimitBeforeCreatingAndRequiresTheUploadRight). Earning the check needs a body reader through `AdminServer` and `AdminRouter` that stops reading at the limit, with a test that sends the limit plus one byte over a socket.
 
 ## 17.55 Trash, purge, new files and folders, and permission toggles
 
@@ -1786,9 +1788,9 @@ Changed on 2026-09-27: mute and kick moved with the online players page to 17.17
 
 **Acceptance**
 
-- [ ] With maintenance on, a player account's sign-in is refused with the maintenance reason and an account above the bypass level signs in
-- [ ] Turning maintenance on and off applies without a loginserver restart, and it is still on after one
-- [ ] Entering maintenance leaves players already in the world connected
+- [x] With maintenance on, a player account's sign-in is refused with the maintenance reason and an account above the bypass level signs in
+- [x] Turning maintenance on and off applies without a loginserver restart, and it is still on after one
+- [x] Entering maintenance leaves players already in the world connected
 - [ ] Every change writes an audit row with who, why and the window
 - [ ] Dev-gated: the retail client shows the maintenance reason rather than a generic failure. Needs the maintainer's own retail client, and the result is recorded with the milestone
 
@@ -2455,11 +2457,11 @@ Changed on 2026-09-27: the player inspector is the 17.175 wizard page grown, and
 
 **Acceptance**
 
-- [ ] Changing one audit row makes verify report that row and every row after it
-- [ ] Deleting a row is reported the same way
-- [ ] A row that cannot be chained is not written, because the hash and the row commit together
-- [ ] With the collector unreachable the queue holds rows and drains when it returns, and the page says how many wait
-- [ ] Verifying a large audit store completes inside its stated budget
+- [x] Changing one audit row makes verify report that row and every row after it [PanelAuditTest.DetectsChangedRowsAndReportsTheFirstOne edits row 2 of 4 and asserts FirstInvalidId 2 and LastRowId 4; PanelAuditTest.DetectsAChangedSubject; PanelAuditTest.RecordChainsFromTheHeadWithoutWalkingTheStore]
+- [x] Deleting a row is reported the same way [PanelAuditTest.DetectsDeletionOfTheLastRow; PanelAuditTest.DetectsDeletionInsideTheChainAtTheFirstGap asserts FirstInvalidId 2 and LastRowId 3; PanelAuditTest.OpensAndKeepsRecordingAfterTheLastRowIsDeleted]
+- [x] A row that cannot be chained is not written, because the hash and the row commit together [PanelAuditTest.DoesNotCommitTheRowOrTheChangeWhenTheChainHeadCannotAdvance; PanelAuditTest.DoesNotCommitAChangeWhenTheAuditCannotBeCompleted]
+- [x] With the collector unreachable the queue holds rows and drains when it returns, and the page says how many wait [PanelAuditTest.KeepsEventsWhileCollectorIsUnavailableAndDrainsAfterRecovery; PanelTest.TheAuditVerifyRouteCountsWaitingEventsAndNamesTheFirstBrokenRow; apps/dashboard/src/pages/Activity.browser.test.ts "says how many audit events wait for the collector"]
+- [x] Verifying a large audit store completes inside its stated budget [PanelAuditTest.VerifiesTenThousandRowsWithinTheFiveSecondBudget]
 
 ## 17.94 Uptime history and incident timeline
 

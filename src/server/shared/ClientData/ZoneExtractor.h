@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every zone of the user's own install from the gamedata.bin its GameData archive holds: the zone's settings, each named location and one row for each entry of its object list, read through the zone views, with the zone known by the name its own data gives it, which the archive's name must match; then the walk-in volumes of its volumes.xml and the triggers of its triggers.xml, read by property name because their classes are the server's own, which only a supplement to the type dump describes, where a file that does not decode is counted against its zone and the rest is still extracted. A part of a zone whose class the type dump cannot describe is reported with its class hash and path rather than guessed at or dropped silently: an object list entry of such a class is left out, and inside an entry that is kept the part is left out of what the row holds; every other problem is reported up to a cap, either from an open GameData folder and catalog or straight from an install folder and type dump, telling a caller that asks how many archives it has read after each one.
+ * Extracts every zone of the user's own install from the gamedata.bin its GameData archive holds: the zone's settings, each named location and one row for each entry of its object list, read through the zone views, with the zone known by the name its own data gives it, which the archive's name must match; then the walk-in volumes of its volumes.xml and the triggers of its triggers.xml, read by property name because their classes are the server's own, which only a supplement to the type dump describes, and the spawners of its spawnData.xml, each with the items it may place, read through the spawn views because the type dump describes them, where a file that does not decode is counted against its zone and the rest is still extracted, and clientSpawnData.xml, which only the client spawns, is never read. A part of a zone whose class the type dump cannot describe is reported with its class hash and path rather than guessed at or dropped silently: an object list entry of such a class is left out, and inside an entry that is kept the part is left out of what the row holds; every other problem is reported up to a cap, either from an open GameData folder and catalog or straight from an install folder and type dump, telling a caller that asks how many archives it has read after each one.
  */
 
 #ifndef AMBROSE_ZONEEXTRACTOR_H
@@ -102,6 +102,36 @@ struct ExtractedTrigger
     std::optional<ExtractedStateTrigger> State;
 };
 
+struct ExtractedSpawnItem
+{
+    uint32 PercentChance = 0;
+    ExtractedObject Object;
+    int64 StartNodeType = 0;
+    uint32 StartNode = 0;
+    uint64 PathId = 0;
+    int32 UniqueLoc = 0;
+};
+
+struct ExtractedSpawner
+{
+    std::string Name;
+    uint64 Id = 0;
+    bool Active = false;
+    bool PopSensitive = false;
+    uint32 MaxSpawns = 0;
+    bool AtLeastOneSpawn = false;
+    bool ActivateAtMax = false;
+    int32 SpawnTime = 0;
+    uint32 RespawnRate = 0;
+    bool GlobalDynamic = false;
+    bool WaitForTimer = false;
+    uint32 ZoneLevelMin = 0;
+    uint32 ZoneLevelMax = 0;
+    uint32 ZoneLevelUp = 0;
+    std::optional<std::vector<uint8>> GlobalDynamicReqs;
+    std::vector<ExtractedSpawnItem> Items;
+};
+
 struct ExtractedZone
 {
     std::string Path;
@@ -115,6 +145,7 @@ struct ExtractedZone
     std::vector<ExtractedObject> Objects;
     std::vector<ExtractedVolume> Volumes;
     std::vector<ExtractedTrigger> Triggers;
+    std::vector<ExtractedSpawner> Spawners;
 };
 
 struct SkippedZonePart
@@ -151,6 +182,7 @@ struct ZoneExtraction
     std::size_t GetSkippedObjectCount() const noexcept;
     std::size_t GetVolumeCount() const noexcept;
     std::size_t GetTriggerCount() const noexcept;
+    std::size_t GetSpawnerCount() const noexcept;
     std::size_t GetTriggerFailureZoneCount() const;
     ExtractedZone const* Find(std::string_view path) const noexcept;
 };
@@ -163,6 +195,7 @@ public:
     static constexpr std::string_view DataEntry = "gamedata.bin";
     static constexpr std::string_view VolumeEntry = "volumes.xml";
     static constexpr std::string_view TriggerEntry = "triggers.xml";
+    static constexpr std::string_view SpawnEntry = "spawnData.xml";
     static constexpr std::size_t MaxEntryBytes = 64 * 1024 * 1024;
 
     static ZoneExtraction Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, ZoneExtractionProgress const& progress = {});
@@ -171,6 +204,7 @@ public:
     static void ReadZone(TypeCatalogPtr const& catalog, std::string_view archiveStem, std::span<uint8 const> data, ZoneExtraction& extraction);
     static void ReadVolumes(TypeCatalogPtr const& catalog, ExtractedZone& zone, std::span<uint8 const> data, ZoneExtraction& extraction);
     static void ReadTriggers(TypeCatalogPtr const& catalog, ExtractedZone& zone, std::span<uint8 const> data, ZoneExtraction& extraction);
+    static void ReadSpawns(TypeCatalogPtr const& catalog, ExtractedZone& zone, std::span<uint8 const> data, ZoneExtraction& extraction);
     static std::string ArchiveStemOf(std::string_view zonePath);
 };
 

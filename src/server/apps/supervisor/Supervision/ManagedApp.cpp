@@ -92,6 +92,7 @@ std::string_view ManagedApp::StateName(AppState state) noexcept
         case AppState::Running: return "running";
         case AppState::Stopping: return "stopping";
         case AppState::Crashed: return "crashed";
+        case AppState::Backoff: return "backoff";
     }
     return "offline";
 }
@@ -759,7 +760,7 @@ void ManagedApp::OnExit()
                     cause.empty() ? std::string() : ": " + cause);
         }
         _view.RestartEpochMs = restart ? now + std::chrono::duration_cast<std::chrono::milliseconds>(RestartDelay).count() : 0;
-        EnterState(AppState::Crashed);
+        EnterState(restart ? AppState::Backoff : AppState::Crashed);
     }
     _restartPending = restart;
     _restartAt = Clock::now() + RestartDelay;

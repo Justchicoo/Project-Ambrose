@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers the panel user commands on a console table: each finds its operator by name and answers in one or two lines; making an operator, resetting a password and handing out a local or pairing link go through the panel's own issuing path with the console named as the issuer, print the link only to the console that asked, and are marked console-only so no browser reaches them through the command route.
+ * Registers the panel user commands on a console table: each finds its operator by name and answers in one or two lines; making an operator, resetting a password and handing out a local or pairing link go through the panel's own issuing path with the console named as the issuer, print the link only to the console that asked, and are marked console-only so no browser reaches them through the command route; panel audit verify walks the audit chain and names the rows that no longer verify.
  */
 
 #include "PanelCommands.h"
@@ -61,6 +61,24 @@ void PanelCommands::Register(ConsoleCommandTable& commands, Panel& panel)
             for (PanelUser const& user : users)
                 reply(fmt::format("{}{}{}{} last signed in {}", user.Username, user.IsOwner ? " (owner)" : "", user.Disabled ? " (disabled)" : "",
                     user.TwoFactor ? " (two-factor)" : "", user.SignedInEpochMs ? WhenText(*user.SignedInEpochMs) : std::string("never")));
+            return true;
+        } });
+    commands.Register({ "panel audit verify", "", "verify the panel's audit chain and report the rows from the first broken one that do not verify", false,
+        [&panel](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            if (!arguments.empty())
+                return false;
+            AuditChainVerification verification;
+            std::string error;
+            if (!panel.VerifyAuditChain(verification, error))
+            {
+                reply(fmt::format("The audit chain could not be verified: {}", error));
+                return true;
+            }
+            if (verification.Valid)
+                reply(fmt::format("The audit chain is valid; {} row(s) checked", verification.RowsChecked));
+            else
+                reply(fmt::format("The audit chain is broken: rows {} to {} do not verify; {}", verification.FirstInvalidId, verification.LastRowId, verification.Problem));
             return true;
         } });
     commands.Register({ "panel user reset-two-factor", "<name>", "turn off an operator's two-factor sign-in and end their sessions, for one who lost their authenticator and codes", false,

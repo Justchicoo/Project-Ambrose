@@ -1,18 +1,18 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 134,
+    "done": 140,
     "total": 469,
-    "percent": 28.6
+    "percent": 29.9
   },
   "checks": {
-    "done": 1078,
+    "done": 1135,
     "total": 2870,
-    "percent": 37.6
+    "percent": 39.5
   },
   "contributor_track": {
-    "merged": 93,
-    "open": 57
+    "merged": 94,
+    "open": 56
   },
   "phases": [
     {
@@ -58,17 +58,17 @@
     {
       "phase": 6,
       "title": "Other players are visible",
-      "milestones_done": 16,
+      "milestones_done": 17,
       "milestones_total": 18,
-      "checks_done": 128,
+      "checks_done": 137,
       "checks_total": 139
     },
     {
       "phase": 7,
       "title": "An npc offers a quest",
-      "milestones_done": 2,
+      "milestones_done": 3,
       "milestones_total": 13,
-      "checks_done": 17,
+      "checks_done": 29,
       "checks_total": 86
     },
     {
@@ -82,9 +82,9 @@
     {
       "phase": 9,
       "title": "A duel completes",
-      "milestones_done": 3,
+      "milestones_done": 4,
       "milestones_total": 12,
-      "checks_done": 18,
+      "checks_done": 30,
       "checks_total": 83
     },
     {
@@ -92,7 +92,7 @@
       "title": "Play the wizard city opening quests",
       "milestones_done": 0,
       "milestones_total": 18,
-      "checks_done": 0,
+      "checks_done": 2,
       "checks_total": 113
     },
     {
@@ -138,17 +138,17 @@
     {
       "phase": 16,
       "title": "Patch server and tooling ownership",
-      "milestones_done": 2,
+      "milestones_done": 3,
       "milestones_total": 13,
-      "checks_done": 15,
+      "checks_done": 22,
       "checks_total": 80
     },
     {
       "phase": 17,
       "title": "Operations console admin api dashboard and metrics",
-      "milestones_done": 21,
+      "milestones_done": 23,
       "milestones_total": 186,
-      "checks_done": 167,
+      "checks_done": 182,
       "checks_total": 1113
     }
   ]

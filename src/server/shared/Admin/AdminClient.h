@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A small HTTP/1.1 client for one app's admin API on this machine: it sends one request, over TLS when the listener serves it, with the app's bearer token, a Host header the listener accepts and the caller's request id, reads the whole answer before a deadline, and reports the status, the headers, the body and the fingerprint of the certificate it was served, or why no answer came, so the supervisor reads health, asks for a shutdown and relays the panel's requests without a library of its own.
+ * A small HTTP/1.1 client for one app's admin API on this machine: it sends one request, over TLS when the listener serves it, with the app's bearer token, a Host header the listener accepts and the caller's request id, reads the whole answer before a deadline, and reports the status, the headers, the body and the fingerprint of the certificate it was served, or why no answer came, so the supervisor reads health, asks for a shutdown and relays the panel's requests without a library of its own; a client that verifies its peer resolves a host name, checks the certificate chain against the system's trusted authorities and the certificate against the host name or address it was given, which is how the panel's audit forwarder reaches an off-machine collector.
  */
 
 #ifndef AMBROSE_ADMINCLIENT_H
@@ -44,13 +44,14 @@ class AdminClient
 public:
     static constexpr std::size_t MaxResponseBytes = 16 * 1024 * 1024;
 
-    AdminClient(std::string host, uint16 port, std::string token, bool tls = false);
+    AdminClient(std::string host, uint16 port, std::string token, bool tls = false, bool verifyPeer = false);
 
     AdminClientResponse Send(AdminClientRequest const& request, std::chrono::milliseconds timeout) const;
 
     std::string const& GetHost() const noexcept { return _host; }
     uint16 GetPort() const noexcept { return _port; }
     bool UsesTls() const noexcept { return _tls; }
+    bool VerifiesPeer() const noexcept { return _verifyPeer; }
 
     static std::string ConnectHost(std::string_view bindIp);
     static std::optional<AdminClientResponse> Parse(std::string_view raw, std::string& error);
@@ -60,6 +61,7 @@ private:
     uint16 _port;
     std::string _token;
     bool _tls = false;
+    bool _verifyPeer = false;
 };
 
 #endif

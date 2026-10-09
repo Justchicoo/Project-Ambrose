@@ -286,7 +286,10 @@ async function stopApp(admin: string, folder: string, name: string, action: "sto
             .then((answer) => answer.json() as Promise<{ apps?: { name: string; state: string }[] }>)
             .then(
                 (snapshot) =>
-                    snapshot.apps?.some((entry) => entry.name === name && entry.state !== "offline" && entry.state !== "crashed") ?? true,
+                    snapshot.apps?.some(
+                        (entry) =>
+                            entry.name === name && entry.state !== "offline" && entry.state !== "crashed" && entry.state !== "backoff",
+                    ) ?? true,
             )
             .catch(() => true);
         if (!running) return;

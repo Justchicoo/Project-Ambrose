@@ -32,6 +32,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -75,7 +76,28 @@ public:
 
     static void SetRealmId(uint32 realmId) noexcept;
     static uint32 GetRealmId() noexcept;
+    using OnlookerSource = std::function<std::vector<std::shared_ptr<GameSession>>()>;
+
     static void SetTransferEndpoint(std::string address, uint16 port);
+    static void SetOnlookerSource(OnlookerSource source);
+
+    template<DeclaredMessage T>
+    bool SendDmlMessage(T const& message)
+    {
+        if constexpr (T::Tag == GameMessages::DownloadPackage::Tag || T::Tag == GameMessages::DownloadPackageElement::Tag || T::Tag == GameMessages::DownloadBrowser::Tag)
+            if (!PatchDownloadsEnabled(T::Tag))
+                return false;
+        return SessionBase::SendDmlMessage(message);
+    }
+
+    template<DeclaredMessage T>
+    bool SendDmlMessageDelayedClose(T const& message)
+    {
+        if constexpr (T::Tag == GameMessages::DownloadPackage::Tag || T::Tag == GameMessages::DownloadPackageElement::Tag || T::Tag == GameMessages::DownloadBrowser::Tag)
+            if (!PatchDownloadsEnabled(T::Tag))
+                return false;
+        return SessionBase::SendDmlMessageDelayedClose(message);
+    }
 
     uint64 GetAccountId() const noexcept { return _accountId.load(std::memory_order_relaxed); }
     void SetAccountId(uint64 accountId) noexcept { _accountId.store(accountId, std::memory_order_relaxed); }
@@ -188,6 +210,7 @@ public:
     void HandleDoneShopping(GameMessages::DoneShopping& message);
     void HandleLogClientResolution(GameMessages::LogClientResolution& message);
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
+    void HandlePatchingBlocked(GameMessages::PatchingBlocked& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
     void HandleUsePotion(GameMessages::UsePotion& message);
     void SendBadges();
@@ -228,6 +251,7 @@ private:
     friend struct ChatHandlerTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
+    bool PatchDownloadsEnabled(std::string_view tag) const;
     SQLOperation::CompletionHandler MakeCompletionHandler();
     void CheckTransferPassKey(LoginKeyClaim claim, std::string passKey, int64 now);
     void ConsumeKey(LoginKeyClaim claim, int64 now);
@@ -267,6 +291,7 @@ private:
     bool TakeCommandLine(std::string_view packed);
     std::vector<std::string> PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now);
     void FollowReloadedVolumes();
+    void WalkThroughDoor(std::vector<std::string> const& doors);
     void ShowGameEffectsOf(GameSession const& other);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;

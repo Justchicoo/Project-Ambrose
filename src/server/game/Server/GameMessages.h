@@ -100,6 +100,40 @@ namespace GameMessages
         }
     };
 
+    struct DownloadPackage
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_DOWNLOADPACKAGE";
+
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Data", &DownloadPackage::Data) };
+        }
+    };
+
+    struct DownloadPackageElement
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_DOWNLOADPACKAGEELEMENT";
+
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Data", &DownloadPackageElement::Data) };
+        }
+    };
+
+    struct DownloadBrowser
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_DOWNLOADBROWSER";
+
+        static constexpr auto Fields() { return std::tuple<>{}; }
+    };
+
     struct NewObject
     {
         static constexpr uint8 ServiceId = GameService;
@@ -123,6 +157,20 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("GameObjectID", &RemoveObject::GameObjectId) };
+        }
+    };
+
+    struct DeleteObject
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_DELETEOBJECT";
+
+        uint64 GameObjectId = 0;
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GameObjectID", &DeleteObject::GameObjectId), DmlField("Data", &DeleteObject::Data) };
         }
     };
 
@@ -1064,6 +1112,20 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("PatchClientPatchTime", &LogPatchClientPatchTime::PatchClientPatchTime) };
+        }
+    };
+
+    struct PatchingBlocked
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_PATCHINGBLOCKED";
+
+        std::string PackageName;
+        std::string ZoneName;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("PackageName", &PatchingBlocked::PackageName), DmlField("ZoneName", &PatchingBlocked::ZoneName) };
         }
     };
 

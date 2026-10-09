@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs process and supervisor test commands from arguments or a config file, ignoring settings except Helper.Script values and supporting # prefixed command lines when a config file also carries test-specific settings; a burn marks, every tenth of a second, the steady clock beside the processor time the process has used, so a test can read the share it truly held over the very window it measured.
+ * Runs process and supervisor test commands from arguments or a config file, ignoring settings except Helper.Script values and supporting # prefixed command lines when a config file also carries test-specific settings; a burn marks, every tenth of a second, the steady clock beside the processor time the process has used, so a test can read the share it truly held over the very window it measured, and a stop-wait command can ignore shutdown input to test forced stops.
  */
 
 #include "ChildProcess.h"
@@ -325,15 +325,16 @@ int main(int argc, char** argv)
             Write(stdout, InputState() + "\n");
             continue;
         }
-        if (command == "wait-for-stop")
+        if (command == "wait-for-stop" || command == "wait-for-stop-ignore-shutdown")
         {
+            bool const ignoreShutdown = command == "wait-for-stop-ignore-shutdown";
             std::signal(SIGINT, OnStopSignal);
             std::signal(SIGTERM, OnStopSignal);
 #ifdef SIGBREAK
             std::signal(SIGBREAK, OnStopSignal);
 #endif
             static std::atomic<bool> shutdownLine{ false };
-            std::thread([]
+            std::thread([ignoreShutdown]
             {
                 std::array<char, 256> line{};
                 while (std::fgets(line.data(), static_cast<int>(line.size()), stdin) != nullptr)
@@ -341,7 +342,7 @@ int main(int argc, char** argv)
                     std::string_view text(line.data());
                     while (!text.empty() && (text.back() == '\n' || text.back() == '\r'))
                         text.remove_suffix(1);
-                    if (text == "shutdown")
+                    if (!ignoreShutdown && text == "shutdown")
                     {
                         shutdownLine = true;
                         return;

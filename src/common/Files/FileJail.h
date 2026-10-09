@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The jail every file request goes through: a root held open as a handle, and each request resolved against it through handles rather than path strings, on Linux with openat2 beneath the root or a component walk that follows no link, on Windows with opens relative to each parent that never follow a reparse point and a final path compared with the root's, refusing a link, a junction, a mount point, a FIFO, a device or a socket before anything reads it; an entry carries its kind, size, modification time, link count and identity, a folder lists from its own handle with a row for every entry, special ones marked unopenable and failures as error rows, a read reopens the file and checks it is still the one resolved, and a create reserves its space before it makes the file exclusively.
+ * The jail every file request goes through: a root held open as a handle, and each request resolved against it through handles rather than path strings, on Linux with openat2 beneath the root or a component walk that follows no link, on Windows with opens relative to each parent that never follow a reparse point and a final path compared with the root's, refusing a link, a junction, a mount point, a FIFO, a device or a socket before anything reads it; an entry carries its kind, size, modification time, link count and identity, a folder lists from its own handle with a row for every entry, special ones marked unopenable and failures as error rows, a read reopens the file and checks it is still the one resolved, a create reserves its space before it makes the file exclusively, and a rename or a removal reopens what it acts on relative to its parent and acts only if it is still the entry that was resolved, a rename never replacing unless asked.
  */
 
 #ifndef AMBROSE_FILEJAIL_H
@@ -166,6 +166,9 @@ namespace Ambrose
         static bool List(JailEntry const& folder, std::size_t mostEntries, std::vector<JailListed>& entries, bool& truncated, JailError& error);
         static bool Read(JailEntry const& entry, uint64 offset, std::size_t length, std::string& bytes, JailError& error);
         static bool Create(JailRoot const& root, JailPath const& path, std::string_view contents, SpaceGuard& guard, JailError& error, SpaceRefusal* refusal = nullptr);
+        static bool Replace(JailEntry const& entry, std::string_view contents, std::string_view previous, SpaceGuard& guard, JailError& error, SpaceRefusal* refusal = nullptr);
+        static bool Rename(JailEntry const& source, JailEntry const& targetParent, std::string_view name, bool replace, JailError& error);
+        static bool Remove(JailEntry const& entry, JailError& error);
         static bool IdentityOf(std::filesystem::path const& path, FileIdentity& identity, std::string& error);
         static bool UsesOpenat2() noexcept;
         static std::string_view KindName(EntryKind kind) noexcept;

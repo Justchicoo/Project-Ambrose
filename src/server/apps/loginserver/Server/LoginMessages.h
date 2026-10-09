@@ -174,10 +174,17 @@ namespace LoginMessages
         static constexpr std::string_view Tag = "MSG_USER_AUTHEN_V2";
 
         std::string Version;
+        std::string Revision;
+        std::string DataRevision;
+        uint64 MachineId = 0;
+        std::string Locale;
+        std::string PatchClientId;
 
         static constexpr auto Fields()
         {
-            return std::tuple{ DmlField("Version", &UserAuthenV2::Version) };
+            return std::tuple{ DmlField("Version", &UserAuthenV2::Version), DmlField("Revision", &UserAuthenV2::Revision),
+                DmlField("DataRevision", &UserAuthenV2::DataRevision), DmlField("MachineID", &UserAuthenV2::MachineId), DmlField("Locale", &UserAuthenV2::Locale),
+                DmlField("PatchClientID", &UserAuthenV2::PatchClientId) };
         }
     };
 

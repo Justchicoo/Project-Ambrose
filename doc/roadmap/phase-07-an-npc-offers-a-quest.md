@@ -90,8 +90,8 @@ A tool fills world.object_template from the user's ObjectData, so the server kno
 **Acceptance**
 
 - [ ] Blobs decode back identically; class hashes match the dump (ActorDialog 0x39e3afab)
-- [ ] Every STR blob has the SerializerBinary header
-- [ ] 3-of-5 bounty GOAL block has COUNT=3, TOTAL=5, TALLYTEXT
+- [x] Every STR blob has the SerializerBinary header (`QuestWireEncoderTest.EveryEncodedBlobStartsWithAStoredSerializerBinaryHeader` in unit_tests: a GOAL madlib block encoded through `QuestWireEncoder::Encode`, the one path every quest blob leaves by, against a type fixture the test writes itself starts with `0x80000000 | (size - 4)` little-endian)
+- [x] 3-of-5 bounty GOAL block has COUNT=3, TOTAL=5, TALLYTEXT (`QuestWireEncoderTest.AThreeOfFiveBountyGoalBlockCarriesCountTotalAndTallyText` in unit_tests: a `BountyGoalTemplate` with BountyTotal 5 built at count 3 gives COUNT=3, TOTAL=5 and TALLYTEXT=BOUNTY_TOTAL)
 
 ### Detailed spec from QST-2: Quest, dialog and madlib content model with client blob encoders
 
@@ -112,8 +112,8 @@ The server holds quests, goals, dialogs and NPC menus as its own C++ types and c
 **Acceptance**
 
 - [ ] Round-trip test: each encoded blob decodes with the OBJ codec back to identical field values, and its class hashes match the dump (ServiceMementoBase, PrepEntry, GoalEntryFull, MadlibBlock, ActorDialog 0x39e3afab).
-- [ ] Wrapper test: every blob placed in a message STR field has the SerializerBinary header (bit31 set = raw length, else zlib with uncompressed size). A missing header makes the client crash, per the a local packet capture tool README.
-- [ ] Madlib test: a GOAL block for a 3-of-5 bounty carries COUNT=3, TOTAL=5 and a TALLYTEXT key.
+- [x] Wrapper test: every blob placed in a message STR field has the SerializerBinary header (bit31 set = raw length, else zlib with uncompressed size). A missing header makes the client crash, per the a local packet capture tool README. (`QuestWireEncoderTest.EveryEncodedBlobStartsWithAStoredSerializerBinaryHeader` in unit_tests: a GOAL madlib block encoded through `QuestWireEncoder::Encode`, the one path every quest blob leaves by, against a type fixture the test writes itself starts with `0x80000000 | (size - 4)` little-endian)
+- [x] Madlib test: a GOAL block for a 3-of-5 bounty carries COUNT=3, TOTAL=5 and a TALLYTEXT key. (`QuestWireEncoderTest.AThreeOfFiveBountyGoalBlockCarriesCountTotalAndTallyText` in unit_tests: a `BountyGoalTemplate` with BountyTotal 5 built at count 3 gives COUNT=3, TOTAL=5 and TALLYTEXT=BOUNTY_TOTAL)
 
 **Risks**
 
@@ -183,10 +183,10 @@ Quests authored as SQL rows load into an immutable sQuestMgr snapshot built on t
 
 **Acceptance**
 
-- [ ] Each type incl. ROP_OR, apply_not, nesting
-- [ ] ReqHasEntry(Q1 'Complete') gates the quest until Q1 completes
-- [ ] Unknown types evaluate false and log once
-- [ ] `.reload requirement` applies an edit to the next evaluation; a bad reload keeps the old lists
+- [x] Each type incl. ROP_OR, apply_not, nesting (`RequirementTest.EveryBuiltInTypeUsesItsMatchingWizardFact` passes ReqHasQuest, ReqHasGoal, ReqHasEntry, ReqEntryValue, ReqGlobalRegistryValue, ReqMagicLevel, ReqSchoolOfFocus, ReqIsSchool, ReqInZone, ReqIsGender and ReqHasBadge each the field it names, `EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold` turns each fact false in turn and the list fails, `NumericOperatorsMatchTheClientValues` holds operators 0 to 4, `NestedOrListsAndApplyNotCompose` an OR list and a negated list nested under an AND root, and `RequirementApplyNotInvertsTheLeafResult` a negated requirement, all in unit_tests)
+- [x] ReqHasEntry(Q1 'Complete') gates the quest until Q1 completes (`QuestMgrTest.QuestRegistryCompletionGatesQuestAvailability`: a quest whose requirement list holds ReqHasEntry on Q1's quest registry entry Complete is neither offerable nor offered by its starter until the wizard's context has that entry, then is both)
+- [x] Unknown types evaluate false and log once (`RequirementTest.UnknownTypeFailsClosedAndLogsOnlyOnce`: a type no evaluator or ConditionScript knows evaluates false twice and logs one warning; `UnknownTypeDoesNotPassWhenNegated`: apply_not does not turn it true. Every row, authored or extracted, reaches the evaluator as the same RequirementRow)
+- [x] `.reload requirement` applies an edit to the next evaluation; a bad reload keeps the old lists (`RequirementTest.ReloadAppliesEditsAndMalformedReloadKeepsServingLists` through sReloadMgr's requirement target, which `.reload requirement` runs: an edited quest name changes the next evaluation and raises the generation, and a list whose operator is XOR is refused with the old generation still serving)
 
 ### Detailed spec from QST-6: Requirement engine v1
 
@@ -212,10 +212,10 @@ Quest availability, goal activation, dialog entries, spawns and triggers can all
 
 **Acceptance**
 
-- [ ] Unit tests for each type against a fake character context, including ROP_OR lists, apply_not, and nested lists.
-- [ ] Unit test: a quest with ReqHasEntry(m_questName=Q1, entry 'Complete', is_quest_registry) is unavailable until Q1 is completed.
-- [ ] Unknown requirement types from extracted trigger or spawn data evaluate to false and log once per type.
-- [ ] Unit test: `.reload requirement` applies an edited requirement to the next evaluation, and a reload with a malformed list keeps the old lists serving.
+- [x] Unit tests for each type against a fake character context, including ROP_OR lists, apply_not, and nested lists. (`RequirementTest.EveryBuiltInTypeUsesItsMatchingWizardFact` passes ReqHasQuest, ReqHasGoal, ReqHasEntry, ReqEntryValue, ReqGlobalRegistryValue, ReqMagicLevel, ReqSchoolOfFocus, ReqIsSchool, ReqInZone, ReqIsGender and ReqHasBadge each the field it names, `EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold` turns each fact false in turn and the list fails, `NumericOperatorsMatchTheClientValues` holds operators 0 to 4, `NestedOrListsAndApplyNotCompose` an OR list and a negated list nested under an AND root, and `RequirementApplyNotInvertsTheLeafResult` a negated requirement, all in unit_tests)
+- [x] Unit test: a quest with ReqHasEntry(m_questName=Q1, entry 'Complete', is_quest_registry) is unavailable until Q1 is completed. (`QuestMgrTest.QuestRegistryCompletionGatesQuestAvailability`: a quest whose requirement list holds ReqHasEntry on Q1's quest registry entry Complete is neither offerable nor offered by its starter until the wizard's context has that entry, then is both)
+- [x] Unknown requirement types from extracted trigger or spawn data evaluate to false and log once per type. (`RequirementTest.UnknownTypeFailsClosedAndLogsOnlyOnce`: a type no evaluator or ConditionScript knows evaluates false twice and logs one warning; `UnknownTypeDoesNotPassWhenNegated`: apply_not does not turn it true. Every row, authored or extracted, reaches the evaluator as the same RequirementRow)
+- [x] Unit test: `.reload requirement` applies an edited requirement to the next evaluation, and a reload with a malformed list keeps the old lists serving. (`RequirementTest.ReloadAppliesEditsAndMalformedReloadKeepsServingLists` through sReloadMgr's requirement target, which `.reload requirement` runs: an edited quest name changes the next evaluation and raises the generation, and a list whose operator is XOR is refused with the old generation still serving)
 
 **Risks**
 

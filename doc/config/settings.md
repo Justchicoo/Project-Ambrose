@@ -50,10 +50,12 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
+| `Files.DownloadMaxBytes` | unsigned | 67108864 bytes | from 65536 to 1073741824 bytes | live | supervisor | normal | The most of a file one download hands out, whole or as a byte range; a larger file is downloaded in ranges. |
 | `Files.ListMaxEntries` | unsigned | 100000 entries | from 1000 to 10000000 entries | live | supervisor | normal | The most entries a folder listing reads before it stops and says the folder held more. |
 | `Files.MinFreeBytes` | unsigned | 1073741824 bytes | from 0 to 1125899906842624 bytes | live | supervisor | normal | The least free space a volume must keep after any write the panel makes; the larger of this and Files.MinFreePercent holds. |
 | `Files.MinFreePercent` | unsigned | 5 % | from 0 to 90 % | live | supervisor | normal | The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds. |
 | `Files.ReadMaxBytes` | unsigned | 4194304 bytes | from 65536 to 67108864 bytes | live | supervisor | normal | The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown. |
+| `Files.UploadMaxBytes` | unsigned | 16777216 bytes | from 1 to 1073741824 bytes | live | supervisor | normal | The largest file body the panel accepts for one upload or copy. |
 
 ## Inventory
 
@@ -79,6 +81,9 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Login.EnforceRevision` | bool | false | none | live | loginserver | normal | Whether a client whose revision Login.AllowedRevision does not list is refused. |
 | `Login.KeyTTL` | unsigned | 60 s | from 5 to 2592000 s | next connection or operation | loginserver | normal | How long the key a client carries to a game server stays good for. |
 | `Login.LockoutSeconds` | unsigned | 900 s | from 1 to 2592000 s | live | loginserver | normal | How long a locked-out address is refused, and how long a failure is remembered. |
+| `Login.Maintenance` | bool | false | none | live | loginserver | normal | Whether the login server is closed for maintenance: accounts below Login.MaintenanceBypassLevel are refused at sign-in with the maintenance reason, and players already in the world stay connected. |
+| `Login.MaintenanceBypassLevel` | unsigned | 2 | from 0 to 4 | live | loginserver | normal | The lowest security level that still signs in during maintenance: 0 player, 1 moderator, 2 game master, 3 administrator, 4 console. |
+| `Login.MaintenanceReason` | string | empty | at most 255 bytes | live | loginserver | normal | The reason a player refused during maintenance is sent; empty sends Maintenance. |
 | `Login.MaxAuthAttempts` | unsigned | 5 | from 0 to 1000 | live | loginserver | normal | Wrong passwords from one address before it is locked out; 0 never locks it out. |
 | `Login.Name` | string | Ambrose | at most 64 bytes | live | loginserver | normal | The login server's name, sent in MSG_STARTCHARACTERLIST. |
 | `Login.SessionKeyLifetime` | unsigned | 108000 s | from 60 to 2592000 s | next connection or operation | loginserver | normal | How long the session key a successful login issues stays valid. |
@@ -106,6 +111,12 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Network.RateLimit.PerSecond` | unsigned | 50 | from 1 to 100000 | live | gameserver, loginserver | normal | How fast a session's inbound frame allowance refills, per second. |
 | `Network.SendQueueHighWater` | unsigned | 16777216 bytes | from 1048576 to 1073741824 bytes | live | gameserver, loginserver | normal | How many bytes one connection may have waiting to be sent before it is closed; applies to existing connections immediately. |
 | `Network.SessionAcceptTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a new connection may take to finish its handshake. |
+
+## Patching
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Patch.Enabled` | bool | false | none | live | gameserver | normal | Whether the realm may send package-download messages; read at each send, so a live change applies to the next package message. The gate sits on GameSession's own send, so download messages must only ever be sent through GameSession. |
 
 ## Player
 
@@ -163,6 +174,7 @@ Access says who may see and change a setting over the admin API and the panel. A
 |---|---|---|---|---|---|---|---|
 | `Visibility.Distance` | float | 0 world units | from 0 to 100000 world units | live | gameserver | normal | How near an object must come to a wizard to be shown to it, read at each visibility update; 0 takes the zone's own far clip, and a zone with none shows everything. |
 | `Visibility.Hysteresis` | float | 20 world units | from 0 to 10000 world units | live | gameserver | normal | How far past the visibility distance an object already shown may go before it is taken away, read at each visibility update, so one standing at the edge is not shown and taken away over and over. |
+| `Zone.DoorsIgnoreRequirements` | bool | false | none | live | gameserver | normal | Whether a door, a trigger holding a ResTeleport, fires for a wizard who does not meet its requirements, which otherwise fail closed until requirements are checked; for exploring a test server. |
 | `Zone.MobileIdReleaseDelay` | unsigned | 2000 ms | from 0 to 60000 ms | next connection or operation | gameserver | normal | How long a mobile id rests after its wizard leaves before another wizard may take it. |
 | `Zone.MoveFlushInterval` | unsigned | 250 ms | from 50 to 5000 ms | next connection or operation | gameserver | normal | How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush. |
 | `Zone.MoveIdleIntervals` | unsigned | 2 | from 1 to 100 | next connection or operation | gameserver | normal | How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush. |

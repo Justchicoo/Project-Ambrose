@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone.
+ * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry.
  */
 
 #include "BindFile.h"
@@ -71,6 +71,25 @@ namespace
             { "bool", "m_bUndetectable" }, { "class SharedPointer<class RequirementList>", "m_spawnRequirements" }, { "enum CoreObjectInfo::LoadingType", "m_loadingType" } };
     }
 
+    void AddSpawnClasses(Json& classes)
+    {
+        std::string const node = "enum SpawnObjectInfo::StartNodeType";
+        classes[std::to_string(StringHash::KiStringHash(node))] = Json{ { "name", node }, { "bases", Json::array() }, { "hash", StringHash::KiStringHash(node) },
+            { "properties", Json::object() } };
+        std::vector<std::string> const plain{ "class PropertyClass" };
+        AddClass(classes, "class ReqGlobalRegistryValue", { "class Requirement", "class PropertyClass" }, { { "std::string", "m_entryName" }, { "float", "m_numericValue" } });
+        std::vector<std::pair<std::string, std::string>> spawnInfo = ObjectInfoFields();
+        spawnInfo.insert(spawnInfo.end(), { { "enum SpawnObjectInfo::StartNodeType", "m_kStartNodeType" }, { "unsigned int", "m_startNode" }, { "gid", "m_pathID" },
+            { "char", "m_uniqueLoc" } });
+        AddClass(classes, "class SpawnObjectInfo", { "class CoreObjectInfo", "class PropertyClass" }, spawnInfo);
+        AddClass(classes, "class SpawnItem", plain, { { "unsigned char", "m_percentChance" }, { "class SpawnObjectInfo*", "m_objectInfo" } });
+        AddClass(classes, "class SpawnObject", plain, { { "std::string", "m_name" }, { "gid", "m_id" }, { "bool", "m_active" }, { "bool", "m_popSensitive" },
+            { "unsigned int", "m_maxNumberOfSpawns" }, { "bool", "m_atLeastOneSpawn" }, { "bool", "m_activateAtMax" }, { "int", "m_spawnTime" }, { "unsigned int", "m_respawnRate" },
+            { "class SpawnItem*", "m_spawnList" }, { "class RequirementList*", "m_globalDynamicReqs" }, { "bool", "m_globalDynamic" }, { "bool", "m_waitForTimer" },
+            { "unsigned int", "m_zoneLevelMin" }, { "unsigned int", "m_zoneLevelMax" }, { "unsigned int", "m_zoneLevelUp" } }, { "m_spawnList" });
+        AddClass(classes, "class SpawnManager", plain, { { "class SharedPointer<class SpawnObject>", "m_spawners" } }, { "m_spawners" });
+    }
+
     std::string ZoneDump(bool withMissingClasses)
     {
         Json classes = Json::object();
@@ -97,6 +116,7 @@ namespace
         AddClass(classes, "class WizZoneData", plain, { { "std::string", "m_zoneName" }, { "std::string", "m_zoneDisplayName" }, { "class LocationTemplate", "m_locationList" },
             { "class SharedPointer<class CoreObjectInfo>", "m_objectList" }, { "int", "m_healingPerMinute" }, { "int", "m_nSoftLimit" }, { "int", "m_nHardLimit" },
             { "float", "m_farClip" }, { "bool", "m_noMounts" } }, { "m_locationList", "m_objectList" });
+        AddSpawnClasses(classes);
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
     }
 
@@ -375,7 +395,7 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
     WorldSqlScript const script = ZoneSqlScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
-    ASSERT_EQ(statements.size(), 10u) << "the volume and trigger tables are emptied too, with no rows to write";
+    ASSERT_EQ(statements.size(), 12u) << "the volume, trigger and spawner tables are emptied too, with no rows to write";
     EXPECT_EQ(statements[0], "DELETE FROM `zone_template`");
     EXPECT_NE(statements[1].find(WorldSqlScript::Literal(std::string(Hub))), std::string::npos) << statements[1];
     EXPECT_EQ(statements[4], "DELETE FROM `zone_object`");
@@ -383,8 +403,10 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     EXPECT_NE(statements[5].find("'', 0, 0, 1, NULL)"), std::string::npos) << "the emitter's loading type is 1 and it has no spawn requirements: " << statements[5];
     EXPECT_EQ(statements[6], "DELETE FROM `zone_volume`");
     EXPECT_EQ(statements[9], "DELETE FROM `zone_trigger_result`");
+    EXPECT_EQ(statements[10], "DELETE FROM `zone_spawner`");
+    EXPECT_EQ(statements[11], "DELETE FROM `zone_spawner_entry`");
     EXPECT_EQ(WorldSqlScript::Literal(std::monostate{}), "NULL");
-    EXPECT_EQ(ZoneSqlScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result" }));
+    EXPECT_EQ(ZoneSqlScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result", "zone_spawner", "zone_spawner_entry" }));
 }
 
 TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtracted)
@@ -557,4 +579,113 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
     EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("Enter_Ravenwood POI"))), std::string::npos);
     EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("class ResTeleport"))), std::string::npos);
     EXPECT_NE(sql.find(fmt::format("{}, NULL, NULL", StringHash::KiStringHash("class ResMissing"))), std::string::npos) << "no class name and no bytes for the unknown result";
+}
+
+TEST(ZoneSpawnTest, ASpawnDataFileBecomesSpawnersWithTheItemsTheyPlaceAndTheirRequirements)
+{
+    TypeRegistry writer;
+    ASSERT_TRUE(writer.LoadFromText(ZoneDump(false), "writer.json")) << writer.GetErrors().front();
+    TypedViewRegistry views;
+    ZoneViews::RegisterAll(views);
+    TypeRegistry reader(&views);
+    ASSERT_TRUE(reader.LoadFromText(ZoneDump(false), "reader.json")) << reader.GetErrors().front();
+    auto const create = [&writer](std::string_view type)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(writer.GetCatalog(), type);
+        EXPECT_TRUE(object) << type;
+        return object;
+    };
+    auto const item = [&create](uint8 chance, uint64 templateId, PropertyTypes::Vector3D location, int64 startNodeType)
+    {
+        PropertyObjectPtr info = create("class SpawnObjectInfo");
+        EXPECT_EQ(info->Set("m_templateID.m_full", templateId), PropertySetResult::Ok);
+        EXPECT_EQ(info->Set("m_location", location), PropertySetResult::Ok);
+        EXPECT_EQ(info->Set("m_fScale", 1.0f), PropertySetResult::Ok);
+        EXPECT_EQ(info->Set("m_loadingType", int64{ 3 }), PropertySetResult::Ok);
+        EXPECT_EQ(info->Set("m_kStartNodeType", startNodeType), PropertySetResult::Ok);
+        EXPECT_EQ(info->Set("m_pathID", uint64{ 9001 }), PropertySetResult::Ok);
+        PropertyObjectPtr made = create("class SpawnItem");
+        EXPECT_EQ(made->Set("m_percentChance", chance), PropertySetResult::Ok);
+        EXPECT_EQ(made->Set("m_objectInfo", std::move(info)), PropertySetResult::Ok);
+        return made;
+    };
+
+    PropertyObjectPtr wood = create("class SpawnObject");
+    ASSERT_EQ(wood->Set("m_name", std::string("SpawnPoint_Wood_01")), PropertySetResult::Ok);
+    ASSERT_EQ(wood->Set("m_id", uint64{ 77 }), PropertySetResult::Ok);
+    ASSERT_EQ(wood->Set("m_active", true), PropertySetResult::Ok);
+    ASSERT_EQ(wood->Set("m_maxNumberOfSpawns", uint32{ 2 }), PropertySetResult::Ok);
+    ASSERT_EQ(wood->Set("m_respawnRate", uint32{ 30 }), PropertySetResult::Ok);
+    PropertyValue::List woodItems;
+    woodItems.emplace_back(item(60, 38232, { 1.0f, 2.0f, 3.0f }, 1));
+    woodItems.emplace_back(item(40, 38230, { 4.0f, 5.0f, 6.0f }, 1));
+    ASSERT_EQ(wood->Set("m_spawnList", std::move(woodItems)), PropertySetResult::Ok);
+
+    PropertyObjectPtr holiday = create("class SpawnObject");
+    ASSERT_EQ(holiday->Set("m_name", std::string("HalloweenSpawner1")), PropertySetResult::Ok);
+    PropertyObjectPtr registry = create("class ReqGlobalRegistryValue");
+    ASSERT_EQ(registry->Set("m_entryName", std::string("Halloween")), PropertySetResult::Ok);
+    PropertyObjectPtr requirements = create("class RequirementList");
+    PropertyValue::List requirementList;
+    requirementList.emplace_back(std::move(registry));
+    ASSERT_EQ(requirements->Set("m_requirements", std::move(requirementList)), PropertySetResult::Ok);
+    ASSERT_EQ(holiday->Set("m_globalDynamicReqs", std::move(requirements)), PropertySetResult::Ok);
+
+    PropertyObjectPtr manager = create("class SpawnManager");
+    PropertyValue::List spawners;
+    spawners.emplace_back(std::move(wood));
+    spawners.emplace_back(std::move(holiday));
+    ASSERT_EQ(manager->Set("m_spawners", std::move(spawners)), PropertySetResult::Ok);
+    EncodeResult const file = BindFile::Write(manager.get());
+    ASSERT_TRUE(file.Ok()) << file.Detail;
+
+    ZoneExtraction extraction;
+    ExtractedZone zone;
+    zone.Path = "WizardCity/WC_Ravenwood";
+    ZoneExtractor::ReadSpawns(reader.GetCatalog(), zone, file.Bytes, extraction);
+    ASSERT_TRUE(extraction.TriggerFailures.empty()) << extraction.TriggerFailures.front().Detail;
+    ASSERT_EQ(zone.Spawners.size(), 2u);
+    ExtractedSpawner const& point = zone.Spawners[0];
+    EXPECT_EQ(point.Name, "SpawnPoint_Wood_01");
+    EXPECT_EQ(point.Id, 77u);
+    EXPECT_TRUE(point.Active);
+    EXPECT_EQ(point.MaxSpawns, 2u);
+    EXPECT_EQ(point.RespawnRate, 30u);
+    EXPECT_FALSE(point.GlobalDynamicReqs);
+    ASSERT_EQ(point.Items.size(), 2u);
+    EXPECT_EQ(point.Items[0].PercentChance, 60u);
+    EXPECT_EQ(point.Items[0].Object.ClassName, "class SpawnObjectInfo");
+    EXPECT_EQ(point.Items[0].Object.TemplateId, 38232u);
+    EXPECT_EQ(point.Items[0].Object.Location, (PropertyTypes::Vector3D{ 1.0f, 2.0f, 3.0f }));
+    EXPECT_EQ(point.Items[0].Object.LoadingType, 3);
+    EXPECT_EQ(point.Items[0].StartNodeType, 1) << "SNT_RANDOM_UNIQUE";
+    EXPECT_EQ(point.Items[0].PathId, 9001u);
+    EXPECT_EQ(point.Items[1].Object.TemplateId, 38230u);
+
+    ExtractedSpawner const& halloween = zone.Spawners[1];
+    EXPECT_EQ(halloween.Name, "HalloweenSpawner1");
+    ASSERT_TRUE(halloween.GlobalDynamicReqs) << "the spawner's requirements are kept as the bytes the zone data holds";
+    SerializerOptions options;
+    options.Versionable = true;
+    options.Flags = SerializerFlag::None;
+    options.Mask = 0;
+    DecodeResult const decoded = ObjectSerializer::Decode(reader.GetCatalog(), *halloween.GlobalDynamicReqs, options);
+    ASSERT_TRUE(decoded.Ok() && decoded.Object) << decoded.Detail;
+    PropertyValue const* const held = decoded.Object->Get("m_requirements");
+    ASSERT_TRUE(held && held->GetList() && held->GetList()->size() == 1u);
+    ASSERT_TRUE(held->GetList()->front().AsObject());
+    EXPECT_EQ(held->GetList()->front().AsObject()->GetClass().Name, "class ReqGlobalRegistryValue");
+
+    ZoneExtraction wrong;
+    ExtractedZone other = zone;
+    other.Spawners.clear();
+    ZoneExtractor::ReadTriggers(reader.GetCatalog(), other, file.Bytes, wrong);
+    ASSERT_EQ(wrong.TriggerFailures.size(), 1u) << "a spawn file read as triggers fails that file alone";
+
+    extraction.Zones.push_back(zone);
+    std::string const sql = ZoneSqlScript::Build(extraction).ToText();
+    EXPECT_NE(sql.find("`zone_spawner`"), std::string::npos);
+    EXPECT_NE(sql.find("`zone_spawner_entry`"), std::string::npos);
+    EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("SpawnPoint_Wood_01"))), std::string::npos);
+    EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("HalloweenSpawner1"))), std::string::npos);
 }

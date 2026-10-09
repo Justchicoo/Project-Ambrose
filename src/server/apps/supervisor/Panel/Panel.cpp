@@ -1,15 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store and then the keyring before the listener so nothing serves without somewhere to write or the keys its secrets need, lends that store under its own lock to the supervisor's live settings and to an owner's protected file patterns, which are saved in the same transaction as the audit row naming who changed them, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable, or name a two-factor requirement the panel does not know, is refused and the old listener and requirement keep serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. An operator with two-factor sign-in is given no session for a password alone: the password earns a challenge held in memory under the hash of a short-lived cookie, which dies after a few attempts or minutes, and only a code or a recovery code from that operator turns it into a session, the one-time password link included; an operator who already has two-factor sign-in moves to another authenticator only with a current code or recovery code from the one in use as well as the password and a code from the new one, so a session and a password alone cannot swap the factor out. A code or recovery code is checked and spent under the same lock every recorded change holds, so it never lands inside another request's transaction and is never undone with it. Every authenticated route and socket is held to the two-factor requirement except the routes that turn it on, and a danger permission, a secret reveal or a restricted change asks for a check of who the caller is within the last few minutes, records what that check authorized, and changes nothing while it is missing. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value; no code, secret or password ever reaches an audit row or a log line. The event socket and its ticket route are registered with the rest, its streams and its sweeper start once the listener is up and stop before it closes. Every single-use link, the owner claim printed at each start while there is no operator, a password link, a local link and a pairing link, is issued through one path that audits it with the store change in one transaction and never writes its token anywhere but the answer, makes the owner with a password nobody is told when a desktop link finds the panel empty, refuses a local link a loopback peer cannot reach and a pairing a plain listener would carry unencrypted, and pins a pairing to the certificate the listener serves now; a link is traded once, counted per address when wrong or spent, burned when used from where it does not belong, and opens a session only through the second factor its operator has, and no Argon2id hash ever runs inside an open transaction.
+ * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store and then the keyring before the listener so nothing serves without somewhere to write or the keys its secrets need, lends that store under its own lock to the supervisor's live settings and to an owner's protected file patterns, which are saved in the same transaction as the audit row naming who changed them, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable, or name a two-factor requirement the panel does not know, is refused and the old listener and requirement keep serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. An operator with two-factor sign-in is given no session for a password alone: the password earns a challenge held in memory under the hash of a short-lived cookie, which dies after a few attempts or minutes, and only a code or a recovery code from that operator turns it into a session, the one-time password link included; an operator who already has two-factor sign-in moves to another authenticator only with a current code or recovery code from the one in use as well as the password and a code from the new one, so a session and a password alone cannot swap the factor out. A code or recovery code is checked and spent under the same lock every recorded change holds, so it never lands inside another request's transaction and is never undone with it. Every authenticated route and socket is held to the two-factor requirement except the routes that turn it on, and a danger permission, a secret reveal or a restricted change asks for a check of who the caller is within the last few minutes, records what that check authorized, and changes nothing while it is missing. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value; no code, secret or password ever reaches an audit row or a log line. The event socket and its ticket route are registered with the rest, its streams and its sweeper start once the listener is up and stop before it closes. Every single-use link, the owner claim printed at each start while there is no operator, a password link, a local link and a pairing link, is issued through one path that audits it with the store change in one transaction and never writes its token anywhere but the answer, makes the owner with a password nobody is told when a desktop link finds the panel empty, refuses a local link a loopback peer cannot reach and a pairing a plain listener would carry unencrypted, and pins a pairing to the certificate the listener serves now; a link is traded once, counted per address when wrong or spent, burned when used from where it does not belong, and opens a session only through the second factor its operator has, and no Argon2id hash ever runs inside an open transaction. The mail test sends only to the signed-in operator's own address through the saved mail settings and is audited, answering the SMTP server's own refusal when it fails, and once a name has failed to sign in repeatedly with the captcha on, sign-in needs a captcha answer the provider verifies, refused with a clear 503 when the provider cannot be reached rather than let through.
  */
 
 #include "Panel.h"
 #include "AdminClient.h"
 #include "AdminConfigView.h"
+#include "PanelCaptcha.h"
 #include "PanelErrorReport.h"
+#include "PanelMail.h"
 #include "ConfigMgr.h"
 #include "PanelSettingStore.h"
 #include "CryptoRandom.h"
+#include "Environment.h"
 #include "Base64.h"
 #include "IpAddress.h"
 #include "Log.h"
@@ -298,6 +301,13 @@ bool Panel::OpenStore(ConfigMgr const& config, std::string& error)
         _store.Close();
         return false;
     }
+    AuditChainVerification verification;
+    std::string verifyError;
+    if (!PanelAudit::VerifyChain(_store, verification, verifyError))
+        AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "The panel's audit chain could not be verified: {}", verifyError);
+    else if (!verification.Valid)
+        AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "The panel's audit chain does not verify from row {} to row {}: {}",
+            verification.FirstInvalidId, verification.LastRowId, verification.Problem);
     for (std::string const& warning : warnings)
         AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "{}", warning);
     for (std::string const& applied : _store.GetApplied())
@@ -393,8 +403,21 @@ bool Panel::Start(ConfigMgr const& config, std::string& error)
     }
     for (std::string const& refused : _listener.Routes().RefusedRoutes())
         AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "The panel leaves out {}", refused);
-    if (!_listener.Start(settings, error))
+    std::string const auditCollectorUrl = config.GetOption<std::string>("Panel.AuditCollectorUrl", "", true);
+    std::string const auditCollectorToken = config.GetOption<std::string>("Panel.AuditCollectorToken", "", true);
+    if (!_auditForwarder.Start(_store, _storeMutex, auditCollectorUrl, auditCollectorToken,
+        [this](std::string_view problem)
+        {
+            AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "Audit collector forwarding will retry: {}", problem);
+        }, error))
         return false;
+    _auditForwarding = !auditCollectorUrl.empty();
+    if (!_listener.Start(settings, error))
+    {
+        _auditForwarder.Stop();
+        _auditForwarding = false;
+        return false;
+    }
     _events.Start();
     _eventSocket->Start();
     OfferTheOwnerLink();
@@ -452,6 +475,8 @@ void Panel::Stop()
     StopGathering();
     _eventSocket->Stop();
     _listener.Stop();
+    _auditForwarder.Stop();
+    _auditForwarding = false;
     _events.Stop();
     _tickets.Clear();
     _rateLimit.Clear();
@@ -575,7 +600,24 @@ bool Panel::Record(AuditEvent const& event, std::function<bool(std::string& erro
         error = "the panel store is not open, so nothing can be recorded and nothing is changed";
         return false;
     }
-    return PanelAudit::Record(_store, event, change, error);
+    bool const recorded = PanelAudit::Record(_store, event, change, error, _auditForwarding);
+    if (recorded && _auditForwarding)
+        _auditForwarder.Wake();
+    return recorded;
+}
+
+bool Panel::VerifyAuditChain(AuditChainVerification& verification, std::string& error)
+{
+    std::lock_guard const lock(_storeMutex);
+    if (!_store.IsOpen())
+    {
+        error = "the panel store is not open";
+        return false;
+    }
+    if (!PanelAudit::VerifyChain(_store, verification, error))
+        return false;
+    verification.PendingEvents = PanelAudit::PendingCount(_store, error);
+    return verification.PendingEvents >= 0;
 }
 
 bool Panel::Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error)
@@ -586,7 +628,10 @@ bool Panel::Record(AuditEvent& event, std::function<bool(AuditEvent& event, std:
         error = "the panel store is not open, so nothing can be recorded and nothing is changed";
         return false;
     }
-    return PanelAudit::Record(_store, event, change, error);
+    bool const recorded = PanelAudit::Record(_store, event, change, error, _auditForwarding);
+    if (recorded && _auditForwarding)
+        _auditForwarder.Wake();
+    return recorded;
 }
 
 AdminResponse Panel::AuditRequest(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation)
@@ -801,6 +846,27 @@ void Panel::RegisterSignIn()
     routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, PanelPermissions::CatalogJson()); });
     routes.AddGuarded("GET", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
     routes.AddGuarded("PATCH", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
+    routes.AddGuarded("POST", "/api/panel/settings/mail/test", "panel.settings", [this](AdminRequest const& request) { return MailTest(request); });
+    routes.AddGuarded("GET", "/api/panel/audit/verify", "activity.read", [this](AdminRequest const&)
+    {
+        AuditChainVerification verification;
+        std::string error;
+        if (!VerifyAuditChain(verification, error))
+            return AdminResponse::Problem(503, "audit_unavailable", error);
+        nlohmann::json const answer{
+            { "schema", 1 },
+            { "valid", verification.Valid },
+            { "rows_checked", verification.RowsChecked },
+            { "elapsed_ms", verification.ElapsedMs },
+            { "budget_ms", PanelAudit::VerificationBudgetMs },
+            { "pending_events", verification.PendingEvents },
+            { "collector_enabled", _auditForwarding },
+            { "first_invalid_id", verification.FirstInvalidId == 0 ? nlohmann::json(nullptr) : nlohmann::json(verification.FirstInvalidId) },
+            { "last_row_id", verification.LastRowId },
+            { "problem", verification.Problem }
+        };
+        return AdminResponse::Json(200, answer.dump());
+    });
     routes.AddGuarded("GET", "/api/panel/errors", "errors.read", [this](AdminRequest const&)
     {
         std::string error;
@@ -1030,6 +1096,106 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
     if (event.Result == AuditResult::Refused)
         return AdminResponse::Problem(409, "settings_refused", event.Reason);
     return PanelSettingsGet(request);
+}
+
+namespace
+{
+    std::string CaptchaVerifyUrl(std::string_view provider)
+    {
+        if (std::optional<std::string> const override = Ambrose::GetEnv("AMBROSE_TEST_CAPTCHA_VERIFY_URL"); override && !override->empty())
+            return *override;
+        return PanelCaptcha::VerifyUrlFor(provider);
+    }
+}
+
+AdminResponse Panel::MailTest(AdminRequest const& request)
+{
+    std::optional<PanelUser> const user = UserOf(request);
+    if (!user)
+        return AdminResponse::Problem(401, "not_signed_in", "Testing the mail settings needs a signed-in user");
+    if (user->Email.empty())
+        return AdminResponse::Problem(409, "mail_no_address", "The signed-in user has no email address, so there is nowhere to send the test mail");
+
+    PanelMailSettings mail;
+    mail.SmtpHost = _settings.ValueOf("Mail.SmtpHost");
+    mail.TlsMode = _settings.ValueOf("Mail.TlsMode");
+    mail.Username = _settings.ValueOf("Mail.Username");
+    mail.Password = _settings.ValueOf("Mail.Password");
+    mail.FromAddress = _settings.ValueOf("Mail.FromAddress");
+    mail.FromName = _settings.ValueOf("Mail.FromName");
+    try
+    {
+        mail.SmtpPort = static_cast<uint16>(std::stoi(_settings.ValueOf("Mail.SmtpPort")));
+    }
+    catch (std::exception const&)
+    {
+        mail.SmtpPort = 587;
+    }
+    if (mail.SmtpHost.empty() || mail.FromAddress.empty())
+        return AdminResponse::Problem(409, "mail_not_configured", "Set Mail.SmtpHost and Mail.FromAddress before testing the mail settings");
+
+    PanelMailResult const sent = PanelMail::SendTestMail(mail, user->Email);
+
+    AuditEvent event;
+    event.Name = "panel:settings.mail_tested";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(user->Id);
+    event.ActorName = user->Username;
+    event.Address = request.RemoteAddress;
+    event.Result = sent.Sent ? AuditResult::Succeeded : AuditResult::Refused;
+    event.Reason = sent.Sent ? "the test mail reached " + user->Email : sent.Error;
+    event.On("panel_user", std::to_string(user->Id), user->Username);
+    std::string failure;
+    if (!Record(event, {}, failure))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A tested mail setting could not be recorded: {}", failure);
+
+    if (!sent.Sent)
+        return AdminResponse::Problem(502, "mail_test_failed", sent.Error);
+    nlohmann::json answer;
+    answer["sent"] = true;
+    answer["to"] = user->Email;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+std::optional<AdminResponse> Panel::CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username)
+{
+    std::string const provider = _settings.ValueOf("Security.CaptchaProvider");
+    if (provider.empty() || provider == "off")
+        return std::nullopt;
+    if (_signIn.RecentFailures(username) < PanelCaptcha::AfterFailures)
+        return std::nullopt;
+
+    std::string const token = body.contains("captcha") && body["captcha"].is_string() ? body["captcha"].get<std::string>() : std::string();
+    if (token.empty())
+        return AdminResponse::Problem(401, "captcha_required", "Too many failed sign-ins; answer the captcha to try again");
+
+    PanelCaptchaResult const checked = PanelCaptcha::Verify(
+        provider, _settings.ValueOf("Security.CaptchaSecret"), token, request.RemoteAddress, CaptchaVerifyUrl(provider));
+    if (checked.Result == PanelCaptchaResult::Outcome::Verified)
+        return std::nullopt;
+
+    _signIn.Failed(username, request.RemoteAddress);
+    AuditEvent refused;
+    refused.Name = "panel:session.refused";
+    refused.Actor = AuditActor::User;
+    refused.Address = request.RemoteAddress;
+    refused.UserAgent = request.UserAgent;
+    refused.Result = AuditResult::Refused;
+    refused.On("panel_user", "", std::string(username));
+    std::string failure;
+    if (checked.Result == PanelCaptchaResult::Outcome::Unreachable || checked.Result == PanelCaptchaResult::Outcome::Misconfigured)
+    {
+        refused.Reason = checked.Detail.empty()
+            ? "the captcha could not be checked, so the sign-in is refused"
+            : checked.Detail + ", so the sign-in is refused";
+        if (!Record(refused, {}, failure))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A captcha-refused sign-in could not be recorded: {}", failure);
+        return AdminResponse::Problem(503, "captcha_unreachable", refused.Reason);
+    }
+    refused.Reason = checked.Detail;
+    if (!Record(refused, {}, failure))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A captcha-refused sign-in could not be recorded: {}", failure);
+    return AdminResponse::Problem(403, "captcha_invalid", checked.Detail);
 }
 
 std::string Panel::NameOf(AdminRequest const& request)
@@ -1306,6 +1472,9 @@ AdminResponse Panel::SignIn(AdminRequest const& request)
         answer.Headers.emplace_back("Retry-After", std::to_string(verdict.RetryAfterSeconds));
         return answer;
     }
+
+    if (std::optional<AdminResponse> gated = CaptchaGate(request, body, username))
+        return *gated;
 
     PanelUser user;
     std::string error;
@@ -1994,6 +2163,7 @@ void Panel::OfferTheOwnerLink()
 
 bool Panel::Transact(std::function<bool(std::string& error)> const& change, std::string& error)
 {
+    error.clear();
     std::lock_guard const lock(_storeMutex);
     if (!_store.IsOpen())
     {
@@ -2007,11 +2177,18 @@ bool Panel::Transact(std::function<bool(std::string& error)> const& change, std:
         _store.Rollback();
         return false;
     }
+    if (!PanelAudit::Finalize(_store, error, _auditForwarding))
+    {
+        _store.Rollback();
+        return false;
+    }
     if (!_store.Commit(error))
     {
         _store.Rollback();
         return false;
     }
+    if (_auditForwarding)
+        _auditForwarder.Wake();
     return true;
 }
 

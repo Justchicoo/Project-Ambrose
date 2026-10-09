@@ -23,20 +23,24 @@
 #include "MessageRegistry.h"
 #include "MovementPacking.h"
 #include "ObjectFields.h"
+#include "ObjectSerializer.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
 #include "PlayerLevelMgr.h"
 #include "PackedName.h"
 #include "PassKey3.h"
 #include "PlayerObjectBuilder.h"
+#include "PropertyFiller.h"
 #include "InstanceSight.h"
 #include "ScriptMgr.h"
 #include "Settings.h"
+#include "SpawnerMgr.h"
 #include "SpellMgr.h"
 #include "StringHash.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
 #include "ZoneMgr.h"
+#include "ZoneTeleportMgr.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -59,6 +63,8 @@ namespace
     std::string TransferAddress;
     uint16 TransferPort = 0;
     constexpr int64 TransferKeyLifetimeSeconds = 120;
+    std::mutex OnlookerMutex;
+    GameSession::OnlookerSource Onlookers;
 
     struct PendingTransfer
     {
@@ -96,6 +102,33 @@ namespace
     {
         return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     }
+
+    std::optional<std::string> EncodeDespawnInfo(MapObjectDeletion const& deletion)
+    {
+        TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+        PropertyObjectPtr const info = catalog ? PropertyObject::Create(catalog, "class DespawnInfo") : nullptr;
+        ObjectField const* const field = ObjectFields::Find("MSG_DELETEOBJECT", "Data");
+        if (!info || !field)
+        {
+            LOG_ERROR("server.gamesession", "Cannot encode how object {} leaves: {}", deletion.GlobalId, !info ? "the loaded type dump has no class DespawnInfo" :
+                "the loaded message definitions do not describe MSG_DELETEOBJECT.Data");
+            return std::nullopt;
+        }
+        std::string problem;
+        PropertyFiller(*info, problem).Set("m_killer", deletion.Killer).Set("m_despawnEffect", deletion.Effect);
+        if (!problem.empty())
+        {
+            LOG_ERROR("server.gamesession", "Cannot encode how object {} leaves: {}", deletion.GlobalId, problem);
+            return std::nullopt;
+        }
+        EncodeResult const encoded = ObjectSerializer::EncodeField(*field, info.get());
+        if (!encoded.Ok())
+        {
+            LOG_ERROR("server.gamesession", "Cannot encode how object {} leaves: {}", deletion.GlobalId, encoded.Detail);
+            return std::nullopt;
+        }
+        return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
+    }
 }
 
 GameSession::GameSession(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context)
@@ -118,6 +151,12 @@ void GameSession::SetTransferEndpoint(std::string address, uint16 port)
     std::lock_guard const lock(TransferEndpointMutex);
     TransferAddress = std::move(address);
     TransferPort = port;
+}
+
+void GameSession::SetOnlookerSource(OnlookerSource source)
+{
+    std::lock_guard const lock(OnlookerMutex);
+    Onlookers = std::move(source);
 }
 
 std::shared_ptr<GameSession> GameSession::SharedSelf()
@@ -1185,7 +1224,8 @@ void GameSession::ArriveInVolumes()
 std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now)
 {
     std::vector<ZoneNotifyText> texts;
-    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts);
+    std::vector<std::string> doors;
+    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts, &doors, sSettings.Get<bool>("Zone.DoorsIgnoreRequirements"));
     for (std::string const& trigger : fired)
         sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
     for (ZoneNotifyText const& text : texts)
@@ -1196,7 +1236,43 @@ std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std:
         SendDmlMessage(message);
         LOG_INFO("server.gamesession", "Session {} showed wizard {} the notify text {} of type {}", GetSessionId(), _worldGuid, Ambrose::ForLog(text.Text, 128), text.Type);
     }
+    if (!fired.empty())
+        if (Map* const map = sMapMgr.Find(*_mapId))
+            sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, fired, _worldGuid, now,
+                std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
+    if (!doors.empty() && event != ZoneTriggerMgr::EnterZoneEvent)
+        WalkThroughDoor(doors);
     return fired;
+}
+
+void GameSession::WalkThroughDoor(std::vector<std::string> const& doors)
+{
+    std::optional<ZoneTeleport> const door = sZoneTeleportMgr.FirstWithDestination(_zonePath, doors);
+    if (!door)
+    {
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {}, which zone_teleport gives no destination", GetSessionId(), _worldGuid,
+            fmt::format("{}", fmt::join(doors, ", ")), Ambrose::ForLog(_zonePath, 128));
+        return;
+    }
+    ZonePlace const place = sZoneMgr.FindPlace(door->DestZone, door->DestLocation);
+    if (place.Result != ZoneLookup::Ok)
+    {
+        LOG_WARN("server.gamesession", "Session {}'s door {} in {} leads to {} in {}, which the zones no longer hold", GetSessionId(), door->TriggerName,
+            Ambrose::ForLog(_zonePath, 128), door->DestLocation, door->DestZone);
+        return;
+    }
+    PlayerPosition const target{ place.Location.X, place.Location.Y, place.Location.Z, place.Location.Yaw };
+    std::string problem;
+    GameSession::OnlookerSource source;
+    {
+        std::lock_guard const lock(OnlookerMutex);
+        source = Onlookers;
+    }
+    std::vector<std::shared_ptr<GameSession>> const onlookers = source ? source() : std::vector<std::shared_ptr<GameSession>>{ SharedSelf() };
+    bool const moved = door->SameZone ? TeleportWithinMap(target, onlookers, problem)
+                                      : RequestZoneTransfer(ZoneTransfer{ door->DestZone, door->DestZone, door->DestLocation, target }, problem);
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {} to {} in {}{}", GetSessionId(), _worldGuid, door->TriggerName, Ambrose::ForLog(_zonePath, 128),
+        door->DestLocation, door->DestZone, moved ? std::string() : fmt::format(", which did not happen: {}", problem));
 }
 
 void GameSession::FollowReloadedVolumes()
@@ -1336,6 +1412,22 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
 {
     if (!_mapId || *_mapId != changes.DynamicZoneId)
         return;
+    for (MapObjectDeletion const& deleted : changes.Deleted)
+    {
+        if (!_sight.IsVisible(deleted.GlobalId))
+            continue;
+        std::optional<std::string> data = EncodeDespawnInfo(deleted);
+        if (!data)
+        {
+            ForgetSight(deleted.GlobalId);
+            continue;
+        }
+        GameMessages::DeleteObject message;
+        message.GameObjectId = deleted.GlobalId;
+        message.Data = std::move(*data);
+        SendDmlMessage(message);
+        _sight.Forget(deleted.GlobalId);
+    }
     for (uint64 const removed : changes.Removed)
         ForgetSight(removed);
 }

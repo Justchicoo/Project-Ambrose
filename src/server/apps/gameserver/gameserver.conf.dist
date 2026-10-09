@@ -58,6 +58,7 @@ PublicAddress =
 Realm.HeartbeatInterval = 30
 World.UpdateInterval = 50
 Zone.UnloadDelay = 60
+Zone.DoorsIgnoreRequirements = 0
 Zone.MobileIdReleaseDelay = 2000
 Player.LinkDeadTime = 60
 Player.AfkWarnTime = 900

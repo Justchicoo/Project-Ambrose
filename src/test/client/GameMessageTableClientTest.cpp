@@ -73,13 +73,22 @@ TEST(GameMessageTableClientTest, EveryWorldMessageHasExactlyOneRuleAndTheEntryCh
     }
 
     for (std::string_view const tag : { "MSG_GETTIMEDACCESSPASSES", "MSG_GETSUBSCRIBERONLYITEMS", "MSG_CROWNBALANCE", "MSG_DONESHOPPING", "MSG_LOGCLIENTRESOLUTION",
-             "MSG_LOGPATCHCLIENTPATCHTIME", "MSG_QUESTFINDEROPTION", "MSG_ITEMLOCK" })
+             "MSG_LOGPATCHCLIENTPATCHTIME", "MSG_PATCHINGBLOCKED", "MSG_QUESTFINDEROPTION", "MSG_ITEMLOCK" })
     {
         MessageInfoPtr const info = loaded.Registry.Find(GameMessages::WizardService, tag);
         ASSERT_NE(info, nullptr) << tag;
         MessageRule const* const rule = table.FindRule(loaded.Catalog, GameMessages::WizardService, info->Definition->Order);
         ASSERT_NE(rule, nullptr) << tag;
         EXPECT_EQ(rule->Kind, MessageRuleKind::Handled) << tag;
+    }
+
+    for (std::string_view const tag : { "MSG_DOWNLOADBROWSER", "MSG_DOWNLOADPACKAGE", "MSG_DOWNLOADPACKAGEELEMENT" })
+    {
+        MessageInfoPtr const info = loaded.Registry.Find(GameMessages::GameService, tag);
+        ASSERT_NE(info, nullptr) << tag;
+        MessageRule const* const rule = table.FindRule(loaded.Catalog, GameMessages::GameService, info->Definition->Order);
+        ASSERT_NE(rule, nullptr) << tag;
+        EXPECT_EQ(rule->Kind, MessageRuleKind::Refused) << tag << " is a server-to-client message";
     }
 
     MessageInfoPtr const hatch = loaded.Registry.Find(GameMessages::WizardService, "MSG_PETHATCHREADYSTATUS");

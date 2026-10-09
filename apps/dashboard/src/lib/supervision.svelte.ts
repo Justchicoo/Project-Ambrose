@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the panel asks about one app: running a command on it, the supervisor's own routes for power, captured output and the file roots with their listings, reads and protected patterns, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
+ * What the panel asks about one app: running a command on it, the supervisor's own routes for power, captured output and the file roots with their listings, reads and protected patterns, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so. The panel's own settings are read, saved and sent a test mail from here as well.
  */
 
 import { ApiError, request } from "./api.svelte";
@@ -15,6 +15,7 @@ import {
     DatabaseUpdatesAnswer,
     OutputAnswer,
     ActivityAnswer,
+    AuditChainAnswer,
     ClientAnswer,
     GraphRangeAnswer,
     GraphsAnswer,
@@ -30,6 +31,7 @@ import {
     SettingHistoryAnswer,
     EventsAnswer,
     PanelSettingsAnswer,
+    PanelMailTestAnswer,
     FileContent,
     FileListing,
     FileRootsAnswer,
@@ -155,6 +157,10 @@ export function updatePanelSettings(values: Record<string, string>) {
     return request("PATCH", "api/panel/settings", PanelSettingsAnswer, { values });
 }
 
+export function testPanelMail() {
+    return request("POST", "api/panel/settings/mail/test", PanelMailTestAnswer, {});
+}
+
 export function errors(signal?: AbortSignal) {
     return request("GET", "api/panel/errors", ErrorsAnswer, undefined, signal);
 }
@@ -181,6 +187,10 @@ export function realmsOf(app: string, signal?: AbortSignal) {
 
 export function activityOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "activity"), ActivityAnswer, undefined, signal);
+}
+
+export function auditChain(signal?: AbortSignal) {
+    return request("GET", "api/panel/audit/verify", AuditChainAnswer, undefined, signal);
 }
 
 export function playersOf(app: string, signal?: AbortSignal) {
