@@ -240,6 +240,8 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - [x] Log lines arriving while a command is half typed do not corrupt the typed text (ConsolePromptTest.ALogLineErasesAndRedrawsTheHalfTypedCommand and ConsolePromptTest.ALineWiderThanTheWindowScrollsSidewaysInsteadOfWrapping, byte for byte on a fake console; the prompt is held to one row so a line wider than the window scrolls sideways instead of wrapping)
 - [x] With `Console.Enable = 0` the app runs with no input thread and still shuts down on Ctrl+C (ServerAppTest.ConsoleEnableZeroStartsNoReader and ServerAppTest.InterruptSignalShutsDownGracefully)
 
+For the Dev-gated check, record one unredirected server-console run on Windows and one on Linux. Each record must show an `ERROR` line visibly red and a `WARN` line visibly yellow, and name only the operating system and terminal, not a host path or machine name. `AppenderConsoleTest.TerminalGetsAnsiColorsPerLevel` checks the emitted sequences on a fake terminal but is not a substitute for either visual run.
+
 ## 17.02 Admin API listener and authentication
 
 **Goal:** Each app can expose a local, authenticated HTTP and WebSocket API that every later operations feature builds on.
