@@ -389,8 +389,11 @@ void LoginSession::HandleUserAuthen(LoginMessages::UserAuthen&)
     RefuseUnsupportedAuthentication(LoginMessages::UserAuthen::Tag);
 }
 
-void LoginSession::HandleUserAuthenV2(LoginMessages::UserAuthenV2&)
+void LoginSession::HandleUserAuthenV2(LoginMessages::UserAuthenV2& message)
 {
+    LOG_DEBUG(AuthLog, "Session {} sent MSG_USER_AUTHEN_V2: version {}, revision {}, data revision {}, locale {}, machine {:016X}, patch client {}",
+        GetSessionId(), Ambrose::ForLog(message.Version), Ambrose::ForLog(message.Revision), Ambrose::ForLog(message.DataRevision), Ambrose::ForLog(message.Locale),
+        message.MachineId, Ambrose::ForLog(message.PatchClientId));
     RefuseUnsupportedAuthentication(LoginMessages::UserAuthenV2::Tag);
 }
 

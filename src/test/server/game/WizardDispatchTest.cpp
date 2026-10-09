@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks that MSG_PLAYERWIZBANG is dispatched only for an in-world wizard and that the named spellbook state maps to the client identifier while all other states clear it.
+ * Checks the in-world MSG_PLAYERWIZBANG dispatch and state mapping, and that both client patch notices are handled while logged in.
  */
 
 #include "GameMessageTable.h"
@@ -39,4 +39,23 @@ TEST(WizardDispatchTest, OnlyTheSpellbookStateHasANonzeroWizBangId)
     EXPECT_EQ(PlayerWizBang::IdForState("SpellbookWizbang"), PlayerWizBang::SpellbookId);
     EXPECT_EQ(PlayerWizBang::IdForState(""), 0u);
     EXPECT_EQ(PlayerWizBang::IdForState("Jumping"), 0u);
+}
+
+TEST(WizardDispatchTest, PatchNoticesAreHandledForLoggedInWizards)
+{
+    GameTesting::GameDefinitions definitions;
+    MessageCatalogPtr const catalog = sMessageRegistry.GetCatalog();
+    ASSERT_TRUE(catalog);
+    MessageHandlerTable<GameSession> const& table = GameMessageTable::Get();
+
+    for (std::string_view const tag : { "MSG_PATCHINGBLOCKED", "MSG_LOGPATCHCLIENTPATCHTIME" })
+    {
+        MessageInfo const* const info = catalog->Find(GameMessages::WizardService, tag);
+        ASSERT_NE(info, nullptr) << tag;
+        MessageRule const* const rule = table.FindRule(catalog, GameMessages::WizardService, info->Definition->Order);
+        ASSERT_NE(rule, nullptr) << tag;
+        EXPECT_EQ(rule->Kind, MessageRuleKind::Handled) << tag;
+        EXPECT_EQ(rule->Statuses, SessionStatuses::LoggedIn | SessionStatuses::InWorld) << tag;
+        EXPECT_EQ(rule->Processing, MessageProcessing::InPlace) << tag;
+    }
 }

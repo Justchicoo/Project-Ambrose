@@ -291,9 +291,9 @@ The retail client patches against Ambrose, finds nothing to change on a complete
 
 **Acceptance**
 
-- [ ] PATCHINGBLOCKED and LOGPATCHCLIENTPATCHTIME registered 'logged in'
+- [x] PATCHINGBLOCKED and LOGPATCHCLIENTPATCHTIME registered 'logged in' [WizardDispatchTest.PatchNoticesAreHandledForLoggedInWizards; GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled]
 - [ ] -P 0 zones in with no download-package messages
-- [ ] Revision mismatch rejected only with Login.EnforceRevision=1
+- [x] Revision mismatch rejected only with Login.EnforceRevision=1 [AuthHandlerDatabaseTest.RevisionEnforcementCanBeChangedForTheNextLogin, run against MySQL on linux-gcc: a mismatched revision is admitted with Login.EnforceRevision off and refused with ErrorNoLock once it is on]
 - [ ] Login.EnforceRevision and Patch.Enabled changes apply live
 
 ### Detailed spec from PAT-9: Game/login integration switches for patching
@@ -302,7 +302,7 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 
 **Deliverables**
 
-- loginserver: accept and log PatchClientID / Revision / DataRevision from MSG_USER_AUTHEN_V3 (and V2/MSG_USER_VALIDATE), and optionally reject a Revision that differs from the patchserver manifest revision (live setting Login.EnforceRevision, applied from the next login)
+- loginserver: decode and log PatchClientID / Revision / DataRevision from MSG_USER_AUTHEN_V3 and MSG_USER_AUTHEN_V2, and PatchClientID from MSG_USER_VALIDATE; optionally reject a Revision that differs from the allowed revisions (live setting Login.EnforceRevision, applied from the next login)
 - gameserver: live setting Patch.Enabled, applied from the next zone transfer; when 0 never send MSG_DOWNLOADPACKAGE / MSG_DOWNLOADPACKAGEELEMENT / MSG_DOWNLOADBROWSER
 - gameserver handlers for client MSG_PATCHINGBLOCKED (log PackageName/ZoneName and keep the player in place) and MSG_LOGPATCHCLIENTPATCHTIME (log only), in game/Handlers/PatchHandler.cpp
 
@@ -316,14 +316,15 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 
 **Acceptance**
 
-- [ ] Unit: dispatch table has MSG_PATCHINGBLOCKED and MSG_LOGPATCHCLIENTPATCHTIME registered with state 'logged in'
+- [x] Unit: dispatch table has MSG_PATCHINGBLOCKED and MSG_LOGPATCHCLIENTPATCHTIME registered with state 'logged in' [WizardDispatchTest.PatchNoticesAreHandledForLoggedInWizards; GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled]
 - [ ] Real client with -P 0 logs in and zones in without the gameserver sending any download-package message (sniffer or server log shows none)
-- [ ] Login with mismatched Revision is rejected with a clear login error only when Login.EnforceRevision=1
+- [x] Login with mismatched Revision is rejected with a clear login error only when Login.EnforceRevision=1 [AuthHandlerDatabaseTest.RevisionEnforcementCanBeChangedForTheNextLogin, run against MySQL on linux-gcc: a mismatched revision is admitted with Login.EnforceRevision off and refused with ErrorNoLock once it is on]
 - [ ] `.settings set Login.EnforceRevision 1` on a running loginserver rejects the next mismatched login without a restart, and setting Patch.Enabled to 0 stops download-package messages from the next zone transfer
 
 **Risks**
 
 - Belongs partly to the LOG and WLD domains; the milestone ids for them are guesses
+- The verified client definition for MSG_USER_VALIDATE has no Revision or DataRevision fields; MSG_USER_AUTHEN_V2 remains unsupported but its patch and revision fields are still decoded and logged before refusal.
 
 ## 16.08 MSG_NEXT_VERSION and patch hardening (PAT-11)
 
