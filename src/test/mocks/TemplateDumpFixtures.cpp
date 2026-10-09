@@ -277,6 +277,22 @@ namespace TemplateDumpFixtures
         AddClass(classes, "class ItemSetBonusTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), set);
     }
 
+    void AddQuestClasses(Json& classes)
+    {
+        Json madlib = Json::object();
+        madlib["m_madlibs"] = Property("class SharedPointer<class MadlibArg>", "m_madlibs", 0, "List");
+        madlib["m_blockToken"] = Property("std::string", "m_blockToken", 1);
+        AddClass(classes, "class MadlibBlock", Json::array({ "PropertyClass" }), madlib);
+
+        Json argument = Json::object();
+        argument["m_madlibToken"] = Property("std::string", "m_madlibToken", 0);
+        argument["m_madlibArgument"] = Property("std::string", "m_madlibArgument", 1);
+        AddClass(classes, "MadlibArgT<std::string>", Json::array({ "MadlibArg", "PropertyClass" }), argument);
+        argument["m_madlibArgument"] = Property("int", "m_madlibArgument", 1);
+        AddClass(classes, "MadlibArgT<int>", Json::array({ "MadlibArg", "PropertyClass" }), argument);
+        AddClass(classes, "class MadlibArg", Json::array({ "PropertyClass" }), Json::object());
+    }
+
     std::string Dump(Json const& classes)
     {
         return Json{ { "version", 2 }, { "classes", classes } }.dump();
