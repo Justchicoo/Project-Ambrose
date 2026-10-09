@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 131,
+    "done": 132,
     "total": 469,
-    "percent": 27.9
+    "percent": 28.1
   },
   "checks": {
-    "done": 1072,
+    "done": 1075,
     "total": 2870,
-    "percent": 37.4
+    "percent": 37.5
   },
   "contributor_track": {
     "merged": 93,
@@ -34,9 +34,9 @@
     {
       "phase": 3,
       "title": "Create list and delete a wizard",
-      "milestones_done": 26,
+      "milestones_done": 27,
       "milestones_total": 28,
-      "checks_done": 168,
+      "checks_done": 171,
       "checks_total": 178
     },
     {

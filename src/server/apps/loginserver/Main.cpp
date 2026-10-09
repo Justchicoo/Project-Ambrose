@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, refuses a live verifier key ring that does not parse, lacks its active key or drops a key a stored verifier still uses, reapplies the account settings when one changes live, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
+ * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, refuses a live verifier key ring that does not parse, lacks its active key or drops a key a stored verifier still uses, reapplies the account settings when one changes live, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, listens for clients, and offers account console commands and the names and creation reload targets, so rows the game server writes after this server started can be read without a restart, until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
  */
 
 #include "DatabaseSettingStore.h"
@@ -10,6 +10,7 @@
 #include "CharacterRepository.h"
 #include "TypeDumpCache.h"
 #include "RealmLoader.h"
+#include "ReloadMgr.h"
 #include "AccountCommands.h"
 #include "AccountMgr.h"
 #include "AppenderDB.h"
@@ -103,33 +104,44 @@ namespace
             _databases.AddDatabase(LoginDatabase, "Login", DatabaseLoader::DATABASE_LOGIN)
                 .AddDatabase(CharacterDatabase, "Character", DatabaseLoader::DATABASE_CHARACTER)
                 .AddDatabase(WorldDatabase, "World", DatabaseLoader::DATABASE_WORLD);
-            _databaseView.AddStore("character names", WorldDatabase.GetName(), []
-            {
-                CharacterNameLoadResult const names = sCharacterNameMgr.Load();
-                if (names.Loaded)
-                    LOG_INFO("server.loginserver", "Reloaded {} character name tables holding {} names in {} locales, and {} disallowed names", names.Tables, names.Parts, names.HumanLocales, names.Disallowed);
-                else
-                    for (std::string const& problem : names.Errors)
-                        LOG_ERROR("server.loginserver", "Character name tables were not reloaded, and the loaded ones stay in use: {}", problem);
-                for (std::string const& warning : names.Warnings)
-                    LOG_WARN("server.loginserver", "Character name tables: {}", warning);
-                return AdminStoreReload{ names.Loaded, names.Errors, names.Warnings };
-            });
-            _databaseView.AddStore("character creation", WorldDatabase.GetName(), []
-            {
-                CharacterCreateLoadResult const rows = sCharacterCreateStore.Load();
-                if (rows.Loaded)
-                    LOG_INFO("server.loginserver", "Reloaded {} schools a wizard may be given and {} starting states", rows.Schools, rows.Starts);
-                else
-                    for (std::string const& problem : rows.Errors)
-                        LOG_ERROR("server.loginserver", "The creation rows were not reloaded, and the loaded ones stay in use: {}", problem);
-                for (std::string const& warning : rows.Warnings)
-                    LOG_WARN("server.loginserver", "Character creation: {}", warning);
-                return AdminStoreReload{ rows.Loaded, rows.Errors, rows.Warnings };
-            });
+            _databaseView.AddStore("character names", WorldDatabase.GetName(), &ReloadNames);
+            _databaseView.AddStore("character creation", WorldDatabase.GetName(), &ReloadCreationRows);
         }
 
     protected:
+        static AdminStoreReload ReloadNames()
+        {
+            CharacterNameLoadResult const names = sCharacterNameMgr.Load();
+            if (names.Loaded)
+                LOG_INFO("server.loginserver", "Reloaded {} character name tables holding {} names in {} locales, and {} disallowed names", names.Tables, names.Parts, names.HumanLocales, names.Disallowed);
+            else
+                for (std::string const& problem : names.Errors)
+                    LOG_ERROR("server.loginserver", "Character name tables were not reloaded, and the loaded ones stay in use: {}", problem);
+            for (std::string const& warning : names.Warnings)
+                LOG_WARN("server.loginserver", "Character name tables: {}", warning);
+            return AdminStoreReload{ names.Loaded, names.Errors, names.Warnings };
+        }
+
+        static AdminStoreReload ReloadCreationRows()
+        {
+            CharacterCreateLoadResult const rows = sCharacterCreateStore.Load();
+            if (rows.Loaded)
+                LOG_INFO("server.loginserver", "Reloaded {} schools a wizard may be given and {} starting states", rows.Schools, rows.Starts);
+            else
+                for (std::string const& problem : rows.Errors)
+                    LOG_ERROR("server.loginserver", "The creation rows were not reloaded, and the loaded ones stay in use: {}", problem);
+            for (std::string const& warning : rows.Warnings)
+                LOG_WARN("server.loginserver", "Character creation: {}", warning);
+            return AdminStoreReload{ rows.Loaded, rows.Errors, rows.Warnings };
+        }
+
+        static bool ReloadTarget(AdminStoreReload (*reload)(), std::vector<std::string>& errors)
+        {
+            AdminStoreReload const result = reload();
+            errors.insert(errors.end(), result.Errors.begin(), result.Errors.end());
+            return result.Loaded;
+        }
+
         void OnAdminApiReady(AdminServer& admin) override
         {
             _databaseView.Register(admin.Routes());
@@ -354,6 +366,11 @@ namespace
             sStats.Publish("realms_online", [] { return Ambrose::StatValue(static_cast<int64>(sRealmList.Online(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()).size())); });
             sStats.Publish("keys_outstanding", [] { return Ambrose::StatValue(CountOutstandingKeys()); });
             AccountCommands::Register(Commands());
+            if (WorldDatabase.IsOpen())
+            {
+                sReloadMgr.Register("names", [](std::vector<std::string>& errors) { return ReloadTarget(&ReloadNames, errors); });
+                sReloadMgr.Register("creation", [](std::vector<std::string>& errors) { return ReloadTarget(&ReloadCreationRows, errors); });
+            }
             _realms.Configure(RealmLoaderSettings::Load(Config()));
             static LocalClientSystem const followed;
             FollowClientRevision({ ClientSetup::ServerTypeDumps(Config(), followed, report, [this] { return PollStopRequested(); }), {} });
@@ -423,6 +440,8 @@ namespace
             sStats.Unpublish("realms_online");
             sStats.Unpublish("keys_outstanding");
             AccountCommands::Unregister(Commands());
+            sReloadMgr.Unregister("names");
+            sReloadMgr.Unregister("creation");
             if (_sockets)
                 LoginShutdown::NotifyAndDrain(*_sockets, sLoginMgr.GetSettings()->ShutdownGrace);
             AppenderDB::Disable(Logger());

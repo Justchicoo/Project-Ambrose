@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * An x86-64 guest machine over Unicorn: read-write-execute memory regions, typed reads and writes, registers and Windows x64 call arguments, code hooks over address ranges that may redirect execution, and calls that must return to a sentinel within an instruction budget or report the fault.
+ * An x86-64 guest machine over Unicorn: read-write-execute memory regions, typed reads and writes, registers and Windows x64 call arguments, code hooks over address ranges that may redirect execution, and calls that must return to a sentinel within an instruction budget or report the fault, and a snapshot of its writable regions that can be written back.
  */
 
 #ifndef AMBROSE_MACHINE_H
@@ -14,6 +14,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 enum class GuestRegister
@@ -103,6 +104,14 @@ public:
     void Redirect(uint64 address);
     void SetAddressDescriber(AddressDescriber describer);
     std::string DescribeAddress(uint64 address) const;
+
+    struct MemorySnapshot
+    {
+        std::vector<std::pair<uint64, std::vector<uint8>>> Regions;
+    };
+
+    MemorySnapshot SaveMemory(std::span<std::pair<uint64, uint64> const> skipped) const;
+    void RestoreMemory(MemorySnapshot const& snapshot);
 
     uint64 Call(uint64 function, std::span<uint64 const> arguments, uint64 instructionBudget);
     std::optional<GuestFault> const& GetLastFault() const noexcept;
