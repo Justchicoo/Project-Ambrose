@@ -127,3 +127,49 @@ std::optional<Realm> RealmList::Choose(std::string_view named, int64 nowEpoch) c
     std::shared_lock const lock(_mutex);
     return Choose(_realms, _policy, named, nowEpoch);
 }
+
+std::optional<Realm> RealmList::ChooseForAdmission(std::string_view named, int64 nowEpoch) const
+{
+    std::shared_lock const lock(_mutex);
+    return ChooseForAdmission(_realms, _policy, named, nowEpoch);
+}
+
+std::optional<Realm> RealmList::ChooseForAdmission(std::vector<Realm> const& realms, RealmPolicy const& policy, std::string_view named, int64 nowEpoch)
+{
+    auto pickNamed = [&](std::string_view wanted) -> std::optional<Realm>
+    {
+        for (Realm const& realm : realms)
+            if (Ambrose::EqualsIgnoreCase(realm.Name, wanted) && IsOnline(realm, policy, nowEpoch))
+                return realm;
+        return std::nullopt;
+    };
+
+    std::string_view const requested = Ambrose::Trim(named);
+    if (!requested.empty())
+        return pickNamed(requested);
+    if (!Ambrose::Trim(policy.DefaultRealm).empty())
+        if (std::optional<Realm> chosen = pickNamed(Ambrose::Trim(policy.DefaultRealm)))
+            return chosen;
+
+    Realm const* least = nullptr;
+    for (Realm const& realm : realms)
+    {
+        if (!IsOnline(realm, policy, nowEpoch) || (realm.PlayerLimit != 0 && realm.OnlineCharacters >= realm.PlayerLimit))
+            continue;
+        if (least == nullptr || realm.OnlineCharacters < least->OnlineCharacters)
+            least = &realm;
+    }
+    if (least != nullptr)
+        return *least;
+
+    for (Realm const& realm : realms)
+    {
+        if (!IsOnline(realm, policy, nowEpoch))
+            continue;
+        if (least == nullptr || realm.OnlineCharacters < least->OnlineCharacters)
+            least = &realm;
+    }
+    if (least != nullptr)
+        return *least;
+    return std::nullopt;
+}

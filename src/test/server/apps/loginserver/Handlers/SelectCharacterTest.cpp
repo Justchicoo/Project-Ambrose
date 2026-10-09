@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives MSG_SELECTCHARACTER over loopback against a real LoginSession with AMBROSE_TEST_DB set: picking a live wizard of this account while a realm is online answers MSG_CHARACTERSELECTED Error=0 carrying that realm's address and port, the wizard's zone and place, and a key that is in login_key against the right account, wizard and realm; picking another account's wizard, a deleted one, or any wizard while no realm is online answers Error!=0 and leaves login_key empty, so a refused pick hands out nothing anybody could present to a gameserver later.
+ * Drives MSG_SELECTCHARACTER over loopback against a real LoginSession with AMBROSE_TEST_DB set: picking a live wizard of this account while a realm is online answers MSG_CHARACTERSELECTED Error=0 carrying that realm's address and port, the wizard's zone and place, and a key that is in login_key against the right account, wizard and realm; picking a full realm queues in order without a key, then admits when a slot opens or its limit rises, while a game master bypasses the queue, and every refused pick leaves login_key empty.
  */
 
 #include "AccountMgr.h"
+#include "AdmissionQueue.h"
 #include "CharacterDatabase.h"
 #include "CharacterRepository.h"
 #include "ClientKey.h"
@@ -12,6 +13,7 @@
 #include "LocationString.h"
 #include "LoginMgr.h"
 #include "LoginTestHarness.h"
+#include "RealmLoader.h"
 #include "RealmList.h"
 #include "Rec1.h"
 
@@ -81,10 +83,13 @@ namespace
 
             sAccountMgr.SetSettings(AccountSettings{});
             sLoginMgr.Reset();
+            sAdmissionQueue.Reset();
             ASSERT_EQ(sAccountMgr.CreateAccount("Wizard", "hunter22", {}, &_accountId), AccountOpResult::Ok);
             ASSERT_EQ(sAccountMgr.CreateAccount("Stranger", "hunter33", {}, &_otherAccountId), AccountOpResult::Ok);
+            ASSERT_EQ(sAccountMgr.CreateAccount("Third", "hunter44", {}, &_thirdAccountId), AccountOpResult::Ok);
             ASSERT_EQ(CharacterRepository::Create(MakeWizard(OwnWizard, _accountId)), CharacterOpResult::Ok);
             ASSERT_EQ(CharacterRepository::Create(MakeWizard(StrangersWizard, _otherAccountId)), CharacterOpResult::Ok);
+            ASSERT_EQ(CharacterRepository::Create(MakeWizard(ThirdWizard, _thirdAccountId)), CharacterOpResult::Ok);
             ASSERT_EQ(CharacterRepository::Create(MakeWizard(DeletedWizard, _accountId)), CharacterOpResult::Ok);
             ASSERT_EQ(CharacterRepository::SoftDelete(DeletedWizard, _accountId, static_cast<uint64>(NowSeconds())), CharacterOpResult::Ok);
 
@@ -100,6 +105,7 @@ namespace
                 LoginDatabase.Close();
             }
             _server.reset();
+            sAdmissionQueue.Reset();
             sRealmList.Replace({});
             sLoginMgr.Reset();
             sAccountMgr.SetSettings(AccountSettings{});
@@ -131,12 +137,12 @@ namespace
             sRealmList.Replace({ realm });
         }
 
-        LoginClient Authenticated()
+        LoginClient Authenticated(std::string const& username = "Wizard", std::string const& password = "hunter22")
         {
             LoginClient client = _server->Connect();
             LoginMessages::UserAuthenV3 authen;
-            std::string const clientKey1 = ClientKey::ComputeClientKey1(ClientKey::HashPassword("hunter22"), client.Salt);
-            authen.Rec1 = Rec1::Encode(fmt::format("{} Wizard {}", client.Salt.SessionId, clientKey1), client.Salt);
+            std::string const clientKey1 = ClientKey::ComputeClientKey1(ClientKey::HashPassword(password), client.Salt);
+            authen.Rec1 = Rec1::Encode(fmt::format("{} {} {}", client.Salt.SessionId, username, clientKey1), client.Salt);
             authen.Version = "W.1.610.0";
             authen.Revision = "r0.Test";
             authen.MachineId = 7;
@@ -148,9 +154,22 @@ namespace
             return client;
         }
 
-        std::optional<LoginMessages::CharacterSelected> Pick(uint64 charId, std::string realmName = {})
+        void ConfigureDatabaseRealm(RealmLoader& loader, uint32 playerLimit = 1)
         {
-            LoginClient client = Authenticated();
+            ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format(
+                "INSERT INTO `realmlist` (`id`, `name`, `address`, `local_address`, `port`, `flags`, `population`, `player_limit`, `last_heartbeat`) "
+                "VALUES ({}, 'Ambrose', '203.0.113.7', '127.0.0.1', {}, 0, 1, {}, {})",
+                RealmId, RealmPort, playerLimit, NowSeconds())));
+            ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format(
+                "INSERT INTO `realm_online_character` (`realm_id`, `character_guid`, `account_id`) VALUES ({}, {}, {})",
+                RealmId, OwnWizard, _accountId)));
+            loader.Configure(RealmLoaderSettings{});
+        }
+
+        std::optional<LoginMessages::CharacterSelected> Pick(uint64 charId, std::string realmName = {},
+            std::string username = "Wizard", std::string password = "hunter22")
+        {
+            LoginClient client = Authenticated(username, password);
             LoginMessages::SelectCharacter pick;
             pick.CharId = charId;
             pick.ServerName = std::move(realmName);
@@ -167,12 +186,14 @@ namespace
         static constexpr uint64 OwnWizard = 101;
         static constexpr uint64 StrangersWizard = 202;
         static constexpr uint64 DeletedWizard = 303;
+        static constexpr uint64 ThirdWizard = 404;
 
         MySQLConnectionInfo _loginInfo;
         MySQLConnectionInfo _charactersInfo;
         std::unique_ptr<LoginServerHarness> _server;
         uint64 _accountId = 0;
         uint64 _otherAccountId = 0;
+        uint64 _thirdAccountId = 0;
         bool _open = false;
     };
 }
@@ -252,4 +273,153 @@ TEST_F(SelectCharacterTest, ANamedRealmThatIsNotThereIsRefusedRatherThanSwappedF
     ASSERT_TRUE(reply);
     EXPECT_NE(reply->Error, 0) << "a player who asked for one world is not quietly put in a different one";
     EXPECT_EQ(CountKeys(), 0u);
+}
+
+TEST_F(SelectCharacterTest, AFullRealmQueuesTheNextSelectionAndAdmitsItAfterTheOnlineRowIsRemoved)
+{
+    RealmLoader loader;
+    ConfigureDatabaseRealm(loader);
+
+    LoginClient client = Authenticated("Stranger", "hunter33");
+    LoginMessages::SelectCharacter pick;
+    pick.CharId = StrangersWizard;
+    pick.ServerName = "Ambrose";
+    Send(client, pick);
+
+    std::optional<LoginMessages::CharacterSelected> const queued = ReadMessage<LoginMessages::CharacterSelected>(client);
+    ASSERT_TRUE(queued);
+    EXPECT_EQ(queued->Error, 0);
+    EXPECT_EQ(queued->PrepPhase, 1);
+    EXPECT_EQ(queued->Slot, 1);
+    EXPECT_TRUE(queued->Key.empty());
+    EXPECT_EQ(CountKeys(), 0u) << "a waiting selection has no handoff key yet";
+    EXPECT_EQ(sAdmissionQueue.QueuedCount(), 1u);
+
+    LoginClient secondClient = Authenticated("Third", "hunter44");
+    LoginMessages::SelectCharacter secondPick;
+    secondPick.CharId = ThirdWizard;
+    secondPick.ServerName = "Ambrose";
+    Send(secondClient, secondPick);
+    std::optional<LoginMessages::CharacterSelected> const secondQueued = ReadMessage<LoginMessages::CharacterSelected>(secondClient);
+    ASSERT_TRUE(secondQueued);
+    EXPECT_EQ(secondQueued->Slot, 2);
+    EXPECT_TRUE(secondQueued->Key.empty());
+    EXPECT_EQ(sAdmissionQueue.QueuedCount(), 2u);
+
+    sAdmissionQueue.Update(std::chrono::seconds(5));
+    std::optional<LoginMessages::CharacterSelected> const position = ReadMessage<LoginMessages::CharacterSelected>(client);
+    ASSERT_TRUE(position);
+    EXPECT_EQ(position->PrepPhase, 1);
+    EXPECT_EQ(position->Slot, 1);
+    std::optional<LoginMessages::CharacterSelected> const secondPosition = ReadMessage<LoginMessages::CharacterSelected>(secondClient);
+    ASSERT_TRUE(secondPosition);
+    EXPECT_EQ(secondPosition->PrepPhase, 1);
+    EXPECT_EQ(secondPosition->Slot, 2);
+
+    ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("DELETE FROM `realm_online_character` WHERE `character_guid` = {}", OwnWizard)));
+    loader.LoadNow();
+
+    std::optional<LoginMessages::CharacterSelected> const admitted = ReadMessage<LoginMessages::CharacterSelected>(client);
+    ASSERT_TRUE(admitted);
+    EXPECT_EQ(admitted->Error, 0);
+    EXPECT_EQ(admitted->PrepPhase, 0);
+    EXPECT_EQ(admitted->CharId, StrangersWizard);
+    EXPECT_FALSE(admitted->Key.empty());
+    EXPECT_EQ(CountKeys(), 1u);
+    EXPECT_EQ(sAdmissionQueue.QueuedCount(), 1u);
+
+    std::optional<LoginMessages::CharacterSelected> const updatedPosition = ReadMessage<LoginMessages::CharacterSelected>(secondClient);
+    ASSERT_TRUE(updatedPosition);
+    EXPECT_EQ(updatedPosition->PrepPhase, 1);
+    EXPECT_EQ(updatedPosition->Slot, 1);
+}
+
+TEST_F(SelectCharacterTest, ARefreshedIncreaseInPlayerLimitAdmitsAQueuedSelection)
+{
+    RealmLoader loader;
+    ConfigureDatabaseRealm(loader);
+
+    LoginClient client = Authenticated("Stranger", "hunter33");
+    LoginMessages::SelectCharacter pick;
+    pick.CharId = StrangersWizard;
+    pick.ServerName = "Ambrose";
+    Send(client, pick);
+
+    std::optional<LoginMessages::CharacterSelected> const queued = ReadMessage<LoginMessages::CharacterSelected>(client);
+    ASSERT_TRUE(queued);
+    EXPECT_EQ(queued->Slot, 1);
+    EXPECT_TRUE(queued->Key.empty());
+
+    ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("UPDATE `realmlist` SET `player_limit` = 2 WHERE `id` = {}", RealmId)));
+    loader.LoadNow();
+
+    std::optional<LoginMessages::CharacterSelected> const admitted = ReadMessage<LoginMessages::CharacterSelected>(client);
+    ASSERT_TRUE(admitted);
+    EXPECT_EQ(admitted->Error, 0);
+    EXPECT_EQ(admitted->CharId, StrangersWizard);
+    EXPECT_FALSE(admitted->Key.empty());
+    EXPECT_EQ(CountKeys(), 1u);
+    EXPECT_EQ(sAdmissionQueue.QueuedCount(), 0u);
+}
+
+TEST_F(SelectCharacterTest, AnUnrelatedOnlineCharacterDoesNotConsumeAQueuedCharactersReservation)
+{
+    RealmLoader loader;
+    ConfigureDatabaseRealm(loader, 2);
+
+    std::optional<LoginMessages::CharacterSelected> const admittedFirst = Pick(StrangersWizard, "Ambrose", "Stranger", "hunter33");
+    ASSERT_TRUE(admittedFirst);
+    ASSERT_FALSE(admittedFirst->Key.empty());
+
+    LoginClient client = Authenticated("Third", "hunter44");
+    LoginMessages::SelectCharacter pick;
+    pick.CharId = ThirdWizard;
+    pick.ServerName = "Ambrose";
+    Send(client, pick);
+    std::optional<LoginMessages::CharacterSelected> const queued = ReadMessage<LoginMessages::CharacterSelected>(client);
+    ASSERT_TRUE(queued);
+    ASSERT_EQ(queued->PrepPhase, 1);
+    ASSERT_EQ(sAdmissionQueue.QueuedCount(), 1u);
+
+    ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format(
+        "INSERT INTO `realm_online_character` (`realm_id`, `character_guid`, `account_id`) VALUES ({}, {}, {})",
+        RealmId, DeletedWizard, _accountId)));
+    ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("UPDATE `realmlist` SET `player_limit` = 3 WHERE `id` = {}", RealmId)));
+    loader.LoadNow();
+
+    EXPECT_EQ(sAdmissionQueue.QueuedCount(), 1u) << "the unrelated online row must not clear the first wizard's outstanding reservation";
+    EXPECT_EQ(CountKeys(), 1u) << "the queued wizard must not receive a key while the reservation still occupies capacity";
+    std::optional<LoginMessages::CharacterSelected> const position = ReadMessage<LoginMessages::CharacterSelected>(client);
+    ASSERT_TRUE(position);
+    EXPECT_EQ(position->PrepPhase, 1);
+    EXPECT_EQ(position->Slot, 1);
+
+    ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("DELETE FROM `realm_online_character` WHERE `character_guid` = {}", OwnWizard)));
+    ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format(
+        "INSERT INTO `realm_online_character` (`realm_id`, `character_guid`, `account_id`) VALUES ({}, {}, {})",
+        RealmId, StrangersWizard, _otherAccountId)));
+    loader.LoadNow();
+
+    ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("DELETE FROM `realm_online_character` WHERE `character_guid` = {}", DeletedWizard)));
+    loader.LoadNow();
+
+    std::optional<LoginMessages::CharacterSelected> const admittedSecond = ReadMessage<LoginMessages::CharacterSelected>(client);
+    ASSERT_TRUE(admittedSecond);
+    EXPECT_EQ(admittedSecond->CharId, ThirdWizard);
+    EXPECT_FALSE(admittedSecond->Key.empty());
+    EXPECT_EQ(sAdmissionQueue.QueuedCount(), 0u);
+}
+
+TEST_F(SelectCharacterTest, AnAccountAboveTheConfiguredSecurityLevelBypassesTheQueue)
+{
+    ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("UPDATE `account` SET `security_level` = 3 WHERE `id` = {}", _accountId)));
+    RealmLoader loader;
+    ConfigureDatabaseRealm(loader);
+
+    std::optional<LoginMessages::CharacterSelected> const reply = Pick(OwnWizard, "Ambrose");
+    ASSERT_TRUE(reply);
+    EXPECT_EQ(reply->Error, 0);
+    EXPECT_EQ(reply->PrepPhase, 0);
+    EXPECT_FALSE(reply->Key.empty());
+    EXPECT_EQ(CountKeys(), 1u);
 }

@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, refuses a live verifier key ring that does not parse, lacks its active key or drops a key a stored verifier still uses, reapplies the account settings when one changes live, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, listens for clients, and offers account console commands and the names and creation reload targets, so rows the game server writes after this server started can be read without a restart, until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
+ * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, refuses a live verifier key ring that does not parse, lacks its active key or drops a key a stored verifier still uses, reapplies the account settings when one changes live, advances full-realm admission queues and their position updates, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, listens for clients, and offers account console commands and the names and creation reload targets, so rows the game server writes after this server started can be read without a restart, until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
  */
 
 #include "DatabaseSettingStore.h"
+#include "AdmissionQueue.h"
 #include "Settings.h"
 #include "CharacterCreateStore.h"
 #include "CharacterNameMgr.h"
@@ -365,6 +366,7 @@ namespace
             sStats.Publish("realms", [] { return Ambrose::StatValue(static_cast<int64>(sRealmList.All().size())); });
             sStats.Publish("realms_online", [] { return Ambrose::StatValue(static_cast<int64>(sRealmList.Online(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()).size())); });
             sStats.Publish("keys_outstanding", [] { return Ambrose::StatValue(CountOutstandingKeys()); });
+            sStats.Publish("admission_queue_waiting", [] { return Ambrose::StatValue(static_cast<int64>(sAdmissionQueue.QueuedCount())); });
             AccountCommands::Register(Commands());
             if (WorldDatabase.IsOpen())
             {
@@ -423,11 +425,13 @@ namespace
         void OnUpdate(std::chrono::milliseconds diff) override
         {
             _realms.Update(diff);
+            sAdmissionQueue.Update(diff);
         }
 
         void OnStatus(std::vector<std::pair<std::string, std::string>>& fields) override
         {
             fields.emplace_back("sessions", fmt::format("{}", _sockets ? _sockets->GetConnectionCount() : 0));
+            fields.emplace_back("admission_queue_waiting", fmt::format("{}", sAdmissionQueue.QueuedCount()));
         }
 
         void OnStop() override
@@ -439,6 +443,7 @@ namespace
             sStats.Unpublish("realms");
             sStats.Unpublish("realms_online");
             sStats.Unpublish("keys_outstanding");
+            sStats.Unpublish("admission_queue_waiting");
             AccountCommands::Unregister(Commands());
             sReloadMgr.Unregister("names");
             sReloadMgr.Unregister("creation");

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The realms the login server may send a player to (sRealmList), and the rule that decides which one. A realm is online when its last heartbeat is newer than the age a missed run of heartbeats makes it, so a gameserver that stopped saying anything falls out on its own rather than waiting to be marked down, and a clock that has not moved yet leaves every realm online rather than emptying the list. Choosing reads in one order: the realm the client named, else the one the operator named, else the least full of those online, so a named realm that is down is a refusal rather than a silent move to another. It holds no database of its own and is filled by whoever loaded the rows, because the login server reads them from its database and a test writes them by hand.
+ * The realms the login server may send a player to (sRealmList), and the rule that decides which one. A realm is online when its last heartbeat is newer than the age a missed run of heartbeats makes it, so a gameserver that stopped saying anything falls out on its own rather than waiting to be marked down, and a clock that has not moved yet leaves every realm online rather than emptying the list. Choosing reads in one order: the realm the client named, else the one the operator named, else the least full of those online, so a named realm that is down is a refusal rather than a silent move to another. It holds no database of its own and is filled by whoever loaded the rows, because the login server reads them from its database and a test writes them by hand. Admission choosing counts online characters instead and keeps a full realm, named or the last one left, so its queue can take the pick.
  */
 
 #ifndef AMBROSE_REALMLIST_H
@@ -35,6 +35,7 @@ struct Realm
     uint32 Flags = REALM_FLAG_NONE;
     uint32 Population = 0;
     uint32 PlayerLimit = 0;
+    uint32 OnlineCharacters = 0;
     int64 LastHeartbeatEpoch = 0;
 
     bool MarkedOffline() const noexcept { return (Flags & REALM_FLAG_OFFLINE) != 0; }
@@ -70,9 +71,11 @@ public:
     std::vector<Realm> Online(int64 nowEpoch) const;
     std::optional<Realm> Find(std::string_view name) const;
     std::optional<Realm> Choose(std::string_view named, int64 nowEpoch) const;
+    std::optional<Realm> ChooseForAdmission(std::string_view named, int64 nowEpoch) const;
 
     static bool IsOnline(Realm const& realm, RealmPolicy const& policy, int64 nowEpoch) noexcept;
     static std::optional<Realm> Choose(std::vector<Realm> const& realms, RealmPolicy const& policy, std::string_view named, int64 nowEpoch);
+    static std::optional<Realm> ChooseForAdmission(std::vector<Realm> const& realms, RealmPolicy const& policy, std::string_view named, int64 nowEpoch);
 
 private:
     RealmList() = default;

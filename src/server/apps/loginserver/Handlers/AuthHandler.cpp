@@ -60,6 +60,7 @@ struct LoginSession::AuthAttempt
     std::string Username;
     std::string ClientKey1;
     uint64 AccountId = 0;
+    uint8 SecurityLevel = 0;
     std::string SessionKey;
 };
 
@@ -190,6 +191,7 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
     bool const accountBanned = !row[6].IsNull();
     attempt->AccountId = account.Id;
     attempt->Username = account.Username;
+    attempt->SecurityLevel = account.SecurityLevel;
 
     std::optional<std::string> const verifier = sAccountMgr.GetVerifier(account);
     if (!verifier)
@@ -311,6 +313,7 @@ void LoginSession::CompleteAuthentication(std::shared_ptr<AuthAttempt> const& at
     _failedResponses = 0;
     _accountName = attempt->Username;
     _accountId.store(attempt->AccountId, std::memory_order_relaxed);
+    _securityLevel.store(attempt->SecurityLevel, std::memory_order_relaxed);
     _machineId = attempt->MachineId;
     SetStatus(SessionStatus::Authenticated);
 
