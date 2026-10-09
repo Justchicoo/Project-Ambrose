@@ -175,7 +175,7 @@ AMBROSE_PANEL_API=https://127.0.0.1:12080 npm run dev --workspace apps/dashboard
 
 **What my milestone actually needs.** Ask me for only these. A milestone whose checks are unit tests needs nothing past step 1. Anything that stores something adds step 2. Anything reading the client's own archives, dumps or zones adds step 4 and my installation. A check marked Real client needs steps 5 and 7 and somebody at the keyboard, and a check marked Dev-gated may need a second machine or hardware I do not have, which stays unticked and is named in the pull request. Panel milestones open like any other once they are ready; the few the maintainer's panel session is building carry a hold of their own, and the open ones are what step 6 is for.
 
-A branch named `milestone/<id>-<short-name>` builds the Linux GCC leg in CI by itself, so an open pull request tells us both whether it compiles there, and the maintainer adds a label for the Windows leg when it is worth one. The first run from a new contributor waits for a maintainer to approve it.
+A branch named `milestone/<id>-<short-name>` builds the Linux GCC leg in CI by itself, so an open pull request tells us both whether it compiles there, and the maintainer adds a label for the Windows leg when it is worth one. Most of a CI run's time is waiting for a runner and compiling, and every push runs every labelled leg again, so push a batch of fixes at once rather than one commit at a time, and do not push to an old pull request another one has replaced. The first run from a new contributor waits for a maintainer to approve it.
 
 ## Running one test rather than all of them
 

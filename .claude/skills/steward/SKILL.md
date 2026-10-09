@@ -21,7 +21,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 
 - Work in this order: merge conflicts, then red CI, then review comments. A red or conflicted head is never "waiting on review".
 - Fix the root cause. Never skip, disable or quarantine a test, push an empty commit, or close and reopen just to rerun CI.
-- Main has a required `checks` status. A branch named `milestone/<id>-<name>` gets the Linux GCC leg by itself. Other legs need a `ci:` label (`ci:windows-msvc-x64`, `ci:all`), which the maintainer's side adds when the change deserves it.
+- Main has a required `checks` status. A branch named `milestone/<id>-<name>` gets the Linux GCC leg by itself. Other legs need a `ci:` label (`ci:windows-msvc-x64`, `ci:all`), which the maintainer's side adds when the change deserves it. While iterating, label one leg (`ci:linux-gcc` or `ci:windows-msvc-x64`); add `ci:all` only right before landing, and take it off a pull request another one supersedes, because every push re-runs all seven jobs.
 
 ## Reviewing a contributor's pull request
 
