@@ -613,7 +613,7 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 
 - [x] Containment for each primitive incl. boundary (ZoneVolumeTest.EachShapeContainsItsBoundaryAndNothingPastIt)
 - [x] Cooldown fires once per player (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
-- [ ] Walking into Ravenwood POI logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; spawning inside fires nothing (open until the POI's zone-entry text shows; what passes so far: client driver run 20261007-151147, zone-volumes.json: the server logged `entered volume 0 (Ravenwood POI) in WizardCity/WC_Hub, posting Enter_Ravenwood POI, which fired Trigger POI Ravenwood` with the wizard inside it in shot 33-inside-ravenwood-poi.png, and on arrival `inside 1 of its 38 volume(s), firing no enter`, shot 06-the-wizard-arrives-inside-the-commons-home-volume-without-firing-its-enter.png)
+- [x] Walking into Ravenwood POI logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; spawning inside fires nothing (client driver run 20261007-153859, zone-volumes.json: the server logged `entered volume 0 (Ravenwood POI) in WizardCity/WC_Hub, posting Enter_Ravenwood POI, which fired Trigger POI Ravenwood` and `showed wizard 1 the notify text WizardPOI_00000001 of type 1`, and shot 32-the-trigger-s-result-shows-the-poi-s-zone-entry-text.png shows TUNNEL TO RAVENWOOD above the wizard; on arrival `inside 1 of its 38 volume(s), firing no enter`, shot 06-the-wizard-arrives-inside-the-commons-home-volume-without-firing-its-enter.png)
 - [x] Triggers with requirements fail closed until 7.04 (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
 - [x] `.reload zone_trigger` applies an edited trigger; a failed reload keeps the old set (ZoneTriggerMgrDatabaseTest.AnEditedTriggerTakesHoldAtTheReloadAndABadRowKeepsTheOldSet)
 
@@ -647,13 +647,13 @@ Walking into a zone volume fires its enter and exit events into the zone's trigg
 
 - [x] Unit: containment tests for each primitive type, including boundary and hysteresis (ZoneVolumeTest.EachShapeContainsItsBoundaryAndNothingPastIt, ZoneVolumeTest.PresenceEntersAtTheEdgeLeavesPastTheMarginAndAPlacedWizardIsAlreadyInside)
 - [x] Unit: a trigger with a cooldown fires once per player per cooldown (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
-- [ ] Real client: walking into Ravenwood's POI sphere in WC_Hub logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; with the POI-text result wired, the zone-entry text shows (open: client driver run 20261007-151147, zone-volumes.json: shot 33-inside-ravenwood-poi.png and the server's `posting Enter_Ravenwood POI, which fired Trigger POI Ravenwood` pass, but the POI-text result is not wired yet, so no zone-entry text shows)
+- [x] Real client: walking into Ravenwood's POI sphere in WC_Hub logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; with the POI-text result wired, the zone-entry text shows (client driver run 20261007-153859, zone-volumes.json: Trigger POI Ravenwood's ResClientNotifyText result sent MSG_CLIENTNOTIFYTEXT with WizardPOI_00000001, and shot 32-the-trigger-s-result-shows-the-poi-s-zone-entry-text.png shows the client's zone-entry text TUNNEL TO RAVENWOOD; ZoneTriggerResultTest.RavenwoodsPoiResultReadsAsTheNotifyTextItShows reads that result from the client's own bytes)
 - [x] Real client: logging in while standing inside a volume fires no enter event (client driver run 20261007-151147, zone-volumes.json: `arrived in WizardCity/WC_Hub inside 1 of its 38 volume(s), firing no enter`, shot 06-the-wizard-arrives-inside-the-commons-home-volume-without-firing-its-enter.png)
 - [x] Unit: editing a zone_trigger row, then `.reload zone_trigger`, changes what fires on the next enter without a restart; a row that fails validation keeps the old triggers and reports the error (ZoneTriggerMgrDatabaseTest.AnEditedTriggerTakesHoldAtTheReloadAndABadRowKeepsTheOldSet)
 
 **Risks**
 
-- Which message shows POI text (e.g. WizardPOI_00000001 keys) is unverified
+- Which message shows POI text: a POI's trigger carries a ResClientNotifyText result whose m_text is the WizardPOI_ key, such as Trigger POI Ravenwood's WizardPOI_00000001, and GAME MSG_CLIENTNOTIFYTEXT shows it. The client's `GameClient::MSG_ClientNotifyText` (0x1416f9f80 in r806919) looks NotifyText up as a locale key with Madlibs as its substitutions and adds a chat line only when AddToChat is set; it does not read Type.
 - Requirement evaluation on triggers depends on QST's requirement engine. Until it exists, triggers with requirements must fail closed, not fire.
 
 ## 6.14 Zone doors table and walk-in transfers (WLD-15)
