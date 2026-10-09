@@ -35,6 +35,7 @@ struct ZoneSpawnEntry
     uint64 PathId = 0;
 
     bool operator==(ZoneSpawnEntry const&) const = default;
+    bool HasPlace() const noexcept;
 };
 
 struct ZoneSpawner
