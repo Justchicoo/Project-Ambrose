@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests synthetic install scanning, WAD header metrics, deterministic output, and the persistent checksum cache.
+ * Tests synthetic install scanning, WAD header metrics, package membership of the launcher files, the manifests left out, deterministic output, and the persistent checksum cache.
  */
 
 #include "Crc32.h"
@@ -73,6 +73,33 @@ TEST_F(InstallFixture, SyntheticInstallProducesExpectedPackagesAndMetrics)
     std::vector<uint8> const bytes = { 'K', 'I', 'W', 'A', 'D', 1, 0, 0, 0, 0, 0, 0, 0, 'p', 'a', 'y', 'l', 'o', 'a', 'd' };
     EXPECT_EQ(root->CRC, Crc32::ComputeClient(bytes));
     EXPECT_EQ(root->HeaderCRC, Crc32::ComputeClient(std::span<uint8 const>(bytes.data(), 13)));
+}
+
+TEST_F(InstallFixture, LauncherFilesUnderWindowsJoinPatchClientAndTheManifestsAreLeftOut)
+{
+    std::filesystem::create_directories(Root / "Windows" / "PatchClient");
+    std::filesystem::create_directories(Root / "PatchClient");
+    std::ofstream(Root / "Windows" / "PatchClient" / "launcher.exe", std::ios::binary) << "launcher";
+    std::ofstream(Root / "PatchClient" / "updater.exe", std::ios::binary) << "updater";
+    std::ofstream(Root / "LatestFileList.bin", std::ios::binary) << "manifest";
+    std::ofstream(Root / "Bin" / "LatestFileList.xml", std::ios::binary) << "<manifest/>";
+    std::string error;
+    PatchListGenerator::Options options{ Root, Root / "output", std::nullopt, std::nullopt };
+    std::optional<PatchListGenerator::Result> result = PatchListGenerator::Generate(options, error);
+    ASSERT_TRUE(result) << error;
+
+    std::vector<std::string> patchClient;
+    std::vector<std::string> everything;
+    for (auto const& package : result->Manifest.Packages)
+        for (auto const& record : package.Records)
+        {
+            everything.push_back(record.SrcFileName);
+            if (package.Name == "PatchClient")
+                patchClient.push_back(record.SrcFileName);
+        }
+    EXPECT_EQ(patchClient, (std::vector<std::string>{ "PatchClient/updater.exe", "Windows/PatchClient/launcher.exe" }));
+    EXPECT_EQ(std::count_if(everything.begin(), everything.end(), [](std::string const& name) { return name.find("LatestFileList") != std::string::npos; }), 0);
+    EXPECT_EQ(result->FilesScanned, 7u);
 }
 
 TEST_F(InstallFixture, SecondRunUsesCacheAndKeepsBinaryIdentical)

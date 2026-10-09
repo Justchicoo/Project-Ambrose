@@ -223,9 +223,15 @@ namespace
             return "Base";
         if (name.starts_with("Data/GameData/") && IsWad(name))
             return std::filesystem::path(name).stem().string();
-        if (name.starts_with("PatchClient/"))
+        if (name.starts_with("PatchClient/") || name.starts_with("Windows/PatchClient/"))
             return "PatchClient";
         return "Base";
+    }
+
+    bool IsOwnManifest(std::string const& name)
+    {
+        std::string const file = std::filesystem::path(name).filename().string();
+        return file == "LatestFileList.bin" || file == "LatestFileList.xml";
     }
 
     bool IsWithin(std::filesystem::path const& path, std::filesystem::path const& directory)
@@ -304,6 +310,8 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
         if (!it->is_regular_file())
             continue;
         std::string const name = RelativeName(it->path(), options.Client);
+        if (IsOwnManifest(name))
+            continue;
         std::string package = PackageName(name);
         auto const rule = rules.find(name);
         if (rule != rules.end() && !rule->second.Package.empty())
