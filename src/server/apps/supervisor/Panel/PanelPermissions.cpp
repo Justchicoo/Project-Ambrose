@@ -191,7 +191,7 @@ namespace
     };
 
     std::vector<std::string_view> const ViewerKeys{
-        "status.read", "console.read", "settings.read", "reload.read", "files.list", "files.read",
+        "status.read", "console.read", "settings.read", "reload.read", "files.list", "files.read", "files.download",
         "backups.read", "schedules.read", "updates.read", "clientdata.read", "database.read", "world.read",
         "realms.read", "accounts.read", "characters.read", "players.read", "reports.read",
         "metrics.read", "alerts.read", "activity.read", "users.read", "nodes.read", "launch.read", "network.read", "errors.read"

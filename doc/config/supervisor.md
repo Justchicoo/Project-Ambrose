@@ -57,7 +57,7 @@ The Applies column says when a changed value takes effect after a configuration 
 
 ## Live settings and file roots
 
-The supervisor keeps live settings of its own, listed in [settings.md](settings.md) with the apps that read them: `Files.MinFreeBytes`, `Files.MinFreePercent`, `Files.ReadMaxBytes` and `Files.ListMaxEntries`. With `Panel.Enable = 1` a change made on the settings page, the admin API or the `settings` console command is kept in the panel store's `settings` table with its `setting_audit` row and survives a restart; with the panel off they resolve from this file alone and a live change is refused. The file roots the Files page reaches are built from this file too, from `LogsDir`, `Backups.Dir`, each `App.<name>.Config` and the config that file names, and are rebuilt whenever the configuration is reloaded or the `file_roots` reload target runs.
+The supervisor keeps live settings of its own, listed in [settings.md](settings.md) with the apps that read them: `Files.MinFreeBytes`, `Files.MinFreePercent`, `Files.ReadMaxBytes`, `Files.ListMaxEntries`, `Files.UploadMaxBytes` and `Files.DownloadMaxBytes`. With `Panel.Enable = 1` a change made on the settings page, the admin API or the `settings` console command is kept in the panel store's `settings` table with its `setting_audit` row and survives a restart; with the panel off they resolve from this file alone and a live change is refused. The file roots the Files page reaches are built from this file too, from `LogsDir`, `Backups.Dir`, each `App.<name>.Config` and the config that file names, and are rebuilt whenever the configuration is reloaded or the `file_roots` reload target runs.
 
 ## How a stop is asked for
 
