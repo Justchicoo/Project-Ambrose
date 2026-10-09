@@ -110,6 +110,26 @@ real git checkout, not an exported folder: the forbidden-file check uses
 `git ls-files`, and build artifacts copied into the tree are reported as
 unknown files.
 
+For much faster rebuilds, install ccache with `winget install -e --id Ccache.Ccache`
+and build with Ninja from a Visual Studio developer prompt (the x64 Native Tools
+prompt, or `vcvars64.bat`), since only the Ninja generator hands each compile to
+ccache:
+
+```powershell
+cmake --preset windows-msvc-ninja
+cmake --build --preset windows-ninja-debug
+ctest --preset windows-ninja-debug
+```
+
+Its programs go below `build\windows-msvc-ninja\bin\Debug\`. The first build
+fills the cache and is slower than the Visual Studio one. After that a rebuild
+from a wiped tree, a rebase or a branch switch reuses every unchanged compile:
+on a 16-core machine a full Debug compile took 225 seconds with
+`windows-msvc-x64`, while a warm Ninja rebuild took 23 seconds. Keep ccache's
+cache on a roomy drive with `ccache --set-config cache_dir=<folder>` and
+`ccache --set-config max_size=20G`, and vcpkg's with the user variable
+`VCPKG_DEFAULT_BINARY_CACHE`.
+
 For an optimized local server, use:
 
 ```powershell
