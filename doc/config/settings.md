@@ -79,6 +79,9 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Login.EnforceRevision` | bool | false | none | live | loginserver | normal | Whether a client whose revision Login.AllowedRevision does not list is refused. |
 | `Login.KeyTTL` | unsigned | 60 s | from 5 to 2592000 s | next connection or operation | loginserver | normal | How long the key a client carries to a game server stays good for. |
 | `Login.LockoutSeconds` | unsigned | 900 s | from 1 to 2592000 s | live | loginserver | normal | How long a locked-out address is refused, and how long a failure is remembered. |
+| `Login.Maintenance` | bool | false | none | live | loginserver | normal | Whether the login server is closed for maintenance: accounts below Login.MaintenanceBypassLevel are refused at sign-in with the maintenance reason, and players already in the world stay connected. |
+| `Login.MaintenanceBypassLevel` | unsigned | 2 | from 0 to 4 | live | loginserver | normal | The lowest security level that still signs in during maintenance: 0 player, 1 moderator, 2 game master, 3 administrator, 4 console. |
+| `Login.MaintenanceReason` | string | empty | at most 255 bytes | live | loginserver | normal | The reason a player refused during maintenance is sent; empty sends Maintenance. |
 | `Login.MaxAuthAttempts` | unsigned | 5 | from 0 to 1000 | live | loginserver | normal | Wrong passwords from one address before it is locked out; 0 never locks it out. |
 | `Login.Name` | string | Ambrose | at most 64 bytes | live | loginserver | normal | The login server's name, sent in MSG_STARTCHARACTERLIST. |
 | `Login.SessionKeyLifetime` | unsigned | 108000 s | from 60 to 2592000 s | next connection or operation | loginserver | normal | How long the session key a successful login issues stays valid. |

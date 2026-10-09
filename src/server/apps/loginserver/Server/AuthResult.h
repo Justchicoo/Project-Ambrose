@@ -21,7 +21,8 @@ enum class AuthResult : int32
     FtpCapped = 0x5BFF7366,
     ErrorNoLock = 0x67DD13EA,
     FailedUpload = 0x10857D75,
-    ValidateFailed = 0x0EB64359
+    ValidateFailed = 0x0EB64359,
+    Maintenance = 0x0E7A0016
 };
 
 namespace AuthResults
@@ -40,6 +41,7 @@ namespace AuthResults
             case AuthResult::ErrorNoLock: return "ErrorNoLock";
             case AuthResult::FailedUpload: return "FailedUpload";
             case AuthResult::ValidateFailed: return "ValidateFailed";
+            case AuthResult::Maintenance: return "Maintenance";
         }
         return "Unknown";
     }
