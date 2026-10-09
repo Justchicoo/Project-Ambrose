@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a push that touches the code, the data the tests read or the build definition, by the schedule, a label, or a manual run.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, then builds and tests, with each Linux leg compiling through its own ccache cache, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a push that touches the code, the data the tests read or the build definition, by the schedule, a label, or a manual run.
 name: core-build
 
 on:
@@ -21,8 +21,8 @@ on:
         options: [none, linux-gcc, linux-clang, linux-gcc-asan, linux-clang-tsan, linux-clang-fuzz, windows-msvc-x64, weekly, linux, all]
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || startsWith(github.event.label.name, 'ci:')) && format('core-build-pr-{0}', github.event.pull_request.number) || github.event_name == 'pull_request' && format('core-build-label-{0}', github.run_id) || format('core-build-{0}-{1}-{2}', github.event_name, github.ref, github.event_name == 'push' && github.sha || inputs.legs) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+  group: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || startsWith(github.event.label.name, 'ci:')) && format('core-build-pr-{0}', github.event.pull_request.number) || github.event_name == 'pull_request' && format('core-build-label-{0}', github.run_id) || format('core-build-{0}-{1}-{2}', github.event_name, github.ref, inputs.legs) }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 permissions:
   contents: read
@@ -196,7 +196,7 @@ jobs:
         run: |
           sudo sed -i 's|http://azure.archive.ubuntu.com|https://archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
           apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
-          sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y ninja-build clang
+          sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y ninja-build clang ccache
       - name: Lower mmap randomization for ThreadSanitizer
         if: matrix.configure == 'linux-clang-tsan'
         run: sudo sysctl -w vm.mmap_rnd_bits=28
@@ -206,6 +206,14 @@ jobs:
         run: |
           sudo systemctl start mysql.service
           mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ambrose_test"
+      - name: Restore compiler cache
+        id: ccache-restore
+        if: runner.os == 'Linux'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ matrix.configure }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.configure }}-
       - name: Restore vcpkg binary cache
         id: vcpkg-restore
         uses: actions/cache/restore@v4
@@ -239,4 +247,19 @@ jobs:
           VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
           AMBROSE_TEST_DB: ${{ runner.os == 'Linux' && '127.0.0.1;3306;root;root;ambrose_test' || '' }}
           CL: ${{ runner.os == 'Windows' && '/MP' || '' }}
+          CCACHE_DIR: ${{ runner.temp }}/ccache
+          CCACHE_MAXSIZE: 1G
         run: python apps/ci/ci_build.py --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors --stage build-test
+      - name: Compiler cache use
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.configure.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          CCACHE_DIR: ${{ runner.temp }}/ccache
+        run: ccache --show-stats
+      - name: Save compiler cache
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.configure.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ matrix.configure }}-${{ github.sha }}
