@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 136,
+    "done": 140,
     "total": 469,
-    "percent": 29.0
+    "percent": 29.9
   },
   "checks": {
-    "done": 1099,
+    "done": 1135,
     "total": 2870,
-    "percent": 38.3
+    "percent": 39.5
   },
   "contributor_track": {
     "merged": 94,
@@ -66,9 +66,9 @@
     {
       "phase": 7,
       "title": "An npc offers a quest",
-      "milestones_done": 2,
+      "milestones_done": 3,
       "milestones_total": 13,
-      "checks_done": 17,
+      "checks_done": 29,
       "checks_total": 86
     },
     {
@@ -92,7 +92,7 @@
       "title": "Play the wizard city opening quests",
       "milestones_done": 0,
       "milestones_total": 18,
-      "checks_done": 0,
+      "checks_done": 2,
       "checks_total": 113
     },
     {
@@ -138,17 +138,17 @@
     {
       "phase": 16,
       "title": "Patch server and tooling ownership",
-      "milestones_done": 2,
+      "milestones_done": 3,
       "milestones_total": 13,
-      "checks_done": 15,
+      "checks_done": 22,
       "checks_total": 80
     },
     {
       "phase": 17,
       "title": "Operations console admin api dashboard and metrics",
-      "milestones_done": 21,
+      "milestones_done": 23,
       "milestones_total": 186,
-      "checks_done": 170,
+      "checks_done": 182,
       "checks_total": 1113
     }
   ]
