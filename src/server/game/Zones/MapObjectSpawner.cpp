@@ -51,7 +51,7 @@ namespace
         return sources.Templates ? sources.Templates(static_cast<uint32>(row.TemplateId)) : TemplateLookup{ nullptr, "no template store is set" };
     }
 
-    ZoneObjectPlacement Place(Map const& map, ZoneObjectSpawn const& row, uint64 globalId, uint16 mobileId)
+    ZoneObjectPlacement PlaceAt(Map const& map, ZoneObjectSpawn const& row, uint64 globalId, uint16 mobileId)
     {
         ZoneObjectPlacement placement;
         placement.GlobalId = globalId;
@@ -96,42 +96,66 @@ namespace
         if (!found.Template)
             return false;
         std::string problem;
-        std::optional<std::vector<uint8>> const data = Encode(*found.Template, Place(map, object.Spawn, object.GlobalId, object.MobileId), sources, problem);
+        std::optional<std::vector<uint8>> const data = Encode(*found.Template, PlaceAt(map, object.Spawn, object.GlobalId, object.MobileId), sources, problem);
         return data && *data == object.Data && IsCritical(*found.Template) == object.Critical && IsExemptFromAoi(*found.Template) == object.ExemptFromAoi;
     }
 
-    void Spawn(Map& map, ZoneObjectSpawn const& row, MapObjectSources const& sources, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay,
-        MapObjectChanges& changes)
+    std::string RowName(ZoneObjectSpawn const& row, MapObjectOrigin origin, uint32 spawnerIndex)
+    {
+        switch (origin)
+        {
+            case MapObjectOrigin::Spawner: return fmt::format("zone_spawner {} entry", spawnerIndex);
+            case MapObjectOrigin::Command: return std::string("a game master's spawn");
+            case MapObjectOrigin::Zone: break;
+        }
+        return fmt::format("zone_object row {}", row.Id);
+    }
+}
+
+void MapObjectChanges::Absorb(MapObjectChanges other)
+{
+    Removed.insert(Removed.end(), other.Removed.begin(), other.Removed.end());
+    Added.insert(Added.end(), other.Added.begin(), other.Added.end());
+    Deleted.insert(Deleted.end(), other.Deleted.begin(), other.Deleted.end());
+    Problems.insert(Problems.end(), std::make_move_iterator(other.Problems.begin()), std::make_move_iterator(other.Problems.end()));
+}
+
+std::optional<uint64> MapObjectSpawner::Place(Map& map, ZoneObjectSpawn const& row, MapObjectOrigin origin, uint32 spawnerIndex, MapObjectSources const& sources,
+    Map::Clock::time_point now, std::chrono::milliseconds releaseDelay, MapObjectChanges& changes)
+{
+    std::string const name = RowName(row, origin, spawnerIndex);
     {
         TemplateLookup const found = FindTemplate(sources, row);
         if (!found.Template)
         {
-            Report(changes, row, true, fmt::format("zone_object row {} names template {}, which cannot be read: {}", row.Id, row.TemplateId, found.Error));
-            return;
+            Report(changes, row, true, fmt::format("{} names template {}, which cannot be read: {}", name, row.TemplateId, found.Error));
+            return std::nullopt;
         }
         std::optional<uint64> const globalId = ObjectGuid::NextRuntime();
         if (!globalId)
         {
-            Report(changes, row, false, fmt::format("zone_object row {} gets no object, since the runtime ids have run out", row.Id));
-            return;
+            Report(changes, row, false, fmt::format("{} gets no object, since the runtime ids have run out", name));
+            return std::nullopt;
         }
         std::optional<uint16> const mobileId = map.GetMobileIds().Allocate(MobileIdAllocator::Range::Object, now);
         if (!mobileId)
         {
-            Report(changes, row, false, fmt::format("zone_object row {} gets no object, since instance {} has no object mobile id left", row.Id, map.GetDynamicZoneId()));
-            return;
+            Report(changes, row, false, fmt::format("{} gets no object, since instance {} has no object mobile id left", name, map.GetDynamicZoneId()));
+            return std::nullopt;
         }
-        ZoneObjectPlacement const placement = Place(map, row, *globalId, *mobileId);
+        ZoneObjectPlacement const placement = PlaceAt(map, row, *globalId, *mobileId);
         std::string problem;
         std::optional<std::vector<uint8>> data = Encode(*found.Template, placement, sources, problem);
         if (!data)
         {
             map.GetMobileIds().Release(*mobileId, now, releaseDelay);
-            Report(changes, row, false, fmt::format("zone_object row {} with template {} gets no object: {}", row.Id, row.TemplateId, problem));
-            return;
+            Report(changes, row, false, fmt::format("{} with template {} gets no object: {}", name, row.TemplateId, problem));
+            return std::nullopt;
         }
         MapObject made;
         made.Spawn = row;
+        made.Origin = origin;
+        made.SpawnerIndex = spawnerIndex;
         made.GlobalId = *globalId;
         made.PermId = placement.PermId;
         made.MobileId = *mobileId;
@@ -143,6 +167,7 @@ namespace
         made.Data = std::move(*data);
         map.AddObject(std::move(made));
         changes.Added.push_back(*globalId);
+        return *globalId;
     }
 }
 
@@ -160,6 +185,8 @@ MapObjectChanges MapObjectSpawner::Reconcile(Map& map, std::vector<ZoneObjectSpa
     std::vector<uint64> gone;
     for (MapObject const& object : map.GetObjects())
     {
+        if (object.Origin != MapObjectOrigin::Zone)
+            continue;
         auto const kept = std::find_if(wanted.begin(), wanted.end(), [&object](ZoneObjectSpawn const* row) { return row->Id == object.Spawn.Id; });
         if (kept == wanted.end() || !(**kept == object.Spawn) || (rebuild && !BuildsAlike(map, object, sources)))
             gone.push_back(object.Spawn.Id);
@@ -170,7 +197,7 @@ MapObjectChanges MapObjectSpawner::Reconcile(Map& map, std::vector<ZoneObjectSpa
 
     for (ZoneObjectSpawn const* row : wanted)
         if (!map.FindSpawn(row->Id))
-            Spawn(map, *row, sources, now, releaseDelay, changes);
+            Place(map, *row, MapObjectOrigin::Zone, 0, sources, now, releaseDelay, changes);
     map.SetObjectStamp(stamp);
     return changes;
 }
@@ -219,6 +246,16 @@ MapObjectStamp MapObjectSpawner::WorldStamp()
         sObjectTemplateMgr.GetGeneration() };
 }
 
+MapObjectSources MapObjectSpawner::WorldSources()
+{
+    MapObjectSources sources;
+    sources.Catalog = sTypeRegistry.GetCatalog();
+    sources.Types = sObjectSchemaMgr.GetCoreObjectTypes();
+    sources.Behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
+    sources.Templates = [](uint32 templateId) { return sObjectTemplateMgr.Lookup(templateId); };
+    return sources;
+}
+
 MapObjectChanges MapObjectSpawner::PopulateFromWorld(Map& map, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay)
 {
     MapObjectStamp const stamp = WorldStamp();
@@ -227,12 +264,7 @@ MapObjectChanges MapObjectSpawner::PopulateFromWorld(Map& map, Map::Clock::time_
     bool const first = !map.GetObjectStamp().has_value();
     std::shared_ptr<ZoneObjects const> const objects = sZoneMgr.GetObjects();
     std::vector<ZoneObjectSpawn> const* const rows = objects ? objects->In(map.GetZonePath()) : nullptr;
-    MapObjectSources sources;
-    sources.Catalog = sTypeRegistry.GetCatalog();
-    sources.Types = sObjectSchemaMgr.GetCoreObjectTypes();
-    sources.Behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
-    sources.Templates = [](uint32 templateId) { return sObjectTemplateMgr.Lookup(templateId); };
-    MapObjectChanges changes = Reconcile(map, rows ? *rows : std::vector<ZoneObjectSpawn>{}, stamp, sources, now, releaseDelay);
+    MapObjectChanges changes = Reconcile(map, rows ? *rows : std::vector<ZoneObjectSpawn>{}, stamp, WorldSources(), now, releaseDelay);
     if (first)
         LOG_INFO("server.zones", "{} objects spawned in {}, {} of them critical", map.GetObjects().size(), map.GetZonePath(), CriticalIds(map).size());
     else if (changes.Changed())

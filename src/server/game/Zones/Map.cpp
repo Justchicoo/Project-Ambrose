@@ -97,6 +97,12 @@ void Map::AddObject(MapObject object)
 std::optional<MapObject> Map::RemoveSpawn(uint64 spawnId, Clock::time_point now, std::chrono::milliseconds releaseDelay)
 {
     auto const found = std::find_if(_objects.begin(), _objects.end(), [spawnId](MapObject const& object) { return object.Spawn.Id == spawnId; });
+    return found == _objects.end() ? std::nullopt : RemoveObject(found->GlobalId, now, releaseDelay);
+}
+
+std::optional<MapObject> Map::RemoveObject(uint64 globalId, Clock::time_point now, std::chrono::milliseconds releaseDelay)
+{
+    auto const found = std::find_if(_objects.begin(), _objects.end(), [globalId](MapObject const& object) { return object.GlobalId == globalId; });
     if (found == _objects.end())
         return std::nullopt;
     MapObject removed = std::move(*found);

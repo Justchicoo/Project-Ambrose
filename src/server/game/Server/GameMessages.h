@@ -126,6 +126,20 @@ namespace GameMessages
         }
     };
 
+    struct DeleteObject
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_DELETEOBJECT";
+
+        uint64 GameObjectId = 0;
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GameObjectID", &DeleteObject::GameObjectId), DmlField("Data", &DeleteObject::Data) };
+        }
+    };
+
     struct ClientZoned
     {
         static constexpr uint8 ServiceId = Wizard2Service;
@@ -1149,6 +1163,22 @@ namespace GameMessages
         }
     };
 
+    struct RequestToggleLockItem
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_REQUESTTOGGLELOCKITEM";
+
+        uint64 ItemId = 0;
+        uint64 GlobalId = 0;
+        uint32 IsLocked = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ItemGID", &RequestToggleLockItem::ItemId), DmlField("GlobalID", &RequestToggleLockItem::GlobalId),
+                DmlField("IsLocked", &RequestToggleLockItem::IsLocked) };
+        }
+    };
+
     struct Loot
     {
         static constexpr uint8 ServiceId = WizardService;
@@ -1160,6 +1190,19 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("GlobalID", &Loot::GlobalId), DmlField("LootList", &Loot::LootList) };
+        }
+    };
+
+    struct ItemLock
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_ITEMLOCK";
+
+        uint8 Enabled = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ItemLock", &ItemLock::Enabled) };
         }
     };
 

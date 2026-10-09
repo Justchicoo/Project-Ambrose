@@ -33,6 +33,7 @@ public:
     bool RefillPotion(Clock::time_point now, std::chrono::seconds refillInterval) noexcept;
     bool SetPowerPip(float value) noexcept;
     bool SetShadowPipRating(float value) noexcept;
+    bool SetShowItemLock(bool value) noexcept;
 
 private:
     PlayerStats _stats;

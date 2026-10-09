@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The operators who sign in to the panel, kept in the supervisor's own store apart from any game account: names held to the same rules a game account's name is, passwords hashed with Argon2id and never kept any other way, one policy on every path that sets one, whether two-factor sign-in is on for them, and a generation per user that a password, a disable or a two-factor change bumps so that user's other sessions stop being believed; a password is checked in the same time and with the same answer whether the user is unknown, disabled or simply wrong, so a caller learns nothing from trying, and a signed-in operator's password is checked again the same way before a change to how they sign in. Making an operator and setting a password each split into a half that checks and hashes and a half that writes, so the slow hash never runs inside an open transaction, and the owner made first who is not disabled can be found for a link that names nobody.
+ * The operators who sign in to the panel, kept in the supervisor's own store apart from any game account: names held to the same rules a game account's name is, passwords hashed with Argon2id at a cost a process may lower before its first hash, as the test program does so a suite full of sign-ins does not spend most of its time hashing, and never kept any other way, one policy on every path that sets one, whether two-factor sign-in is on for them, and a generation per user that a password, a disable or a two-factor change bumps so that user's other sessions stop being believed; a password is checked in the same time and with the same answer whether the user is unknown, disabled or simply wrong, so a caller learns nothing from trying, and a signed-in operator's password is checked again the same way before a change to how they sign in. Making an operator and setting a password each split into a half that checks and hashes and a half that writes, so the slow hash never runs inside an open transaction, and the owner made first who is not disabled can be found for a link that names nobody.
  */
 
 #ifndef AMBROSE_PANELUSERS_H
@@ -11,6 +11,7 @@
 #include "PanelPermissions.h"
 #include "Types.h"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -53,6 +54,13 @@ struct PanelUser
     bool TwoFactor = false;
 };
 
+struct PanelHashCost
+{
+    std::size_t Lanes = 1;
+    std::size_t MemoryKiB = 64 * 1024;
+    std::size_t Passes = 3;
+};
+
 struct PanelUserDraft
 {
     std::string Username = {};
@@ -87,6 +95,8 @@ public:
     static std::string Unguessable();
     static bool HashPassword(std::string_view password, std::string& hash, std::string& error);
     static bool PasswordMatches(std::string const& hash, std::string_view password);
+    static void SetHashCost(PanelHashCost cost);
+    static PanelHashCost GetHashCost();
 
     bool IsEmpty(std::string& error);
     std::optional<PanelUser> Find(std::string_view username, std::string& error);

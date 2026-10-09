@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Changes a wizard's backpack on the world thread: an item is added only while the backpack has room for it under the capacity read at that moment, and an add to a full one sends MSG_ITEMDROP naming the template and stores nothing; an added item is stored with its instance and backpack row together and shown with GAME MSG_INVENTORYBEHAVIOR_ADDITEM; an item taken away or trashed is deleted only from the wizard that owns it and shown gone with MSG_INVENTORYBEHAVIOR_REMOVEITEM; MSG_TRASHINVENTORYITEM for an item the wizard does not hold, of another template, or locked is refused and logged; and MSG_LOOT shows the wizard the items it was given.
+ * Changes a wizard's backpack on the world thread: an item is added only while the backpack has room for it under the capacity read at that moment, and an add to a full one sends MSG_ITEMDROP naming the template and stores nothing; an added item is stored with its instance and backpack row together and shown with GAME MSG_INVENTORYBEHAVIOR_ADDITEM; an item taken away or trashed is deleted only from the wizard that owns it and shown gone with MSG_INVENTORYBEHAVIOR_REMOVEITEM; MSG_TRASHINVENTORYITEM for an item the wizard does not hold, of another template, or locked is refused and logged; MSG_REQUESTTOGGLELOCKITEM locks or unlocks an item the wizard holds, stores it, and answers with the item's pattern word carrying the lock in its top bit; and MSG_LOOT shows the wizard the items it was given.
  */
 
 #include "CharacterRepository.h"
@@ -115,6 +115,43 @@ void GameSession::HandleTrashInventoryItem(GameMessages::TrashInventoryItem& mes
     TrashItem(message.GlobalId, static_cast<uint32>(message.TemplateId));
 }
 
+BackpackLockResult GameSession::ToggleItemLock(uint64 itemGuid)
+{
+    if (!_backpack)
+        return BackpackLockResult::NotInWorld;
+    BackpackLockResult const verdict = _backpack->ToggleLock(itemGuid);
+    CharacterItem const* const item = _backpack->Find(itemGuid);
+    if (!item)
+    {
+        LOG_WARN(InventoryLog, "Session {} refused wizard {}'s request to lock or unlock item {}, since it does not hold that item", GetSessionId(), _worldGuid, itemGuid);
+        return verdict;
+    }
+    SaveItemLock(*item);
+    GameMessages::RequestToggleLockItem locked;
+    locked.ItemId = itemGuid;
+    locked.GlobalId = _worldGuid;
+    locked.IsLocked = PlayerBackpack::LockWord(*item);
+    SendDmlMessage(locked);
+    LOG_INFO(InventoryLog, "Session {} {} item {} of wizard {}", GetSessionId(), item->Locked ? "locked" : "unlocked", itemGuid, _worldGuid);
+    return verdict;
+}
+
+void GameSession::HandleRequestToggleLockItem(GameMessages::RequestToggleLockItem& message)
+{
+    LOG_DEBUG(InventoryLog, "Session {} asks to toggle the lock of item {} for {}, sending IsLocked {:#x}", GetSessionId(), message.ItemId, message.GlobalId, message.IsLocked);
+    ToggleItemLock(message.ItemId);
+}
+
+void GameSession::HandleItemLock(GameMessages::ItemLock& message)
+{
+    if (!_player)
+        return;
+    bool const enabled = message.Enabled != 0;
+    if (_player->SetShowItemLock(enabled))
+        SaveStatsIfDirty();
+    LOG_INFO(InventoryLog, "Session {} turned wizard {}'s backpack item lock {}", GetSessionId(), _worldGuid, enabled ? "on" : "off");
+}
+
 bool GameSession::ShowLoot(std::vector<LootItem> const& items)
 {
     std::string problem;
@@ -148,6 +185,18 @@ void GameSession::DeleteStoredItem(uint64 itemGuid)
     if (!statement)
     {
         LOG_ERROR(InventoryLog, "Session {} could not delete item {} of wizard {}'s backpack, since the characters database is not open", GetSessionId(), itemGuid, _worldGuid);
+        return;
+    }
+    CharacterDatabase.Execute(std::move(statement));
+}
+
+void GameSession::SaveItemLock(CharacterItem const& item)
+{
+    CharacterRepository::Statement statement = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareLockItem(_worldGuid, item.Guid, item.Locked) : nullptr;
+    if (!statement)
+    {
+        LOG_ERROR(InventoryLog, "Session {} could not store the lock of item {} of wizard {}'s backpack, since the characters database is not open", GetSessionId(), item.Guid,
+            _worldGuid);
         return;
     }
     CharacterDatabase.Execute(std::move(statement));

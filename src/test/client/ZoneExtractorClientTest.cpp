@@ -1,11 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every zone of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the counts recorded for the installed revision, r806919's below: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
+ * Extracts every zone of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the counts recorded for the installed revision, r806919's below: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set every zone's spawnData.xml decodes through the authored classes that database holds, as its spawn items place a WizSpawnObjectInfo the dump does not list, Ravenwood's five spawners include SpawnPoint_Wood_01 placing with SNT_RANDOM_UNIQUE, and the Commons' HalloweenSpawner1 waits on a ReqGlobalRegistryValue; and the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
  */
 
+#include "ConfigMgr.h"
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
 #include "KiwadArchive.h"
+#include "ObjectSerializer.h"
 #include "ServerClassScript.h"
 #include "TypeRegistry.h"
 #include "Environment.h"
@@ -15,12 +17,14 @@
 #include "ZoneExtractor.h"
 #include "ZoneMgr.h"
 #include "ZoneSqlScript.h"
+#include "ZoneViews.h"
 
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cstddef>
+#include <filesystem>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -42,6 +46,65 @@ namespace
     {
         return std::any_of(std::begin(SigilClasses), std::end(SigilClasses), [classHash](std::string_view name) { return StringHash::KiStringHash(name) == classHash; });
     }
+
+    class AuthoredWorld
+    {
+    public:
+        bool Open(std::string const& prefix, std::string& reason)
+        {
+            std::optional<std::string> const client = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
+            std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
+            std::optional<std::string> const text = Ambrose::GetEnv("AMBROSE_TEST_DB");
+            if (!client || client->empty() || !dump || dump->empty() || !text || text->empty())
+            {
+                reason = "AMBROSE_CLIENT_DIR, AMBROSE_TYPE_DUMP_PATH and AMBROSE_TEST_DB are not all set";
+                return false;
+            }
+            Client = LogConfig::Utf8Path(*client);
+            std::optional<MySQLConnectionInfo> server = MySQLConnectionInfo::Parse(*text);
+            EXPECT_TRUE(server);
+            if (!server)
+                return false;
+            _world = *server;
+            _world.Database = fmt::format("{}_{:08x}", prefix, std::random_device()());
+            _server = *server;
+            _server.Database.clear();
+            EXPECT_TRUE(DBUpdater::Run(_world, "world", UpdaterSettings{}));
+            EXPECT_TRUE(WorldDatabase.SetConnectionInfo(_world.ToConnectionString(), 1, 1));
+            EXPECT_EQ(WorldDatabase.Open(), 0u);
+            _open = true;
+            TypeDumpLoader::RawDump authored;
+            std::vector<std::string> errors;
+            bool const read = ServerClassScript::Read(authored, errors, ServerClassScript::AuthoredSource);
+            EXPECT_TRUE(read) << (errors.empty() ? std::string() : errors.front());
+            ZoneViews::RegisterAll(_views);
+            Registry = std::make_unique<TypeRegistry>(&_views);
+            bool const joined = Registry->SetSupplement(std::move(authored), "the authored classes", errors);
+            EXPECT_TRUE(joined) << (errors.empty() ? std::string() : errors.front());
+            bool const loaded = Registry->LoadFromFile(LogConfig::Utf8Path(*dump));
+            EXPECT_TRUE(loaded);
+            return read && joined && loaded;
+        }
+
+        ~AuthoredWorld()
+        {
+            if (!_open)
+                return;
+            WorldDatabase.Close();
+            MySQLConnection connection(_server);
+            if (connection.Open() == 0)
+                connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(_world.Database)));
+        }
+
+        std::filesystem::path Client;
+        std::unique_ptr<TypeRegistry> Registry;
+
+    private:
+        TypedViewRegistry _views;
+        MySQLConnectionInfo _world;
+        MySQLConnectionInfo _server;
+        bool _open = false;
+    };
 
     class ZoneExtractorClientTest : public testing::Test
     {
@@ -216,40 +279,17 @@ TEST_F(ZoneExtractorClientTest, TheRowsFillAWorldDatabaseTheZoneManagerLoads)
 
 TEST(ZoneExtractorClientTriggerTest, TheCommonsVolumesAndTriggersReadThroughTheAuthoredClasses)
 {
-    std::optional<std::string> const client = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
-    std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
-    std::optional<std::string> const text = Ambrose::GetEnv("AMBROSE_TEST_DB");
-    if (!client || client->empty() || !dump || dump->empty() || !text || text->empty())
-        GTEST_SKIP() << "AMBROSE_CLIENT_DIR, AMBROSE_TYPE_DUMP_PATH and AMBROSE_TEST_DB are not all set";
-    std::optional<MySQLConnectionInfo> server = MySQLConnectionInfo::Parse(*text);
-    ASSERT_TRUE(server);
-    MySQLConnectionInfo world = *server;
-    world.Database = fmt::format("ambrose_client_triggers_{:08x}", std::random_device()());
-    server->Database.clear();
-    struct Cleanup
+    AuthoredWorld world;
+    std::string reason;
+    if (!world.Open("ambrose_client_triggers", reason))
     {
-        MySQLConnectionInfo Server;
-        std::string Name;
-        ~Cleanup()
-        {
-            WorldDatabase.Close();
-            MySQLConnection connection(Server);
-            if (connection.Open() == 0)
-                connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(Name)));
-        }
-    } const cleanup{ *server, world.Database };
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
-    ASSERT_TRUE(WorldDatabase.SetConnectionInfo(world.ToConnectionString(), 1, 1));
-    ASSERT_EQ(WorldDatabase.Open(), 0u);
-    TypeDumpLoader::RawDump authored;
-    std::vector<std::string> errors;
-    ASSERT_TRUE(ServerClassScript::Read(authored, errors, ServerClassScript::AuthoredSource)) << (errors.empty() ? std::string() : errors.front());
-
-    TypeRegistry registry;
-    ASSERT_TRUE(registry.SetSupplement(std::move(authored), "the authored classes", errors)) << (errors.empty() ? std::string() : errors.front());
-    ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*dump)));
+        if (!reason.empty())
+            GTEST_SKIP() << reason;
+        FAIL();
+    }
+    TypeRegistry& registry = *world.Registry;
     std::string error;
-    std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(LogConfig::Utf8Path(*client) / "Data" / "GameData" / "WizardCity-WC_Hub.wad", error);
+    std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(world.Client / "Data" / "GameData" / "WizardCity-WC_Hub.wad", error);
     ASSERT_TRUE(archive) << error;
     KiwadReadResult const volumes = archive->Read(ZoneExtractor::VolumeEntry, ZoneExtractor::MaxEntryBytes);
     KiwadReadResult const triggers = archive->Read(ZoneExtractor::TriggerEntry, ZoneExtractor::MaxEntryBytes);
@@ -286,4 +326,80 @@ TEST(ZoneExtractorClientTriggerTest, TheCommonsVolumesAndTriggersReadThroughTheA
     ClassInfo const* const resTeleport = registry.GetCatalog()->FindClass("class ResTeleport");
     ASSERT_NE(resTeleport, nullptr);
     EXPECT_TRUE(resTeleport->Properties.empty()) << "no destination is held; destinations come from the world's own data";
+}
+
+TEST(ZoneExtractorClientSpawnTest, EverySpawnDataReadsThroughTheAuthoredClassesWithRavenwoodsSpawnersAndTheCommonsHalloweenSpawner)
+{
+    AuthoredWorld world;
+    std::string reason;
+    if (!world.Open("ambrose_client_spawns", reason))
+    {
+        if (!reason.empty())
+            GTEST_SKIP() << reason;
+        FAIL();
+    }
+    TypeCatalogPtr const catalog = world.Registry->GetCatalog();
+    std::filesystem::path const gameData = world.Client / "Data" / "GameData";
+    ZoneExtraction extraction;
+    std::size_t files = 0;
+    ExtractedZone ravenwood;
+    ExtractedZone hub;
+    std::error_code error;
+    for (std::filesystem::directory_iterator iterator(gameData, error), end; !error && iterator != end; iterator.increment(error))
+    {
+        if (!iterator->is_regular_file() || iterator->path().extension() != ".wad")
+            continue;
+        std::string openError;
+        std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(iterator->path(), openError);
+        ASSERT_TRUE(archive) << openError;
+        if (!archive->Find(ZoneExtractor::SpawnEntry))
+            continue;
+        KiwadReadResult const read = archive->Read(ZoneExtractor::SpawnEntry, ZoneExtractor::MaxEntryBytes);
+        ASSERT_TRUE(read.Succeeded()) << read.Error;
+        ++files;
+        ExtractedZone zone;
+        zone.Path = ConfigMgr::PathToUtf8(iterator->path().stem());
+        ZoneExtractor::ReadSpawns(catalog, zone, read.Data, extraction);
+        if (zone.Path == ZoneExtractor::ArchiveStemOf(Ravenwood))
+            ravenwood = std::move(zone);
+        else if (zone.Path == ZoneExtractor::ArchiveStemOf(Commons))
+            hub = std::move(zone);
+    }
+    ASSERT_FALSE(error) << error.message();
+    EXPECT_GT(files, 0u);
+    EXPECT_TRUE(extraction.TriggerFailures.empty()) << extraction.TriggerFailures.size() << " spawn files do not decode, the first " << extraction.TriggerFailures.front().Zone
+        << ": " << extraction.TriggerFailures.front().Detail;
+
+    InstalledRevision::Expect(ravenwood.Spawners.size(), { { "r806919", 5u } }, "Ravenwood spawners");
+    auto const wood = std::find_if(ravenwood.Spawners.begin(), ravenwood.Spawners.end(), [](ExtractedSpawner const& spawner) { return spawner.Name == "SpawnPoint_Wood_01"; });
+    ASSERT_NE(wood, ravenwood.Spawners.end());
+    ASSERT_FALSE(wood->Items.empty());
+    constexpr int64 RandomUnique = 1;
+    EXPECT_TRUE(std::any_of(wood->Items.begin(), wood->Items.end(), [](ExtractedSpawnItem const& item) { return item.StartNodeType == RandomUnique; }))
+        << "SpawnPoint_Wood_01 places with SNT_RANDOM_UNIQUE";
+
+    auto const halloween = std::find_if(hub.Spawners.begin(), hub.Spawners.end(), [](ExtractedSpawner const& spawner) { return spawner.Name == "HalloweenSpawner1"; });
+    ASSERT_NE(halloween, hub.Spawners.end());
+    SerializerOptions options;
+    options.Versionable = true;
+    options.Flags = SerializerFlag::None;
+    options.Mask = 0;
+    std::vector<std::vector<uint8> const*> lists;
+    if (halloween->GlobalDynamicReqs)
+        lists.push_back(&*halloween->GlobalDynamicReqs);
+    for (ExtractedSpawnItem const& item : halloween->Items)
+        if (item.Object.SpawnRequirements)
+            lists.push_back(&*item.Object.SpawnRequirements);
+    std::set<std::string> classes;
+    for (std::vector<uint8> const* bytes : lists)
+    {
+        DecodeResult const decoded = ObjectSerializer::Decode(catalog, *bytes, options);
+        ASSERT_TRUE(decoded.Ok() && decoded.Object) << decoded.Detail;
+        PropertyValue const* const requirements = decoded.Object->Get("m_requirements");
+        ASSERT_TRUE(requirements && requirements->GetList());
+        for (PropertyValue const& requirement : *requirements->GetList())
+            if (requirement.AsObject())
+                classes.insert(requirement.AsObject()->GetClass().Name);
+    }
+    EXPECT_TRUE(classes.contains("class ReqGlobalRegistryValue")) << "HalloweenSpawner1 waits on a global registry value";
 }
