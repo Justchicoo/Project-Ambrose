@@ -470,10 +470,10 @@ database fails, 2 on bad usage.
                 Collect<TemplateScript>(TemplateExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
             else
             {
-                ZoneExtraction const zones = ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog());
+                ZoneExtraction const zoneExtraction = ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog());
                 if (arguments->ProposalFile)
                 {
-                    std::vector<TeleportProposal> const proposals = TeleportProposer::Propose(zones.Zones);
+                    std::vector<TeleportProposal> const proposals = TeleportProposer::Propose(zoneExtraction.Zones);
                     if (!TeleportProposer::WriteCsv(LogConfig::Utf8Path(*arguments->ProposalFile), proposals, error))
                     {
                         std::cerr << fmt::format("extractor: cannot write {}: {}\n", *arguments->ProposalFile, error);
@@ -481,7 +481,7 @@ database fails, 2 on bad usage.
                     }
                     std::cout << fmt::format("proposed {} door destination(s) for review in {}\n", proposals.size(), *arguments->ProposalFile);
                 }
-                Collect<ZoneSqlScript>(zones, extracted);
+                Collect<ZoneSqlScript>(zoneExtraction, extracted);
             }
         }
         if (extracted.ErrorCount != 0)
