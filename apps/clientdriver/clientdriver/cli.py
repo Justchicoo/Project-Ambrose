@@ -1,8 +1,9 @@
 # Project Ambrose by Imjustchico
-# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, or list the scenarios, holding the WSL distribution the scratch database runs in, named by --wsl-distro or AMBROSE_TEST_DB_WSL, for as long as the driver runs.
+# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, list the scenarios, or start a play session that keeps its databases and stays up until told to stop, holding the WSL distribution the scratch database runs in, named by --wsl-distro or AMBROSE_TEST_DB_WSL, for as long as the driver runs.
 import argparse
 import os
 import sys
+import tempfile
 
 from . import paths, preflight, references as refs, scenario as scenarios
 from .errors import Refused
@@ -15,6 +16,8 @@ DEFAULT_SCENARIO = "login-to-charselect.json"
 DEFAULT_HOST = "127.0.0.2"
 DEFAULT_PORT = 12100
 DEFAULT_GAME_PORT = 12433
+DEFAULT_PLAY_PORT = 12200
+DEFAULT_PLAY_GAME_PORT = 12533
 DEFAULT_DB = ("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
 
 
@@ -133,6 +136,32 @@ def command_capture_refs(args):
     return CaptureRun(options, scenario, references, environment).execute()
 
 
+def command_play(args):
+    from . import play
+
+    if args.stop:
+        print(f"clientdriver: {play.ask_to_stop()}")
+        return OK
+    binaries, reason = paths.find_binaries(args.binaries)
+    if not binaries:
+        print(f"clientdriver: {reason}", file=sys.stderr)
+        return FAILED
+    options = options_of(args, need_crops=False)
+    password = os.environ.get(args.password_env) if args.password_env else None
+    if args.user and not password and not args.stop and sys.stdin.isatty() and not play.running():
+        import getpass
+
+        password = getpass.getpass(f"password for {args.user}: ")
+    options.update(game_set=list(args.game_set or []), window=args.window, password=password)
+    with tempfile.TemporaryDirectory(prefix="ambrose-play-") as folder:
+        install, revision, why = preflight.ask_launcher(binaries, options["host"], options["port"], args.window or "800x600", folder)
+    if not install:
+        print(f"clientdriver: {why}", file=sys.stderr)
+        return FAILED
+    environment = {"binaries": binaries, "server_defaults": paths.server_defaults(binaries), "install": install, "revision": revision}
+    return play.play(options, environment, client=args.client_start)
+
+
 def command_scenarios(args):
     folder = paths.SCENARIOS
     for name in sorted(os.listdir(folder)):
@@ -170,13 +199,24 @@ def build_parser():
     capture.add_argument("--foreground", dest="background", action="store_false", help="leave the client window in front instead of at the bottom")
     capture.add_argument("--replace", action="store_true", help="take every new crop, even one that does not look like the crop it replaces")
     commands.add_parser("scenarios", help="list the scenarios and what each one needs")
+    play = commands.add_parser("play", help="start servers that keep their databases for a person to play on, start a client, and stay up until told to stop")
+    add_common(play)
+    play.add_argument("--set", action="append", help="one more login server option, as Key=Value; may repeat")
+    play.add_argument("--game-set", action="append", help="one more game server option, as Key=Value; may repeat")
+    play.add_argument("--user", help="the account to make sure of; it is created, or its password set again, before the client starts")
+    play.add_argument("--password-env", help="the environment variable holding --user's password, so it never sits on a command line; without it the password is asked for")
+    play.add_argument("--window", help="the client window size, as WxH (default the launcher's own)")
+    play.add_argument("--no-client", dest="client_start", action="store_false", help="start the servers only")
+    play.add_argument("--stop", action="store_true", help="ask the running play session to stop, and wait until it has")
+    play.set_defaults(port=DEFAULT_PLAY_PORT, game_port=DEFAULT_PLAY_GAME_PORT)
     return parser
 
 
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
-    handlers = {"run": command_run, "check": command_check, "capture-refs": command_capture_refs, "scenarios": command_scenarios}
+    handlers = {"run": command_run, "check": command_check, "capture-refs": command_capture_refs, "scenarios": command_scenarios,
+                "play": command_play}
     try:
         return handlers[args.command](args)
     except Refused as error:
