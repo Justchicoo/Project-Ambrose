@@ -35,6 +35,7 @@ struct AdminRequest
     std::string UserAgent;
     std::string Cookie;
     std::string Csrf;
+    std::string Range;
     bool Upgrade = false;
     std::string Id;
     std::string Principal;
