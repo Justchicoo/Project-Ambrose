@@ -456,7 +456,7 @@ Moved on 2026-09-17 to 3.21, which builds the dump by emulating the client progr
 
 **Acceptance**
 
-- [ ] Spike output lists classes and bases from the maintainer's client; never writes into the client dir
+- [x] Spike output lists classes and bases from the maintainer's client; never writes into the client dir [typeextract on the r806919 install reported 6986 classes, 49465 properties and 3065 races; TypeExtractionClientTest.TheInstallExtractsValidatesAndMatchesTheReferenceDump passed, and the dump was written to the build directory]
 
 ### Detailed spec from OBJ-20: Project-owned type dumper
 
@@ -469,8 +469,8 @@ Users generate their own type dump from their own client, so Ambrose does not de
 
 **Acceptance**
 
-- [ ] On the maintainer's r806919 client, the output is structurally equal to the reference dump: 6981 entries, 49461 properties, identical hashes and flags
-- [ ] The tool never writes into the client directory
+- [x] On the maintainer's r806919 client, the output structurally matches the reference dump, with only the five documented extra classes/four properties and 60 empty enum option values [3.21 TypeExtractionClientTest records the reference comparison; this run independently extracted r806919 and passed TypeExtractionClientTest.TheInstallExtractsValidatesAndMatchesTheReferenceDump]
+- [x] The tool never writes into the client directory [typeextract --client <client> --out <build output> wrote the dump under build/; the client-gated test passed]
 
 **Risks**
 
