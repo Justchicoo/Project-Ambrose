@@ -29,6 +29,23 @@
       }
     },
     {
+      "name": "windows-msvc-ninja",
+      "displayName": "Windows MSVC x64 with Ninja, from a Visual Studio developer prompt, compiling through ccache",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
       "name": "linux-gcc",
       "displayName": "Linux GCC",
       "inherits": "base",
@@ -94,6 +111,11 @@
       "configuration": "RelWithDebInfo"
     },
     {
+      "name": "windows-ninja-debug",
+      "configurePreset": "windows-msvc-ninja",
+      "configuration": "Debug"
+    },
+    {
       "name": "linux-gcc-debug",
       "configurePreset": "linux-gcc",
       "configuration": "Debug"
@@ -147,6 +169,19 @@
       "name": "windows-release",
       "configurePreset": "windows-msvc-x64",
       "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 4,
+        "timeout": 600
+      }
+    },
+    {
+      "name": "windows-ninja-debug",
+      "configurePreset": "windows-msvc-ninja",
+      "configuration": "Debug",
       "output": {
         "outputOnFailure": true
       },

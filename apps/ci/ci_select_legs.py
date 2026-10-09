@@ -16,11 +16,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 UTC = datetime.timezone.utc
 
 LEGS = OrderedDict([
-    ("windows-msvc-x64", {"os": "windows-latest", "configure": "windows-msvc-x64", "build": "windows-debug", "configure_timeout": 90, "build_timeout": 40}),
-    ("linux-gcc", {"os": "ubuntu-latest", "configure": "linux-gcc", "build": "linux-gcc-debug", "configure_timeout": 45, "build_timeout": 20}),
-    ("linux-clang", {"os": "ubuntu-latest", "configure": "linux-clang", "build": "linux-clang-debug", "configure_timeout": 45, "build_timeout": 25}),
+    ("windows-msvc-x64", {"os": "windows-latest", "configure": "windows-msvc-ninja", "build": "windows-ninja-debug", "configure_timeout": 90, "build_timeout": 40}),
+    ("linux-gcc", {"os": "ubuntu-latest", "configure": "linux-gcc", "build": "linux-gcc-debug", "configure_timeout": 45, "build_timeout": 30}),
+    ("linux-clang", {"os": "ubuntu-latest", "configure": "linux-clang", "build": "linux-clang-debug", "configure_timeout": 45, "build_timeout": 35}),
     ("linux-gcc-asan", {"os": "ubuntu-latest", "configure": "linux-gcc-asan", "build": "linux-gcc-asan", "configure_timeout": 45, "build_timeout": 45}),
-    ("linux-clang-tsan", {"os": "ubuntu-latest", "configure": "linux-clang-tsan", "build": "linux-clang-tsan", "configure_timeout": 45, "build_timeout": 25}),
+    ("linux-clang-tsan", {"os": "ubuntu-latest", "configure": "linux-clang-tsan", "build": "linux-clang-tsan", "configure_timeout": 45, "build_timeout": 35}),
     ("linux-clang-fuzz", {"os": "ubuntu-latest", "configure": "linux-clang-fuzz", "build": "linux-clang-fuzz", "configure_timeout": 45, "build_timeout": 40}),
 ])
 JOB_TIMEOUT_MARGIN = 10
@@ -281,7 +281,7 @@ def plan(event, inputs, now, git, actions=None):
 def matrix(legs):
     include = []
     for leg in legs:
-        entry = {"os": LEGS[leg]["os"], "configure": LEGS[leg]["configure"], "build": LEGS[leg]["build"],
+        entry = {"leg": leg, "os": LEGS[leg]["os"], "configure": LEGS[leg]["configure"], "build": LEGS[leg]["build"],
                  "configure_timeout": LEGS[leg]["configure_timeout"], "build_timeout": LEGS[leg]["build_timeout"],
                  "job_timeout": LEGS[leg]["configure_timeout"] + LEGS[leg]["build_timeout"] + JOB_TIMEOUT_MARGIN}
         include.append(entry)
