@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 10
     services:
       mysql:
-        image: mysql:8.0
+        image: mirror.gcr.io/library/mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: ambrose-sql-check
         ports: ["3306:3306"]
@@ -32,7 +32,7 @@ jobs:
           --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pambrose-sql-check --silent"
           --health-interval=3s --health-timeout=3s --health-retries=40
       mariadb:
-        image: mariadb:11
+        image: mirror.gcr.io/library/mariadb:11
         env:
           MARIADB_ROOT_PASSWORD: ambrose-sql-check
         ports: ["3307:3306"]
