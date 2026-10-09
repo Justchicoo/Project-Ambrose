@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id, template id and, where the class has one, the pattern word whose top bit the client reads as the lock, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to whichever of the player's behaviors has an m_itemList, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump.
+ * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id, template id and, where the class has one, the pattern word whose top bit the client reads as the lock, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to the player's behavior that has both an m_itemList and an m_numItemsAllowed, since the equipment behavior carries an m_itemList too, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump.
  */
 
 #include "ItemObjectBuilder.h"
@@ -101,7 +101,6 @@ bool ItemObjectBuilder::FillBackpack(PropertyObject& player, CoreObjectTypeTable
     return problem.empty();
 }
 
-// The equipment behavior carries an m_itemList too, so only the one with m_numItemsAllowed is the backpack.
 PropertyObject* ItemObjectBuilder::FindBackpack(PropertyValue::List& behaviors)
 {
     for (PropertyValue& entry : behaviors)
