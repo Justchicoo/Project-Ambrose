@@ -23,31 +23,45 @@
 
 namespace
 {
-    constexpr std::string_view ScriptText = R"(from ghidra.app.decompiler import DecompInterface
-from ghidra.util.task import ConsoleTaskMonitor
+    constexpr std::string_view ScriptText = R"(import ghidra.app.decompiler.DecompInterface;
+import ghidra.app.decompiler.DecompileResults;
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.Function;
 
-print("AMBROSE-PROGRAM %s" % currentProgram.getExecutableSHA256())
-decompiler = DecompInterface()
-decompiler.openProgram(currentProgram)
-monitor = ConsoleTaskMonitor()
-for text in getScriptArgs():
-    address = toAddr(text)
-    function = getFunctionAt(address)
-    if function is None:
-        function = getFunctionContaining(address)
-    if function is None:
-        function = createFunction(address, None)
-    if function is None:
-        print("AMBROSE-FAILED %s no function is found or can be made there" % text)
-        continue
-    result = decompiler.decompileFunction(function, 600, monitor)
-    if result is None or not result.decompileCompleted():
-        reason = "the decompiler gave no result" if result is None else (result.getErrorMessage() or "the decompiler did not finish")
-        print("AMBROSE-FAILED %s %s" % (text, reason.strip().replace("\n", " ")))
-        continue
-    print("AMBROSE-BEGIN %s %s" % (text, function.getName()))
-    print(result.getDecompiledFunction().getC())
-    print("AMBROSE-END %s" % text)
+public class AmbroseDecompile extends GhidraScript {
+    @Override
+    protected void run() throws Exception {
+        System.out.println("AMBROSE-PROGRAM " + currentProgram.getExecutableSHA256());
+        DecompInterface decompiler = new DecompInterface();
+        decompiler.openProgram(currentProgram);
+        for (String text : getScriptArgs()) {
+            Address address = toAddr(text);
+            Function function = getFunctionAt(address);
+            if (function == null)
+                function = getFunctionContaining(address);
+            if (function == null)
+                function = createFunction(address, null);
+            if (function == null) {
+                System.out.println("AMBROSE-FAILED " + text + " no function is found or can be made there");
+                continue;
+            }
+            DecompileResults result = decompiler.decompileFunction(function, 600, monitor);
+            if (result == null || !result.decompileCompleted()) {
+                String reason = result == null ? "the decompiler gave no result" : result.getErrorMessage();
+                if (reason == null || reason.isBlank())
+                    reason = "the decompiler did not finish";
+                System.out.println("AMBROSE-FAILED " + text + " " + reason.strip().replace("\n", " "));
+                continue;
+            }
+            System.out.println("AMBROSE-BEGIN " + text + " " + function.getName());
+            System.out.println(result.getDecompiledFunction().getC());
+            System.out.println("AMBROSE-END " + text);
+        }
+        decompiler.dispose();
+        System.out.flush();
+    }
+}
 )";
 
     constexpr std::string_view ProgramMarker = "AMBROSE-PROGRAM ";

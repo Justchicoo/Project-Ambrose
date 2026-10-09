@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives Unicorn's x86-64 engine: page-aligned mappings checked against the engine's regions, bounds-checked reads, writes and strings, full-width XMM register access, code hooks whose exceptions stop emulation and resurface in the caller, and budgeted calls that return through a sentinel page or report where and why they stopped.
+ * Drives Unicorn's x86-64 engine: page-aligned mappings checked against the engine's regions, bounds-checked reads, writes and strings, full-width XMM register access, code hooks whose exceptions stop emulation and resurface in the caller, and budgeted calls that return through a sentinel page or report where and why they stopped, and saves every writable region outside the ranges asked to skip so a probe can be undone.
  */
 
 #include "Machine.h"
@@ -613,4 +613,25 @@ uint64 Machine::Call(uint64 function, std::span<uint64 const> arguments, uint64 
 std::optional<GuestFault> const& Machine::GetLastFault() const noexcept
 {
     return _state->LastFault;
+}
+
+Machine::MemorySnapshot Machine::SaveMemory(std::span<std::pair<uint64, uint64> const> skipped) const
+{
+    MemorySnapshot snapshot;
+    for (uc_mem_region const& region : GetRegions(_state->Engine))
+    {
+        bool const skip = std::any_of(skipped.begin(), skipped.end(), [&](std::pair<uint64, uint64> const& range) { return region.begin < range.second && range.first <= region.end; });
+        if (skip || !(region.perms & UC_PROT_WRITE))
+            continue;
+        snapshot.Regions.emplace_back(region.begin, ReadBytes(region.begin, static_cast<std::size_t>(region.end - region.begin + 1)));
+    }
+    return snapshot;
+}
+
+void Machine::RestoreMemory(MemorySnapshot const& snapshot)
+{
+    for (auto const& [address, bytes] : snapshot.Regions)
+        Write(address, bytes);
+    if (_state->HasRun)
+        _state->TranslationStale = true;
 }

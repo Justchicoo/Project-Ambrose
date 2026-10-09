@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the guest heap: block alignment and gaps, remembered sizes, zero-filled blocks, reallocation copies, exhaustion without overflow, the contained range, free semantics and refused regions.
+ * Tests the guest heap: block alignment and gaps, remembered sizes, zero-filled blocks, reallocation copies, exhaustion without overflow, the contained range, free semantics, refused regions and a saved state restored over later writes, allocations and frees.
  */
 
 #include "GuestHeap.h"
@@ -232,4 +232,26 @@ TEST(GuestHeapTest, RefusesRegionsThatCannotHoldAHeap)
     GuestHeap heap(machine, HeapBase, 0x2000);
     EXPECT_THROW(CreateHeap(machine, HeapBase + 0x1000, 0x2000), EmulationError);
     EXPECT_NO_THROW(CreateHeap(machine, HeapBase + 0x2000, 0x1000));
+}
+
+TEST(GuestHeapTest, ARestoredSnapshotUndoesWritesAllocationsAndFrees)
+{
+    Machine machine;
+    GuestHeap heap(machine, HeapBase, 0x100000);
+    uint64 const kept = heap.Allocate(16, true);
+    machine.WriteU64(kept, 0x1111);
+    uint64 const freed = heap.Allocate(16, true);
+    GuestHeap::Snapshot const snapshot = heap.Save();
+
+    machine.WriteU64(kept, 0x2222);
+    EXPECT_TRUE(heap.Free(freed));
+    uint64 const added = heap.Allocate(32, false);
+    machine.WriteU64(added, 0x3333);
+    heap.Restore(snapshot);
+
+    EXPECT_EQ(machine.ReadU64(kept), 0x1111u);
+    EXPECT_EQ(heap.SizeOf(freed), uint64{ 16 });
+    EXPECT_FALSE(heap.SizeOf(added).has_value());
+    EXPECT_EQ(machine.ReadU64(added), 0u);
+    EXPECT_EQ(heap.Allocate(32, false), added);
 }
