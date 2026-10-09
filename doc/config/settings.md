@@ -107,6 +107,12 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Network.SendQueueHighWater` | unsigned | 16777216 bytes | from 1048576 to 1073741824 bytes | live | gameserver, loginserver | normal | How many bytes one connection may have waiting to be sent before it is closed; applies to existing connections immediately. |
 | `Network.SessionAcceptTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a new connection may take to finish its handshake. |
 
+## Patching
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Patch.Enabled` | bool | false | none | live | gameserver | normal | Whether the realm may send package-download messages; read at each send, so a live change applies to the next package message. The gate sits on GameSession's own send, so download messages must only ever be sent through GameSession. |
+
 ## Player
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |

@@ -75,6 +75,9 @@ namespace LoginMessageFixtures
 <MSG_IGNORELIST><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">90</_MsgOrder><ListOwnerGID TYPE="GID"></ListOwnerGID><ListData TYPE="STR"></ListData><Add TYPE="UBYT"></Add></RECORD></MSG_IGNORELIST>
 <MSG_JUMP><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">100</_MsgOrder><ExcludeOriginator TYPE="UBYT"></ExcludeOriginator></RECORD></MSG_JUMP>
 <MSG_LOGINCOMPLETE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">108</_MsgOrder><ZoneName TYPE="STR"></ZoneName><Data TYPE="STR"></Data><ServerTime TYPE="UINT"></ServerTime><ZoneID TYPE="GID"></ZoneID><DynamicZoneID TYPE="UINT"></DynamicZoneID><DynamicServerProcID TYPE="UINT"></DynamicServerProcID><Permissions TYPE="UINT"></Permissions><IsCSR TYPE="INT"></IsCSR><ZoneServer TYPE="STR"></ZoneServer><TestServer TYPE="UBYT"></TestServer><AltMusicFile TYPE="UINT"></AltMusicFile><ShowSubscriberIcon TYPE="UBYT"></ShowSubscriberIcon><SubscriberCrownsPricePercent TYPE="INT"></SubscriberCrownsPricePercent><UseFriendFinder TYPE="INT"></UseFriendFinder><RealmName TYPE="STR"></RealmName><IsBossMarkZone TYPE="UBYT"></IsBossMarkZone><CriticalObjects TYPE="STR"></CriticalObjects><ZoneHasFriendlyPlayers TYPE="UBYT"></ZoneHasFriendlyPlayers><HourOffset TYPE="UINT"></HourOffset><DisableBeastmoonGroups TYPE="UINT"></DisableBeastmoonGroups><PickUpAllEnabled TYPE="UBYT"></PickUpAllEnabled><SegmentedMessage TYPE="UBYT"></SegmentedMessage><LastSegment TYPE="UBYT"></LastSegment></RECORD></MSG_LOGINCOMPLETE>
+<MSG_DOWNLOADBROWSER><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">67</_MsgOrder></RECORD></MSG_DOWNLOADBROWSER>
+<MSG_DOWNLOADPACKAGE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">68</_MsgOrder><Data TYPE="STR"></Data></RECORD></MSG_DOWNLOADPACKAGE>
+<MSG_DOWNLOADPACKAGEELEMENT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">69</_MsgOrder><Data TYPE="STR"></Data></RECORD></MSG_DOWNLOADPACKAGEELEMENT>
 <MSG_MOVESTATE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">119</_MsgOrder><GlobalID TYPE="GID"></GlobalID><NewState TYPE="BYT"></NewState></RECORD></MSG_MOVESTATE>
 <MSG_NEWOBJECT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">122</_MsgOrder><Data TYPE="STR"></Data></RECORD></MSG_NEWOBJECT>
 <MSG_NOT_AFK><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">130</_MsgOrder></RECORD></MSG_NOT_AFK>
@@ -118,6 +121,7 @@ namespace LoginMessageFixtures
 <MSG_ITEMDROP><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">74</_MsgOrder><TemplateID TYPE="GID"></TemplateID><ErrorID TYPE="UINT"></ErrorID></RECORD></MSG_ITEMDROP>
 <MSG_LOGCLIENTRESOLUTION><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">87</_MsgOrder><ScreenWidth TYPE="UINT"></ScreenWidth><ScreenHeight TYPE="UINT"></ScreenHeight><FullScreen TYPE="UBYT"></FullScreen><ClassicMode TYPE="UBYT"></ClassicMode></RECORD></MSG_LOGCLIENTRESOLUTION>
 <MSG_LOGPATCHCLIENTPATCHTIME><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">89</_MsgOrder><PatchClientPatchTime TYPE="UINT"></PatchClientPatchTime></RECORD></MSG_LOGPATCHCLIENTPATCHTIME>
+<MSG_PATCHINGBLOCKED><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">107</_MsgOrder><PackageName TYPE="STR"></PackageName><ZoneName TYPE="STR"></ZoneName></RECORD></MSG_PATCHINGBLOCKED>
 <MSG_LOOT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">90</_MsgOrder><GlobalID TYPE="GID"></GlobalID><LootList TYPE="STR"></LootList></RECORD></MSG_LOOT>
 <MSG_PLAYERWIZBANG><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">128</_MsgOrder><StateName TYPE="STR"></StateName></RECORD></MSG_PLAYERWIZBANG>
 <MSG_QUESTFINDEROPTION><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">145</_MsgOrder><Enable TYPE="UBYT"></Enable></RECORD></MSG_QUESTFINDEROPTION>
