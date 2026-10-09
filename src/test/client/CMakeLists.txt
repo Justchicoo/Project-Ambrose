@@ -18,6 +18,7 @@ target_link_libraries(client_tests
         spells
         combat
         items
+        quests
         nlohmann_json::nlohmann_json
         GTest::gmock)
 
