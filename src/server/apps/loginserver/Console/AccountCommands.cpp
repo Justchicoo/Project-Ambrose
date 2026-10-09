@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Creates accounts, sets passwords and security levels, locks, bans, unbans and describes accounts from the console, replying with AccountMgr's result text and parsing ban durations such as 1d12h or perm.
+ * Creates accounts, sets passwords and security levels, locks, bans accounts, addresses and machines, unbans them and describes accounts from the console, replying with AccountMgr's result text and parsing ban durations such as 1d12h or perm.
  */
 
 #include "AccountCommands.h"
@@ -14,7 +14,10 @@
 
 namespace
 {
-    std::string const CommandNames[] = { "account create", "account set password", "account set gmlevel", "account lock", "account unlock", "account ban", "account unban", "account info" };
+    std::string const CommandNames[] = {
+        "account create", "account set password", "account set gmlevel", "account lock", "account unlock", "account ban", "account unban", "account info",
+        "ban ip", "ban machine", "unban ip", "unban machine"
+    };
 
     std::optional<AccountInfo> FindAccount(std::string_view username, ConsoleCommandTable::Reply const& reply)
     {
@@ -24,6 +27,13 @@ namespace
         else if (!lookup.Account)
             reply(fmt::format("Account {} does not exist", username));
         return lookup.Account;
+    }
+
+    std::optional<Seconds> ParseBanDuration(std::string_view text)
+    {
+        if (Ambrose::EqualsIgnoreCase(text, "perm") || Ambrose::EqualsIgnoreCase(text, "permanent"))
+            return Seconds(0);
+        return Ambrose::ParseDuration(text);
     }
 
     std::string FormatTime(uint64 seconds)
@@ -115,8 +125,7 @@ void AccountCommands::Register(ConsoleCommandTable& commands)
         {
             if (arguments.size() < 3)
                 return false;
-            bool const permanent = Ambrose::EqualsIgnoreCase(arguments[1], "perm") || Ambrose::EqualsIgnoreCase(arguments[1], "permanent");
-            std::optional<Seconds> const duration = permanent ? Seconds(0) : Ambrose::ParseDuration(arguments[1]);
+            std::optional<Seconds> const duration = ParseBanDuration(arguments[1]);
             if (!duration)
                 return false;
             if (std::optional<AccountInfo> const account = FindAccount(arguments[0], reply))
@@ -132,6 +141,47 @@ void AccountCommands::Register(ConsoleCommandTable& commands)
             return true;
         } });
 
+    commands.Register({ "ban ip", "<address> <duration|perm> <reason>", "ban an address for a duration such as 30m, 12h, 7d or 1d12h, or permanently", true,
+        [](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            if (arguments.size() < 3)
+                return false;
+            std::optional<Seconds> const duration = ParseBanDuration(arguments[1]);
+            if (!duration)
+                return false;
+            std::string const reason = JoinFrom(arguments, 2);
+            AccountOpResult const result = sAccountMgr.BanAddress(arguments[0], *duration, "Console", reason);
+            if (result != AccountOpResult::Ok)
+                reply(fmt::format("Address not banned: {}", AccountMgr::Describe(result)));
+            else if (duration->count() == 0)
+                reply("Address banned permanently");
+            else
+                reply(fmt::format("Address banned until {}", FormatTime(AccountMgr::Now() + static_cast<uint64>(duration->count()))));
+            return true;
+        } });
+
+    commands.Register({ "ban machine", "<machine-hex> <duration|perm> <reason>", "ban a machine by its MachineID in hexadecimal for a duration, or permanently", true,
+        [](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            if (arguments.size() < 3)
+                return false;
+            std::optional<uint64> const machine = Ambrose::StringTo<uint64>(arguments[0], 16);
+            if (!machine)
+                return false;
+            std::optional<Seconds> const duration = ParseBanDuration(arguments[1]);
+            if (!duration)
+                return false;
+            std::string const reason = JoinFrom(arguments, 2);
+            AccountOpResult const result = sAccountMgr.BanMachine(*machine, *duration, "Console", reason);
+            if (result != AccountOpResult::Ok)
+                reply(fmt::format("Machine not banned: {}", AccountMgr::Describe(result)));
+            else if (duration->count() == 0)
+                reply("Machine banned permanently");
+            else
+                reply(fmt::format("Machine banned until {}", FormatTime(AccountMgr::Now() + static_cast<uint64>(duration->count()))));
+            return true;
+        } });
+
     commands.Register({ "account unban", "<username>", "lift every active ban on an account", false,
         [](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
         {
@@ -142,6 +192,29 @@ void AccountCommands::Register(ConsoleCommandTable& commands)
                 AccountOpResult const result = sAccountMgr.Unban(account->Id);
                 reply(result == AccountOpResult::Ok ? fmt::format("Account {} unbanned", account->Username) : fmt::format("Account {} not unbanned: {}", account->Username, AccountMgr::Describe(result)));
             }
+            return true;
+        } });
+
+    commands.Register({ "unban ip", "<address>", "lift an address ban", true,
+        [](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            if (arguments.size() != 1)
+                return false;
+            AccountOpResult const result = sAccountMgr.UnbanAddress(arguments[0]);
+            reply(result == AccountOpResult::Ok ? "Address unbanned" : fmt::format("Address not unbanned: {}", AccountMgr::Describe(result)));
+            return true;
+        } });
+
+    commands.Register({ "unban machine", "<machine-hex>", "lift a machine ban", true,
+        [](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            if (arguments.size() != 1)
+                return false;
+            std::optional<uint64> const machine = Ambrose::StringTo<uint64>(arguments[0], 16);
+            if (!machine)
+                return false;
+            AccountOpResult const result = sAccountMgr.UnbanMachine(*machine);
+            reply(result == AccountOpResult::Ok ? "Machine unbanned" : fmt::format("Machine not unbanned: {}", AccountMgr::Describe(result)));
             return true;
         } });
 
