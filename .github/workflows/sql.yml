@@ -1,13 +1,13 @@
 # Project Ambrose by Imjustchico
-# Applies every base, released and pending SQL file in the updater's own order to fresh databases on a MySQL 8 container whenever a pull request or a push to main changes the SQL or the tool that applies it, failing and naming the first file the server refuses, with no build of the servers.
+# Applies every base, released and pending SQL file in the updater's own order to fresh databases on a MySQL 8 container whenever a pull request or a push to main changes the SQL or the tool that applies it, failing and naming the first file the server refuses, with no build of the servers, then runs the same SQL on a MariaDB container beside it and flags every file only one of them accepts, after proving that check against the C-81 corpus.
 name: sql
 
 on:
   push:
     branches: [main]
-    paths: ["data/sql/**", "apps/ci/ci_sql.py", ".github/workflows/sql.yml"]
+    paths: ["data/sql/**", "apps/ci/ci_sql.py", "contrib/fixtures/c81-sql-duality-corpus.json", "contrib/fixtures/c81-sql-duality/**", ".github/workflows/sql.yml"]
   pull_request:
-    paths: ["data/sql/**", "apps/ci/ci_sql.py", ".github/workflows/sql.yml"]
+    paths: ["data/sql/**", "apps/ci/ci_sql.py", "contrib/fixtures/c81-sql-duality-corpus.json", "contrib/fixtures/c81-sql-duality/**", ".github/workflows/sql.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -31,6 +31,14 @@ jobs:
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pambrose-sql-check --silent"
           --health-interval=3s --health-timeout=3s --health-retries=40
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: ambrose-sql-check
+        ports: ["3307:3306"]
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=3s --health-timeout=3s --health-retries=40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,3 +47,11 @@ jobs:
         env:
           MYSQL_PWD: ambrose-sql-check
         run: python apps/ci/ci_sql.py apply --host 127.0.0.1 --port 3306 --user root
+      - name: Check the duality check against the C-81 corpus
+        env:
+          MYSQL_PWD: ambrose-sql-check
+        run: python apps/ci/ci_sql.py duality --server mysql=127.0.0.1:3306 --server mariadb=127.0.0.1:3307 --corpus contrib/fixtures/c81-sql-duality-corpus.json
+      - name: Flag SQL only one of MySQL and MariaDB accepts
+        env:
+          MYSQL_PWD: ambrose-sql-check
+        run: python apps/ci/ci_sql.py duality --server mysql=127.0.0.1:3306 --server mariadb=127.0.0.1:3307
