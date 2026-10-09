@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the scratch servers a scenario drives: the login server, and the game server when the scenario enters the world, each on its own port with the run's databases and its own logs inside the run folder, started from the shipped defaults with every difference passed as a command-line override, the login server's account created over its own console, the game server announcing its realm at the run's own address, and each shutdown waited for.
+# Runs the scratch servers a scenario drives: the login server, and the game server when the scenario enters the world, each on its own port with the run's databases and its own logs inside the run folder, started from the shipped defaults with every difference passed as a command-line override, the login server's account created over its own console and its world rows reloaded there once the game server has written them, the game server announcing its realm at the run's own address, and each shutdown waited for.
 import os
 import re
 import shutil
@@ -95,6 +95,13 @@ class LoginServer:
         if changed.group(1) != "changed":
             raise StepFailed(f"the account {user} exists and its password could not be set: {changed.group(1)}")
         return f"{user} already existed, and its password was set again"
+
+    def reload(self, target, timeout=60):
+        self.send(f"reload {target}")
+        answer = self.console.wait(rf"\b{re.escape(target)} (is now generation \d+|was not reloaded.*)", timeout, alive=self.alive)
+        if not answer.group(1).startswith("is now"):
+            raise StepFailed(f"{self.WHAT} could not reload {target}: {answer.group(1)}")
+        return f"{target} {answer.group(1)}"
 
     def stop(self, timeout=60):
         if self.process is None:
