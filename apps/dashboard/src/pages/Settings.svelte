@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The panel settings editor: general, mail and security values grouped like the server model, locked listener-owned values identified by their layer, secrets masked with an explicit clear action, and changes submitted as one audited batch. -->
+<!-- Project Ambrose by Imjustchico: The panel settings editor: general, mail and security values grouped like the server model, locked listener-owned values identified by their layer, secrets masked with an explicit clear action, and changes submitted as one audited batch. The mail group sends a test mail through the saved settings to the signed-in operator alone and shows who it reached, or the mail server's own refusal. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Tabs from "$lib/components/ui/tabs/index.js";
@@ -6,10 +6,11 @@
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
     import { ApiError } from "$lib/api.svelte.js";
-    import { panelSettings, updatePanelSettings } from "$lib/supervision.svelte.js";
+    import { panelSettings, testPanelMail, updatePanelSettings } from "$lib/supervision.svelte.js";
     import type { InferOutput } from "valibot";
     import { PanelSettingsAnswer } from "$lib/schemas.js";
     import SaveIcon from "@lucide/svelte/icons/save";
+    import SendIcon from "@lucide/svelte/icons/send";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
 
@@ -19,6 +20,7 @@
     let failure = $state("");
     let notice = $state("");
     let busy = $state(false);
+    let mailing = $state(false);
 
     $effect(() => {
         void (async () => {
@@ -52,6 +54,20 @@
             failure = problem instanceof ApiError ? problem.message : "The panel settings could not be saved";
         } finally {
             busy = false;
+        }
+    }
+
+    async function testMail() {
+        mailing = true;
+        failure = "";
+        notice = "";
+        try {
+            const sent = await testPanelMail();
+            notice = `A test mail was sent to ${sent.to}.`;
+        } catch (problem) {
+            failure = problem instanceof ApiError ? problem.message : "The test mail could not be sent";
+        } finally {
+            mailing = false;
         }
     }
 </script>
@@ -108,6 +124,14 @@
                         </div>
                     {/each}
                 </Card.Content>
+                {#if group.id === "mail"}
+                    <Card.Footer class="flex flex-wrap items-center gap-3">
+                        <Button variant="outline" onclick={() => void testMail()} disabled={mailing || answer === null}>
+                            <SendIcon />{mailing ? "Sending…" : "Send test mail"}
+                        </Button>
+                        <p class="text-xs text-muted-foreground">Uses the saved settings and sends only to your own address.</p>
+                    </Card.Footer>
+                {/if}
             </Card.Root>
         </Tabs.Content>
     {/each}

@@ -16,7 +16,8 @@ Project Ambrose itself is MIT licensed, in LICENSE. It uses the libraries below.
 | pugixml | Reading the client's XML: message definitions, configurations, name tables | MIT | Keep the notice |
 | zlib | Inflating the archives and blobs the client stores | Zlib | Keep the notice |
 | Crow | The admin API's HTTP and WebSocket listener in every app and the supervisor | BSD-3-Clause | Keep the notice |
-| OpenSSL | TLS on the panel listener, through Crow | Apache-2.0 | Keep the notice |
+| OpenSSL | TLS on the panel listener, through Crow, and on the supervisor's outbound requests, through libcurl | Apache-2.0 | Keep the notice |
+| libcurl | The supervisor's outbound requests: the panel's test mail over SMTP and its sign-in captcha checks | curl | Keep the notice |
 | SQLite | The panel's own store: sessions, audit rows and settings | blessing | A public-domain dedication: nothing beyond keeping it with the source |
 | FTXUI | The full-screen terminal panels behind `--tui` | MIT | Keep the notice |
 | WebView2 | The launcher's window behind `--window-ui` on Windows, which hosts the page shipped beside the program | BSD-3-Clause | Keep the notice and the disclaimer, and do not use Microsoft's name to endorse this. Only the loader is linked; the runtime it drives is the one already on the machine and is not distributed here |
