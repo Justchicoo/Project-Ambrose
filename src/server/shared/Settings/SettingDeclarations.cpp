@@ -105,6 +105,11 @@ namespace
             Unsigned("Potion.RefillInterval", "300", "0", "86400", "s", "Player", Game, Live,
                 "How long after a potion is used before one charge refills; 0 disables later refills, and changes apply after the next charge refills."),
 
+            Unsigned("Queue.BypassSecurityLevel", "2", "0", "4", "", "Realms", Login, Live,
+                "The minimum account security level that bypasses full-realm admission queues, read for each character selection."),
+            Unsigned("Queue.PositionUpdateInterval", "5", "1", "60", "s", "Realms", Login, Live,
+                "How often authenticated clients waiting for a realm receive their current queue position."),
+
             Text("Realm.Name", "Ambrose", "64", "Realms", Game, NextUse, "The realm's name, announced to the login server with each heartbeat and sent in MSG_LOGINCOMPLETE."),
             Text("Realm.Address", "", "255", "Realms", Game, NextUse, "The address the login server sends players to for this realm; empty uses PublicAddress, then BindIP."),
             Text("PublicAddress", "", "255", "Realms", Game, NextUse, "The address players reach this game server at, used when Realm.Address is empty."),

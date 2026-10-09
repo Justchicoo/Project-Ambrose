@@ -144,6 +144,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
 | `PublicAddress` | string | empty | at most 255 bytes | next connection or operation | gameserver | normal | The address players reach this game server at, used when Realm.Address is empty. |
+| `Queue.BypassSecurityLevel` | unsigned | 2 | from 0 to 4 | live | loginserver | normal | The minimum account security level that bypasses full-realm admission queues, read for each character selection. |
+| `Queue.PositionUpdateInterval` | unsigned | 5 s | from 1 to 60 s | live | loginserver | normal | How often authenticated clients waiting for a realm receive their current queue position. |
 | `Realm.Address` | string | empty | at most 255 bytes | next connection or operation | gameserver | normal | The address the login server sends players to for this realm; empty uses PublicAddress, then BindIP. |
 | `Realm.DefaultRealm` | string | empty | at most 64 bytes | live | loginserver | normal | The realm a player is sent to when their client names none; a name no realm online has falls through to the least-full realm. |
 | `Realm.HeartbeatInterval` | unsigned | 30 s | from 1 to 3600 s | live | gameserver, loginserver | normal | How often a game server tells the login server it is up, and the beat the login server counts missed heartbeats by. |
