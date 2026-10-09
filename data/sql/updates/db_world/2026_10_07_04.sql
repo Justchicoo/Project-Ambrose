@@ -36,7 +36,7 @@ INSERT INTO `server_class_property` (`class_hash`, `property_id`, `name`, `type`
     (1839222684, 16, 'm_lootTable', 'std::string', 2539512673, 'Static', 0, 7, 0, 0, 0),
     (1839222684, 17, '#1254251407', 'unsigned int', 1254251407, 'Static', 0, 7, 0, 0, 0),
     (1839222684, 18, '#1645979895', 'unsigned int', 1645979895, 'Static', 0, 7, 0, 0, 0),
-    (1839222684, 19, '#3028959106', 'bool', 3028959106, 'Static', 0, 7, 0, 0, 0),
+    (1839222684, 19, '#3028959106', 'std::string', 3028959106, 'Static', 0, 7, 0, 0, 0),
     (723600258, 0, 'm_spawnID', 'gid', 1481718190, 'Static', 0, 7, 0, 0, 0),
     (723600258, 1, 'm_activate', 'bool', 142527940, 'Static', 0, 7, 0, 0, 0),
     (1383450208, 0, 'm_spawnID', 'gid', 1481718190, 'Static', 0, 7, 0, 0, 0),
