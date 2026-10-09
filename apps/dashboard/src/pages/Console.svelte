@@ -45,7 +45,8 @@
     function appearance(one: AppEntry | undefined): { tone: Tone; word: string } {
         const supervision = one?.supervision;
         if (!supervision) return { tone: "unknown", word: "Not supervised" };
-        if (supervision.state === "crashed" && supervision.restart_epoch_ms) return { tone: "waiting", word: "Starting again" };
+        if (supervision.state === "backoff" || (supervision.state === "crashed" && supervision.restart_epoch_ms))
+            return { tone: "waiting", word: "Starting again" };
         return {
             tone: tones[supervision.state] ?? "unknown",
             word: supervision.state.charAt(0).toUpperCase() + supervision.state.slice(1),
