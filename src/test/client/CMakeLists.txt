@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the game message table check and the login message table check when the login library is built, with the archive builder and temporary folder helpers the template store check writes its own Root.wad with, the MariaDB client plugins beside it for database checks, and runs the whole-archive sweep on its own because it uses every hardware thread.
+# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the game message table check and the login message table check when the login library is built, with the archive builder and temporary folder helpers the template store check writes its own Root.wad with, the MariaDB client plugins beside it for database checks, runs the whole-archive sweep on its own because it uses every hardware thread, and gives each client test thirty minutes rather than the presets' ten, because a Debug build reads the install about thirteen times slower so a slower machine can take one past ten minutes, and a cancelled test sends the run round again.
 file(GLOB client_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 if(NOT TARGET login)
     list(FILTER client_test_sources EXCLUDE REGEX "LoginMessageTableClientTest")
@@ -31,9 +31,9 @@ gtest_discover_tests(client_tests
     DISCOVERY_MODE PRE_TEST
     DISCOVERY_TIMEOUT 120
     TEST_FILTER "-${client_serial_tests}"
-    PROPERTIES LABELS client)
+    PROPERTIES LABELS client TIMEOUT 1800)
 gtest_discover_tests(client_tests
     DISCOVERY_MODE PRE_TEST
     DISCOVERY_TIMEOUT 120
     TEST_FILTER "${client_serial_tests}"
-    PROPERTIES LABELS client RUN_SERIAL TRUE)
+    PROPERTIES LABELS client RUN_SERIAL TRUE TIMEOUT 1800)
