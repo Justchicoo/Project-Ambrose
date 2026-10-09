@@ -926,7 +926,7 @@ Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as 
 
 - [ ] A restart requested while a backup restore holds the app is refused with 409 naming the restore
 - [ ] A restart inside protected hours is refused naming the window, an owner's override with a reason goes through and is audited, and a scheduled restart inside the window is refused the same way
-- [ ] Kill during a stuck stop ends the process and records a requested exit, not a crash
+- [x] Kill during a stuck stop ends the process and records a requested exit, not a crash (SupervisorTest.KillingAnAppStuckStoppingRecordsARequestedExit holds shutdown at the helper, kills it while stopping, and proves the exit is requested with zero crashes)
 - [ ] Restarting the stack stops gameservers before the loginserver and starts the loginserver before gameservers
 - [ ] A power request answers 202 with an operation id, and its progress and final result arrive on the socket and in the audit log
 - [ ] Disabling an app stops it and refuses a start with the disable reason named, and enabling it allows the next start

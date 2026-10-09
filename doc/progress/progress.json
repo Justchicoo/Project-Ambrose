@@ -6,7 +6,7 @@
     "percent": 28.1
   },
   "checks": {
-    "done": 1075,
+    "done": 1076,
     "total": 2870,
     "percent": 37.5
   },
@@ -148,7 +148,7 @@
       "title": "Operations console admin api dashboard and metrics",
       "milestones_done": 21,
       "milestones_total": 186,
-      "checks_done": 167,
+      "checks_done": 168,
       "checks_total": 1113
     }
   ]

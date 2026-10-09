@@ -39,7 +39,9 @@
     const watched = $derived(supervised());
     const runs = $derived(supervisorServes());
     const running = $derived(watched.filter((entry) => entry.supervision?.state === "running").length);
-    const crashed = $derived(watched.filter((entry) => entry.supervision?.state === "crashed").length);
+    const crashed = $derived(
+        watched.filter((entry) => entry.supervision?.state === "crashed" || entry.supervision?.state === "backoff").length,
+    );
     const stale = $derived(isStale(live.receivedAt, live.now));
     const reachable = $derived(live.connection === "live");
     const age = $derived(live.receivedAt === 0 ? "" : formatAge(live.now - live.receivedAt));

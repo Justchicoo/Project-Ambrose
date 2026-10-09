@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports, or the app prints with its admin API off, until the app is ready, grants a printed step six hours at most, and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
+ * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, kills an app stuck stopping without calling the requested exit a crash, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, shows a crash restart as backoff, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports, or the app prints with its admin API off, until the app is ready, grants a printed step six hours at most, and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
  */
 
 #include "AdminAuth.h"
@@ -337,6 +337,9 @@ TEST(SupervisorTest, AnAppEndedFromOutsideCountsOneCrashAndStartsAgain)
     ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }));
     int64 const first = *rig.App().ProcessId;
     EndFromOutside(first);
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Backoff; }));
+    EXPECT_GT(rig.App().RestartEpochMs, 0);
+    EXPECT_EQ(nlohmann::json::parse(Supervisor::StatusData(rig.App()))["state"], "backoff");
     ASSERT_TRUE(rig.WaitFor([first](AppSnapshot const& app) { return app.State == AppState::Running && app.ProcessId && *app.ProcessId != first; }));
     AppSnapshot const restarted = rig.App();
     EXPECT_EQ(restarted.Crashes, 1u);
@@ -347,6 +350,26 @@ TEST(SupervisorTest, AnAppEndedFromOutsideCountsOneCrashAndStartsAgain)
     EXPECT_FALSE(crash.Requested);
     EXPECT_EQ(crash.During, AppState::Running);
     EXPECT_TRUE(rig.Said("without being asked", OutputRun::Previous));
+}
+
+TEST(SupervisorTest, KillingAnAppStuckStoppingRecordsARequestedExit)
+{
+    Rig rig({ "echo", ReadyLine, "wait-for-stop-ignore-shutdown" });
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }));
+
+    PowerResult const stop = rig.Instance().Power("helper", PowerAction::Stop, 0);
+    ASSERT_TRUE(stop.Accepted) << stop.Message;
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Stopping; }));
+    PowerResult const kill = rig.Instance().Power("helper", PowerAction::Kill, 0);
+    ASSERT_TRUE(kill.Accepted) << kill.Message;
+
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Offline; }));
+    AppSnapshot const stopped = rig.App();
+    ASSERT_FALSE(stopped.Exits.empty());
+    EXPECT_TRUE(stopped.Exits.back().Requested);
+    EXPECT_EQ(stopped.Exits.back().During, AppState::Stopping);
+    EXPECT_EQ(stopped.Crashes, 0u);
 }
 
 TEST(SupervisorTest, AStartThatEndsBeforeItIsReadyIsRecordedAndNotStartedAgain)

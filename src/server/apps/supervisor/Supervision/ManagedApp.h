@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports, through that API or a start-step line, asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches. Every change of state passes through one place that stamps when the state began, and each change, or a change of its process, crash count or restart time within a state, reaches the status observer once and in order, from the controller thread and never under the app's own lock.
+ * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports, through that API or a start-step line, asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running and reports that wait as backoff, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches. Every change of state passes through one place that stamps when the state began, and each change, or a change of its process, crash count or restart time within a state, reaches the status observer once and in order, from the controller thread and never under the app's own lock.
  */
 
 #ifndef AMBROSE_MANAGEDAPP_H
@@ -34,7 +34,8 @@ enum class AppState : uint8
     Starting,
     Running,
     Stopping,
-    Crashed
+    Crashed,
+    Backoff
 };
 
 enum class PowerAction : uint8
