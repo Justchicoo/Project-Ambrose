@@ -141,6 +141,14 @@ cmake --build --preset windows-debug
 ctest --preset windows-debug
 ```
 
+For faster rebuilds on Windows, install ccache (`winget install -e --id Ccache.Ccache`) and build from a "Developer PowerShell for VS" or "x64 Native Tools" prompt with the Ninja presets, which keep a separate tree in `build/windows-msvc-ninja` and only recompile what changed after a rebase or a branch switch:
+
+```
+cmake --preset windows-msvc-ninja
+cmake --build --preset windows-ninja-debug
+ctest --preset windows-ninja-debug
+```
+
 On Linux the presets are `linux-gcc` and `linux-gcc-debug`, and `doc/guides/linux.md` is a guide somebody walked on Ubuntu 24.04. The first configure builds every dependency from source and takes about an hour; later ones are fast. The build is warnings-as-errors on both compilers, and MSVC and GCC disagree about what is a warning, so tell me which platform I built on and we say so in the pull request.
 
 **2. The databases.** Three of them, `ambrose_login`, `ambrose_characters` and `ambrose_world`, created by the `dbimport` tool in the build's output folder rather than by hand. The default connection string for each is `127.0.0.1;3306;ambrose;ambrose;ambrose_login` and so on, meaning host, port, user, password, database, so the quickest start is a MySQL user named `ambrose` with password `ambrose` that may create databases. Docker gives exactly that, and MySQL 8.0 is what CI tests against:
@@ -175,7 +183,7 @@ AMBROSE_PANEL_API=https://127.0.0.1:12080 npm run dev --workspace apps/dashboard
 
 **What my milestone actually needs.** Ask me for only these. A milestone whose checks are unit tests needs nothing past step 1. Anything that stores something adds step 2. Anything reading the client's own archives, dumps or zones adds step 4 and my installation. A check marked Real client needs steps 5 and 7 and somebody at the keyboard, and a check marked Dev-gated may need a second machine or hardware I do not have, which stays unticked and is named in the pull request. Panel milestones open like any other once they are ready; the few the maintainer's panel session is building carry a hold of their own, and the open ones are what step 6 is for.
 
-A branch named `milestone/<id>-<short-name>` builds the Linux GCC leg in CI by itself, so an open pull request tells us both whether it compiles there, and the maintainer adds a label for the Windows leg when it is worth one. The first run from a new contributor waits for a maintainer to approve it.
+A branch named `milestone/<id>-<short-name>` builds the Linux GCC leg in CI by itself, so an open pull request tells us both whether it compiles there, and the maintainer adds a label for the Windows leg when it is worth one. Every CI leg compiles through a cache kept from earlier runs, so the first run after a large change to main is the slow one and later pushes only recompile what they change. The first run from a new contributor waits for a maintainer to approve it.
 
 ## Running one test rather than all of them
 
