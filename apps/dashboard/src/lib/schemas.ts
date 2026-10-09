@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, a sign-in that asks for a second factor, the operator's two-factor state, its setup secret, the recovery codes shown once, a step-up check and the refusal that asks for one, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events, its databases with their update files, and the supervisor's file roots with their policies, a folder's listing, a window of a file and a root's protected patterns, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
+ * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, a sign-in that asks for a second factor, the operator's two-factor state, its setup secret, the recovery codes shown once, a step-up check and the refusal that asks for one, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events, its databases with their update files, and the supervisor's file roots with their policies, a folder's listing, a window of a file and a root's protected patterns, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields. The panel's own settings answer is checked here too, with the answer to its test mail.
  */
 
 import * as v from "valibot";
@@ -340,6 +340,11 @@ export const PanelSettingsAnswer = v.looseObject({
             maximum: v.number(),
         }),
     ),
+});
+
+export const PanelMailTestAnswer = v.looseObject({
+    sent: v.boolean(),
+    to: v.string(),
 });
 
 export const ErrorGroup = v.looseObject({

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the panel settings editor in a real browser against a stubbed admin API: the three groups show their typed values, listener-owned values are locked, secrets stay masked and the save action sends one values object.
+ * Tests the panel settings editor in a real browser against a stubbed admin API: the three groups show their typed values, listener-owned values are locked, secrets stay masked and the save action sends one values object. The mail group's test button sends the test mail and says who it reached, or shows the mail server's refusal.
  */
 
 import { flushSync, mount, unmount } from "svelte";
@@ -80,5 +80,27 @@ describe("the panel settings page", () => {
         expect(save).not.toBeUndefined();
         save?.click();
         await vi.waitFor(() => expect(host.textContent).toContain("Settings saved and audited."));
+    });
+
+    it("sends a test mail from the mail group and says who it reached", async () => {
+        const sent: string[] = [];
+        vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input instanceof Request ? input.url : input);
+            sent.push(`${init?.method ?? "GET"} ${url}`);
+            const body = url.includes("mail/test") ? { sent: true, to: "owner@example.test" } : answer;
+            return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+        });
+        await vi.waitFor(() => expect(host.textContent).toContain("Mail.Password"));
+        const mailTab = [...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Mail");
+        mailTab?.click();
+        flushSync();
+        let test: HTMLButtonElement | undefined;
+        await vi.waitFor(() => {
+            test = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Send test mail"));
+            expect(test).not.toBeUndefined();
+        });
+        test?.click();
+        await vi.waitFor(() => expect(host.textContent).toContain("A test mail was sent to owner@example.test."));
+        expect(sent.some((line) => line.startsWith("POST") && line.includes("api/panel/settings/mail/test"))).toBe(true);
     });
 });

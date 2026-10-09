@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests that panel settings keep secrets out of answers, logs and audit rows, environment-owned values stay locked, invalid values are refused, and only users holding panel.settings can read or change any settings group.
+ * Tests that panel settings keep secrets out of answers, logs and audit rows, environment-owned values stay locked, invalid values are refused, and only users holding panel.settings can read or change any settings group. The mail test reaches only the signed-in user through a fake SMTP server and shows that server's error on a bad password, and with the captcha on and its provider unreachable, sign-in after repeated failures is refused with a clear error.
  */
 
 #include "AdminClient.h"
@@ -12,6 +12,11 @@
 #include "PanelPermissions.h"
 #include "SourceFolder.h"
 
+#include <asio/io_context.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/read_until.hpp>
+#include <asio/streambuf.hpp>
+#include <asio/write.hpp>
 #include <nlohmann/json.hpp>
 
 #include <gtest/gtest.h>
@@ -20,9 +25,11 @@
 #include <chrono>
 #include <cstdlib>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -285,4 +292,260 @@ TEST_F(PanelSettingsTest, RequiresPanelSettingsForEveryGroupAndBothMethods)
         EXPECT_EQ(Send("PATCH", "/api/panel/settings?group=" + group,
             { { "values", { { key, "changed" } } } }, &operatorUser).Status, 403) << group;
     }
+}
+
+namespace
+{
+    class CaptchaVerifyOverride
+    {
+    public:
+        explicit CaptchaVerifyOverride(std::string_view url)
+        {
+#ifdef _WIN32
+            _putenv_s("AMBROSE_TEST_CAPTCHA_VERIFY_URL", std::string(url).c_str());
+#else
+            setenv("AMBROSE_TEST_CAPTCHA_VERIFY_URL", std::string(url).c_str(), 1);
+#endif
+        }
+
+        ~CaptchaVerifyOverride()
+        {
+#ifdef _WIN32
+            _putenv_s("AMBROSE_TEST_CAPTCHA_VERIFY_URL", "");
+#else
+            unsetenv("AMBROSE_TEST_CAPTCHA_VERIFY_URL");
+#endif
+        }
+
+        CaptchaVerifyOverride(CaptchaVerifyOverride const&) = delete;
+        CaptchaVerifyOverride& operator=(CaptchaVerifyOverride const&) = delete;
+    };
+
+    class FakeSmtpServer
+    {
+    public:
+        explicit FakeSmtpServer(bool rejectAuth) : _rejectAuth(rejectAuth),
+            _acceptor(_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), 0))
+        {
+            _port = _acceptor.local_endpoint().port();
+            _thread = std::thread([this] { Serve(); });
+        }
+
+        ~FakeSmtpServer()
+        {
+            asio::error_code ignored;
+            {
+                asio::ip::tcp::socket wake(_context);
+                wake.connect(asio::ip::tcp::endpoint(asio::ip::address_v4::loopback(), _port), ignored);
+            }
+            if (_thread.joinable())
+                _thread.join();
+        }
+
+        FakeSmtpServer(FakeSmtpServer const&) = delete;
+        FakeSmtpServer& operator=(FakeSmtpServer const&) = delete;
+
+        uint16 Port() const
+        {
+            return _port;
+        }
+
+        std::vector<std::string> Recipients() const
+        {
+            std::lock_guard const lock(_mutex);
+            return _recipients;
+        }
+
+    private:
+        void Serve()
+        {
+            asio::ip::tcp::socket socket(_context);
+            asio::error_code error;
+            _acceptor.accept(socket, error);
+            if (!error)
+                Handle(socket);
+        }
+
+        std::optional<std::string> ReadLine(asio::ip::tcp::socket& socket)
+        {
+            asio::error_code error;
+            asio::read_until(socket, _readBuffer, "\n", error);
+            if (error)
+                return std::nullopt;
+            std::istream stream(&_readBuffer);
+            std::string line;
+            std::getline(stream, line);
+            while (!line.empty() && (line.back() == '\r' || line.back() == '\n'))
+                line.pop_back();
+            return line;
+        }
+
+        static void WriteLine(asio::ip::tcp::socket& socket, std::string_view line)
+        {
+            std::string const framed = std::string(line) + "\r\n";
+            asio::error_code error;
+            asio::write(socket, asio::buffer(framed), error);
+        }
+
+        void Handle(asio::ip::tcp::socket& socket)
+        {
+            WriteLine(socket, "220 fake.test ESMTP");
+            for (;;)
+            {
+                std::optional<std::string> const read = ReadLine(socket);
+                if (!read)
+                    return;
+                std::string const& line = *read;
+                if (line.starts_with("EHLO") || line.starts_with("HELO"))
+                {
+                    WriteLine(socket, "250-fake.test");
+                    WriteLine(socket, "250 AUTH LOGIN");
+                }
+                else if (line == "AUTH LOGIN")
+                {
+                    WriteLine(socket, "334 VXNlcm5hbWU6");
+                    if (!ReadLine(socket))
+                        return;
+                    WriteLine(socket, "334 UGFzc3dvcmQ6");
+                    if (!ReadLine(socket))
+                        return;
+                    if (_rejectAuth)
+                    {
+                        WriteLine(socket, "535 5.7.8 Authentication credentials invalid");
+                        return;
+                    }
+                    WriteLine(socket, "235 2.7.0 Authentication successful");
+                }
+                else if (line.starts_with("MAIL FROM:"))
+                    WriteLine(socket, "250 OK");
+                else if (line.starts_with("RCPT TO:"))
+                {
+                    std::string address = std::string(line.substr(8));
+                    while (!address.empty() && (address.front() == '<' || address.front() == ' '))
+                        address.erase(0, 1);
+                    while (!address.empty() && (address.back() == '>' || address.back() == ' '))
+                        address.pop_back();
+                    std::lock_guard const lock(_mutex);
+                    _recipients.push_back(address);
+                    WriteLine(socket, "250 OK");
+                }
+                else if (line == "DATA")
+                {
+                    WriteLine(socket, "354 End data with <CR><LF>.<CR><LF>");
+                    for (;;)
+                    {
+                        std::optional<std::string> const data = ReadLine(socket);
+                        if (!data)
+                            return;
+                        if (*data == ".")
+                            break;
+                    }
+                    WriteLine(socket, "250 OK");
+                }
+                else if (line == "QUIT")
+                {
+                    WriteLine(socket, "221 Bye");
+                    return;
+                }
+                else if (line == "RSET")
+                    WriteLine(socket, "250 OK");
+                else
+                    WriteLine(socket, "502 Unimplemented");
+            }
+        }
+
+        bool _rejectAuth;
+        asio::streambuf _readBuffer;
+        asio::io_context _context;
+        asio::ip::tcp::acceptor _acceptor;
+        uint16 _port = 0;
+        std::thread _thread;
+        mutable std::mutex _mutex;
+        std::vector<std::string> _recipients;
+    };
+}
+
+TEST_F(PanelSettingsTest, MailTestReachesOnlyTheSignedInUser)
+{
+    Credentials owner;
+    ASSERT_TRUE(MakeOwner(owner));
+    std::string error;
+    std::optional<PanelStore::Statement> setEmail = _panel->Store().Prepare("UPDATE panel_user SET email = ? WHERE id = ?", error);
+    ASSERT_TRUE(setEmail.has_value()) << error;
+    setEmail->Bind(1, "owner@example.test");
+    setEmail->Bind(2, owner.UserId);
+    ASSERT_TRUE(setEmail->Run(error)) << error;
+
+    FakeSmtpServer smtp(false);
+    ASSERT_TRUE(_panel->Settings().Update({
+        { "Mail.SmtpHost", "127.0.0.1" },
+        { "Mail.SmtpPort", std::to_string(smtp.Port()) },
+        { "Mail.TlsMode", "none" },
+        { "Mail.FromAddress", "panel@example.test" },
+    }, owner.UserId, error)) << error;
+
+    AdminClientResponse const answer = Send("POST", "/api/panel/settings/mail/test",
+        { { "to", "attacker@evil.example" } }, &owner);
+    EXPECT_EQ(answer.Status, 200) << answer.Body;
+
+    std::vector<std::string> const recipients = smtp.Recipients();
+    ASSERT_EQ(recipients.size(), 1u);
+    EXPECT_EQ(recipients[0], "owner@example.test");
+}
+
+TEST_F(PanelSettingsTest, MailTestShowsTheSmtpServersErrorOnABadPassword)
+{
+    Credentials owner;
+    ASSERT_TRUE(MakeOwner(owner));
+    std::string error;
+    std::optional<PanelStore::Statement> setEmail = _panel->Store().Prepare("UPDATE panel_user SET email = ? WHERE id = ?", error);
+    ASSERT_TRUE(setEmail.has_value()) << error;
+    setEmail->Bind(1, "owner@example.test");
+    setEmail->Bind(2, owner.UserId);
+    ASSERT_TRUE(setEmail->Run(error)) << error;
+
+    FakeSmtpServer smtp(true);
+    ASSERT_TRUE(_panel->Settings().Update({
+        { "Mail.SmtpHost", "127.0.0.1" },
+        { "Mail.SmtpPort", std::to_string(smtp.Port()) },
+        { "Mail.TlsMode", "none" },
+        { "Mail.Username", "paneluser" },
+        { "Mail.Password", "wrong-password" },
+        { "Mail.FromAddress", "panel@example.test" },
+    }, owner.UserId, error)) << error;
+
+    AdminClientResponse const answer = Send("POST", "/api/panel/settings/mail/test", {}, &owner);
+    EXPECT_EQ(answer.Status, 502) << answer.Body;
+    EXPECT_NE(answer.Body.find("535"), std::string::npos) << answer.Body;
+    EXPECT_NE(answer.Body.find("Authentication credentials invalid"), std::string::npos) << answer.Body;
+}
+
+TEST_F(PanelSettingsTest, CaptchaUnreachableRefusesSignInWithAClearError)
+{
+    Credentials owner;
+    ASSERT_TRUE(MakeOwner(owner));
+    std::string error;
+    ASSERT_TRUE(_panel->Settings().Update({
+        { "Security.CaptchaProvider", "recaptcha" },
+        { "Security.CaptchaSiteKey", "test-site-key" },
+        { "Security.CaptchaSecret", "test-secret" },
+    }, owner.UserId, error)) << error;
+
+    AdminClientResponse const clean = Send("POST", "/api/panel/session",
+        { { "username", "owner" }, { "password", "a good long password" } });
+    EXPECT_EQ(clean.Status, 200) << clean.Body;
+
+    for (int attempt = 0; attempt < 3; ++attempt)
+    {
+        AdminClientResponse const wrong = Send("POST", "/api/panel/session",
+            { { "username", "owner" }, { "password", "not the password" } });
+        EXPECT_EQ(wrong.Status, 401) << wrong.Body;
+    }
+
+    CaptchaVerifyOverride const unreachable("http://127.0.0.1:9/");
+    AdminClientResponse const refused = Send("POST", "/api/panel/session",
+        { { "username", "owner" }, { "password", "a good long password" }, { "captcha", "test-token" } });
+    EXPECT_EQ(refused.Status, 503) << refused.Body;
+    EXPECT_NE(refused.Body.find("captcha"), std::string::npos) << refused.Body;
+    EXPECT_NE(refused.Body.find("could not be reached"), std::string::npos) << refused.Body;
 }

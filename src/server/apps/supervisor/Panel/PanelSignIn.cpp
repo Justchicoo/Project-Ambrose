@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps one count per account and one per account and address together, each over a window that starts at its first failure and ends on its own, so a run of guesses is held back for what is left of the window and then forgiven; the name is folded before it is counted, so guessing at a name in another case is the same guessing, and a success clears both of that account's counts and nobody else's. An address counted alone is kept under a key no account's count can share, with the same window, limit and eviction, and nothing clears it but its window.
+ * Keeps one count per account and one per account and address together, each over a window that starts at its first failure and ends on its own, so a run of guesses is held back for what is left of the window and then forgiven; the name is folded before it is counted, so guessing at a name in another case is the same guessing, and a success clears both of that account's counts and nobody else's. An address counted alone is kept under a key no account's count can share, with the same window, limit and eviction, and nothing clears it but its window. The failures still counted against an account can be read, so a captcha can be asked for once there have been enough of them.
  */
 
 #include "PanelSignIn.h"
@@ -148,6 +148,19 @@ void PanelSignInThrottle::DropOldest(Clock::time_point now)
         oldest = _counts.begin();
     if (oldest != _counts.end())
         _counts.erase(oldest);
+}
+
+uint32 PanelSignInThrottle::RecentFailures(std::string_view username) const
+{
+    if (username.empty())
+        return 0;
+    std::lock_guard const lock(_mutex);
+    auto const found = _counts.find(UserKey(username));
+    if (found == _counts.end())
+        return 0;
+    if (_timeSource() - found->second.Started >= _window)
+        return 0;
+    return found->second.Failures;
 }
 
 void PanelSignInThrottle::Failed(std::string_view username, std::string_view address)

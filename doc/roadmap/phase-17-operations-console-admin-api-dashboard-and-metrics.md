@@ -1122,10 +1122,10 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] The mail test reaches only the signed-in user's address, and a bad SMTP password shows the server's error
+- [x] The mail test reaches only the signed-in user's address, and a bad SMTP password shows the server's error (PanelSettingsTest.MailTestReachesOnlyTheSignedInUser sends through a fake SMTP server and sees the one RCPT TO it got, the signed-in user's address, with a `to` naming someone else in the request body ignored; PanelSettingsTest.MailTestShowsTheSmtpServersErrorOnABadPassword answers 502 carrying the fake server's `535 5.7.8 Authentication credentials invalid`)
 - [x] The saved SMTP password never appears in any response, log or audit row (PanelSettingsTest.KeepsSavedSecretsOutOfAnswersLogsAndAuditRows)
 - [x] With `AMBROSE_PANEL_TRUSTED_PROXIES` set, the key shows as locked and a live edit is refused naming the layer (PanelSettingsTest.KeepsTrustedProxiesLockedToTheEnvironmentLayer)
-- [ ] With the captcha on and its provider unreachable, sign-in after repeated failures is refused with a clear error rather than allowed through
+- [x] With the captcha on and its provider unreachable, sign-in after repeated failures is refused with a clear error rather than allowed through (PanelSettingsTest.CaptchaUnreachableRefusesSignInWithAClearError fails three sign-ins, then a correct password with a captcha answer answers 503 naming the unreachable provider; a sign-in with no failures before them needs no captcha)
 - [x] A user without `panel.settings` gets 403 on every group and sees no page in navigation (PanelSettingsTest.RequiresPanelSettingsForEveryGroupAndBothMethods, which an operator holding settings.read but not panel.settings fails on every group for both GET and PATCH, and routes.test.ts, which keeps the page out of navigation without panel.settings)
 
 ## 17.36 Personal API keys
