@@ -24,7 +24,7 @@
 
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
-- **Oversized.** 16.11 project-owned type dumper spike (M). Walking a live client process's type system is a substantial RE and tooling effort.
+- **Oversized.** 16.11 project-owned type dumper spike (M). Walking a live client process's type system is a substantial RE and tooling effort. Resolved on 2026-10-09: 3.21 replaced the live-process walk with emulating the client program on disk, and 16.11 closed on its evidence.
 
 ## 16.01 FileBinary table codec (PAT-3)
 
@@ -456,7 +456,7 @@ Moved on 2026-09-17 to 3.21, which builds the dump by emulating the client progr
 
 **Acceptance**
 
-- [ ] Spike output lists classes and bases from the maintainer's client; never writes into the client dir
+- [x] Spike output lists classes and bases from the maintainer's client; never writes into the client dir [met by 3.21's typeextract, which reads the program file on disk instead of a running client: TypeExtractionClientTest.TheInstallExtractsValidatesAndMatchesTheReferenceDump extracts the r806919 install's 6986 classes with their bases and validates them, and the dump goes to --out or the Ambrose data folder, never the client folder; rerun on r806919 by MeruneFleuruwu on 2026-10-08, 1/1 passed with the dump written under the build directory]
 
 ### Detailed spec from OBJ-20: Project-owned type dumper
 
@@ -469,8 +469,8 @@ Users generate their own type dump from their own client, so Ambrose does not de
 
 **Acceptance**
 
-- [ ] On the maintainer's r806919 client, the output is structurally equal to the reference dump: 6981 entries, 49461 properties, identical hashes and flags
-- [ ] The tool never writes into the client directory
+- [x] On the maintainer's r806919 client, the output is structurally equal to the reference dump: 6981 entries, 49461 properties, identical hashes and flags [met by 3.21's first check: TypeExtractionClientTest.TheInstallExtractsValidatesAndMatchesTheReferenceDump compares the extracted dump with the reference dump and finds every name, base, property, hash and flag equal, the only differences being 5 classes and 4 properties the reference dump missed (6986 and 49465 in all) and 60 empty enum option values kept as empty text]
+- [x] The tool never writes into the client directory [met by 3.21's fifth check: typeextract writes only to --out or the Ambrose data folder through an exclusive temporary file, and its Windows layer refuses process exits and thread creation; `typeextract --client <client> --out <build output>` on r806919 wrote nothing into the install]
 
 **Risks**
 
