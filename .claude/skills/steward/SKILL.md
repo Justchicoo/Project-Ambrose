@@ -12,7 +12,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 
 - `python apps/codestyle/codestyle.py`: branding header on every file, and no other comments.
 - `python apps/ci/ci_local.py` runs CI's checks job over the commits the push would send: self-tests, forbidden files, findings, roadmap summary, commit trailers, and the track path check when `--branch` is given.
-- Build and run the tests the change touches. Run the full `ctest --preset <preset>` before the push that should turn green.
+- Build and run the tests the change touches. Run the full `ctest --preset <preset>` before the push that should turn green, into a log as ambrose-lean says, or leave it to CI's `ci:` legs.
 - For front-end changes, `npm run verify`.
 - For a CI fix, reproduce the failure first, then show the same check passing.
 - Every commit carries the AI attribution trailer. `ci_commit_trailer.py` refuses a commit without one.
@@ -21,7 +21,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 
 - Work in this order: merge conflicts, then red CI, then review comments. A red or conflicted head is never "waiting on review".
 - Fix the root cause. Never skip, disable or quarantine a test, push an empty commit, or close and reopen just to rerun CI.
-- Main has a required `checks` status. A branch named `milestone/<id>-<name>` gets the Linux GCC leg by itself. Other legs need a `ci:` label (`ci:windows-msvc-x64`, `ci:all`), which the maintainer's side adds when the change deserves it.
+- Main has a required `checks` status. A branch named `milestone/<id>-<name>` gets the Linux GCC leg by itself. Other legs need a `ci:` label (`ci:windows-msvc-x64`, `ci:all`), which the maintainer's side adds when the change deserves it. While iterating, label one leg (`ci:linux-gcc` or `ci:windows-msvc-x64`); add `ci:all` only right before landing, and take it off a pull request another one supersedes, because every push re-runs all seven jobs.
 
 ## Reviewing a contributor's pull request
 
@@ -35,7 +35,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 - Contributor work lands as one commit made with `git merge --squash prN` on main, authored to the contributor's numeric noreply address, with their `Co-Authored-By`. The subject is `<item id>: <what landed>`. Never use GitHub's squash button for it, which names their account email.
 - Whatever the maintainer's side can finish in the same sitting is fixed on main, one commit per fix, naming the pull request and the fault.
 - Update the tracks in the same sitting: the merged table, "Started, still open", and doc/MILESTONE-TRACK.md's Started and Landed rows. Run `python apps/ci/tests/test_ci.py` and `python apps/site/build.py --check` before pushing.
-- When a batch teaches something, write it into doc/REVIEWING.md or the contributor prompts (contrib/AI-START-HERE.md, contrib/AI-MILESTONES-HERE.md), not into a review comment.
+- When a batch teaches something, write it into doc/REVIEWING.md or the contributor prompt (contrib/AI-MILESTONES-HERE.md), not into a review comment.
 
 ## Running servers to verify
 

@@ -8,7 +8,7 @@ This track is the other door, and the safe one. This track holds work that helps
 
 Ask in the Discord before you start if anything here is unclear: https://discord.gg/Dx6ACDUj6N. It is also where a finding gets discussed before it is written up.
 
-Read this document first, then contrib/findings/README.md and CONTRIBUTING.md. Working with an AI assistant is expected here: contrib/AI-START-HERE.md is a prompt to paste into yours, and it carries what that assistant needs to know about this repository before it writes anything.
+Read this document first, then contrib/findings/README.md and CONTRIBUTING.md. Working with an AI assistant is expected here: contrib/AI-MILESTONES-HERE.md is the one prompt to paste into yours, for a milestone or an item here, and it carries what that assistant needs to know about this repository before it writes anything.
 
 ## The rule that makes it safe
 
