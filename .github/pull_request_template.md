@@ -22,4 +22,4 @@ _Milestones only. Which boxes in the phase file this ticks, and what proves each
 - [ ] Every new file starts with the Project Ambrose header and a one-line brief, and carries no other comment
 - [ ] No game files, captures of other people, credentials or private paths, and `git status` is clean
 - [ ] Every commit carries a trailer naming the AI that wrote it
-- [ ] The checks under "Before the pull request" pass, in `contrib/AI-START-HERE.md` or, for a milestone, `contrib/AI-MILESTONES-HERE.md`
+- [ ] The checks under "Before the pull request" pass, in `contrib/AI-MILESTONES-HERE.md`

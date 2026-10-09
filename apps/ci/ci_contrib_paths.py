@@ -47,7 +47,6 @@ RESERVED_FILES = (
     "LICENSE",
     "README.md",
     "contrib/AI-MILESTONES-HERE.md",
-    "contrib/AI-START-HERE.md",
     "contrib/README.md",
     "doc/ARCHITECTURE.md",
     "doc/CONTRIBUTOR-TRACK.md",

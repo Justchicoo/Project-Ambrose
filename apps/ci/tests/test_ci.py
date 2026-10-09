@@ -867,7 +867,7 @@ class ContributorPathTests(unittest.TestCase):
         self.assertEqual(ci_contrib_paths.check(invented), invented)
 
     def test_the_tracks_own_signposts_are_out_of_reach(self):
-        signposts = ["contrib/README.md", "contrib/AI-START-HERE.md"]
+        signposts = ["contrib/README.md", "contrib/AI-MILESTONES-HERE.md"]
         self.assertEqual(ci_contrib_paths.check(signposts), signposts)
 
     def test_the_checker_and_the_tracks_table_name_the_same_folders(self):
