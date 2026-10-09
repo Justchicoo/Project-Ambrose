@@ -70,6 +70,7 @@ def options_of(args, need_crops=True):
         "set": list(getattr(args, "set", None) or []),
         "label": getattr(args, "label", None),
         "user": getattr(args, "user", None),
+        "gm_level": getattr(args, "gm_level", None),
         "wizard_from": getattr(args, "wizard_from", None),
         "wizard_guid": getattr(args, "wizard_guid", None),
         "background": getattr(args, "background", True),
@@ -187,6 +188,7 @@ def build_parser():
     run.add_argument("--set", action="append", help="one more login server option, as Key=Value; may repeat")
     run.add_argument("--label", help="what this run checks, so a milestone can cite its run id")
     run.add_argument("--user", help="account name the run creates and logs in with")
+    run.add_argument("--gm-level", type=int, choices=range(5), metavar="0-4", help="the security level the account is given: 0 player, 1 moderator, 2 game master, 3 administrator, 4 console")
     run.add_argument("--wizard-from", help="a characters database, host;port;user;password;database, to copy the scenario's wizard from instead of the one it describes; it is only read")
     run.add_argument("--wizard-guid", type=int, help="the wizard --wizard-from copies (default 1)")
     run.add_argument("--foreground", dest="background", action="store_false", help="leave the client window in front instead of at the bottom")
@@ -204,6 +206,7 @@ def build_parser():
     play.add_argument("--set", action="append", help="one more login server option, as Key=Value; may repeat")
     play.add_argument("--game-set", action="append", help="one more game server option, as Key=Value; may repeat")
     play.add_argument("--user", help="the account to make sure of; it is created, or its password set again, before the client starts")
+    play.add_argument("--gm-level", type=int, choices=range(5), metavar="0-4", help="the security level the account is given: 0 player, 1 moderator, 2 game master, 3 administrator, 4 console")
     play.add_argument("--password-env", help="the environment variable holding --user's password, so it never sits on a command line; without it the password is asked for")
     play.add_argument("--window", help="the client window size, as WxH (default the launcher's own)")
     play.add_argument("--no-client", dest="client_start", action="store_false", help="start the servers only")

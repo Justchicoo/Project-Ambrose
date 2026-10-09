@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the scratch servers a scenario drives: the login server, and the game server when the scenario enters the world, each on its own port with the run's databases and its own logs inside the run folder, started from the shipped defaults with every difference passed as a command-line override, the login server's account created over its own console and its world rows reloaded there once the game server has written them, the game server announcing its realm at the run's own address, and each shutdown waited for.
+# Runs the scratch servers a scenario drives: the login server, and the game server when the scenario enters the world, each on its own port with the run's databases and its own logs inside the run folder, started from the shipped defaults with every difference passed as a command-line override, the login server's account created over its own console and given the security level asked for and its world rows reloaded there once the game server has written them, the game server announcing its realm at the run's own address, and each shutdown waited for.
 import os
 import re
 import shutil
@@ -95,6 +95,13 @@ class LoginServer:
         if changed.group(1) != "changed":
             raise StepFailed(f"the account {user} exists and its password could not be set: {changed.group(1)}")
         return f"{user} already existed, and its password was set again"
+
+    def set_gm_level(self, user, level, timeout=60):
+        self.send(f"account set gmlevel {user} {int(level)}")
+        answer = self.console.wait(rf"Security level of {re.escape(user)} (set to \d+|not changed: .*)", timeout, alive=self.alive)
+        if not answer.group(1).startswith("set to"):
+            raise StepFailed(f"the account {user}'s security level was {answer.group(1)}")
+        return f"{user}'s security level {answer.group(1)}"
 
     def reload(self, target, timeout=60):
         self.send(f"reload {target}")

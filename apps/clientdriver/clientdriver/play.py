@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# A play session for a person rather than a scenario: it keeps its own databases from one session to the next, starts the login server, loads the zone rows into an empty world, starts the game server and has the login server reload the name tables and creation rows the game server wrote, makes sure of the player's account when one is named, starts the client through the launcher, and stays up until stop is typed, Ctrl+C is pressed or another `play --stop` asks it to, while a second `play` against a running session only starts another client.
+# A play session for a person rather than a scenario: it keeps its own databases from one session to the next, starts the login server, loads the zone rows into an empty world, starts the game server and has the login server reload the name tables and creation rows the game server wrote, makes sure of the player's account when one is named, at the security level asked for, starts the client through the launcher, and stays up until stop is typed, Ctrl+C is pressed or another `play --stop` asks it to, while a second `play` against a running session only starts another client.
 import json
 import os
 import subprocess
@@ -122,6 +122,8 @@ class PlaySession:
             if not options.get("password"):
                 raise Refused(f"the account {options['user']} needs a password: pass --password-env naming a variable that holds it, or start play from a terminal to be asked")
             self.note("the account", self.login.ensure_account(options["user"], options["password"]))
+            if options.get("gm_level") is not None:
+                self.note("the account's security level", self.login.set_gm_level(options["user"], options["gm_level"]))
         self.note("the world database", self.zone_rows())
         self.note("the game server", self.game.start(timeout=options["server_timeout"]))
         self.note("the login server's name tables", self.login.reload("names"))

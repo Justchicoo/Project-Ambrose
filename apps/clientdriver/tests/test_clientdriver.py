@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
 import json
 import os
 import re
@@ -535,6 +535,17 @@ class WorldEntryTests(TemporaryFolder):
         login, sent = self.reloading_login(["Account clientdriver created with id 1", "creation is now generation 2"])
         self.assertEqual(login.reload("creation", timeout=1), "creation is now generation 2")
         self.assertEqual(sent, ["reload creation"])
+
+    def test_the_account_is_given_the_security_level_asked_for(self):
+        login, sent = self.reloading_login(["Security level of clientdriver set to 4"])
+        self.assertEqual(login.set_gm_level("clientdriver", 4, timeout=1), "clientdriver's security level set to 4")
+        self.assertEqual(sent, ["account set gmlevel clientdriver 4"])
+
+    def test_a_security_level_the_login_server_refuses_stops_the_run_with_its_reason(self):
+        login, _sent = self.reloading_login(["Security level of clientdriver not changed: no such account"])
+        with self.assertRaises(StepFailed) as raised:
+            login.set_gm_level("clientdriver", 4, timeout=1)
+        self.assertIn("no such account", str(raised.exception))
 
     def test_a_reload_the_login_server_refuses_stops_the_run_with_its_reason(self):
         login, _sent = self.reloading_login(["names was not reloaded and generation 1 goes on serving", "  the world database is not open"])
@@ -2499,6 +2510,10 @@ class PlayServer:
         PlayServer.events.append(f"account {user}")
         return f"{user} created"
 
+    def set_gm_level(self, user, level):
+        PlayServer.events.append(f"gmlevel {user} {level}")
+        return f"{user}'s security level set to {level}"
+
     def reload(self, target):
         PlayServer.events.append(f"reload {target}")
         return f"{target} is now generation 2"
@@ -2541,6 +2556,15 @@ class PlayTests(TemporaryFolder):
         session.start()
         self.assertEqual(PlayServer.events, ["start loginserver", "account player", "start gameserver", "reload names", "reload creation"])
         self.assertEqual(play.read_state(self.folder)["port"], 12200)
+
+    def test_the_player_s_account_gets_the_security_level_asked_for_before_the_game_server_starts(self):
+        session, _launched = self.session(gm_level=4)
+        session.start()
+        self.assertEqual(PlayServer.events[:4], ["start loginserver", "account player", "gmlevel player 4", "start gameserver"])
+        arguments = cli.build_parser().parse_args(["run", "--gm-level", "4"])
+        self.assertEqual(cli.options_of(arguments)["gm_level"], 4)
+        with self.assertRaises(SystemExit), mock.patch("sys.stderr"):
+            cli.build_parser().parse_args(["play", "--gm-level", "5"])
 
     def test_a_stop_from_another_play_ends_the_session_and_stops_the_game_server_first(self):
         session, launched = self.session()
