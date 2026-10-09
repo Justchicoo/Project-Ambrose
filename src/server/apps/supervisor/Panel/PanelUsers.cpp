@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Hashes with Botan's Argon2id at a cost a sign-in can afford to wait for, keeping only the PHC string it produces, which carries its own parameters so a row hashed at an older cost still opens after the cost is raised; a sign-in that names nobody, or a disabled account, still spends one verify against a hash made at start, so an attacker cannot tell the three refusals apart by how long they took, and every refusal answers the same way. Whether two-factor sign-in is on is read with every user from the two-factor table, and a generation bump returns the generation it moved to, so the one session that made a change can be carried across to it. Making an operator checks the name and the policy and hashes before the insert, which checks the name again so one taken meanwhile is still refused by name, and setting a password does the same before its update, so a caller can hash outside a transaction and write inside one.
+ * Hashes with Botan's Argon2id at a cost a sign-in can afford to wait for, or at the one a process set before its first hash, keeping only the PHC string it produces, which carries its own parameters so a row hashed at an older cost still opens after the cost is raised; a sign-in that names nobody, or a disabled account, still spends one verify against a hash made at start, so an attacker cannot tell the three refusals apart by how long they took, and every refusal answers the same way. Whether two-factor sign-in is on is read with every user from the two-factor table, and a generation bump returns the generation it moved to, so the one session that made a change can be carried across to it. Making an operator checks the name and the policy and hashes before the insert, which checks the name again so one taken meanwhile is still refused by name, and setting a password does the same before its update, so a caller can hash outside a transaction and write inside one.
  */
 
 #include "PanelUsers.h"
@@ -20,17 +20,15 @@
 
 namespace
 {
-    constexpr std::size_t Lanes = 1;
-    constexpr std::size_t MemoryKiB = 64 * 1024;
-    constexpr std::size_t Passes = 3;
     constexpr uint8 Argon2idFamily = 2;
+    PanelHashCost Cost;
 
     std::once_flag DecoyReady;
     std::string DecoyHash;
 
     std::string MakeHash(std::string_view password)
     {
-        return Botan::argon2_generate_pwhash(password.data(), password.size(), Botan::system_rng(), Lanes, MemoryKiB, Passes, Argon2idFamily);
+        return Botan::argon2_generate_pwhash(password.data(), password.size(), Botan::system_rng(), Cost.Lanes, Cost.MemoryKiB, Cost.Passes, Argon2idFamily);
     }
 
     void StartDecoy()
@@ -115,6 +113,16 @@ bool PanelUsers::HashPassword(std::string_view password, std::string& hash, std:
         return false;
     }
     return !hash.empty();
+}
+
+void PanelUsers::SetHashCost(PanelHashCost cost)
+{
+    Cost = cost;
+}
+
+PanelHashCost PanelUsers::GetHashCost()
+{
+    return Cost;
 }
 
 bool PanelUsers::PasswordMatches(std::string const& hash, std::string_view password)
