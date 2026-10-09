@@ -159,6 +159,9 @@ namespace
             Unsigned("Login.KeyTTL", "60", "5", "2592000", "s", "Login", Login, NextUse, "How long the key a client carries to a game server stays good for."),
             Unsigned("Login.AfkTimeout", "360", "0", "86400", "s", "Login", Login, NextUse, "How long a client may idle before choosing a wizard before it is closed; 0 never closes it."),
             Integer("Login.AfkWarning", "1", "-128", "127", "", "Login", Login, NextUse, "The Warning byte MSG_DISCONNECT_LOGIN_AFK carries."),
+            Flag("Login.Maintenance", "false", "Login", Login, Live, "Whether the login server is closed for maintenance: accounts below Login.MaintenanceBypassLevel are refused at sign-in with the maintenance reason, and players already in the world stay connected."),
+            Text("Login.MaintenanceReason", "", "255", "Login", Login, Live, "The reason a player refused during maintenance is sent; empty sends Maintenance."),
+            Unsigned("Login.MaintenanceBypassLevel", "2", "0", "4", "", "Login", Login, Live, "The lowest security level that still signs in during maintenance: 0 player, 1 moderator, 2 game master, 3 administrator, 4 console."),
             Unsigned("Login.ShutdownGrace", "5", "0", "60", "s", "Login", Login, Live, "How long a stopping login server waits for its shutdown notices to be written."),
 
             Unsigned("Character.MaxPerAccount", "6", "0", "250", "", "Characters", Login, Live, "How many wizards an account may hold."),

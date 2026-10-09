@@ -1786,9 +1786,9 @@ Changed on 2026-09-27: mute and kick moved with the online players page to 17.17
 
 **Acceptance**
 
-- [ ] With maintenance on, a player account's sign-in is refused with the maintenance reason and an account above the bypass level signs in
-- [ ] Turning maintenance on and off applies without a loginserver restart, and it is still on after one
-- [ ] Entering maintenance leaves players already in the world connected
+- [x] With maintenance on, a player account's sign-in is refused with the maintenance reason and an account above the bypass level signs in
+- [x] Turning maintenance on and off applies without a loginserver restart, and it is still on after one
+- [x] Entering maintenance leaves players already in the world connected
 - [ ] Every change writes an audit row with who, why and the window
 - [ ] Dev-gated: the retail client shows the maintenance reason rather than a generic failure. Needs the maintainer's own retail client, and the result is recorded with the milestone
 
