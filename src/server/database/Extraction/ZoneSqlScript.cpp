@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lays extracted zones out for the world tables in the order they were read: one zone_template row per zone, then its locations, objects, volumes and triggers in list order, each volume and trigger known by its place in its list, with every event of each in order and every result of each trigger, replacing zone_template first so the rows that name a zone are only ever written after it, and zone_trigger before its results, with every float carried as the double it widens to and requirements, placed objects and result bytes NULL where there are none.
+ * Lays extracted zones out for the world tables in the order they were read: one zone_template row per zone, then its locations, objects, volumes, triggers and spawners in list order, each volume and trigger known by its place in its list, with every event of each in order and every result of each trigger, replacing zone_template first so the rows that name a zone are only ever written after it, zone_trigger before its results and zone_spawner before the entries each spawner may place, with every float carried as the double it widens to and requirements, placed objects and result bytes NULL where there are none.
  */
 
 #include "ZoneSqlScript.h"
@@ -18,6 +18,8 @@ WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
     std::vector<WorldSqlScript::Row> triggers;
     std::vector<WorldSqlScript::Row> events;
     std::vector<WorldSqlScript::Row> results;
+    std::vector<WorldSqlScript::Row> spawners;
+    std::vector<WorldSqlScript::Row> spawnEntries;
     auto const bytes = [](std::optional<std::vector<uint8>> const& data)
     {
         return data ? WorldSqlScript::Value{ std::string(data->begin(), data->end()) } : WorldSqlScript::Value{ std::monostate{} };
@@ -75,6 +77,22 @@ WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
             addResults(zone.Path, index, "results", trigger.Results);
             addResults(zone.Path, index, "cooldown", trigger.CooldownResults);
         }
+        for (std::size_t index = 0; index < zone.Spawners.size(); ++index)
+        {
+            ExtractedSpawner const& spawner = zone.Spawners[index];
+            spawners.push_back({ zone.Path, uint64{ index }, spawner.Name, spawner.Id, flag(spawner.Active), flag(spawner.PopSensitive), uint64{ spawner.MaxSpawns },
+                flag(spawner.AtLeastOneSpawn), flag(spawner.ActivateAtMax), whole(spawner.SpawnTime), uint64{ spawner.RespawnRate }, flag(spawner.GlobalDynamic),
+                flag(spawner.WaitForTimer), uint64{ spawner.ZoneLevelMin }, uint64{ spawner.ZoneLevelMax }, uint64{ spawner.ZoneLevelUp }, bytes(spawner.GlobalDynamicReqs) });
+            for (std::size_t position = 0; position < spawner.Items.size(); ++position)
+            {
+                ExtractedSpawnItem const& item = spawner.Items[position];
+                ExtractedObject const& object = item.Object;
+                spawnEntries.push_back({ zone.Path, uint64{ index }, uint64{ position }, uint64{ item.PercentChance }, object.ClassName, object.TemplateId, uint64{ object.ObjectId },
+                    number(object.Location.X), number(object.Location.Y), number(object.Location.Z), number(object.Orientation.X), number(object.Orientation.Y),
+                    number(object.Orientation.Z), number(object.Scale), object.ZoneTag, object.StartState, object.OverrideName, flag(object.GlobalDynamic), flag(object.Undetectable),
+                    whole(object.LoadingType), bytes(object.SpawnRequirements), whole(item.StartNodeType), uint64{ item.StartNode }, item.PathId, whole(item.UniqueLoc) });
+            }
+        }
     }
 
     std::vector<std::string_view> const tables = GetTables();
@@ -90,10 +108,15 @@ WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
         "unnamed_3431571632" }, triggers);
     script.ReplaceTable(tables[5], { "zone_path", "owner", "owner_index", "kind", "position", "event_name" }, events);
     script.ReplaceTable(tables[6], { "zone_path", "trigger_index", "list", "position", "class_hash", "class_name", "data" }, results);
+    script.ReplaceTable(tables[7], { "zone_path", "spawner_index", "name", "spawner_id", "active", "pop_sensitive", "max_spawns", "at_least_one_spawn", "activate_at_max",
+        "spawn_time", "respawn_rate", "global_dynamic", "wait_for_timer", "zone_level_min", "zone_level_max", "zone_level_up", "global_dynamic_reqs" }, spawners);
+    script.ReplaceTable(tables[8], { "zone_path", "spawner_index", "position", "percent_chance", "class_name", "template_id", "object_id", "position_x", "position_y", "position_z",
+        "orientation_x", "orientation_y", "orientation_z", "scale", "zone_tag", "start_state", "override_name", "global_dynamic", "undetectable", "loading_type", "spawn_requirements",
+        "start_node_type", "start_node", "path_id", "unique_loc" }, spawnEntries);
     return script;
 }
 
 std::vector<std::string_view> ZoneSqlScript::GetTables()
 {
-    return { "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result" };
+    return { "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result", "zone_spawner", "zone_spawner_entry" };
 }

@@ -126,6 +126,20 @@ namespace GameMessages
         }
     };
 
+    struct DeleteObject
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_DELETEOBJECT";
+
+        uint64 GameObjectId = 0;
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GameObjectID", &DeleteObject::GameObjectId), DmlField("Data", &DeleteObject::Data) };
+        }
+    };
+
     struct ClientZoned
     {
         static constexpr uint8 ServiceId = Wizard2Service;

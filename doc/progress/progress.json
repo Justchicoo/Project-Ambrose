@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 134,
+    "done": 135,
     "total": 469,
-    "percent": 28.6
+    "percent": 28.8
   },
   "checks": {
-    "done": 1078,
+    "done": 1090,
     "total": 2870,
-    "percent": 37.6
+    "percent": 38.0
   },
   "contributor_track": {
     "merged": 93,
@@ -82,9 +82,9 @@
     {
       "phase": 9,
       "title": "A duel completes",
-      "milestones_done": 3,
+      "milestones_done": 4,
       "milestones_total": 12,
-      "checks_done": 18,
+      "checks_done": 30,
       "checks_total": 83
     },
     {

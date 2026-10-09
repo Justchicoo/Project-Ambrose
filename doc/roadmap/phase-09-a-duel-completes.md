@@ -24,8 +24,8 @@
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
 - **Ordering.** Phase 9 outcome and 9.10 require a 'wandering mob', but path-walking NPCs (10.14) come after phase 9 and 9.10 does not depend on them. Creature decks (11.14) also come after 9.10, although 9.10 says the mob 'casts its attack'. An interim hard-coded or authored creature spell source is needed, or 9.10 starts with a stationary mob and its 'wandering' check moves to 10.14.
-- **Ordering.** 9.04 spawns creatures but does not depend on 7.01 (object_template extractor). Creature names, behaviors and templates come from there, and 7.01 is not reachable through 9.04's dependency chain.
-- **Missing work.** Game event / holiday scheduler and daily reset (AzerothCore game_event equivalent). It gates HalloweenSpawner1's ReqGlobalRegistryValue (9.04), daily assignments (14.16), daily PvP and holiday data. Global registry storage is also missing.
+- **Ordering.** 9.04 spawns creatures but does not depend on 7.01 (object_template extractor). Creature names, behaviors and templates come from there, and 7.01 is not reachable through 9.04's dependency chain. **Resolved in 9.04:** 7.01 landed first, and a spawner's objects are built from their templates through sObjectTemplateMgr, the same way zone placements are.
+- **Missing work.** Game event / holiday scheduler and daily reset (AzerothCore game_event equivalent). It gates HalloweenSpawner1's ReqGlobalRegistryValue (9.04), daily assignments (14.16), daily PvP and holiday data. Global registry storage is also missing. **For 9.04:** a spawner with global requirements places nothing until that scheduler answers them, so HalloweenSpawner1 is read and kept but never spawns out of season.
 - **Oversized.** 9.08 single-target damage cast with cinematic parity (M). It bundles COMBATACTIONS encoding, m_effectChosen bits, fizzle, pips and hit rolls, and its real-client check is where the client resolving results itself, settled under Combat messages in doc/ARCHITECTURE.md, is first seen.
 - **Correction.** The 9.01/decision-list note that the XML says MoveType '0 pass, 1 attack, 2 enchant, 3 flee' is misquoted. WizCombatMessages.xml says '0 for pass, 1 for attack, 2 for cast on a spell, 3 for flee', and the client's own code shows that description is wrong; Combat messages in doc/ARCHITECTURE.md gives the values.
 
@@ -160,10 +160,10 @@ An object carries the game effects put on it, each under an internal id of its o
 
 **Acceptance**
 
-- [ ] WC_Ravenwood yields 5 SpawnObjects incl. SpawnPoint_Wood_01 SNT_RANDOM_UNIQUE; WC_Hub HalloweenSpawner1 has ReqGlobalRegistryValue
-- [ ] Respawn after respawnTime, never above count
-- [ ] Changing Rate.Respawn affects the next despawn without a restart; a failed `.reload zone_spawner` keeps the old spawners
-- [ ] Real client: '.npc spawn <id>' appears for nearby clients; '.npc delete' plays despawn effect
+- [x] WC_Ravenwood yields 5 SpawnObjects incl. SpawnPoint_Wood_01 SNT_RANDOM_UNIQUE; WC_Hub HalloweenSpawner1 has ReqGlobalRegistryValue [ZoneExtractorClientSpawnTest.EverySpawnDataReadsThroughTheAuthoredClassesWithRavenwoodsSpawnersAndTheCommonsHalloweenSpawner passes on r806919; `extractor zones` lists WC_Ravenwood's Spawn point 0, SpawnPoint_Wood_01, SpawnPoint_Wood_02, SpawnPoint_Cattail_01 and SpawnPoint_Flax_01]
+- [x] Respawn after respawnTime, never above count [SpawnerMgrTest.AfterADespawnASpawnerRespawnsAfterItsTimeAndNeverAboveItsCount]
+- [x] Changing Rate.Respawn affects the next despawn without a restart; a failed `.reload zone_spawner` keeps the old spawners [SpawnerMgrTest.ChangingRateRespawnHalvesTheDelayOfTheNextDespawnWithoutARestart, SpawnerMgrDatabaseTest.AReloadWithARaisedCountSpawnsTheDifferenceAndABrokenRowKeepsTheOldSpawners]
+- [x] Real client: '.npc spawn <id>' appears for nearby clients; '.npc delete' plays despawn effect [driver run 20261009-123415 with two clients in the Commons: `.npc spawn 38232` placed Simeon in front of the game master and the second client showed him, and `.npc delete` sent MSG_DELETEOBJECT naming the game master as killer and he left both screens]
 
 ### Detailed spec from WLD-18: Spawners and runtime spawn/despawn
 
@@ -191,11 +191,11 @@ Zone spawners create, despawn and respawn non-combat creatures and objects on ti
 
 **Acceptance**
 
-- [ ] Unit: after a despawn, a spawner respawns after respawnTime and never goes over its count
-- [ ] Unit: `.settings set Rate.Respawn 0.5` halves the respawn delay from the next despawn without a restart
-- [ ] Unit: `.reload zone_spawner` with a raised count spawns the difference, and a reload with a broken row keeps the old spawners serving
-- [ ] Real client: '.npc spawn <id>' makes the creature appear in front of the GM for all nearby clients; '.npc delete' removes it with its despawn effect
-- [ ] Real client: a trigger whose result is ResSpawn makes its creature appear when the event fires
+- [x] Unit: after a despawn, a spawner respawns after respawnTime and never goes over its count [SpawnerMgrTest.AfterADespawnASpawnerRespawnsAfterItsTimeAndNeverAboveItsCount]
+- [x] Unit: `.settings set Rate.Respawn 0.5` halves the respawn delay from the next despawn without a restart [SpawnerMgrTest.ChangingRateRespawnHalvesTheDelayOfTheNextDespawnWithoutARestart sets Rate.Respawn to 0.5 as a live setting]
+- [x] Unit: `.reload zone_spawner` with a raised count spawns the difference, and a reload with a broken row keeps the old spawners serving [SpawnerMgrDatabaseTest.AReloadWithARaisedCountSpawnsTheDifferenceAndABrokenRowKeepsTheOldSpawners]
+- [x] Real client: '.npc spawn <id>' makes the creature appear in front of the GM for all nearby clients; '.npc delete' removes it with its despawn effect [driver run 20261009-123415: `.npc spawn 38232` placed Simeon in front of the game master for both clients, and `.npc delete` removed the same object from both through MSG_DELETEOBJECT]
+- [x] Real client: a trigger whose result is ResSpawn makes its creature appear when the event fires [driver run 20261009-123858: entering WizardCity/WC_Duel_Arena fired Trigger Start Dueling, whose ResSpawn results started the arena's four inactive spawners, the game server logged their four spawns into that instance, and the client was sent them (shot 22)]
 
 **Risks**
 
@@ -226,9 +226,9 @@ world.zone_object and world.spawn_* hold every NPC and interactable placement an
 
 **Acceptance**
 
-- [ ] Integration test: WizardCity/WC_Ravenwood yields 97 CoreObjectInfo templateIDs, including NPC templates 38232, 38230, 81102, 1451035 (WC-Bartleby) and 39088. Its spawnData yields 5 SpawnObjects, including SpawnPoint_Wood_01 with SNT_RANDOM_UNIQUE.
-- [ ] Integration test: WizardCity/WC_Hub spawnData contains HalloweenSpawner1 with a ReqGlobalRegistryValue requirement.
-- [ ] Full run over ~3356 zone WADs finishes, with a per-zone error count of 0 or a listed set of unknown classes.
+- [x] Integration test: WizardCity/WC_Ravenwood yields 97 CoreObjectInfo templateIDs, including NPC templates 38232, 38230, 81102, 1451035 (WC-Bartleby) and 39088. Its spawnData yields 5 SpawnObjects, including SpawnPoint_Wood_01 with SNT_RANDOM_UNIQUE. [ZoneExtractorClientTest.RavenwoodHoldsItsObjectsPlacesAndTeachers counts 93 objects and 4 sigils with all five templates; ZoneExtractorClientSpawnTest reads its 5 spawners]
+- [x] Integration test: WizardCity/WC_Hub spawnData contains HalloweenSpawner1 with a ReqGlobalRegistryValue requirement. [ZoneExtractorClientSpawnTest]
+- [x] Full run over ~3356 zone WADs finishes, with a per-zone error count of 0 or a listed set of unknown classes. [`extractor zones --world-db` on r806919: 0 zones fail, 13,341 zone_spawner and 15,716 zone_spawner_entry rows, and all 6,524 ResSpawn and 4,943 ResDespawn results carry their bytes]
 
 **Risks**
 
