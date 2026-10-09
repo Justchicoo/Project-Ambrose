@@ -25,6 +25,7 @@
 #include "ObjectTemplateMgr.h"
 #include "QuestMgr.h"
 #include "QuickChatMgr.h"
+#include "RequirementMgr.h"
 #include "SigilMgr.h"
 #include "SpawnerMgr.h"
 #include "SpellMgr.h"
@@ -664,12 +665,19 @@ namespace
 
         void LoadQuests()
         {
-            sQuestMgr.RegisterReloadTargets();
+            sRequirementMgr.RegisterReloadTargets();
             if (!WorldDatabase.IsOpen())
             {
+                LOG_WARN("server.gameserver", "WorldDatabaseInfo is empty, so no requirement lists are loaded");
+                sQuestMgr.RegisterReloadTargets();
                 LOG_WARN("server.gameserver", "WorldDatabaseInfo is empty, so no quest is loaded");
                 return;
             }
+            std::vector<std::string> requirementErrors;
+            if (!sRequirementMgr.Load(requirementErrors))
+                for (std::string const& problem : requirementErrors)
+                    LOG_ERROR("server.gameserver", "Requirements: {}", problem);
+            sQuestMgr.RegisterReloadTargets();
             QuestLoadResult const quests = sQuestMgr.LoadSkippingInvalid();
             for (std::string const& problem : quests.Errors)
                 LOG_ERROR("server.gameserver", "Quests: {}", problem);

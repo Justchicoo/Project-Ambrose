@@ -4,6 +4,7 @@
  */
 
 #include "QuestMgr.h"
+#include "RequirementMgr.h"
 #include "DatabaseEnv.h"
 #include "LocaleStore.h"
 #include "Log.h"
@@ -57,11 +58,14 @@ bool QuestMgr::ReadWorldRows(QuestRows& rows, std::vector<std::string>& errors)
     }
     bool ok = true;
     ok &= Select("quest_template", "SELECT `name`, `name_id`, `title_key`, `info_key`, `prep_key`, `underway_key`, `complete_key`, `level`, `repeat`, `mainline`, `no_quest_helper`, "
-        "`skip_qh_autoselect`, `pet_only`, `activity_type`, `prep_always`, `is_hidden` FROM `quest_template` ORDER BY `name`", errors, [&rows](Field const* f)
+        "`skip_qh_autoselect`, `pet_only`, `activity_type`, `prep_always`, `is_hidden`, `requirement_list_id` FROM `quest_template` ORDER BY `name`", errors, [&rows](Field const* f)
     {
-        rows.Quests.push_back(QuestTemplateRow{ f[0].Get<std::string>(), f[1].Get<uint32>(), f[2].Get<std::string>(), f[3].Get<std::string>(), f[4].Get<std::string>(),
+        QuestTemplateRow row{ f[0].Get<std::string>(), f[1].Get<uint32>(), f[2].Get<std::string>(), f[3].Get<std::string>(), f[4].Get<std::string>(),
             f[5].Get<std::string>(), f[6].Get<std::string>(), f[7].Get<uint32>(), f[8].Get<uint32>(), f[9].Get<bool>(), f[10].Get<bool>(), f[11].Get<bool>(), f[12].Get<bool>(),
-            f[13].Get<uint32>(), f[14].Get<bool>(), f[15].Get<bool>() });
+            f[13].Get<uint32>(), f[14].Get<bool>(), f[15].Get<bool>(), {} };
+        if (!f[16].IsNull())
+            row.RequirementListId = f[16].Get<std::string>();
+        rows.Quests.push_back(std::move(row));
     });
     ok &= Select("quest_start_goal", "SELECT `quest`, `goal_name` FROM `quest_start_goal` ORDER BY `quest`, `goal_name`", errors, [&rows](Field const* f)
     {
@@ -130,7 +134,23 @@ void QuestMgr::SetKeyLookup(KeyLookup lookup)
 
 void QuestMgr::RegisterReloadTargets()
 {
-    sReloadMgr.Register(std::string(Target), [this](std::vector<std::string>& errors) { return Load(errors); });
+    sReloadMgr.Register(std::string(Target), [this](std::vector<std::string>& errors) { return Load(errors); }, { std::string(RequirementMgr::Target) });
+}
+
+bool QuestMgr::CanOffer(std::string_view questName, RequirementContext const& context) const
+{
+    auto const quests = _quests.Get();
+    QuestInfo const* quest = quests->Find(questName);
+    if (!quest)
+        return false;
+    return quest->Row.RequirementListId.empty() || sRequirementMgr.Evaluate(quest->Row.RequirementListId, context);
+}
+
+std::vector<std::string> QuestMgr::GetQuestsOfferedBy(uint32 templateId, RequirementContext const& context) const
+{
+    std::vector<std::string> offered = _quests.Get()->GetQuestsOfferedBy(templateId);
+    std::erase_if(offered, [this, &context](std::string const& questName) { return !CanOffer(questName, context); });
+    return offered;
 }
 
 bool QuestMgr::Read(QuestRows& rows, std::vector<std::string>& errors) const

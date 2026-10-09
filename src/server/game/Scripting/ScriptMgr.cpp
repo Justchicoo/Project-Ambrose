@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A script registers itself from its own constructor, which is why the loader only has to call each AddSC function, and why the manager takes that loader as an argument rather than calling it by name: the hooks would otherwise depend on the scripts that use them, which is a circle a linker is right to refuse. the manager takes ownership there and frees them when it unloads, so a script file names its classes and nothing else has to know they exist. Every hook runs each script in the order it registered and catches what one throws, naming the script and the hook, because one bad content script must not take the tick down with it. The manager watches the network for its server scripts once the first registers, asks them in registration order, stops at the first that holds a message back, and takes a script that throws for one that let it through, reported by name, so a broken script never cuts the network.
+ * A script registers itself from its own constructor, which is why the loader only has to call each AddSC function, and why the manager takes that loader as an argument rather than calling it by name: the hooks would otherwise depend on the scripts that use them, which is a circle a linker is right to refuse. The manager takes ownership there and frees them when it unloads, so a script file names its classes and nothing else has to know they exist. Every hook runs each script in the order it registered and catches what one throws, naming the script and the hook; a condition hook returns its first definite answer and leaves unknown types unanswered when no script handles them. The manager watches the network for its server scripts once the first registers, asks them in registration order, stops at the first that holds a message back, and takes a script that throws for one that let it through, reported by name, so a broken script never cuts the network.
  */
 
 #include "ScriptMgr.h"
@@ -21,6 +21,11 @@ ZoneScript::ZoneScript(std::string name, std::string zone) : ScriptObject(std::m
 }
 
 PlayerScript::PlayerScript(std::string name) : ScriptObject(std::move(name))
+{
+    sScriptMgr.Register(this);
+}
+
+ConditionScript::ConditionScript(std::string name) : ScriptObject(std::move(name))
 {
     sScriptMgr.Register(this);
 }
@@ -59,6 +64,11 @@ void ScriptMgr::Register(ZoneScript* script)
 void ScriptMgr::Register(PlayerScript* script)
 {
     _playerScripts.push_back(script);
+}
+
+void ScriptMgr::Register(ConditionScript* script)
+{
+    _conditionScripts.push_back(script);
 }
 
 void ScriptMgr::Register(CommandScript* script)
@@ -113,6 +123,9 @@ void ScriptMgr::Unload()
     for (PlayerScript* script : _playerScripts)
         delete script;
     _playerScripts.clear();
+    for (ConditionScript* script : _conditionScripts)
+        delete script;
+    _conditionScripts.clear();
     for (CommandScript* script : _commandScripts)
         delete script;
     _commandScripts.clear();
@@ -121,7 +134,7 @@ void ScriptMgr::Unload()
 
 std::size_t ScriptMgr::GetScriptCount() const
 {
-    return _worldScripts.size() + _zoneScripts.size() + _playerScripts.size() + _commandScripts.size() + _serverScripts.size();
+    return _worldScripts.size() + _zoneScripts.size() + _playerScripts.size() + _conditionScripts.size() + _commandScripts.size() + _serverScripts.size();
 }
 
 std::vector<std::string> ScriptMgr::GetScriptNames() const
@@ -133,6 +146,8 @@ std::vector<std::string> ScriptMgr::GetScriptNames() const
     for (ZoneScript const* script : _zoneScripts)
         names.push_back(script->GetName());
     for (PlayerScript const* script : _playerScripts)
+        names.push_back(script->GetName());
+    for (ConditionScript const* script : _conditionScripts)
         names.push_back(script->GetName());
     for (CommandScript const* script : _commandScripts)
         names.push_back(script->GetName());
@@ -209,6 +224,28 @@ void ScriptMgr::OnGoldChanged(Player& player, int32 oldValue, int32 newValue)
 void ScriptMgr::OnHealthChanged(Player& player, int32 oldValue, int32 newValue)
 {
     ForEachPlayer("OnHealthChanged", [&player, oldValue, newValue](PlayerScript* script) { script->OnHealthChanged(player, oldValue, newValue); });
+}
+
+std::optional<bool> ScriptMgr::EvaluateCondition(RequirementRow const& requirement, RequirementContext const& context) const
+{
+    for (ConditionScript* script : _conditionScripts)
+    {
+        try
+        {
+            std::optional<bool> const result = script->OnConditionCheck(requirement, context);
+            if (result)
+                return result;
+        }
+        catch (std::exception const& failure)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from OnConditionCheck: {}", script->GetName(), failure.what());
+        }
+        catch (...)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from OnConditionCheck for a reason it did not say", script->GetName());
+        }
+    }
+    return std::nullopt;
 }
 
 template<typename Hook>
