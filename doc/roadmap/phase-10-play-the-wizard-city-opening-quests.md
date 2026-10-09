@@ -833,7 +833,7 @@ Clicking teleporter objects (Spiral Door, go-home, marked world teleporters) ope
 
 **Acceptance**
 
-- [ ] 2-node path at speed s takes distance/s +-1 tick
+- [x] 2-node path at speed s takes distance/s +-1 tick (PathMovementGeneratorTest.TwoNodePathCoversDistanceAtConfiguredSpeedWithinOneTick)
 - [ ] Empty Map sends nothing
 - [ ] `.reload zone_path` reroutes walking NPCs live; a failed reload keeps the old paths
 - [ ] Real client: patrol identical on two clients
@@ -865,7 +865,7 @@ NPCs with path data walk their routes on the server, and every client sees the s
 
 **Acceptance**
 
-- [ ] Unit: an NPC on a 2-node path with speed s covers the distance in distance/s seconds (+-1 tick)
+- [x] Unit: an NPC on a 2-node path with speed s covers the distance in distance/s seconds (+-1 tick) (PathMovementGeneratorTest.TwoNodePathCoversDistanceAtConfiguredSpeedWithinOneTick: speed 5 times scale 2 over 50 units arrives in 250 ticks of 20 ms)
 - [ ] Unit: a Map with no players sends no movement packets
 - [ ] Unit: `.reload zone_path` with a moved node sends a walking NPC to the new node position from its next leg without a restart, and a reload with a broken node keeps the old path
 - [ ] Real client: a patrolling NPC in a Wizard City street walks the same route on clients A and B at the same moment and does not pop on arrival

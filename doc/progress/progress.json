@@ -6,7 +6,7 @@
     "percent": 28.1
   },
   "checks": {
-    "done": 1075,
+    "done": 1077,
     "total": 2870,
     "percent": 37.5
   },
@@ -92,7 +92,7 @@
       "title": "Play the wizard city opening quests",
       "milestones_done": 0,
       "milestones_total": 18,
-      "checks_done": 0,
+      "checks_done": 2,
       "checks_total": 113
     },
     {
