@@ -90,3 +90,10 @@ bool Player::SetShadowPipRating(float value) noexcept
     _dirtyStats = _dirtyStats || changed;
     return changed;
 }
+
+bool Player::SetShowItemLock(bool value) noexcept
+{
+    bool const changed = _stats.SetShowItemLock(value);
+    _dirtyStats = _dirtyStats || changed;
+    return changed;
+}

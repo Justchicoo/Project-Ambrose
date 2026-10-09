@@ -27,7 +27,7 @@ namespace PlayerStatsFixtures
             { "int", "m_referenceLevel" }, { "int", "m_highestCharacterLevelOnAccount" }, { "float", "m_powerPipBase" }, { "int", "m_shadowPipMax" }, { "int", "m_pipConversionBaseAllSchools" },
             { "float", "m_shadowPipRating" }, { "float", "m_archmasteryBase" }, { "unsigned int", "m_schoolID" }, { "unsigned int", "m_secondarySchool" } };
         fields.insert(fields.end(), { { "unsigned int", "m_purchasedCustomEmotes1" }, { "unsigned int", "m_purchasedCustomEmotes2" }, { "unsigned int", "m_purchasedCustomEmotes3" },
-            { "unsigned int", "m_purchasedCustomTeleportEffects1" }, { "unsigned int", "m_purchasedCustomTeleportEffects2" }, { "unsigned int", "m_purchasedCustomTeleportEffects3" } });
+            { "unsigned int", "m_purchasedCustomTeleportEffects1" }, { "unsigned int", "m_purchasedCustomTeleportEffects2" }, { "unsigned int", "m_purchasedCustomTeleportEffects3" }, { "bool", "m_showItemLock" } });
         std::vector<std::pair<std::string, CharacterTypeFixtures::Detail::Json>> properties;
         uint32 id = 0;
         for (auto const& [type, name] : fields)

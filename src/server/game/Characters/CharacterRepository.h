@@ -117,6 +117,7 @@ public:
     static Statement PrepareLoadInventory(uint64 guid);
     static CreateTransaction PrepareAddItem(uint64 guid, CharacterItem const& item);
     static Statement PrepareTrashItem(uint64 guid, uint64 itemGuid);
+    static Statement PrepareLockItem(uint64 guid, uint64 itemGuid, bool locked);
     static std::vector<CharacterItem> ReadInventory(PreparedResultSet& result);
     static bool IsValidStats(CharacterStats const& stats) noexcept;
     static std::string_view GetResultName(CharacterOpResult result) noexcept;

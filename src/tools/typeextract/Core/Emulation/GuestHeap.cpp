@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Hands out guest heap blocks by bumping an aligned top with a gap after each block, checks every size against the region's limit without overflowing, zero-fills requested blocks, and moves reallocated blocks by copying the kept bytes into a fresh block.
+ * Hands out guest heap blocks by bumping an aligned top with a gap after each block, checks every size against the region's limit without overflowing, zero-fills requested blocks, and moves reallocated blocks by copying the kept bytes into a fresh block, and restores a saved top, block table and used bytes, zeroing what was handed out since.
  */
 
 #include "GuestHeap.h"
@@ -122,4 +122,19 @@ uint64 GuestHeap::GetLimit() const noexcept
 uint64 GuestHeap::GetAllocationCount() const noexcept
 {
     return _allocations;
+}
+
+GuestHeap::Snapshot GuestHeap::Save() const
+{
+    return { _top, _allocations, _sizes, _machine.ReadBytes(_base, static_cast<std::size_t>(_top - _base)) };
+}
+
+void GuestHeap::Restore(Snapshot const& snapshot)
+{
+    _machine.Write(_base, snapshot.Bytes);
+    if (_top > snapshot.Top)
+        FillZero(_machine, snapshot.Top, _top - snapshot.Top);
+    _top = snapshot.Top;
+    _allocations = snapshot.Allocations;
+    _sizes = snapshot.Sizes;
 }

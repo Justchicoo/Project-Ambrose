@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the guest machine on hand-assembled x86-64 code: Windows x64 arguments and return values, instruction budgets, fault reports, code hooks, redirects and reentrancy, segment bases, XMM registers, string reads at mapping ends, and mapping, read and write errors.
+ * Tests the guest machine on hand-assembled x86-64 code: Windows x64 arguments and return values, instruction budgets, fault reports, code hooks, redirects and reentrancy, segment bases, XMM registers, string reads at mapping ends, and mapping, read and write errors, and saved writable memory restored outside the ranges it skipped.
  */
 
 #include "Machine.h"
@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <utility>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -590,4 +591,22 @@ TEST(MachineTest, ArgumentsPastTheAddressSpaceAreRefused)
     EXPECT_THROW(machine.GetArgument(std::numeric_limits<std::size_t>::max()), EmulationError);
     machine.SetRegister(GuestRegister::Rcx, 5);
     EXPECT_EQ(machine.GetArgument(0), uint64{ 5 });
+}
+
+TEST(MachineTest, RestoredMemoryUndoesWritesOutsideTheSkippedRanges)
+{
+    Machine machine;
+    machine.Map(DataBase, Machine::PageSize);
+    machine.Map(DataBase + 0x100000, Machine::PageSize);
+    machine.WriteU64(DataBase, 0x1111);
+    machine.WriteU64(DataBase + 0x100000, 0xAAAA);
+    std::array<std::pair<uint64, uint64>, 1> const skipped = { std::pair{ DataBase + 0x100000, DataBase + 0x101000 } };
+    Machine::MemorySnapshot const snapshot = machine.SaveMemory(skipped);
+
+    machine.WriteU64(DataBase, 0x2222);
+    machine.WriteU64(DataBase + 0x100000, 0xBBBB);
+    machine.RestoreMemory(snapshot);
+
+    EXPECT_EQ(machine.ReadU64(DataBase), 0x1111u);
+    EXPECT_EQ(machine.ReadU64(DataBase + 0x100000), 0xBBBBu);
 }

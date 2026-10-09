@@ -171,8 +171,11 @@ public:
     BackpackAdd AddItem(ItemTemplateRecord const& itemTemplate, uint32 quantity);
     std::optional<CharacterItem> RemoveItem(uint64 itemGuid);
     BackpackTrashResult TrashItem(uint64 itemGuid, uint32 templateId);
+    BackpackLockResult ToggleItemLock(uint64 itemGuid);
     bool ShowLoot(std::vector<LootItem> const& items);
     void HandleTrashInventoryItem(GameMessages::TrashInventoryItem& message);
+    void HandleRequestToggleLockItem(GameMessages::RequestToggleLockItem& message);
+    void HandleItemLock(GameMessages::ItemLock& message);
     std::optional<int32> AddGameEffect(PropertyObjectPtr effect, std::string& problem);
     std::optional<ActiveGameEffect> RemoveGameEffect(int32 internalId);
     GameEffectHolder const& GetGameEffects() const noexcept { return _effects; }
@@ -244,6 +247,7 @@ private:
     void SaveSpell(CharacterSpell const& spell);
     void SaveNewItem(CharacterItem const& item);
     void DeleteStoredItem(uint64 itemGuid);
+    void SaveItemLock(CharacterItem const& item);
     void SendItemAdded(ItemTemplateRecord const& itemTemplate, CharacterItem const& item);
     void SendItemRemoved(uint64 itemGuid);
     void SavePosition(PlayerPosition const& position);

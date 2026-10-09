@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's.
 import json
 import os
 import re
@@ -13,7 +13,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clientdriver import capture, client, database, engine, install, listeners, netguard, paths, preflight, references, refscapture, report, run, scenario, screens, server, zones
+from clientdriver import capture, cli, client, database, engine, install, listeners, netguard, paths, play, preflight, references, refscapture, report, run, scenario, screens, server, zones
 from clientdriver.errors import Refused, StepFailed
 from clientdriver.logtail import LogTail, read_lines
 
@@ -512,6 +512,35 @@ class WorldEntryTests(TemporaryFolder):
         login = server.LoginServer("loginserver.exe", "loginserver.conf.dist", os.path.join(self.folder, "login"), "127.0.0.2", 12100, scratch)
         self.assertIn("LoginServerPort=12100", login.overrides())
         self.assertTrue(login.log.path.endswith("Login.log"))
+
+    def reloading_login(self, answer):
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
+        login = server.LoginServer("loginserver.exe", "loginserver.conf.dist", os.path.join(self.folder, "login"), "127.0.0.2", 12100, scratch)
+        login.console = LogTail(self.write(os.path.join("login", "console.txt"), []), interval=0.01)
+        sent = []
+
+        class Input:
+            def write(self, data):
+                sent.append(data.decode("utf-8").strip())
+                self.console_lines(answer)
+
+            def flush(self):
+                pass
+
+        Input.console_lines = lambda _self, lines: self.write(os.path.join("login", "console.txt"), lines)
+        login.process = SimpleNamespace(poll=lambda: None, stdin=Input())
+        return login, sent
+
+    def test_the_login_server_rereads_the_rows_the_game_server_wrote_after_it_started(self):
+        login, sent = self.reloading_login(["Account clientdriver created with id 1", "creation is now generation 2"])
+        self.assertEqual(login.reload("creation", timeout=1), "creation is now generation 2")
+        self.assertEqual(sent, ["reload creation"])
+
+    def test_a_reload_the_login_server_refuses_stops_the_run_with_its_reason(self):
+        login, _sent = self.reloading_login(["names was not reloaded and generation 1 goes on serving", "  the world database is not open"])
+        with self.assertRaises(StepFailed) as raised:
+            login.reload("names", timeout=1)
+        self.assertIn("could not reload names", str(raised.exception))
 
     def test_the_zone_rows_are_cached_by_revision_and_layout_outside_the_repository(self):
         path = zones.cache_path("r806919.Wizard_1_610")
@@ -2449,6 +2478,121 @@ class PreflightTests(unittest.TestCase):
         with open(os.path.join(paths.APP, "requirements.txt"), "r", encoding="utf-8") as handle:
             pinned = {line.split("==")[0].strip().lower() for line in handle if line.strip() and not line.startswith("#")}
         self.assertEqual({distribution.lower() for _module, distribution in preflight.PACKAGES}, pinned)
+
+
+class PlayServer:
+    def __init__(self, program, defaults, folder, host, port, databases, settings=()):
+        self.name = os.path.basename(program).split(".")[0]
+        self.port = port
+        self.settings = list(settings)
+        self.living = False
+
+    def start(self, timeout=300):
+        PlayServer.events.append(f"start {self.name}")
+        self.living = True
+        return f"{self.name} ready"
+
+    def alive(self):
+        return self.living
+
+    def ensure_account(self, user, password):
+        PlayServer.events.append(f"account {user}")
+        return f"{user} created"
+
+    def reload(self, target):
+        PlayServer.events.append(f"reload {target}")
+        return f"{target} is now generation 2"
+
+    def stop(self):
+        PlayServer.events.append(f"stop {self.name}")
+        self.living = False
+        return "stopped"
+
+
+class PlayDatabases:
+    address = "127.0.0.1:3307"
+    names = {"login": "ambrose_driver_play_login", "characters": "ambrose_driver_play_characters", "world": "ambrose_driver_play_world"}
+
+    def __init__(self, zones_held):
+        self.zones_held = zones_held
+
+    def value(self, kind, query):
+        return self.zones_held
+
+    def info(self, kind):
+        return f"127.0.0.1;3307;ambrose;ambrose;{self.names[kind]}"
+
+
+class PlayTests(TemporaryFolder):
+    OPTIONS = {"db_host": "127.0.0.1", "db_port": 3307, "db_user": "ambrose", "db_password": "ambrose", "host": "127.0.0.2",
+               "port": 12200, "game_port": 12533, "server_timeout": 5, "user": "player", "password": "secret"}
+    ENVIRONMENT = {"binaries": "bin", "server_defaults": "loginserver.conf.dist", "install": "install", "revision": "r806919"}
+
+    def session(self, zones_held=12, **options):
+        PlayServer.events = []
+        launched = []
+        session = play.PlaySession(dict(self.OPTIONS, **options), self.ENVIRONMENT, where=self.folder, login_class=PlayServer,
+                                   game_class=PlayServer, databases=PlayDatabases(zones_held),
+                                   launch=lambda *arguments: launched.append(arguments) or "client started")
+        return session, launched
+
+    def test_the_login_server_rereads_its_rows_after_the_game_server_has_written_them(self):
+        session, _launched = self.session()
+        session.start()
+        self.assertEqual(PlayServer.events, ["start loginserver", "account player", "start gameserver", "reload names", "reload creation"])
+        self.assertEqual(play.read_state(self.folder)["port"], 12200)
+
+    def test_a_stop_from_another_play_ends_the_session_and_stops_the_game_server_first(self):
+        session, launched = self.session()
+        play.threading.Timer(0.2, lambda: open(play.stop_path(self.folder), "w").close()).start()
+        self.assertEqual(session.execute(read=lambda: (_ for _ in ()).throw(EOFError())), 0)
+        self.assertEqual(PlayServer.events[-2:], ["stop gameserver", "stop loginserver"])
+        self.assertEqual(launched, [("bin", "127.0.0.2", 12200, None, None, None)])
+        self.assertIsNone(play.read_state(self.folder))
+        self.assertFalse(os.path.exists(play.stop_path(self.folder)))
+
+    def test_typing_stop_ends_the_session(self):
+        session, _launched = self.session()
+        self.assertEqual(session.execute(client=False, read=iter(["look", "stop"]).__next__), 0)
+        self.assertEqual(PlayServer.events[-2:], ["stop gameserver", "stop loginserver"])
+
+    def test_a_server_that_stops_by_itself_ends_the_session(self):
+        session, _launched = self.session()
+        play.threading.Timer(0.2, lambda: setattr(session.game, "living", False)).start()
+        self.assertEqual(session.execute(client=False, read=lambda: (_ for _ in ()).throw(EOFError())), 0)
+        self.assertEqual(PlayServer.events[-1], "stop loginserver")
+
+    def test_an_account_without_a_password_is_refused_and_nothing_is_left_running(self):
+        session, launched = self.session(password=None)
+        self.assertEqual(session.execute(read=lambda: "stop"), 1)
+        self.assertEqual(PlayServer.events, ["start loginserver", "stop gameserver", "stop loginserver"])
+        self.assertEqual(launched, [])
+
+    def test_an_empty_world_gets_the_cached_zone_rows_and_a_full_one_is_left_alone(self):
+        session, _launched = self.session(zones_held=0)
+        applied = []
+        session.databases.apply_sql = lambda kind, path: applied.append((kind, path)) or "applied"
+        with mock.patch.object(zones, "ensure", return_value=("rows.sql", "read")) as ensure:
+            self.assertEqual(session.zone_rows(), "applied")
+            ensure.assert_called_once()
+        self.assertEqual(applied, [("world", "rows.sql")])
+        session.databases.zones_held = 7
+        self.assertEqual(session.zone_rows(), "the world database already holds 7 zone(s)")
+
+    def test_stop_waits_until_the_session_has_gone_and_is_a_no_op_without_one(self):
+        self.assertEqual(play.ask_to_stop(self.folder, probe=lambda host, port: True), "no play session is running")
+        with open(play.state_path(self.folder), "w") as handle:
+            json.dump({"host": "127.0.0.2", "port": 12200}, handle)
+        self.assertIsNone(play.running(self.folder, probe=lambda host, port: False))
+        said = play.ask_to_stop(self.folder, probe=lambda host, port: True, sleep=lambda _seconds: os.remove(play.state_path(self.folder)))
+        self.assertEqual(said, "the play session on 127.0.0.2:12200 stopped")
+        self.assertTrue(os.path.exists(play.stop_path(self.folder)))
+
+    def test_the_play_databases_are_its_own_and_never_a_run_s(self):
+        self.assertTrue(play.PREFIX.startswith(database.PREFIX))
+        self.assertNotEqual(play.PREFIX + "_", cli.DEFAULT_DB[4] + "_")
+        arguments = cli.build_parser().parse_args(["play", "--no-client"])
+        self.assertEqual((arguments.port, arguments.game_port, arguments.client_start), (cli.DEFAULT_PLAY_PORT, cli.DEFAULT_PLAY_GAME_PORT, False))
 
 
 if __name__ == "__main__":

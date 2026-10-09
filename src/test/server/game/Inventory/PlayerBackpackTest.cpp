@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests a wizard's backpack: its capacity is the slots every backpack has plus the extra slots, never below zero; an add to a full backpack is refused without spending an item id or giving a row to store, and room made by more slots lets the next add through; added items take ids from the item line and slots in arrival order, which a backpack read from rows in any order keeps; and an item is trashed only when the backpack holds it, of the template named, and unlocked.
+ * Tests a wizard's backpack: its capacity is the slots every backpack has plus the extra slots, never below zero; an add to a full backpack is refused without spending an item id or giving a row to store, and room made by more slots lets the next add through; added items take ids from the item line and slots in arrival order, which a backpack read from rows in any order keeps; and an item is trashed only when the backpack holds it, of the template named, and unlocked, and only an item it holds locks, with the lock in the top bit of its pattern word.
  */
 
 #include "ObjectGuid.h"
@@ -78,4 +78,20 @@ TEST(PlayerBackpackTest, AnItemIsTrashedOnlyWhenHeldOfTheNamedTemplateAndUnlocke
     ASSERT_TRUE(backpack.Remove(10));
     EXPECT_EQ(backpack.Find(10), nullptr);
     EXPECT_EQ(backpack.Size(), 1u);
+}
+
+TEST(PlayerBackpackTest, OnlyAHeldItemLocksAndItsPatternWordCarriesTheLockInTheTopBit)
+{
+    CharacterItem patterned = Stored(10, 1, 0);
+    patterned.Pattern = 3;
+    PlayerBackpack backpack = PlayerBackpack::FromStored({ patterned });
+    EXPECT_EQ(backpack.ToggleLock(99), BackpackLockResult::NotOwned);
+    EXPECT_EQ(PlayerBackpack::LockWord(*backpack.Find(10)), 3u);
+    EXPECT_EQ(backpack.ToggleLock(10), BackpackLockResult::Locked);
+    EXPECT_TRUE(backpack.Find(10)->Locked);
+    EXPECT_EQ(PlayerBackpack::LockWord(*backpack.Find(10)), PlayerBackpack::LockBit | 3u);
+    EXPECT_EQ(backpack.CanTrash(10, 1), BackpackTrashResult::Locked);
+    EXPECT_EQ(backpack.ToggleLock(10), BackpackLockResult::Unlocked);
+    EXPECT_EQ(PlayerBackpack::LockWord(*backpack.Find(10)), 3u);
+    EXPECT_EQ(backpack.CanTrash(10, 1), BackpackTrashResult::Trashed);
 }

@@ -73,7 +73,7 @@ TEST(GameMessageTableClientTest, EveryWorldMessageHasExactlyOneRuleAndTheEntryCh
     }
 
     for (std::string_view const tag : { "MSG_GETTIMEDACCESSPASSES", "MSG_GETSUBSCRIBERONLYITEMS", "MSG_CROWNBALANCE", "MSG_DONESHOPPING", "MSG_LOGCLIENTRESOLUTION",
-             "MSG_LOGPATCHCLIENTPATCHTIME", "MSG_QUESTFINDEROPTION" })
+             "MSG_LOGPATCHCLIENTPATCHTIME", "MSG_QUESTFINDEROPTION", "MSG_ITEMLOCK" })
     {
         MessageInfoPtr const info = loaded.Registry.Find(GameMessages::WizardService, tag);
         ASSERT_NE(info, nullptr) << tag;

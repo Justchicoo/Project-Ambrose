@@ -1,16 +1,16 @@
 {
-  "title": "A game master's .additem puts a hat in the backpack with its name in the tooltip, the client's own trash takes it out, and it stays gone after a relog",
+  "title": "A wizard turns on Backpack Item Lock in the client's own settings, locks a hat with the lock button, the hat shows the lock icon and cannot be trashed, stays locked after a relog, and is unlocked and trashed",
   "include": "parts/common.json",
   "notes": [
-    "A level 5 Fire wizard with an empty backpack enters Ravenwood as a game master. The backpack B opens shows 0 of the 100 items",
-    "Inventory.Slots gives, which the server writes into the m_numItemsAllowed of the wizard's ClientWizInventoryBehavior.",
-    "'.additem 1652259' typed in chat gives the wizard Crowns-S58-Hats-L110-BS-008-01, the Balance hat the client names Cute Fairy Kei",
-    "Broadbrim. The server stores it and sends GAME MSG_INVENTORYBEHAVIOR_ADDITEM, which the client's ClientInventoryBehavior handles,",
-    "with the item unwrapped in SerializedItem; the backpack shows its row and 1 of 100, and holding the pointer on the row shows the",
-    "tooltip with its name. Choosing the row, the trash can and YES in the client's own dialog sends MSG_TRASHINVENTORYITEM with the",
-    "item's global id, and the server deletes it and sends MSG_INVENTORYBEHAVIOR_REMOVEITEM.",
-    "The client is quit and started again, and the wizard must enter with an empty backpack and no item row left.",
-    "Locking is backpack-lock.json's run, since the lock button shows only once the client's Backpack Item Lock setting is on."
+    "A level 5 Fire wizard enters Ravenwood as a game master and '.additem 1652259' gives it the Cute Fairy Kei Broadbrim hat, as in",
+    "backpack-add-and-trash.json. The backpack shows no lock button until the wizard's WizGameStats.m_showItemLock is on, which is the",
+    "client's own Backpack Item Lock setting on the fourth gameplay page: OK sends WIZARD MSG_ITEMLOCK, which the server stores in",
+    "character_stats.show_item_lock and sends back in m_showItemLock on every entry. The lock button then shows between the socket and",
+    "Equip buttons, which moves the trash can one place right. Pressing it sends MSG_REQUESTTOGGLELOCKITEM with GlobalID 0 and IsLocked",
+    "0; the server toggles its own stored lock and answers with the item's pattern word with bit 31 set, and the client draws a padlock",
+    "beside the row and greys out the trash can. The client is quit and started again, and the hat must still be locked. The lock button",
+    "unlocks it, and the trash can and YES take it out for good.",
+    "Opening the settings sends four option messages the server does not handle yet, which the scenario expects."
   ],
   "requires": {
     "gameserver": true
@@ -248,16 +248,56 @@
     },
     {
       "action": "shot",
-      "name": "the hat's icon and name in the backpack, 1 of 100",
-      "file": "backpack-with-hat",
+      "name": "the hat in the backpack before the option is on, with no lock button",
+      "file": "backpack-no-lock-button",
       "settle": 3
     },
     {
-      "action": "hover",
-      "name": "the hat's tooltip names it",
-      "target": "backpack_first_item",
-      "file": "hat-tooltip",
+      "action": "click",
+      "name": "open the settings from the backpack",
+      "target": "backpack_settings_tab"
+    },
+    {
+      "action": "click",
+      "name": "open the fourth gameplay page",
+      "target": "settings_gameplay_4"
+    },
+    {
+      "action": "click",
+      "name": "turn Backpack Item Lock to YES",
+      "target": "option_item_lock_next"
+    },
+    {
+      "action": "shot",
+      "name": "Backpack Item Lock reads YES",
+      "file": "option-item-lock-yes",
       "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "accept the settings",
+      "target": "settings_ok",
+      "attempts": 3,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "Session \\d+ turned wizard {wizard_guid}'s backpack item lock (\\w+)",
+        "timeout": 15,
+        "expect": "on",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_db",
+      "name": "the option is stored with the wizard",
+      "query": "SELECT `show_item_lock` FROM `character_stats` WHERE `guid` = {wizard_guid}",
+      "timeout": 15,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the backpack with the option on",
+      "vk": "0x42"
     },
     {
       "action": "click",
@@ -265,46 +305,59 @@
       "target": "backpack_first_item"
     },
     {
-      "action": "click",
-      "name": "press the trash can",
-      "target": "backpack_trash"
-    },
-    {
       "action": "shot",
-      "name": "the client asks whether to trash the hat",
-      "file": "trash-confirm",
+      "name": "the lock button shows beside Equip and the trash can is lit",
+      "file": "lock-button-shown",
       "settle": 2
     },
     {
       "action": "click",
-      "name": "answer YES",
-      "target": "trash_confirm_yes",
+      "name": "press the lock button",
+      "target": "backpack_lock",
       "attempts": 3,
       "until": {
         "action": "wait_game_log",
-        "pattern": "took item {hat_guid} of template 1652259 from wizard {wizard_guid}, and its backpack holds (\\d+) item\\(s\\)",
+        "pattern": "Session \\d+ locked item ({hat_guid}) of wizard {wizard_guid}",
         "timeout": 15,
-        "expect": "0",
+        "expect": "{hat_guid}",
         "record": true
       }
     },
     {
       "action": "wait_db",
-      "name": "the hat's row is gone",
-      "query": "SELECT COUNT(*) FROM `item_instance` WHERE `owner` = {wizard_guid}",
+      "name": "the lock is stored on the hat",
+      "query": "SELECT `locked` FROM `item_instance` WHERE `guid` = {hat_guid} AND `owner` = {wizard_guid}",
       "timeout": 15,
-      "expect": "0",
+      "expect": "1",
       "record": true
     },
     {
       "action": "shot",
-      "name": "the backpack after the trash",
-      "file": "backpack-after-trash",
-      "settle": 3
+      "name": "the lock icon beside the hat and the trash can greyed out",
+      "file": "hat-locked",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "press the greyed trash can",
+      "target": "backpack_trash_beside_lock"
+    },
+    {
+      "action": "shot",
+      "name": "no trash question for the locked hat",
+      "file": "locked-no-trash-question",
+      "settle": 2
+    },
+    {
+      "action": "wait_db",
+      "name": "the locked hat is still held",
+      "query": "SELECT COUNT(*) FROM `item_instance` WHERE `guid` = {hat_guid} AND `owner` = {wizard_guid}",
+      "timeout": 5,
+      "expect": "1"
     },
     {
       "action": "key",
-      "name": "close the backpack after the trash",
+      "name": "close the backpack with the locked hat",
       "vk": "0x42"
     },
     {
@@ -388,7 +441,7 @@
     },
     {
       "action": "wait_game_log",
-      "name": "the wizard enters again with an empty backpack",
+      "name": "the wizard enters again with the hat",
       "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
       "timeout": 120,
       "fail": "cannot enter the world",
@@ -408,22 +461,92 @@
       "vk": "0x42"
     },
     {
+      "action": "click",
+      "name": "choose the hat after relogging",
+      "target": "backpack_first_item"
+    },
+    {
       "action": "shot",
-      "name": "the backpack after relogging holds nothing",
-      "file": "backpack-after-relog",
+      "name": "the hat is still locked after relogging, with the lock button shown and the trash can greyed",
+      "file": "hat-locked-after-relog",
+      "settle": 3
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat is still stored locked",
+      "query": "SELECT `locked` FROM `item_instance` WHERE `guid` = {hat_guid} AND `owner` = {wizard_guid}",
+      "timeout": 5,
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "name": "press the unlock button",
+      "target": "backpack_lock",
+      "attempts": 3,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "Session \\d+ unlocked item ({hat_guid}) of wizard {wizard_guid}",
+        "timeout": 15,
+        "expect": "{hat_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_db",
+      "name": "the unlock is stored",
+      "query": "SELECT `locked` FROM `item_instance` WHERE `guid` = {hat_guid} AND `owner` = {wizard_guid}",
+      "timeout": 15,
+      "expect": "0",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the hat unlocked with the trash can lit again",
+      "file": "hat-unlocked",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "press the trash can",
+      "target": "backpack_trash_beside_lock"
+    },
+    {
+      "action": "shot",
+      "name": "the client asks whether to trash the hat",
+      "file": "trash-confirm",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "answer YES",
+      "target": "trash_confirm_yes",
+      "attempts": 3,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "took item {hat_guid} of template 1652259 from wizard {wizard_guid}, and its backpack holds (\\d+) item\\(s\\)",
+        "timeout": 15,
+        "expect": "0",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat's row is gone",
+      "query": "SELECT COUNT(*) FROM `item_instance` WHERE `owner` = {wizard_guid}",
+      "timeout": 15,
+      "expect": "0",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the backpack after the trash",
+      "file": "backpack-after-trash",
       "settle": 3
     },
     {
       "action": "key",
-      "name": "close the backpack after relogging",
+      "name": "close the backpack after the trash",
       "vk": "0x42"
-    },
-    {
-      "action": "wait_db",
-      "name": "the wizard still owns no item",
-      "query": "SELECT COUNT(*) FROM `item_instance` WHERE `owner` = {wizard_guid}",
-      "timeout": 5,
-      "expect": "0"
     },
     {
       "action": "wait_game_log",
@@ -440,7 +563,7 @@
     },
     {
       "action": "forbid_log",
-      "name": "the game server refused no trash",
+      "name": "the game server refused no trash, because the locked hat's trash can could not be pressed",
       "side": "server",
       "pattern": "refused wizard \\d+'s request to trash"
     }
@@ -461,10 +584,14 @@
     "MSG_REQASKSERVER",
     "MSG_REQUESTCROWNSREWARDSEVENTS",
     "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTPRIVACYOPTIONS",
+    "MSG_REQUESTSHOWPVPOPTION",
     "MSG_REQUESTTSDONEPREPFORMP",
     "MSG_REQUESTTSMARKEDASUNTRAINED",
     "MSG_REQUESTTUTORIALTIPLOG",
     "MSG_SplashEnabled",
-    "MSG_TOURNAMENTLOOTROLLINFO"
+    "MSG_TOURNAMENTLOOTROLLINFO",
+    "MSG_UPDATEREALLOWENDORSEMENT",
+    "MSG_UPDATEREMEMBERLASTREALM"
   ]
 }

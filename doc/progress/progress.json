@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 132,
+    "done": 135,
     "total": 469,
-    "percent": 28.1
+    "percent": 28.8
   },
   "checks": {
-    "done": 1084,
+    "done": 1090,
     "total": 2870,
-    "percent": 37.8
+    "percent": 38.0
   },
   "contributor_track": {
     "merged": 93,
@@ -34,9 +34,9 @@
     {
       "phase": 3,
       "title": "Create list and delete a wizard",
-      "milestones_done": 26,
+      "milestones_done": 27,
       "milestones_total": 28,
-      "checks_done": 168,
+      "checks_done": 171,
       "checks_total": 178
     },
     {
@@ -74,9 +74,9 @@
     {
       "phase": 8,
       "title": "The wizard grows vitals xp spells backpack and gear",
-      "milestones_done": 2,
+      "milestones_done": 4,
       "milestones_total": 14,
-      "checks_done": 49,
+      "checks_done": 52,
       "checks_total": 101
     },
     {
