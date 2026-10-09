@@ -126,7 +126,7 @@ On Ubuntu 24.04:
 
 ```
 sudo apt-get update
-sudo apt-get install -y build-essential cmake ninja-build git curl zip unzip tar pkg-config python3 python3-venv clang docker.io docker-compose-v2
+sudo apt-get install -y build-essential cmake ninja-build ccache git curl zip unzip tar pkg-config python3 python3-venv clang docker.io docker-compose-v2
 sudo usermod -aG docker "$USER"
 git clone https://github.com/microsoft/vcpkg "$HOME/vcpkg"
 "$HOME/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
@@ -141,7 +141,7 @@ cmake --build --preset windows-debug
 ctest --preset windows-debug
 ```
 
-For faster rebuilds on Windows, install ccache (`winget install -e --id Ccache.Ccache`) and build from a "Developer PowerShell for VS" or "x64 Native Tools" prompt with the Ninja presets, which keep a separate tree in `build/windows-msvc-ninja` and only recompile what changed after a rebase or a branch switch:
+The build compiles through ccache whenever it is installed, which the Ubuntu line above does, so a rebuild after a rebase, a branch switch or a merge from main recompiles only the files that changed instead of all of them; an existing build tree picks it up after `cmake --preset <preset>` is run again. For the same on Windows, install ccache (`winget install -e --id Ccache.Ccache`) and build from a "Developer PowerShell for VS" or "x64 Native Tools" prompt with the Ninja presets, which keep a separate tree in `build/windows-msvc-ninja` and only recompile what changed after a rebase or a branch switch:
 
 ```
 cmake --preset windows-msvc-ninja
