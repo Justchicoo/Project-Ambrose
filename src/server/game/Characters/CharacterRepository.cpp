@@ -543,7 +543,8 @@ CharacterRepository::Statement CharacterRepository::PrepareSaveStats(uint64 guid
     statement->SetData(14, stats.PurchasedCustomTeleportEffects[0]);
     statement->SetData(15, stats.PurchasedCustomTeleportEffects[1]);
     statement->SetData(16, stats.PurchasedCustomTeleportEffects[2]);
-    statement->SetData(17, stats.Revision);
+    statement->SetData(17, static_cast<uint8>(stats.ShowItemLock ? 1 : 0));
+    statement->SetData(18, stats.Revision);
     return statement;
 }
 
@@ -567,7 +568,8 @@ std::optional<CharacterStats> CharacterRepository::ReadStats(PreparedResultSet& 
     stats.LevelLocked = row[10].Get<uint32>() != 0;
     stats.PurchasedCustomEmotes = { row[11].Get<uint32>(), row[12].Get<uint32>(), row[13].Get<uint32>() };
     stats.PurchasedCustomTeleportEffects = { row[14].Get<uint32>(), row[15].Get<uint32>(), row[16].Get<uint32>() };
-    stats.Revision = row[17].Get<uint64>();
+    stats.ShowItemLock = row[17].Get<uint32>() != 0;
+    stats.Revision = row[18].Get<uint64>();
     return stats;
 }
 
@@ -687,6 +689,17 @@ CharacterRepository::Statement CharacterRepository::PrepareTrashItem(uint64 guid
         return statement;
     statement->SetData(0, itemGuid);
     statement->SetData(1, guid);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareLockItem(uint64 guid, uint64 itemGuid, bool locked)
+{
+    Statement statement = Prepare(CHAR_UPD_ITEM_LOCK);
+    if (!statement)
+        return statement;
+    statement->SetData(0, static_cast<uint8>(locked ? 1 : 0));
+    statement->SetData(1, itemGuid);
+    statement->SetData(2, guid);
     return statement;
 }
 

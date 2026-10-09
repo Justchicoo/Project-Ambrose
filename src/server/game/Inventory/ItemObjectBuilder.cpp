@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id and template id, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to whichever of the player's behaviors has an m_itemList, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump.
+ * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id, template id and, where the class has one, the pattern word whose top bit the client reads as the lock, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to the player's behavior that has both an m_itemList and an m_numItemsAllowed, since the equipment behavior carries an m_itemList too, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump.
  */
 
 #include "ItemObjectBuilder.h"
 #include "ObjectFields.h"
+#include "PlayerBackpack.h"
 #include "PropertyFiller.h"
 
 #include <fmt/format.h>
@@ -55,6 +56,10 @@ PropertyObjectPtr ItemObjectBuilder::Build(TypeCatalogPtr const& catalog, CoreOb
         .Set("m_templateID.m_full", uint64{ itemTemplate.TemplateId });
     if (!problem.empty())
         return nullptr;
+    if (object->GetClass().FindProperty(PatternProperty))
+        PropertyFiller(*object, problem).Set(PatternProperty, static_cast<int32>(PlayerBackpack::LockWord(item)));
+    if (!problem.empty())
+        return nullptr;
     return object;
 }
 
@@ -70,16 +75,10 @@ bool ItemObjectBuilder::FillBackpack(PropertyObject& player, CoreObjectTypeTable
         return false;
     }
     PropertyValue::List behaviors = *current;
-    PropertyObject* inventory = nullptr;
-    for (PropertyValue& entry : behaviors)
-        if (PropertyObject* const behavior = entry.AsObject(); behavior && behavior->GetClass().FindProperty(ItemListProperty))
-        {
-            inventory = behavior;
-            break;
-        }
+    PropertyObject* const inventory = FindBackpack(behaviors);
     if (!inventory)
     {
-        problem = fmt::format("no behavior of the player object carries {}", ItemListProperty);
+        problem = fmt::format("no behavior of the player object carries {} and {}", ItemListProperty, ItemsAllowedProperty);
         return false;
     }
     PropertyValue::List list;
@@ -102,6 +101,15 @@ bool ItemObjectBuilder::FillBackpack(PropertyObject& player, CoreObjectTypeTable
     return problem.empty();
 }
 
+PropertyObject* ItemObjectBuilder::FindBackpack(PropertyValue::List& behaviors)
+{
+    for (PropertyValue& entry : behaviors)
+        if (PropertyObject* const behavior = entry.AsObject();
+            behavior && behavior->GetClass().FindProperty(ItemListProperty) && behavior->GetClass().FindProperty(ItemsAllowedProperty))
+            return behavior;
+    return nullptr;
+}
+
 bool ItemObjectBuilder::SetItemsAllowed(PropertyObject& player, uint32 capacity, std::string& problem)
 {
     problem.clear();
@@ -113,17 +121,13 @@ bool ItemObjectBuilder::SetItemsAllowed(PropertyObject& player, uint32 capacity,
         return false;
     }
     PropertyValue::List behaviors = *current;
-    auto const inventory = std::find_if(behaviors.begin(), behaviors.end(), [](PropertyValue& entry)
-    {
-        PropertyObject* const behavior = entry.AsObject();
-        return behavior && behavior->GetClass().FindProperty(ItemsAllowedProperty);
-    });
-    if (inventory == behaviors.end())
+    PropertyObject* const inventory = FindBackpack(behaviors);
+    if (!inventory)
     {
         problem = fmt::format("no behavior of the player object carries {}", ItemsAllowedProperty);
         return false;
     }
-    PropertyFiller(*inventory->AsObject(), problem).Set(ItemsAllowedProperty, static_cast<int32>(std::min<uint32>(capacity, std::numeric_limits<int32>::max())));
+    PropertyFiller(*inventory, problem).Set(ItemsAllowedProperty, static_cast<int32>(std::min<uint32>(capacity, std::numeric_limits<int32>::max())));
     PropertyFiller(player, problem).Set("m_inactiveBehaviors", std::move(behaviors));
     return problem.empty();
 }

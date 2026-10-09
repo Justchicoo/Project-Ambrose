@@ -377,3 +377,57 @@ TEST_F(GameSessionStatsSaveTest, LiveGoldAndPotionChangesPersistBeforeLeavingThe
     EXPECT_FLOAT_EQ(persisted.Stats->PotionCharge, 1.0f);
     EXPECT_EQ(persisted.Stats->Revision, 2u);
 }
+
+TEST_F(GameSessionStatsSaveTest, TheBackpackItemLockOptionIsStoredAndComesBackOnTheNextEntry)
+{
+    constexpr uint64 Guid = 1800080103;
+    CharacterSummary character;
+    character.Guid = Guid;
+    character.Account = Guid;
+    character.SchoolId = PlayerStatsFixtures::Fire;
+    character.Level = 5;
+    character.Zone = "WizardCity/WC_Ravenwood";
+    character.ZoneDisplay = "Ravenwood";
+    character.Created = 1;
+    ASSERT_EQ(CharacterRepository::Create(character), CharacterOpResult::Ok);
+    std::optional<PlayerStats> stats = MakeLifecyclePlayerStats(Guid, CharacterStats{});
+    ASSERT_TRUE(stats);
+    EXPECT_FALSE(stats->GetShowItemLock()) << "a new wizard's backpack hides the lock button until the option is turned on";
+
+    std::shared_ptr<GameSession> const session = MakeSession();
+    GameSessionLifecycleTestAccess::PrepareAttachedInWorld(*session, Guid);
+    GameSessionLifecycleTestAccess::SetPlacement(*session, 1, Guid, 1);
+    GameSessionLifecycleTestAccess::SetPlayer(*session, Player(std::move(*stats)));
+
+    GameMessages::ItemLock turnOn;
+    turnOn.Enabled = 1;
+    session->HandleItemLock(turnOn);
+    EXPECT_TRUE(session->GetStats()->GetShowItemLock());
+
+    CharacterStatsLoad persisted;
+    for (int attempt = 0; attempt < 100; ++attempt)
+    {
+        persisted = CharacterRepository::LoadStats(Guid);
+        if (persisted.Stats && persisted.Stats->ShowItemLock)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(persisted.Stats);
+    EXPECT_TRUE(persisted.Stats->ShowItemLock) << "the option is still on when the wizard enters again";
+    std::optional<PlayerStats> const entering = MakeLifecyclePlayerStats(Guid, *persisted.Stats);
+    ASSERT_TRUE(entering);
+    EXPECT_TRUE(entering->GetShowItemLock());
+
+    GameMessages::ItemLock turnOff;
+    session->HandleItemLock(turnOff);
+    EXPECT_FALSE(session->GetStats()->GetShowItemLock());
+    for (int attempt = 0; attempt < 100; ++attempt)
+    {
+        persisted = CharacterRepository::LoadStats(Guid);
+        if (persisted.Stats && !persisted.Stats->ShowItemLock)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(persisted.Stats);
+    EXPECT_FALSE(persisted.Stats->ShowItemLock);
+}

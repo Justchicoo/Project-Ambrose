@@ -368,6 +368,7 @@ TEST_F(CharacterRepositoryDatabaseTest, AWizardsStatsAreMissingUntilSavedAndThen
     stats.LevelLocked = true;
     stats.PurchasedCustomEmotes = { 0x1u, 0x80000000u, 0xA5A55A5Au };
     stats.PurchasedCustomTeleportEffects = { 0x2u, 0x40000000u, 0x5A5AA5A5u };
+    stats.ShowItemLock = true;
     stats.Revision = 1;
     ASSERT_EQ(CharacterRepository::SaveStats(301, stats), CharacterOpResult::Ok);
     CharacterStatsLoad const saved = CharacterRepository::LoadStats(301);

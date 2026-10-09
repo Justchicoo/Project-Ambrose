@@ -21,6 +21,7 @@ public:
     static constexpr std::string_view SerializedItemField = "SerializedItem";
     static constexpr std::string_view ItemListProperty = "m_itemList";
     static constexpr std::string_view ItemsAllowedProperty = "m_numItemsAllowed";
+    static constexpr std::string_view PatternProperty = "m_pattern";
 
     ItemObjectBuilder() = delete;
 
@@ -29,6 +30,7 @@ public:
     static bool FillBackpack(PropertyObject& player, CoreObjectTypeTable const& types, ItemTemplateStore const& templates, std::vector<CharacterItem> const& items,
         std::vector<uint64>& missing, std::string& problem);
     static bool SetItemsAllowed(PropertyObject& player, uint32 capacity, std::string& problem);
+    static PropertyObject* FindBackpack(PropertyValue::List& behaviors);
     static std::optional<std::string> Encode(std::string_view message, PropertyObject const& object, CoreObjectTypeTable const& types, std::string& problem);
 };
 
