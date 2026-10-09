@@ -23,7 +23,8 @@
   ],
   "server_log_allowed": [
     "character_create_school holds no school, so no wizard can be created until it does",
-    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added",
+    "zone_teleport was not reloaded and generation 0 goes on serving: WizardCity/WC_Hub trigger 'Lost door' leads to Nowhere/NoSuchZone, which the zones do not hold"
   ],
   "wizard": {
     "school": 2343174,
@@ -479,6 +480,32 @@
       "name": "the wizard arrives through the house's way out",
       "file": "out-of-headmistress-house",
       "settle": 3
+    },
+    {
+      "action": "game_command",
+      "name": ".zone teleports lists the Commons' doors and counts those with no destination",
+      "command": "zone teleports WizardCity/WC_Hub",
+      "pattern": "WizardCity/WC_Hub has (\\d+) door\\(s\\), (\\d+) with no destination",
+      "timeout": 20
+    },
+    {
+      "action": "db_exec",
+      "name": "a row naming a missing zone is added",
+      "database": "world",
+      "statement": "INSERT INTO `zone_teleport` (`zone`, `trigger_name`, `dest_zone`, `dest_location`, `transition_id`, `same_zone`) VALUES ('WizardCity/WC_Hub', 'Lost door', 'Nowhere/NoSuchZone', '', 0, 0)"
+    },
+    {
+      "action": "game_command",
+      "name": ".reload zone_teleport refuses the missing zone and keeps the old doors",
+      "command": "reload zone_teleport",
+      "pattern": "zone_teleport was not reloaded and generation (\\d+) goes on serving",
+      "timeout": 30
+    },
+    {
+      "action": "db_exec",
+      "name": "the row naming a missing zone is taken out",
+      "database": "world",
+      "statement": "DELETE FROM `zone_teleport` WHERE `zone` = 'WizardCity/WC_Hub' AND `trigger_name` = 'Lost door'"
     },
     {
       "action": "db_exec",
