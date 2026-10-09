@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What a failed sign-in costs: failures are counted against the account, and separately against the account and the address together, over a window that ends on its own; only failures count, so no amount of signing in successfully buys an attacker more guesses, and a success clears only the counts for that account, so guessing at one account from an address is not forgiven by signing in to another from the same address. A door that names no account, such as a sign-in link, counts against the address alone, in counts of its own kept apart from every account's, which no success ever clears.
+ * What a failed sign-in costs: failures are counted against the account, and separately against the account and the address together, over a window that ends on its own; only failures count, so no amount of signing in successfully buys an attacker more guesses, and a success clears only the counts for that account, so guessing at one account from an address is not forgiven by signing in to another from the same address. A door that names no account, such as a sign-in link, counts against the address alone, in counts of its own kept apart from every account's, which no success ever clears. How many failures an account has in its current window can be asked, for the captcha that follows repeated failures.
  */
 
 #ifndef AMBROSE_PANELSIGNIN_H
@@ -44,6 +44,7 @@ public:
 
     PanelSignInVerdict Check(std::string_view username, std::string_view address);
     PanelSignInVerdict CheckAddress(std::string_view address);
+    uint32 RecentFailures(std::string_view username) const;
     void Failed(std::string_view username, std::string_view address);
     void FailedAtAddress(std::string_view address);
     void Succeeded(std::string_view username, std::string_view address);
