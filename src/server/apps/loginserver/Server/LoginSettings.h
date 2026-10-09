@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login rules read from configuration, which each authentication attempt, character list and idle check takes a snapshot of: the name the login server shows, revision enforcement, failed-attempt limits and lockouts, what a second login to an online account does, how long session keys last, how many wizards an account may hold and whether it may name them itself, when idle clients are dropped, and how long a shutdown waits for clients to leave.
+ * Login rules read from configuration, which each authentication attempt, character list and idle check takes a snapshot of: the name the login server shows, revision enforcement, failed-attempt limits and lockouts, what a second login to an online account does, how long session keys last, how many wizards an account may hold and whether it may name them itself, when idle clients are dropped, how long a shutdown waits for clients to leave, and whether maintenance refuses accounts below its bypass level and with what reason.
  */
 
 #ifndef AMBROSE_LOGINSETTINGS_H
@@ -58,6 +58,9 @@ struct LoginSettings
     std::chrono::seconds AfkTimeout{ DefaultAfkTimeoutSeconds };
     int8 AfkWarning = DefaultAfkWarning;
     std::chrono::seconds ShutdownGrace{ DefaultShutdownGraceSeconds };
+    bool Maintenance = false;
+    std::string MaintenanceReason;
+    uint8 MaintenanceBypassLevel = 2;
 
     bool AllowsRevision(std::string_view revision) const;
 

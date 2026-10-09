@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds, a permanent one the latest end the client reads, and no Reason, and nothing else any TimeStamp, account bans stay hidden behind a wrong password, the attempt limit is read live and locks the address out, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
+ * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds, a permanent one the latest end the client reads, and no Reason, and nothing else any TimeStamp, account bans stay hidden behind a wrong password, the attempt limit is read live and locks the address out, maintenance refuses a player with its reason and no session while a game master signs in and a player signs in once it ends, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
  */
 
 #include "AccountMgr.h"
@@ -284,6 +284,58 @@ TEST_F(AuthHandlerDatabaseTest, TheAttemptLimitIsReadLiveAndLocksTheAddressOut)
     LoginClient third = _server->Connect();
     SendAuthen(third, Credentials(third, "Wizard", "hunter22"));
     EXPECT_EQ(ExpectAdmitted(third).size(), 44u);
+}
+
+TEST_F(AuthHandlerDatabaseTest, MaintenanceRefusesPlayersButAdmitsGameMasters)
+{
+    LoginSettings settings;
+    settings.MaxAuthAttempts = 100;
+    sLoginMgr.SetSettings(settings);
+    LoginClient signedIn = _server->Connect();
+    SendAuthen(signedIn, Credentials(signedIn, "Wizard", "hunter22"));
+    EXPECT_EQ(ExpectAdmitted(signedIn).size(), 44u);
+    std::shared_ptr<LoginSession> const held = sLoginMgr.FindAccountSession(_accountId);
+    ASSERT_TRUE(held);
+    uint64 const sessionsBefore = Count("SELECT COUNT(*) FROM `account_session`");
+
+    settings.Maintenance = true;
+    settings.MaintenanceReason = "Database upgrade";
+    settings.MaintenanceBypassLevel = 2;
+    sLoginMgr.SetSettings(settings);
+
+    LoginClient player = _server->Connect();
+    SendAuthen(player, Credentials(player, "Wizard", "hunter22"));
+    std::optional<LoginMessages::UserAuthenRsp> const refused = ReadMessage<LoginMessages::UserAuthenRsp>(player);
+    ASSERT_TRUE(refused) << "player refused during maintenance";
+    EXPECT_EQ(refused->Error, AuthResult::Maintenance) << "player refused during maintenance";
+    EXPECT_EQ(refused->Reason, "Database upgrade") << "player sees the maintenance reason";
+    EXPECT_EQ(refused->UserId, 0u);
+    EXPECT_TRUE(refused->Rec1.empty());
+    EXPECT_EQ(Count("SELECT COUNT(*) FROM `account_session`"), sessionsBefore) << "a refused player stores no session";
+    EXPECT_EQ(sLoginMgr.FindAccountSession(_accountId), held) << "entering maintenance leaves the session already signed in holding its account";
+    EXPECT_EQ(held->GetStatus(), SessionStatus::Authenticated);
+    EXPECT_FALSE(ReadDml(*signedIn.Socket, std::chrono::milliseconds(300))) << "the session already signed in is sent nothing";
+
+    settings.MaintenanceReason.clear();
+    sLoginMgr.SetSettings(settings);
+    LoginClient unexplained = _server->Connect();
+    SendAuthen(unexplained, Credentials(unexplained, "Wizard", "hunter22"));
+    std::optional<LoginMessages::UserAuthenRsp> const plain = ReadMessage<LoginMessages::UserAuthenRsp>(unexplained);
+    ASSERT_TRUE(plain);
+    EXPECT_EQ(plain->Error, AuthResult::Maintenance);
+    EXPECT_EQ(plain->Reason, "Maintenance") << "an empty reason sends Maintenance";
+
+    ASSERT_EQ(sAccountMgr.SetSecurityLevel(_accountId, 2), AccountOpResult::Ok);
+    LoginClient gm = _server->Connect();
+    SendAuthen(gm, Credentials(gm, "Wizard", "hunter22"));
+    EXPECT_EQ(ExpectAdmitted(gm).size(), 44u) << "game master signs in during maintenance";
+    ASSERT_EQ(sAccountMgr.SetSecurityLevel(_accountId, 0), AccountOpResult::Ok);
+
+    settings.Maintenance = false;
+    sLoginMgr.SetSettings(settings);
+    LoginClient after = _server->Connect();
+    SendAuthen(after, Credentials(after, "Wizard", "hunter22"));
+    EXPECT_EQ(ExpectAdmitted(after).size(), 44u) << "player signs in after maintenance ends";
 }
 
 TEST_F(AuthHandlerDatabaseTest, DuplicateLoginsKickTheEarlierSessionOrAreRejected)

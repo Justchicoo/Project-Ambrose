@@ -63,7 +63,7 @@ private:
 
     void ContinueAuthentication(std::shared_ptr<AuthAttempt> const& attempt, PreparedQueryResult result);
     void CompleteAuthentication(std::shared_ptr<AuthAttempt> const& attempt, bool committed);
-    void FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close = false, uint64 unbanDate = 0);
+    void FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close = false, uint64 unbanDate = 0, std::string_view reasonOverride = {});
     void AbortAuthentication(AuthAttempt* attempt, std::exception const& failure);
     void RefuseUnsupportedAuthentication(std::string_view tag);
     void ContinueValidation(std::shared_ptr<ValidateAttempt> const& attempt, PreparedQueryResult result);
