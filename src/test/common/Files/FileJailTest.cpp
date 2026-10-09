@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the jail against real folders: an ordinary path resolves to its entry with its kind, size and identity and a missing one says so; a folder link or junction leaving the root is refused naming where it points, and a symbolic link to a file outside is refused where this user may make one; a link that stays inside is refused unless the root's policy follows it, and then the entry carries the path it really reached; a named pipe, a device and a unix socket are refused before anything opens them for reading or writing, which a writer still blocked on the pipe proves; on Windows a short 8.3 name comes back as its long name, so a rule on the long name still applies; a listing reads the folder's own handle and marks links and special files unopenable; a read is a window of the file, and a file swapped for another after it was resolved is not read; and a second hard link shows in the link count.
+ * Tests the jail against real folders: an ordinary path resolves to its entry with its kind, size and identity and a missing one says so; a folder link or junction leaving the root is refused naming where it points, and a symbolic link to a file outside is refused where this user may make one; a link that stays inside is refused unless the root's policy follows it, and then the entry carries the path it really reached; a named pipe, a device and a unix socket are refused before anything opens them for reading or writing, which a writer still blocked on the pipe proves; on Windows a short 8.3 name comes back as its long name, so a rule on the long name still applies; a listing reads the folder's own handle and marks links and special files unopenable; a read is a window of the file, and a file swapped for another after it was resolved is not read; a second hard link shows in the link count; and a rename lands beside or inside another folder without replacing what is there unless asked, a removal takes a file or an empty folder, and both refuse an entry that was swapped after it was resolved.
  */
 
 #include "FileJail.h"
@@ -322,4 +322,66 @@ TEST_F(FileJailTest, CountsASecondHardLink)
     std::string problem;
     ASSERT_TRUE(Ambrose::FileJail::IdentityOf(_root / "one.txt", identity, problem)) << problem;
     EXPECT_TRUE(identity.Same(shared->Stat.Identity));
+}
+
+TEST_F(FileJailTest, RenameMovesAnEntryAndReplacesOnlyWhenAsked)
+{
+    WriteFile(_root / "a" / "one.txt", "first");
+    WriteFile(_root / "b" / "two.txt", "second");
+    Ambrose::JailError error;
+    std::optional<Ambrose::JailEntry> const source = Resolve("a/one.txt", error);
+    std::optional<Ambrose::JailEntry> const target = Resolve("b", error);
+    ASSERT_TRUE(source.has_value() && target.has_value()) << error.Message;
+    EXPECT_FALSE(Ambrose::FileJail::Rename(*source, *target, "two.txt", false, error));
+    EXPECT_EQ(error.Failure, Ambrose::JailFailure::Conflict);
+    EXPECT_EQ(error.Code, "exists");
+    EXPECT_TRUE(std::filesystem::exists(_root / "a" / "one.txt"));
+
+    Ambrose::JailError moved;
+    EXPECT_TRUE(Ambrose::FileJail::Rename(*source, *target, "three.txt", false, moved)) << moved.Message << ": " << moved.Resolved;
+    EXPECT_FALSE(std::filesystem::exists(_root / "a" / "one.txt"));
+    EXPECT_TRUE(std::filesystem::exists(_root / "b" / "three.txt"));
+
+    Ambrose::JailError again;
+    std::optional<Ambrose::JailEntry> const next = Resolve("b/three.txt", again);
+    ASSERT_TRUE(next.has_value()) << again.Message;
+    EXPECT_TRUE(Ambrose::FileJail::Rename(*next, *target, "two.txt", true, again)) << again.Message;
+    std::ifstream stream(_root / "b" / "two.txt", std::ios::binary);
+    std::string contents((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(contents, "first");
+}
+
+TEST_F(FileJailTest, RenameRefusesAnEntrySwappedAfterItWasResolved)
+{
+    WriteFile(_root / "swap.txt", "original");
+    WriteFile(_root / "keep.txt", "other");
+    Ambrose::JailError error;
+    std::optional<Ambrose::JailEntry> const source = Resolve("swap.txt", error);
+    std::optional<Ambrose::JailEntry> const target = Resolve("", error);
+    ASSERT_TRUE(source.has_value() && target.has_value()) << error.Message;
+    std::filesystem::remove(_root / "swap.txt");
+    std::filesystem::rename(_root / "keep.txt", _root / "swap.txt");
+    Ambrose::JailError failure;
+    EXPECT_FALSE(Ambrose::FileJail::Rename(*source, *target, "moved.txt", false, failure));
+    EXPECT_EQ(failure.Code, "changed");
+    EXPECT_TRUE(std::filesystem::exists(_root / "swap.txt"));
+    EXPECT_FALSE(std::filesystem::exists(_root / "moved.txt"));
+}
+
+TEST_F(FileJailTest, RemoveTakesAFileOrAnEmptyFolderAndNothingElse)
+{
+    WriteFile(_root / "full" / "inside.txt", "x");
+    std::filesystem::create_directories(_root / "empty");
+    Ambrose::JailError error;
+    std::optional<Ambrose::JailEntry> const full = Resolve("full", error);
+    std::optional<Ambrose::JailEntry> const empty = Resolve("empty", error);
+    std::optional<Ambrose::JailEntry> const file = Resolve("full/inside.txt", error);
+    ASSERT_TRUE(full.has_value() && empty.has_value() && file.has_value()) << error.Message;
+    Ambrose::JailError refused;
+    EXPECT_FALSE(Ambrose::FileJail::Remove(*full, refused));
+    EXPECT_EQ(refused.Code, "not_empty");
+    EXPECT_TRUE(Ambrose::FileJail::Remove(*empty, refused)) << refused.Message;
+    EXPECT_TRUE(Ambrose::FileJail::Remove(*file, refused)) << refused.Message;
+    EXPECT_FALSE(std::filesystem::exists(_root / "empty"));
+    EXPECT_FALSE(std::filesystem::exists(_root / "full" / "inside.txt"));
 }
