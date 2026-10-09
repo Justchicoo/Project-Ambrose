@@ -68,6 +68,8 @@ TEST(PanelStoreTest, BringsUpTheShippedTablesAndRecordsTheUpdateOnce)
     EXPECT_TRUE(HasTable(store, "audit_event"));
     EXPECT_TRUE(HasTable(store, "audit_subject"));
     EXPECT_TRUE(HasTable(store, "panel_session"));
+    EXPECT_TRUE(HasTable(store, "audit_chain_head"));
+    EXPECT_TRUE(HasTable(store, "panel_audit_outbox"));
     EXPECT_FALSE(store.GetApplied().empty());
     std::vector<std::string> const applied = RecordedNames(store);
     EXPECT_EQ(applied, store.GetApplied());

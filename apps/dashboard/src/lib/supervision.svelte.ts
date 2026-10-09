@@ -15,6 +15,7 @@ import {
     DatabaseUpdatesAnswer,
     OutputAnswer,
     ActivityAnswer,
+    AuditChainAnswer,
     ClientAnswer,
     GraphRangeAnswer,
     GraphsAnswer,
@@ -186,6 +187,10 @@ export function realmsOf(app: string, signal?: AbortSignal) {
 
 export function activityOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "activity"), ActivityAnswer, undefined, signal);
+}
+
+export function auditChain(signal?: AbortSignal) {
+    return request("GET", "api/panel/audit/verify", AuditChainAnswer, undefined, signal);
 }
 
 export function playersOf(app: string, signal?: AbortSignal) {

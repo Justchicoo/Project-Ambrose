@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it serves the dashboard compiled into the program with the same headers a folder gets until Panel.DashboardDir names a folder, which then wins, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, reset, batch, reload or reveal is recorded with who, where, why and how it ended, a dry run not at all and a reveal naming a key with only the keys it showed, a refused change too, but never a value.
+ * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it serves the dashboard compiled into the program with the same headers a folder gets until Panel.DashboardDir names a folder, which then wins, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, reset, batch, reload or reveal is recorded with who, where, why and how it ended, a dry run not at all and a reveal naming a key with only the keys it showed, a refused change too, but never a value; and the audit verify route counts the events waiting for the collector and names the first row a changed record breaks the chain at.
  */
 
 #include "AdminClient.h"
@@ -328,6 +328,65 @@ TEST_F(PanelTest, APanelRestartIsRecordedOnceWithItsUserAddressAppAndChainHash)
     EXPECT_EQ(subjects->Text(1), "gameserver");
     EXPECT_FALSE(subjects->Step(error));
     EXPECT_TRUE(error.empty()) << error;
+}
+
+TEST_F(PanelTest, TheAuditVerifyRouteCountsWaitingEventsAndNamesTheFirstBrokenRow)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\nPanel.AuditCollectorUrl = https://collector.invalid/audit\nPanel.AuditCollectorToken = collector-test-token\n"), error)) << error;
+    int64 ownerId = 0;
+    ASSERT_EQ(panel.Users().Create("audit-owner", "a good long password", true, false, &ownerId, error), PanelUserResult::Ok) << error;
+    std::optional<PanelSessionOpened> const ownerSession = panel.Sessions().Open(ownerId, 1, "127.0.0.1", "test", PanelStore::NowEpochMs(), error);
+    ASSERT_TRUE(ownerSession.has_value()) << error;
+    std::string const cookie = panel.Routes().GetBrowserAccess().CookieName + "=" + ownerSession->Secret;
+    AdminClient const client("127.0.0.1", panel.GetPort(), "");
+    auto const verify = [&client, &cookie]
+    {
+        AdminClientRequest request{ "GET", "/api/panel/audit/verify", "", "application/json", "" };
+        request.Headers.emplace_back("Cookie", cookie);
+        request.Headers.emplace_back("Origin", fmt::format("http://127.0.0.1:{}", client.GetPort()));
+        AdminClientResponse const answered = client.Send(request, std::chrono::seconds(10));
+        EXPECT_TRUE(answered.Answered) << answered.Error;
+        EXPECT_EQ(answered.Status, 200) << answered.Body;
+        return nlohmann::json::parse(answered.Body, nullptr, false);
+    };
+
+    nlohmann::json const before = verify();
+    ASSERT_TRUE(before.is_object());
+    int64 const waitingBefore = before.value("pending_events", int64{ -1 });
+    ASSERT_GE(waitingBefore, 0);
+
+    AdminRequest request;
+    request.Method = "POST";
+    request.Path = "/api/apps/gameserver/power";
+    request.RemoteAddress = "203.0.113.40";
+    request.Principal = "user:" + std::to_string(ownerId);
+    AdminResponse const restarted = panel.AuditRequest(request, "gameserver", "app:power.restart", []
+    {
+        return AdminResponse::Json(202, R"({"accepted":true})");
+    });
+    ASSERT_EQ(restarted.Status, 202) << restarted.Body;
+
+    nlohmann::json const after = verify();
+    ASSERT_TRUE(after.is_object());
+    EXPECT_EQ(after.value("pending_events", int64{ -1 }), waitingBefore + 1);
+    EXPECT_TRUE(after.value("collector_enabled", false));
+    EXPECT_TRUE(after.value("valid", false)) << after.dump();
+
+    AuditEvent tamper;
+    tamper.Name = "test:tamper";
+    ASSERT_TRUE(panel.Record(tamper, [&panel](std::string& failure)
+    {
+        return panel.Store().Execute("UPDATE audit_event SET reason = 'altered' WHERE id = 1", failure);
+    }, error)) << error;
+
+    nlohmann::json const broken = verify();
+    ASSERT_TRUE(broken.is_object());
+    EXPECT_FALSE(broken.value("valid", true)) << broken.dump();
+    ASSERT_TRUE(broken.contains("first_invalid_id") && broken["first_invalid_id"].is_number()) << broken.dump();
+    EXPECT_EQ(broken["first_invalid_id"].get<int64>(), 1);
+    EXPECT_GE(broken.value("last_row_id", int64{ 0 }), 2);
 }
 
 TEST_F(PanelTest, ARefusedOutOfScopeDangerousPermissionIsAuditedWithItsReason)
