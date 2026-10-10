@@ -21,6 +21,7 @@
 #include "PanelKeyring.h"
 #include "PanelLinks.h"
 #include "PanelMaintenance.h"
+#include "PanelOpsCalendar.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
 #include "PanelTwoFactor.h"
@@ -166,6 +167,8 @@ private:
     AdminResponse MaintenanceGet(AdminRequest const& request);
     AdminResponse MaintenanceEnter(AdminRequest const& request);
     AdminResponse MaintenanceExit(AdminRequest const& request);
+    void RegisterOpsCalendar();
+    AdminResponse OpsCalendarGet(AdminRequest const& request);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
