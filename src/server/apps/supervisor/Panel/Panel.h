@@ -21,6 +21,7 @@
 #include "PanelKeyring.h"
 #include "PanelLinks.h"
 #include "PanelMaintenance.h"
+#include "PanelPublicStatus.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
 #include "PanelTwoFactor.h"
@@ -119,6 +120,7 @@ public:
     PanelEventSocket& EventSocket() { return *_eventSocket; }
     void SetAppSource(PanelEventSocket::AppSource source);
     void SetAppCall(MaintenanceAppCall call) { _appCall = std::move(call); }
+    void SetPublicSource(PublicStatusSource source) { _publicSource = std::move(source); }
     void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
@@ -166,6 +168,10 @@ private:
     AdminResponse MaintenanceGet(AdminRequest const& request);
     AdminResponse MaintenanceEnter(AdminRequest const& request);
     AdminResponse MaintenanceExit(AdminRequest const& request);
+    void RegisterPublicStatus();
+    AdminResponse PublicStatusGet(AdminRequest const& request);
+    AdminResponse IncidentPost(AdminRequest const& request);
+    AdminResponse IncidentClear(AdminRequest const& request);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
@@ -244,6 +250,9 @@ private:
     PanelEventTickets _tickets;
     std::unique_ptr<PanelEventSocket> _eventSocket;
     MaintenanceAppCall _appCall;
+    PublicStatusSource _publicSource;
+    PublicStatusCache _publicStatusCache;
+    bool _publicStatusEnabled = false;
     AdminServer _listener;
     bool _secure = false;
 };
