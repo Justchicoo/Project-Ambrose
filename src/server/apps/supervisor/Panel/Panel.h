@@ -160,6 +160,11 @@ private:
     void RegisterSignIn();
     void RegisterTwoFactor();
     void RegisterCommandHistory();
+    void RegisterProxy();
+    void WatchProxyHeaders(AdminRequest const& request);
+    void ApplyTrustedProxies();
+    AdminResponse ProxyCheckRoute(AdminRequest const& request);
+    AdminResponse ProxyConfigRoute(AdminRequest const& request);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
@@ -239,6 +244,9 @@ private:
     std::unique_ptr<PanelEventSocket> _eventSocket;
     AdminServer _listener;
     bool _secure = false;
+    std::string _configTrustedProxies;
+    std::mutex _proxyWatchMutex;
+    std::map<std::string, std::chrono::steady_clock::time_point, std::less<>> _proxyWatch;
 };
 
 #endif
