@@ -19,6 +19,7 @@
 | 16.11 | Project-owned type dumper spike (OBJ-20 part 1) | M | 3.03 |
 | 16.12 | Type dump v2 emission and validator (OBJ-20 part 2) | M | 16.11, 3.01 |
 | 16.13 | Player launcher that patches from Ambrose (new) | M | 16.06, 16.08, 3.27 |
+| 16.14 | Windows setup program: install Ambrose like any other program (new) | M | 5.08 |
 
 ## Review notes for this phase
 
@@ -547,3 +548,37 @@ The maintainer's direction on 2026-09-14: WizardLauncher.exe patches the client 
 - A modified KingsIsle executable is never distributed. Redirection comes from data the launcher reads, from Ambrose's own launcher, or, as an experimental opt-in feature planned as a follow-up milestone in this phase, from a patch the user applies locally to their own copy of WizardLauncher.exe (a binary diff, or a hook DLL of Ambrose's own code), never to the pinned development install and at the user's own risk
 - The retail launcher may reach KingsIsle, for example for its news page, before or regardless of its configuration, which leaves the Ambrose launcher path or a local patch
 - Cannot be verified in CI
+
+## 16.14 Windows setup program: install Ambrose like any other program (new)
+
+**Goal:** Somebody who has never built Ambrose downloads one setup file, runs it, and starts the servers from the Start menu, with nothing to compile and nothing else to install first.
+
+**Size:** M. **Depends on:** 5.08
+
+Added on 2026-10-10 at the maintainer's direction, after 5.08's clean Windows run had to install Build Tools, vcpkg and a compile before anything started: "we need a better installation method that allows them to install it like any other program". 5.08's scripts stay the way a contributor builds from source; this is the way everyone else installs. It follows the settled Installer format and Private database rows of Desktop programs and client data in doc/ARCHITECTURE.md, NSIS per user with no administrator and MariaDB bundled, ahead of the panel program 17.183 packages, which can take the same pipeline and MariaDB staging when it lands.
+
+**Acceptance**
+
+- [x] The package carries exactly its content list, the servers, tools, SQL, the installer script, the notices, the MariaDB programs and the Visual C++ runtime, and refuses a client file, a type dump or a stray; its manifest lists every file with its SHA-256; a MariaDB zip off its pin is refused (`apps/packaging/windows/tests/test_package.py`, 12 tests, which also builds the setup with makensis from a fake install)
+- [x] `ambrose.ps1 start` in an installed copy makes its private MariaDB once, on port 3316 and bound to 127.0.0.1, gives it the account with no password prompt, points the apps at it through conf.d, imports the databases and runs the supervisor, and `client` writes the chosen install for every app (`apps/installer/tests/test_installer.py`, PackagedStartTests)
+- [x] `client installs` lists each Wizard101 install found as folder, revision and source, or says there is none (ClientToolTest)
+- [ ] CI builds the setup on a runner from the repository alone, installs it silently, the supervisor reports loginserver, gameserver and patchserver running against the private MariaDB, and it stops and uninstalls, keeping the database until /REMOVEDATA (the windows-setup workflow's smoke step)
+- [ ] A version tag publishes the setup and its SHA-256 as a pre-release, and refuses to when mariadb.json pins no checksum (the workflow's release job on a tag)
+- [ ] Dev-gated: on a clean Windows 11 machine the setup installs with no administrator prompt, fills in the user's own Wizard101 folder, Start Ambrose reaches ready on all three servers with real client data, and the uninstaller keeps and then removes the data as asked. Needs a clean Windows machine
+
+### Detailed spec: Windows setup program
+
+**Deliverables**
+
+- `apps/packaging/windows/package.py`: stages a release `cmake --install` with the installer script, LICENSE and THIRD-PARTY-NOTICES, the MariaDB winx64 zip `mariadb.json` names, checked against the SHA-256 pinned there and the one MariaDB publishes, trimmed to its programs, shared files and plugins, and the Visual C++ runtime DLLs beside every program that loads them; checks the stage against its content list; writes `ambrose-manifest.json` with every file's size and SHA-256 and the uninstall list of exactly those files; runs makensis and writes the setup's SHA-256 beside it
+- `apps/packaging/windows/ambrose-setup.nsi`: installs per user into `%LOCALAPPDATA%\Programs\Project Ambrose` with no administrator; a page for the Wizard101 folder, filled in from `client installs` and checked by `ambrose.ps1 client`, or left empty so the servers search on each start; Start menu shortcuts to start and stop the servers, open the folder and uninstall, an optional desktop shortcut and an optional start at sign-in; an Installed apps entry with version and size; an uninstaller that stops the servers, removes exactly the installed files and keeps the database and settings unless asked, `/REMOVEDATA` when silent
+- `apps/installer/ambrose.ps1` run from an installed copy: `start [-Background]`, `stop`, `status [-WaitReady <seconds>]` and `client [<folder>]`. The private MariaDB lives in `database` in the Ambrose data folder, listens on 127.0.0.1 port 3316 (`AMBROSE_DATABASE_PORT` changes it) so a MariaDB or MySQL already on 3306 is left alone, and its root has no password because nothing but this machine can reach it; the apps reach it through `bin/conf.d/database.conf`, rewritten on every start
+- `client installs`, so the setup offers the same install the servers would pick without a search of its own
+- `.github/workflows/windows-setup.yml`: builds RelWithDebInfo with no tests on a Windows runner, packages, runs the smoke test in `apps/packaging/windows/tests/smoke.ps1` and uploads the setup; a `v*` tag publishes it as a pre-release with `--require-pin`
+
+**Notes**
+
+- Nothing client-derived ships. The first start reads the user's own install exactly as a source build does, which on a slow disk takes a while once and is cached after.
+- The setup is unsigned until the code signing decision's SignPath grant arrives, so SmartScreen warns on first run; the release page carries the SHA-256.
+- Not in this milestone: a Windows service for the supervisor, which needs an administrator and the private MariaDB as a service too, a progress window for the first start, a setup icon, and a Linux package. Each is a follow-up.
+

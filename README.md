@@ -58,7 +58,7 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 
 [doc/ROADMAP.md](doc/ROADMAP.md)'s **Where we are** says exactly which milestones are done, and the [work board](https://justchicoo.github.io/Project-Ambrose/) says what is being built right now and by whom. The plan runs in **17 phases**, each milestone ending in something visible in the real client or the panel.
 
-143 of the 469 milestones are finished. Phases 1, 2, 4 and 6 are complete, phase 3 waits only on the launcher as its own app and phase 5 only on the installer, and quests, a wizard's gear and combat have their groundwork in. Outside contributors have finished twenty-five milestones and landed part of eighteen more. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
+143 of the 470 milestones are finished. Phases 1, 2, 4 and 6 are complete, phase 3 waits only on the launcher as its own app and phase 5 only on the installer, and quests, a wizard's gear and combat have their groundwork in. Outside contributors have finished twenty-five milestones and landed part of eighteen more. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
 
 ## Building
 

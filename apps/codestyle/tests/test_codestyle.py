@@ -140,6 +140,8 @@ class HashFamilyTests(CheckerTestCase):
     def test_systemd_units_refuse_both_comment_forms(self):
         self.assertClean("apps/packaging/ambrose.service", HASH_HEADER + "[Unit]\nDescription=Ambrose\n")
         self.assertIssue("apps/packaging/ambrose.service", HASH_HEADER + "[Unit]\n; note\n", "comment", 4)
+        self.assertClean("apps/packaging/windows/ambrose-setup.nsi", HASH_HEADER + "Name \"Project Ambrose\"\n")
+        self.assertIssue("apps/packaging/windows/ambrose-setup.nsi", HASH_HEADER + "Name \"Project Ambrose\"\n; note\n", "comment", 4)
         self.assertIssue("apps/packaging/ambrose.timer", HASH_HEADER + "[Timer]\n# note\n", "comment", 4)
 
     def test_dist_templates_use_their_inner_file_type(self):

@@ -2,11 +2,36 @@
 
 # Installing Project Ambrose
 
+## Windows: the setup program
+
+To run Ambrose rather than work on it, download `ProjectAmbrose-Setup-<version>.exe` from the
+repository's releases, or from the windows-setup workflow's run for a build between releases, check it
+against the SHA-256 beside it, and run it. It installs for your account alone, with no administrator,
+into `%LOCALAPPDATA%\Programs\Project Ambrose`, and needs no compiler, vcpkg or separate database:
+the servers come built and a private MariaDB comes with them. The setup is unsigned for now, so
+Windows SmartScreen may ask you to confirm with More info, then Run anyway.
+
+- **Wizard101.** The setup fills in the install it finds on this computer; change it if you play from
+  another copy, or leave it empty to let the servers look on each start. Ambrose never downloads the game.
+- **Start and stop.** Start Ambrose in the Start menu starts the database and the supervisor, which runs
+  loginserver, gameserver and patchserver, in a window you can watch; Stop Ambrose stops them
+  and the database. The first start reads your install, which can take a while on a slow disk;
+  later starts are quick. The setup can also start Ambrose in the background whenever you sign in.
+- **Your data.** Accounts and wizards live in a MariaDB in `%LOCALAPPDATA%\ProjectAmbrose\database`,
+  on port 3316 and reachable only from this computer, so a MySQL or MariaDB already on 3306 is left alone.
+  Settings are the `.conf` files in the install's `bin` folder, as for a source build, with the database
+  and the Wizard101 folder in `bin\conf.d`. Uninstalling from Installed apps keeps both unless you tick the
+  box to delete them.
+- **From PowerShell.** `ambrose.ps1` in the install folder runs `start`, `start -Background`, `stop`,
+  `status` and `client <folder>` for the installed copy.
+
+## Building from source
+
 The installer supports Ubuntu 24.04 with GCC and Windows 11 with Visual Studio
 2022. It uses vcpkg for every library, such as OpenSSL, Botan and MariaDB Connector/C. Install CMake
 3.25 or newer and set `VCPKG_ROOT` before starting.
 
-## What a clean machine needs
+### What a clean machine needs
 
 - **Your own Wizard101 install.** The servers read their game data from it and never change it. They find it
   themselves in the usual places; otherwise set `ClientDir` in each server's `.conf`, or `AMBROSE_CLIENT_DIR`.
@@ -14,7 +39,7 @@ The installer supports Ubuntu 24.04 with GCC and Windows 11 with Visual Studio
   configuration names `ambrose` with password `ambrose` on `127.0.0.1:3306`; change the `*DatabaseInfo` lines
   in `dbimport.conf` and the servers' `.conf` files to use another.
 
-## Linux
+### Linux
 
 On Ubuntu, `deps --install` installs GCC, CMake, Ninja, Git and vcpkg into `$HOME/vcpkg`, and
 `--with-database` also installs MariaDB and makes the `ambrose` account the shipped configuration names:
@@ -29,7 +54,7 @@ apps/installer/ambrose.sh db
 apps/installer/ambrose.sh run supervisor
 ```
 
-## Windows
+### Windows
 
 On Windows, `deps -Install` installs whatever is missing through winget: Visual Studio 2022 Build Tools with
 the C++ workload, CMake, Git, and vcpkg into `$env:USERPROFILE\vcpkg`. `-WithDatabase` also installs MariaDB as the

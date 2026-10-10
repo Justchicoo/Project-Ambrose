@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, template names the archive and class of the template an id names and its list finds a recipe in the World-Part.wad its piped path names, types lists the template classes that name themselves by an ObjectName property, strings finds a log message in the client program with the function that reads it, xrefs finds that read, disasm prints the function naming the message it reads, functions finds that function by the name it logs under, vtable prints the table of the class a behavior is built as with the slots only it holds and finds a runtime library class by its run-time type information, decompile prints it as C when AMBROSE_GHIDRA_DIR and AMBROSE_GHIDRA_PROJECT name a Ghidra install and project, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
+# Runs the client tool to check its usage text, that bad usage exits 2 and that installs lists each install found as folder, revision and source or says none was found, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, template names the archive and class of the template an id names and its list finds a recipe in the World-Part.wad its piped path names, types lists the template classes that name themselves by an ObjectName property, strings finds a log message in the client program with the function that reads it, xrefs finds that read, disasm prints the function naming the message it reads, functions finds that function by the name it logs under, vtable prints the table of the class a behavior is built as with the slots only it holds and finds a runtime library class by its run-time type information, decompile prints it as C when AMBROSE_GHIDRA_DIR and AMBROSE_GHIDRA_PROJECT name a Ghidra install and project, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -17,6 +17,20 @@ foreach(arguments IN ITEMS "" "--bogus" "types" "messages" "wad" "template" "str
         message(FATAL_ERROR "client with arguments '${arguments}' exited ${usageResult} instead of 2: ${usageOutput}${usageError}")
     endif()
 endforeach()
+
+execute_process(COMMAND "${APP}" installs extra RESULT_VARIABLE installsUsageResult OUTPUT_VARIABLE installsUsageOutput ERROR_VARIABLE installsUsageError TIMEOUT 30)
+if(NOT installsUsageResult EQUAL 2 OR NOT installsUsageError MATCHES "client installs takes nothing to look for")
+    message(FATAL_ERROR "client installs with something to look for exited ${installsUsageResult} instead of 2: ${installsUsageOutput}${installsUsageError}")
+endif()
+
+execute_process(COMMAND "${APP}" installs RESULT_VARIABLE installsResult OUTPUT_VARIABLE installsOutput ERROR_VARIABLE installsError TIMEOUT 120)
+if(installsResult EQUAL 1)
+    if(NOT installsOutput STREQUAL "" OR NOT installsError MATCHES "no Wizard101 install was found on this machine")
+        message(FATAL_ERROR "client installs found nothing but did not say so: ${installsOutput}${installsError}")
+    endif()
+elseif(NOT installsResult EQUAL 0 OR NOT installsOutput MATCHES "^[^\t\n]+\t[^\t\n]+\t[^\t\n]+\n")
+    message(FATAL_ERROR "client installs exited ${installsResult} without one install per line as folder, revision and source: ${installsOutput}${installsError}")
+endif()
 
 if("$ENV{AMBROSE_CLIENT_DIR}" STREQUAL "" OR "$ENV{AMBROSE_TYPE_DUMP_PATH}" STREQUAL "")
     message(STATUS "client tool test skipped: its client checks need AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH")

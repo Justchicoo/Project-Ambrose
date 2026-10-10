@@ -79,6 +79,8 @@ def classify(relpath):
         ".supp": "linehash",
         ".json": "exempt",
         ".service": "conf",
+        ".nsi": "conf",
+        ".nsh": "conf",
         ".socket": "conf",
         ".timer": "conf",
     }
