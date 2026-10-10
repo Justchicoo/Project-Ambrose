@@ -20,6 +20,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace
@@ -99,6 +100,8 @@ TEST(ServerClassExtractorTest, TheNamedBehaviorIsKeptOnceItsListDecodesAndTheUnn
     ServerClassExtractorOptions options;
     options.Threads = 2;
     options.Progress = [&rounds](uint32 round, std::size_t) { rounds.push_back(round); };
+    std::vector<std::tuple<uint32, std::size_t, std::size_t>> sweeps;
+    options.Sweeping = [&sweeps](uint32 round, std::size_t swept, std::size_t total) { sweeps.emplace_back(round, swept, total); };
     ServerClassExtraction const found = ServerClassExtractor::Run({ path }, served, {}, oracle, names, options);
 
     ASSERT_TRUE(found.Ok()) << found.Errors.front();
@@ -109,6 +112,13 @@ TEST(ServerClassExtractorTest, TheNamedBehaviorIsKeptOnceItsListDecodesAndTheUnn
     EXPECT_EQ(*deck.Properties[1].Container, "List") << "read first as one value, the list raised a size mismatch and was tried again as a list";
     EXPECT_EQ(found.Rounds, 4u) << "propose, find the mismatch, propose the list, prove it";
     EXPECT_EQ(rounds, (std::vector<uint32>{ 1, 2, 3 }));
+    std::vector<std::tuple<uint32, std::size_t, std::size_t>> expected;
+    for (uint32 round = 1; round <= 4; ++round)
+    {
+        expected.emplace_back(round, 0, 1);
+        expected.emplace_back(round, 1, 1);
+    }
+    EXPECT_EQ(sweeps, expected) << "every round says it started and when it swept the last archive, so a caller waiting on a long sweep sees it working";
     EXPECT_EQ(found.UnknownBefore, 2u);
     EXPECT_EQ(found.ObjectsBefore, 10u);
     EXPECT_EQ(found.UnknownAfter, 1u);

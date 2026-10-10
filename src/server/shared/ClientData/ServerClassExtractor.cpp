@@ -31,11 +31,13 @@ namespace
     };
 
     Swept SweepAll(std::vector<std::filesystem::path> const& archives, TypeCatalogPtr const& catalog, unsigned threads, std::vector<std::vector<std::string>> const* only,
-        std::vector<std::vector<std::string>> const* xmlOnly, std::string& error)
+        std::vector<std::vector<std::string>> const* xmlOnly, std::function<void(std::size_t)> const& sweeping, std::string& error)
     {
         Swept swept;
         for (std::size_t at = 0; at < archives.size(); ++at)
         {
+            if (sweeping)
+                sweeping(at);
             if (only && (*only)[at].empty() && (*xmlOnly)[at].empty())
             {
                 swept.UnknownFiles.emplace_back();
@@ -74,6 +76,8 @@ namespace
             for (BindSweepFailure const& failure : report.Failures)
                 swept.Failed.insert(failure.File);
         }
+        if (sweeping)
+            sweeping(archives.size());
         return swept;
     }
 
@@ -108,7 +112,10 @@ ServerClassExtraction ServerClassExtractor::Run(std::vector<std::filesystem::pat
         }
         result.Rounds = round + 1;
         std::string opening;
-        Swept const swept = SweepAll(archives, registry.GetCatalog(), options.Threads, round == 0 ? nullptr : &unknownFiles, round == 0 ? nullptr : &xmlUnknownFiles, opening);
+        std::function<void(std::size_t)> sweeping;
+        if (options.Sweeping)
+            sweeping = [&options, round, total = archives.size()](std::size_t swept) { options.Sweeping(round + 1, swept, total); };
+        Swept const swept = SweepAll(archives, registry.GetCatalog(), options.Threads, round == 0 ? nullptr : &unknownFiles, round == 0 ? nullptr : &xmlUnknownFiles, sweeping, opening);
         if (!opening.empty())
         {
             result.Errors.push_back(std::move(opening));
