@@ -514,9 +514,9 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Fire-only robe on an Ice wizard refused
-- [ ] Occupied slot swaps back to the backpack
-- [ ] Real client: hat changes model; second client sees it; persists
+- [x] Fire-only robe on an Ice wizard refused [PlayerEquipmentTest.AFireOnlyRobeOnAnIceWizardIsRefusedAndStaysInTheBackpack; ItemMgrClientTest.ThePlayersSlotsAndTheItemsRequirementsDecideAnEquip runs the same rule on r806919's robe 1652037 and the player's own slots]
+- [x] Occupied slot swaps back to the backpack [PlayerEquipmentTest.EquippingIntoAnOccupiedSlotMovesTheOldItemBackToTheBackpack, with the swap stored by CharacterRepositoryDatabaseTest.WornItemsMoveBetweenTheBackpackAndTheirSlotAndStayWithTheirOwner]
+- [x] Real client: hat changes model; second client sees it; persists [real client run 20261010-114657 with apps/clientdriver/scenarios/equip-gear.json: two Fire wizards in the Commons, the main one given WC1-Hat-Tier1 by `.additem` and wearing it by a double-click on its row, which the client sends as MSG_EQUIPITEM with the slot Hat; the row took the worn color, the paper doll and the wearer's own view changed hats, and the companion saw the hat in the same hue as the doll and the wearer (232 degrees in all three), the public entry now being the WizardEquippedItemInfo the client's avatar rules read colors from, so neither client logged AvatarTextureOption null; after the main client was quit and started again the hat was still in character_equipment, its row worn and the companion saw it in the same hue, and a double-click put it back in the backpack, which both clients showed. m_itemSlotNameID is the KI string id of the slot name, as the client's own equip handler hashes it; runs 20261010-112856 and 20261010-113449 passed the same way]
 
 ### Detailed spec from WIZ-12: Equip and unequip gear
 
@@ -543,9 +543,9 @@ Players can drag items between backpack and equipment slots, and other players s
 
 **Acceptance**
 
-- [ ] Unit test: equipping a Fire-only robe on an Ice wizard is refused and the item stays in the backpack
-- [ ] Unit test: equipping into an occupied slot moves the old item back to the backpack
-- [ ] Real client: dragging a hat onto the hat slot changes the paper-doll and the 3D model. A second nearby client sees the new hat. It is still equipped after relogging.
+- [x] Unit test: equipping a Fire-only robe on an Ice wizard is refused and the item stays in the backpack [PlayerEquipmentTest.AFireOnlyRobeOnAnIceWizardIsRefusedAndStaysInTheBackpack; ItemMgrClientTest.ThePlayersSlotsAndTheItemsRequirementsDecideAnEquip runs the same rule on r806919's robe 1652037 and the player's own slots]
+- [x] Unit test: equipping into an occupied slot moves the old item back to the backpack [PlayerEquipmentTest.EquippingIntoAnOccupiedSlotMovesTheOldItemBackToTheBackpack, with the swap stored by CharacterRepositoryDatabaseTest.WornItemsMoveBetweenTheBackpackAndTheirSlotAndStayWithTheirOwner]
+- [x] Real client: dragging a hat onto the hat slot changes the paper-doll and the 3D model. A second nearby client sees the new hat. It is still equipped after relogging. [real client run 20261010-114657 with apps/clientdriver/scenarios/equip-gear.json: two Fire wizards in the Commons, the main one given WC1-Hat-Tier1 by `.additem` and wearing it by a double-click on its row, which the client sends as MSG_EQUIPITEM with the slot Hat; the row took the worn color, the paper doll and the wearer's own view changed hats, and the companion saw the hat in the same hue as the doll and the wearer (232 degrees in all three), the public entry now being the WizardEquippedItemInfo the client's avatar rules read colors from, so neither client logged AvatarTextureOption null; after the main client was quit and started again the hat was still in character_equipment, its row worn and the companion saw it in the same hue, and a double-click put it back in the backpack, which both clients showed. m_itemSlotNameID is the KI string id of the slot name, as the client's own equip handler hashes it; runs 20261010-112856 and 20261010-113449 passed the same way; the hat is put on by a double-click on its row, the client's other way of equipping it]
 
 **Risks**
 

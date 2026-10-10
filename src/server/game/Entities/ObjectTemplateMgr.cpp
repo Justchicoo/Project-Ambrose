@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the manifest from a Root.wad opened afresh, so a reload sees the file as it is now, and when it swaps a manifest in closes every archive held open for templates but that Root.wad, which it keeps for the templates Root.wad holds; decodes a template from the archive its manifest entry names as any class derived from CoreTemplate, since recipes, spells and quests are templates as much as game objects are, its behaviors read through the CoreTemplate view and each named by m_behaviorName, a null entry kept as an empty name and an entry whose name is empty left out, as CoreObjectFactory::AddBehavior gives the first an empty slot and the second none, its name the GameObjectTemplate's m_objectName, a SpellTemplate's m_name or else whichever property its class flags ObjectName, and says which step failed and why when one does; the player's template must be a GameObjectTemplate, since a wizard is built from its behaviors. The cache keeps a template only under the manifest it was decoded under, so a decode that finishes after a reload is handed to its caller but not kept, counts a template's memory as the values its object holds, keeps no template larger than the whole budget, and drops the least recently used first. The player's template is read again from its archive opened afresh whenever it reloads, rather than taken from the cache or an archive already open, so it reads the file as it is now.
+ * Reads the manifest from a Root.wad opened afresh, so a reload sees the file as it is now, and when it swaps a manifest in closes every archive held open for templates but that Root.wad, which it keeps for the templates Root.wad holds; decodes a template from the archive its manifest entry names as any class derived from CoreTemplate, since recipes, spells and quests are templates as much as game objects are, its behaviors read through the CoreTemplate view and each named by m_behaviorName, a null entry kept as an empty name and an entry whose name is empty left out, as CoreObjectFactory::AddBehavior gives the first an empty slot and the second none, its name the GameObjectTemplate's m_objectName, a SpellTemplate's m_name or else whichever property its class flags ObjectName, and says which step failed and why when one does; the player's template must be a GameObjectTemplate, since a wizard is built from its behaviors. The cache keeps a template only under the manifest it was decoded under, so a decode that finishes after a reload is handed to its caller but not kept, counts a template's memory as the values its object holds, keeps no template larger than the whole budget, and drops the least recently used first. The player's template is read again from its archive opened afresh whenever it reloads, rather than taken from the cache or an archive already open, so it reads the file as it is now. The equipment template is named by the m_equipmentTemplate of the first of the player's behaviors that carries one and read from ObjectData/<name>.xml in Root.wad, the one EquipmentTemplate the install holds there, which the manifest gives no id; a player's template that names one that cannot be read is refused whole, and one that names none leaves the wizard no slots.
  */
 
 #include "ObjectTemplateMgr.h"
@@ -188,12 +188,61 @@ bool ObjectTemplateMgr::LoadPlayer(std::vector<std::string>& errors)
         errors.push_back(fmt::format("the player's template is {} in {}, a {}, which is not a GameObjectTemplate", location->Path, location->Archive, player->Object->GetClass().Name));
         return false;
     }
+    ObjectTemplate equipment;
+    if (std::optional<std::string> const equipmentName = EquipmentTemplateName(*player->Object))
+    {
+        TemplateLocation const where{ std::string(TemplateManifest::RootArchive), fmt::format("{}{}.xml", EquipmentFolder, *equipmentName) };
+        std::unique_ptr<KiwadArchive> rootOpened;
+        KiwadArchive const* root = archive.get();
+        if (location->Archive != TemplateManifest::RootArchive)
+        {
+            std::filesystem::path const rootPath = gameData / TemplateManifest::RootArchive;
+            rootOpened = KiwadArchive::Open(rootPath, error);
+            if (!rootOpened)
+            {
+                errors.push_back(fmt::format("the player's equipment template is in {}, which cannot be opened: {}", ConfigMgr::PathToUtf8(rootPath), error));
+                return false;
+            }
+            root = rootOpened.get();
+        }
+        KiwadReadResult const equipmentBytes = root->Read(where.Path);
+        if (!equipmentBytes.Succeeded())
+        {
+            errors.push_back(fmt::format("the player's equipment template {} is {} in {}, which cannot be read: {}", *equipmentName, where.Path, where.Archive, equipmentBytes.Error));
+            return false;
+        }
+        std::optional<ObjectTemplate> decoded = Decode(catalog, 0, where, equipmentBytes.Data, error);
+        if (!decoded)
+        {
+            errors.push_back(fmt::format("the player's equipment template {}: {}", *equipmentName, error));
+            return false;
+        }
+        equipment = std::move(*decoded);
+    }
     auto const took = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
-    LOG_INFO(TemplateLog, "Read the player's template {} from {} in {} ms: {} behaviors", player->TemplateId, player->File, took.count(), player->Behaviors.size());
+    LOG_INFO(TemplateLog, "Read the player's template {} from {} in {} ms: {} behaviors, its equipment {}", player->TemplateId, player->File, took.count(), player->Behaviors.size(),
+        equipment.Object ? equipment.File : std::string("named by none of them"));
     auto shared = std::make_shared<ObjectTemplate const>(std::move(*player));
     Keep(PlayerTemplateId, shared, generation);
     _player.Replace(std::move(shared));
+    _playerEquipment.Replace(std::move(equipment));
     return true;
+}
+
+std::optional<std::string> ObjectTemplateMgr::EquipmentTemplateName(PropertyObject const& player)
+{
+    std::optional<CoreTemplateView> const core = CoreTemplateView::From(player);
+    if (!core)
+        return std::nullopt;
+    for (PropertyValue const& entry : core->GetBehaviors())
+    {
+        PropertyObject const* const behavior = entry.AsObject();
+        PropertyValue const* const value = behavior ? behavior->Get(EquipmentTemplateProperty) : nullptr;
+        std::string const* const name = value ? value->GetIf<std::string>() : nullptr;
+        if (name && !name->empty())
+            return *name;
+    }
+    return std::nullopt;
 }
 
 TemplateLookup ObjectTemplateMgr::Lookup(uint32 templateId)
@@ -249,6 +298,7 @@ void ObjectTemplateMgr::Clear()
         _cachedBytes = 0;
     }
     _player.Replace(ObjectTemplate());
+    _playerEquipment.Replace(ObjectTemplate());
     std::lock_guard const lock(_archiveMutex);
     _archives.clear();
 }

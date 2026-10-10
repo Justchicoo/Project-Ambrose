@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A wizard's backpack while it plays: the items it holds in the order they arrived, read from its stored rows, and how many it may hold, the slots the server gives every backpack plus the extra slots it grants; an add to a full backpack is refused before an id is spent, so nothing is made or stored, and an item is trashed only by the wizard that holds it, of the template the client names, and while it is not locked; the wizard that holds an item locks and unlocks it, and the client reads the lock as the top bit of the item's pattern word.
+ * A wizard's backpack while it plays: the items it holds in the order they arrived, read from its stored rows, and how many it may hold, the slots the server gives every backpack plus the extra slots it grants; an add to a full backpack is refused before an id is spent, so nothing is made or stored, and an item is trashed only by the wizard that holds it, of the template the client names, and while it is not locked; the wizard that holds an item locks and unlocks it, and the client reads the lock as the top bit of the item's pattern word; an item taken off returns to the backpack as its newest arrival.
  */
 
 #ifndef AMBROSE_PLAYERBACKPACK_H
@@ -60,6 +60,7 @@ public:
     BackpackAdd Add(uint32 templateId, uint32 quantity, uint32 capacity, GuidGenerator& guids, uint64 now);
     BackpackTrashResult CanTrash(uint64 itemGuid, uint32 templateId) const noexcept;
     std::optional<CharacterItem> Remove(uint64 itemGuid);
+    CharacterItem Put(CharacterItem item);
     BackpackLockResult ToggleLock(uint64 itemGuid) noexcept;
     static uint32 LockWord(CharacterItem const& item) noexcept;
 

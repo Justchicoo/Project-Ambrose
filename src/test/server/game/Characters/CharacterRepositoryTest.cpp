@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema with the updates still pending and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook; and backpack rows, read in the order they arrived with every field, an item trashed only by its owner, its backpack row going with it, and the highest item id kept after the item is gone.
+ * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema with the updates still pending and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook; and backpack rows, read in the order they arrived with every field, an item trashed only by its owner, its backpack row going with it, and the highest item id kept after the item is gone; and worn items, which leave the backpack rows for equipment rows naming their slot, come back to the backpack when a slot gives them back or they are taken off, are never worn by a wizard that does not own them, and go with their item when it is trashed.
  */
 
 #include "CharacterRepository.h"
@@ -494,4 +494,63 @@ TEST_F(CharacterRepositoryDatabaseTest, BackpackItemsRoundTripAreTrashedOnlyByTh
     EXPECT_EQ(CharacterRepository::TrashItem(301, 5000), CharacterOpResult::NotFound);
     ASSERT_EQ(CharacterRepository::LoadInventory(301).Items.size(), 1u);
     EXPECT_EQ(CharacterRepository::GetMaxItemGuid(), 5000u) << "a trashed item's id is not handed out again";
+}
+
+TEST_F(CharacterRepositoryDatabaseTest, WornItemsMoveBetweenTheBackpackAndTheirSlotAndStayWithTheirOwner)
+{
+    std::mt19937 random(20261010);
+    ASSERT_EQ(CharacterRepository::Create(MakeCharacter(random, 311, 41, 1800000311)), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::Create(MakeCharacter(random, 312, 42, 1800000312)), CharacterOpResult::Ok);
+    CharacterEquipmentLoad const bare = CharacterRepository::LoadEquipment(311);
+    ASSERT_EQ(bare.Result, CharacterOpResult::Ok);
+    EXPECT_TRUE(bare.Items.empty());
+    EXPECT_EQ(CharacterRepository::LoadEquipment(999).Result, CharacterOpResult::NotFound);
+
+    CharacterItem hat{ 6000, 1652259, 1, 2, 3, 4, true, 7, 1800000500, 0 };
+    CharacterItem robe{ 6001, 1652037, 1, 0, 0, 0, false, 0, 1800000501, 1 };
+    CharacterItem newHat{ 6002, 1652260, 1, 0, 0, 0, false, 0, 1800000502, 2 };
+    for (CharacterItem const& item : { hat, robe, newHat })
+    {
+        ASSERT_EQ(CharacterRepository::AddItem(311, item), CharacterOpResult::Ok);
+    }
+
+    EXPECT_EQ(CharacterRepository::EquipItem(311, hat, ""), CharacterOpResult::InvalidData);
+    ASSERT_EQ(CharacterRepository::EquipItem(311, hat, "Hat"), CharacterOpResult::Ok);
+    CharacterEquipmentLoad const worn = CharacterRepository::LoadEquipment(311);
+    ASSERT_EQ(worn.Items.size(), 1u);
+    CharacterItem expected = hat;
+    expected.Slot = 0;
+    EXPECT_TRUE(worn.Items.front().Item == expected) << "a worn item keeps every field of its instance";
+    EXPECT_EQ(worn.Items.front().Slot, "Hat");
+    EXPECT_EQ(CharacterRepository::LoadInventory(311).Items.size(), 2u) << "a worn item leaves the backpack";
+
+    CharacterItem returned = hat;
+    returned.Slot = 7;
+    CharacterRepository::CreateTransaction const swap = CharacterRepository::PrepareEquipItem(311, newHat, "Hat", returned);
+    ASSERT_TRUE(swap);
+    ASSERT_TRUE(CharacterDatabase.DirectCommitTransaction(swap));
+    CharacterEquipmentLoad const swapped = CharacterRepository::LoadEquipment(311);
+    ASSERT_EQ(swapped.Items.size(), 1u);
+    EXPECT_EQ(swapped.Items.front().Item.Guid, newHat.Guid);
+    std::vector<CharacterItem> const held = CharacterRepository::LoadInventory(311).Items;
+    ASSERT_EQ(held.size(), 2u);
+    EXPECT_EQ(held.back().Guid, hat.Guid) << "the hat a full slot gives back is in the backpack again, after the robe";
+    EXPECT_EQ(held.back().Slot, 7u);
+
+    CharacterItem takenOff = newHat;
+    takenOff.Slot = 8;
+    CharacterRepository::CreateTransaction const unequip = CharacterRepository::PrepareUnequipItem(311, takenOff);
+    ASSERT_TRUE(unequip);
+    ASSERT_TRUE(CharacterDatabase.DirectCommitTransaction(unequip));
+    EXPECT_TRUE(CharacterRepository::LoadEquipment(311).Items.empty());
+    EXPECT_EQ(CharacterRepository::LoadInventory(311).Items.size(), 3u);
+
+    ASSERT_EQ(CharacterRepository::EquipItem(312, robe, "Robe"), CharacterOpResult::Ok) << "the transaction itself runs";
+    EXPECT_TRUE(CharacterRepository::LoadEquipment(312).Items.empty()) << "a wizard never wears an item it does not own";
+    EXPECT_EQ(CharacterRepository::LoadInventory(311).Items.size(), 3u) << "nor takes it from its owner's backpack";
+
+    ASSERT_EQ(CharacterRepository::EquipItem(311, robe, "Robe"), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::LoadEquipment(311).Items.size(), 1u);
+    EXPECT_EQ(CharacterRepository::TrashItem(311, robe.Guid), CharacterOpResult::Ok);
+    EXPECT_TRUE(CharacterRepository::LoadEquipment(311).Items.empty()) << "a trashed item takes its equipment row with it";
 }

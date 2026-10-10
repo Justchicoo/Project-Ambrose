@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads every item template of the user's own install through the item manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the classes the install holds beside the dump as the game server reads them: every template under ObjectData/ decodes and every item among them loads with no requirement or effect of a class neither describes, as many WizItemTemplates as recorded for the installed revision, r806919's 76679, printed with the other item classes, the memory they take and how long they took; the hat 1652259 is an item under the display key Items_00028316; and in a scratch folder holding a copy of the install's Root.wad with the hat's cost re-encoded, beside read-only links to the other archives that hold ObjectData, the item_template reload swaps in the edited hat under a new generation, and with the install's classes taken away a reload fails naming the class hash it met and keeps the edited set serving.
+ * Reads every item template of the user's own install through the item manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the classes the install holds beside the dump as the game server reads them: every template under ObjectData/ decodes and every item among them loads with no requirement or effect of a class neither describes, as many WizItemTemplates as recorded for the installed revision, r806919's 76679, printed with the other item classes, the memory they take and how long they took; the hat 1652259 is an item under the display key Items_00028316; and in a scratch folder holding a copy of the install's Root.wad with the hat's cost re-encoded, beside read-only links to the other archives that hold ObjectData, the item_template reload swaps in the edited hat under a new generation, and with the install's classes taken away a reload fails naming the class hash it met and keeps the edited set serving; and on r806919 the player's own equipment slots and these item templates decide equips as the client would, the Fire-only robe 1652037 refused to an Ice wizard and worn by a level 1 Fire wizard in the robe slot, and the Balance hat 1652259, which needs level 110, refused to that Fire wizard.
  */
 
 #include "BindFile.h"
@@ -10,9 +10,11 @@
 #include "ItemMgr.h"
 #include "KiwadArchive.h"
 #include "KiwadPatcher.h"
-#include "LogTestDirectory.h"
 #include "LogConfig.h"
+#include "LogTestDirectory.h"
+#include "ObjectGuid.h"
 #include "ObjectTemplateMgr.h"
+#include "PlayerEquipment.h"
 #include "ReloadMgr.h"
 #include "TypeRegistry.h"
 
@@ -187,4 +189,37 @@ TEST_F(ItemMgrClientTest, AnItemEditedInACopyOfTheInstallAppliesOnReloadAndARelo
     EXPECT_TRUE(named) << "the reload names ReqMonsterMagicLevel's hash, which only the install's classes describe";
     EXPECT_EQ(items.GetGeneration(), editedGeneration);
     EXPECT_FLOAT_EQ(items.GetItems()->Find(hatId)->BaseCost, editedCost) << "the set serving before the failed reload keeps serving";
+}
+
+TEST_F(ItemMgrClientTest, ThePlayersSlotsAndTheItemsRequirementsDecideAnEquip)
+{
+    if (!InstalledRevision::Is("r806919"))
+        GTEST_SKIP() << "the robe and hat ids are r806919's";
+    std::vector<std::string> errors;
+    ASSERT_TRUE(sObjectTemplateMgr.LoadPlayer(errors)) << errors.front();
+    std::shared_ptr<ObjectTemplate const> const equipment = sObjectTemplateMgr.GetPlayerEquipment();
+    ASSERT_TRUE(equipment && equipment->Object);
+    std::string problem;
+    std::optional<EquipmentSlots> const slots = EquipmentSlots::Read(*equipment->Object, problem);
+    ASSERT_TRUE(slots) << problem;
+    std::shared_ptr<ItemTemplateStore const> const items = s_items->GetItems();
+
+    CharacterItem robe;
+    robe.Guid = ObjectGuid::ItemBase + 1;
+    robe.TemplateId = 1652037;
+    CharacterItem hat;
+    hat.Guid = ObjectGuid::ItemBase + 2;
+    hat.TemplateId = 1652259;
+    hat.Slot = 1;
+    PlayerBackpack backpack = PlayerBackpack::FromStored({ robe, hat });
+    PlayerEquipment worn;
+
+    EquipWizard const ice("Ice", 50);
+    EXPECT_EQ(worn.Equip(backpack, 100, *slots, *items, ice, robe.Guid, "Robe").Result, EquipResult::RequirementsNotMet);
+    EquipWizard const fire("Fire", 1);
+    EXPECT_EQ(worn.Equip(backpack, 100, *slots, *items, fire, robe.Guid, "Hat").Result, EquipResult::WrongSlot);
+    EXPECT_EQ(worn.Equip(backpack, 100, *slots, *items, fire, hat.Guid, "Hat").Result, EquipResult::RequirementsNotMet);
+    EXPECT_EQ(worn.Equip(backpack, 100, *slots, *items, fire, robe.Guid, "Robe").Result, EquipResult::Equipped);
+    EquipWizard const balance("Balance", 110);
+    EXPECT_EQ(worn.Equip(backpack, 100, *slots, *items, balance, hat.Guid, "Hat").Result, EquipResult::Equipped);
 }

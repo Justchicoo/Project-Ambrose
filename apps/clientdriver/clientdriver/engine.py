@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, Enter is pressed every second to skip what comes before the login window and is pressed as a key, with the window active, for Play while character selection stays on the screen, a click following when two presses two seconds apart do not take, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; the launcher window is read and pressed through UI Automation, a read passing when every pattern matches some text the window shows and a press of Play going on to find the client the launcher starts and its window; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after; a wizard can be teleported to stand a little way from an NPC, facing it, by the game server's .tele npc, so a scenario reaches an NPC without walking.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, Enter is pressed every second to skip what comes before the login window and is pressed as a key, with the window active, for Play while character selection stays on the screen, a click following when two presses two seconds apart do not take, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; the launcher window is read and pressed through UI Automation, a read passing when every pattern matches some text the window shows and a press of Play going on to find the client the launcher starts and its window; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after; a wizard can be teleported to stand a little way from an NPC, facing it, by the game server's .tele npc, so a scenario reaches an NPC without walking; a shot is kept by its name so a later step can say a region of two shots differs or matches, which is how a change one client makes is checked on the other client's screen, or that what changed in two pairs of shots, such as a hat put on as its wearer and a second client see it, has the same color.
 import os
 import re
 import threading
@@ -11,6 +11,8 @@ from .errors import StepFailed
 from .scenario import LITERAL_IN_PATTERNS, fill
 
 MAX_DWELL = 0.5
+HUE_DEGREES = 30
+COLORED_PIXELS = 20
 LAUNCHER_POLL = 0.5
 SEEN_SAMPLE = 8
 
@@ -58,6 +60,7 @@ class Engine:
         self.databases = databases
         self.steps = []
         self.screenshots = []
+        self.kept = {}
         self.notes = []
         self.taken = 0
         self.previous = None
@@ -168,7 +171,39 @@ class Engine:
         if not taken:
             raise StepFailed(f"the screenshot this step asks for could not be written: {self.notes[-1]['note']}")
         self.screenshots[-1]["step"] = step.get("name", name)
+        self.kept[name] = (picture, taken)
         return taken
+
+    def act_compare_shots(self, step):
+        first, first_file = self.kept[step["first"]]
+        second, second_file = self.kept[step["second"]]
+        box = tuple(step["region"])
+        scored = screens.compare(first.crop(box), second.crop(box))
+        fraction = float(step.get("fraction", screens.CHANGE_FRACTION))
+        said = f"{scored['fraction']} of the pixels in {list(box)} match between {first_file} and {second_file}, mean difference {scored['mean']}"
+        if step["expect"] == "differ" and scored["fraction"] >= fraction:
+            raise StepFailed(f"{said}, so they do not differ; a change leaves less than {fraction} matching")
+        if step["expect"] == "match" and scored["fraction"] < fraction:
+            raise StepFailed(f"{said}, so they do not match; a match leaves at least {fraction} matching")
+        return said
+
+    def act_compare_colors(self, step):
+        least = int(step.get("at_least", COLORED_PIXELS))
+        read = []
+        for side in ("first", "second"):
+            (before, before_file), (after, after_file) = (self.kept[name] for name in step[side])
+            box = tuple(step[side + "_region"])
+            hue, colored = screens.changed_hue(before.crop(box), after.crop(box))
+            if colored < least:
+                raise StepFailed(f"only {colored} strongly colored pixel(s) in {list(box)} changed from {before_file} to {after_file}, fewer than the {least} a color is read from")
+            read.append((hue, colored, after_file))
+        apart = screens.hue_distance(read[0][0], read[1][0])
+        degrees = float(step.get("degrees", HUE_DEGREES))
+        said = (f"what changed is hue {read[0][0]} over {read[0][1]} pixel(s) in {read[0][2]} and hue {read[1][0]} over {read[1][1]} pixel(s) in {read[1][2]}, "
+                f"{apart} degrees apart")
+        if apart > degrees:
+            raise StepFailed(f"{said}, more than the {degrees:g} the same color may be")
+        return said
 
     def act_wait_server_log(self, step):
         return self.wait_log(self.server.log, step, self.server.alive)
@@ -503,6 +538,9 @@ class Engine:
         until = step.get("until")
         name = step.get("name", target)
         dwell = min(step.get("dwell", 0.35), MAX_DWELL)
+        clicks = int(step.get("clicks", 1))
+        if clicks not in (1, 2):
+            raise StepFailed("a click presses once, or twice for a double click")
         last = None
         said = "nothing was pressed"
         entered = False
@@ -532,10 +570,10 @@ class Engine:
                     return f"pressed Enter for {target}, and it took late"
                 raise StepFailed(f"the {step['on_screen']} screen is no longer there, so {target} was not pressed")
             if step.get("watch"):
-                (said, active), filmed = self.watch_while(step, lambda: self.client.click(x, y, dwell=dwell), "the press was made")
+                (said, active), filmed = self.watch_while(step, lambda: self.client.click(x, y, dwell=dwell, clicks=clicks), "the press was made")
                 said = f"{said}; {filmed}"
             else:
-                said, active = self.client.click(x, y, dwell=dwell)
+                said, active = self.client.click(x, y, dwell=dwell, clicks=clicks)
             self.current = None
             if until:
                 try:
@@ -548,6 +586,18 @@ class Engine:
             else:
                 last = StepFailed("the client's window never became the active one, so its interface dropped the press")
         raise StepFailed(f"{attempts} press(es) on {target} did not take, the last of them {said}: {last}")
+
+    def act_drag(self, step):
+        start = self.store.references.target_of(step["target"])
+        end = self.store.references.target_of(step["to"])
+        steps = int(step.get("steps", 8))
+        if steps < 1 or steps > 50:
+            raise StepFailed("a drag moves the pointer in 1 to 50 steps")
+        said, active = self.client.drag(start, end, dwell=min(step.get("dwell", 0.35), MAX_DWELL), steps=steps)
+        self.current = None
+        if not active:
+            raise StepFailed(f"the client's window never became the active one, so its interface dropped the drag from {step['target']} to {step['to']}")
+        return f"dragged {step['target']} onto {step['to']}: {said}"
 
     def act_hover(self, step):
         target = step["target"]

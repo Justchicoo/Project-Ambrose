@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id, template id and, where the class has one, the pattern word whose top bit the client reads as the lock, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to the player's behavior that has both an m_itemList and an m_numItemsAllowed, since the equipment behavior carries an m_itemList too, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump.
+ * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id, template id, its colors and, where the class has one, the pattern word whose top bit the client reads as the lock, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to the player's behavior that has both an m_itemList and an m_numItemsAllowed, since the equipment behavior carries an m_itemList too, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump. The worn items go to the behavior with an m_itemList and no m_numItemsAllowed, ClientWizEquipmentBehavior, as the same item objects the backpack holds, since the client loads both lists and MSG_EQUIPMENTBEHAVIOR_EQUIPITEM's SerializedItem with the reader MSG_INVENTORYBEHAVIOR_ADDITEM's uses; m_slotList and m_publicItemList are filled only where the class has them, a slot entry's m_itemSlotNameID is the KI string id of the slot's name, as the client's own equip handler hashes the slot name for the entry it makes, and a public entry is a WizardEquippedItemInfo, since the client's ClientWizEquipmentBehavior casts what it is sent to that class and drops anything else, carrying the item's template id and the same colors and pattern its own object carries, without the lock bit, so other wizards tint it as its wearer does; the public entry is encoded on its own through the SerializedInfo field ObjectFields declares.
  */
 
 #include "ItemObjectBuilder.h"
 #include "ObjectFields.h"
 #include "PlayerBackpack.h"
+#include "ObjectSerializer.h"
 #include "PropertyFiller.h"
+#include "StringHash.h"
 
 #include <fmt/format.h>
 
@@ -58,6 +60,8 @@ PropertyObjectPtr ItemObjectBuilder::Build(TypeCatalogPtr const& catalog, CoreOb
         return nullptr;
     if (object->GetClass().FindProperty(PatternProperty))
         PropertyFiller(*object, problem).Set(PatternProperty, static_cast<int32>(PlayerBackpack::LockWord(item)));
+    if (object->GetClass().FindProperty("m_primaryColor") && object->GetClass().FindProperty("m_secondaryColor"))
+        PropertyFiller(*object, problem).Set("m_primaryColor", int32{ item.PrimaryColor }).Set("m_secondaryColor", int32{ item.SecondaryColor });
     if (!problem.empty())
         return nullptr;
     return object;
@@ -147,4 +151,122 @@ std::optional<std::string> ItemObjectBuilder::Encode(std::string_view message, P
         return std::nullopt;
     }
     return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
+}
+
+bool ItemObjectBuilder::FillEquipment(PropertyObject& player, CoreObjectTypeTable const& types, ItemTemplateStore const& templates, std::vector<CharacterEquippedItem> const& items,
+    std::vector<uint64>& missing, std::string& problem)
+{
+    problem.clear();
+    PropertyValue const* const held = player.Get("m_inactiveBehaviors");
+    PropertyValue::List const* const current = held ? held->GetList() : nullptr;
+    if (!current)
+    {
+        problem = fmt::format("{} has no behavior list", player.GetClass().Name);
+        return false;
+    }
+    PropertyValue::List behaviors = *current;
+    PropertyObject* const equipment = FindEquipment(behaviors);
+    if (!equipment)
+    {
+        problem = fmt::format("no behavior of the player object carries {} without {}", ItemListProperty, ItemsAllowedProperty);
+        return false;
+    }
+    bool const hasSlots = equipment->GetClass().FindProperty(SlotListProperty) != nullptr;
+    bool const hasPublic = equipment->GetClass().FindProperty(PublicItemListProperty) != nullptr;
+    PropertyValue::List list;
+    PropertyValue::List slots;
+    PropertyValue::List shown;
+    list.reserve(items.size());
+    for (CharacterEquippedItem const& worn : items)
+    {
+        ItemTemplateRecord const* const itemTemplate = templates.Find(worn.Item.TemplateId);
+        if (!itemTemplate)
+        {
+            missing.push_back(worn.Item.Guid);
+            continue;
+        }
+        PropertyObjectPtr object = Build(player.GetCatalog(), types, *itemTemplate, worn.Item, problem);
+        if (!object)
+            return false;
+        list.emplace_back(std::move(object));
+        if (hasSlots)
+        {
+            PropertyObjectPtr slot = PropertyObject::Create(player.GetCatalog(), SlotInfoClass);
+            if (!slot)
+            {
+                problem = fmt::format("the type dump has no {}", SlotInfoClass);
+                return false;
+            }
+            PropertyFiller(*slot, problem).Set("m_itemID", worn.Item.Guid).Set("m_itemSlotNameID", SlotNameId(worn.Slot));
+            if (!problem.empty())
+                return false;
+            slots.emplace_back(std::move(slot));
+        }
+        if (hasPublic)
+        {
+            PropertyObjectPtr info = BuildPublicInfo(player.GetCatalog(), worn.Item, problem);
+            if (!info)
+                return false;
+            shown.emplace_back(std::move(info));
+        }
+    }
+    PropertyFiller filler(*equipment, problem);
+    filler.Set(ItemListProperty, std::move(list));
+    if (hasSlots)
+        filler.Set(SlotListProperty, std::move(slots));
+    if (hasPublic)
+        filler.Set(PublicItemListProperty, std::move(shown));
+    if (!problem.empty())
+        return false;
+    PropertyFiller(player, problem).Set("m_inactiveBehaviors", std::move(behaviors));
+    return problem.empty();
+}
+
+PropertyObject* ItemObjectBuilder::FindEquipment(PropertyValue::List& behaviors)
+{
+    for (PropertyValue& entry : behaviors)
+        if (PropertyObject* const behavior = entry.AsObject();
+            behavior && behavior->GetClass().FindProperty(ItemListProperty) && !behavior->GetClass().FindProperty(ItemsAllowedProperty))
+            return behavior;
+    return nullptr;
+}
+
+PropertyObjectPtr ItemObjectBuilder::BuildPublicInfo(TypeCatalogPtr const& catalog, CharacterItem const& item, std::string& problem)
+{
+    PropertyObjectPtr info = catalog ? PropertyObject::Create(catalog, ItemInfoClass) : nullptr;
+    if (!info)
+    {
+        problem = fmt::format("the type dump has no {}", ItemInfoClass);
+        return nullptr;
+    }
+    PropertyFiller(*info, problem)
+        .Set("m_itemID", item.TemplateId)
+        .Set("m_baseColor", uint32{ item.PrimaryColor })
+        .Set("m_trimColor", uint32{ item.SecondaryColor })
+        .Set("m_pattern", uint32{ item.Pattern });
+    if (!problem.empty())
+        return nullptr;
+    return info;
+}
+
+std::optional<std::string> ItemObjectBuilder::EncodePublicInfo(std::string_view message, PropertyObject const& info, CoreObjectTypeTable const& types, std::string& problem)
+{
+    ObjectField const* const field = ObjectFields::Find(message, SerializedInfoField);
+    if (!field)
+    {
+        problem = fmt::format("no field describes the {} of {}", SerializedInfoField, message);
+        return std::nullopt;
+    }
+    EncodeResult const encoded = CoreObjectSerializer::EncodeField(*field, info, types);
+    if (!encoded.Ok())
+    {
+        problem = fmt::format("the equipped item's public entry does not encode: {}", encoded.Detail);
+        return std::nullopt;
+    }
+    return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
+}
+
+uint32 ItemObjectBuilder::SlotNameId(std::string_view slot) noexcept
+{
+    return StringHash::StringId(slot);
 }

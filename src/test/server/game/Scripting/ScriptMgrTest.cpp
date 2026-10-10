@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the hook framework every later domain hangs off: a script registers itself by being constructed, the loader CMake wrote brings in the scripts that are merely present in the source tree, every hook reaches every script in the order they registered, player hooks hear gold and health changes, ConditionScript answers custom requirement types, the sample NpcScript serves only the template it names, a module under modules/ arrives by the same loader with no edit to anything in the core, a script that throws from a hook is reported and the scripts after it still run, and unloading frees them and leaves the manager empty.
+ * Tests the hook framework every later domain hangs off: a script registers itself by being constructed, the loader CMake wrote brings in the scripts that are merely present in the source tree, every hook reaches every script in the order they registered, player hooks hear gold and health changes and each item put on or taken off, ConditionScript answers custom requirement types, the sample NpcScript serves only the template it names, a module under modules/ arrives by the same loader with no edit to anything in the core, a script that throws from a hook is reported and the scripts after it still run, and unloading frees them and leaves the manager empty.
  */
 
 #include "Player.h"
@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -51,6 +52,16 @@ namespace
         void OnHealthChanged(Player&, int32 oldValue, int32 newValue) override
         {
             Calls.push_back("health:" + std::to_string(oldValue) + ":" + std::to_string(newValue));
+        }
+
+        void OnEquip(Player&, uint64 itemGuid, uint32 templateId, std::string_view slot) override
+        {
+            Calls.push_back("equip:" + std::to_string(itemGuid) + ":" + std::to_string(templateId) + ":" + std::string(slot));
+        }
+
+        void OnUnequip(Player&, uint64 itemGuid, uint32 templateId, std::string_view slot) override
+        {
+            Calls.push_back("unequip:" + std::to_string(itemGuid) + ":" + std::to_string(templateId) + ":" + std::string(slot));
         }
     };
 
@@ -140,6 +151,17 @@ TEST_F(ScriptMgrTest, PlayerChangesReachEveryPlayerScript)
     EXPECT_EQ(Calls, (std::vector<std::string>{
         "gold:10:20", "gold:10:20", "health:30:40", "health:30:40",
     }));
+}
+
+TEST_F(ScriptMgrTest, EquipChangesReachEveryPlayerScript)
+{
+    new CountingPlayerScript();
+    Player player(PlayerStats{});
+
+    sScriptMgr.OnEquip(player, 7, 1652259, "Hat");
+    sScriptMgr.OnUnequip(player, 7, 1652259, "Hat");
+
+    EXPECT_EQ(Calls, (std::vector<std::string>{ "equip:7:1652259:Hat", "unequip:7:1652259:Hat" }));
 }
 
 TEST_F(ScriptMgrTest, ConditionScriptsCanAnswerCustomRequirementTypes)

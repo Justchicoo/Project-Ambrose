@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The requirement rows, the facts a wizard can answer, and the reloadable requirement manager that serves complete nested lists from one immutable generation.
+ * The requirement rows, the facts a wizard can answer, and the reloadable requirement manager that serves complete nested lists from one immutable generation and evaluates a flat list a caller hands it by the same rules.
  */
 
 #ifndef AMBROSE_REQUIREMENTMGR_H
@@ -113,6 +113,7 @@ public:
     void SetRowSource(RowSource source);
     bool Load(std::vector<std::string>& errors);
     bool Evaluate(std::string_view listId, RequirementContext const& context) const;
+    bool EvaluateRequirements(RequirementListRow const& list, std::vector<RequirementRow> const& requirements, RequirementContext const& context) const;
     std::uint64_t GetGeneration() const;
     void Clear();
 

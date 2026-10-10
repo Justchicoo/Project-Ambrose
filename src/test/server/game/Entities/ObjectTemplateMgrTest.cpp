@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the template store on an install the test builds, a Root.wad holding TemplateManifest.xml and the Krokotopia-WorldData.wad and Recipes-WorldData.wad piped paths name, read through a type dump it writes: a template is its file, archive, object name and behaviors in order with a null entry kept as an empty slot and an entry with an empty name left out, as the client builds an object's behaviors, a recipe is a template too with the name its class flags ObjectName, a second lookup is a cache hit handing out the same template, a missing id is null and named without throwing, each step that fails is named and nothing it touched is kept, `.reload templates` swaps in an edited manifest while a template already handed out keeps its contents, a broken manifest keeps the old map and reports every fault, the player's template is read again from the file when it reloads and must be a game object template, the least recently used template is dropped past the budget, and lookups from several threads through reloads each get a template or a reason.
+ * Tests the template store on an install the test builds, a Root.wad holding TemplateManifest.xml and the Krokotopia-WorldData.wad and Recipes-WorldData.wad piped paths name, read through a type dump it writes: a template is its file, archive, object name and behaviors in order with a null entry kept as an empty slot and an entry with an empty name left out, as the client builds an object's behaviors, a recipe is a template too with the name its class flags ObjectName, a second lookup is a cache hit handing out the same template, a missing id is null and named without throwing, each step that fails is named and nothing it touched is kept, `.reload templates` swaps in an edited manifest while a template already handed out keeps its contents, a broken manifest keeps the old map and reports every fault, the player's template is read again from the file when it reloads and must be a game object template, the equipment template its equipment behavior names is read beside it from ObjectData/ in Root.wad and gives the slots a wizard wears items in, one it names that cannot be read refuses the player's template and keeps the one before, and one that names none leaves no equipment, the least recently used template is dropped past the budget, and lookups from several threads through reloads each get a template or a reason.
  */
 
 #include "ObjectTemplateMgr.h"
 #include "BindFile.h"
+#include "EquipmentSlots.h"
 #include "KiwadBuilder.h"
 #include "LogTestDirectory.h"
 #include "ObjectViews.h"
@@ -25,6 +26,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -85,6 +87,23 @@ namespace
         object["m_nObjectType"] = kind;
         object["m_sIcon"] = Property("std::string", "m_sIcon", 9);
         add("class GameObjectTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), object);
+        Json equipmentBehavior = Json::object();
+        equipmentBehavior["m_behaviorName"] = Property("std::string", "m_behaviorName", 0);
+        equipmentBehavior["m_equipmentTemplate"] = Property("std::string", "m_equipmentTemplate", 1);
+        add("class EquipmentBehaviorTemplate", Json::array({ "BehaviorTemplate", "PropertyClass" }), equipmentBehavior);
+        Json slot = Json::object();
+        slot["m_adjectivesAND"] = Property("std::string", "m_adjectivesAND", 0, "List");
+        slot["m_adjectivesOR"] = Property("std::string", "m_adjectivesOR", 1, "List");
+        slot["m_adjectivesNOT"] = Property("std::string", "m_adjectivesNOT", 2, "List");
+        slot["m_slotName"] = Property("std::string", "m_slotName", 3);
+        slot["m_slotCategory"] = Property("std::string", "m_slotCategory", 4);
+        slot["m_maxItemCount"] = Property("unsigned int", "m_maxItemCount", 5);
+        add("class EquipSlot", Json::array({ "PropertyClass" }), slot);
+        Json equipment = Json::object();
+        equipment["m_behaviors"] = Property("class BehaviorTemplate*", "m_behaviors", 0, "List");
+        equipment["m_baseSlots"] = Property("class EquipSlot*", "m_baseSlots", 1, "List");
+        equipment["m_equipmentName"] = Property("std::string", "m_equipmentName", 2);
+        add("class EquipmentTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), equipment);
         return Json{ { "version", 2 }, { "classes", classes } }.dump();
     }
 
@@ -216,6 +235,46 @@ namespace
                 entries.emplace_back(std::move(behavior));
             }
             EXPECT_EQ(object->Set("m_behaviors", std::move(entries)), PropertySetResult::Ok);
+            return Write(object);
+        }
+
+        std::vector<uint8> PlayerWearing(std::string const& equipmentName)
+        {
+            PropertyObjectPtr object = PropertyObject::Create(_catalog, "class GameObjectTemplate");
+            EXPECT_TRUE(object);
+            EXPECT_EQ(object->Set("m_templateID", uint32{ 1 }), PropertySetResult::Ok);
+            EXPECT_EQ(object->Set("m_objectName", std::string("Player Object")), PropertySetResult::Ok);
+            PropertyObjectPtr behavior = PropertyObject::Create(_catalog, "class EquipmentBehaviorTemplate");
+            EXPECT_EQ(behavior->Set("m_behaviorName", std::string("WizardEquipmentBehavior")), PropertySetResult::Ok);
+            EXPECT_EQ(behavior->Set("m_equipmentTemplate", equipmentName), PropertySetResult::Ok);
+            PropertyValue::List entries;
+            entries.emplace_back(std::move(behavior));
+            EXPECT_EQ(object->Set("m_behaviors", std::move(entries)), PropertySetResult::Ok);
+            return Write(object);
+        }
+
+        std::vector<uint8> Equipment(std::vector<std::tuple<std::string, std::vector<std::string>, std::vector<std::string>, uint32>> const& slots)
+        {
+            PropertyObjectPtr object = PropertyObject::Create(_catalog, "class EquipmentTemplate");
+            EXPECT_TRUE(object);
+            PropertyValue::List entries;
+            for (auto const& [name, all, any, maxItems] : slots)
+            {
+                PropertyObjectPtr slot = PropertyObject::Create(_catalog, "class EquipSlot");
+                EXPECT_EQ(slot->Set("m_slotName", name), PropertySetResult::Ok);
+                EXPECT_EQ(slot->Set("m_slotCategory", name + "s"), PropertySetResult::Ok);
+                EXPECT_EQ(slot->Set("m_maxItemCount", maxItems), PropertySetResult::Ok);
+                PropertyValue::List allOf;
+                for (std::string const& adjective : all)
+                    allOf.emplace_back(adjective);
+                PropertyValue::List anyOf;
+                for (std::string const& adjective : any)
+                    anyOf.emplace_back(adjective);
+                EXPECT_EQ(slot->Set("m_adjectivesAND", std::move(allOf)), PropertySetResult::Ok);
+                EXPECT_EQ(slot->Set("m_adjectivesOR", std::move(anyOf)), PropertySetResult::Ok);
+                entries.emplace_back(std::move(slot));
+            }
+            EXPECT_EQ(object->Set("m_baseSlots", std::move(entries)), PropertySetResult::Ok);
             return Write(object);
         }
 
@@ -451,6 +510,39 @@ TEST_F(ObjectTemplateMgrTest, ThePlayersTemplateIsHeldApartAndReadFromTheFileAga
     EXPECT_FALSE(recipe.Ok);
     EXPECT_TRUE(Holds(recipe.Errors, "the player's template is ObjectData/Player.xml in Root.wad, a class RecipeTemplate, which is not a GameObjectTemplate")) << recipe.Errors.front();
     EXPECT_EQ(_store.GetPlayer()->Behaviors.size(), 3u);
+}
+
+TEST_F(ObjectTemplateMgrTest, TheEquipmentTemplateThePlayersBehaviorNamesGivesItsSlots)
+{
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_store.LoadPlayer(errors)) << errors.front();
+    EXPECT_FALSE(_store.GetPlayerEquipment()->Object) << "a player whose behaviors name no equipment template wears nothing";
+
+    Entries files = DefaultFiles();
+    files.front().second = PlayerWearing("TestEquipment");
+    files.emplace_back("ObjectData/TestEquipment.xml", Equipment({ { "Hat", { "Hat" }, {}, 1u }, { "Weapon", {}, { "Wand", "Staff" }, 1u }, { "Elixir", { "Elixir" }, {}, 3u } }));
+    WriteRoot(DefaultManifest(), files);
+    ASSERT_TRUE(_store.LoadPlayer(errors)) << errors.front();
+    std::shared_ptr<ObjectTemplate const> const equipment = _store.GetPlayerEquipment();
+    ASSERT_TRUE(equipment->Object);
+    EXPECT_EQ(equipment->Archive, "Root.wad");
+    EXPECT_EQ(equipment->File, "ObjectData/TestEquipment.xml");
+    std::string problem;
+    std::optional<EquipmentSlots> const slots = EquipmentSlots::Read(*equipment->Object, problem);
+    ASSERT_TRUE(slots) << problem;
+    ASSERT_EQ(slots->GetSlots().size(), 3u);
+    EXPECT_EQ(slots->GetSlots()[0].Category, "Hats");
+    EXPECT_EQ(slots->Find("elixir")->MaxItems, 3u);
+    EXPECT_TRUE(slots->Find("Weapon")->Accepts({ "Staff" }));
+    EXPECT_FALSE(slots->Find("Weapon")->Accepts({ "Hat" }));
+    EXPECT_TRUE(slots->Find("Hat")->Accepts({ "hat", "FLAG_NoAuction" }));
+
+    files.front().second = PlayerWearing("MissingEquipment");
+    WriteRoot(DefaultManifest(), files);
+    errors.clear();
+    EXPECT_FALSE(_store.LoadPlayer(errors));
+    EXPECT_TRUE(Holds(errors, "the player's equipment template MissingEquipment is ObjectData/MissingEquipment.xml in Root.wad, which cannot be read")) << errors.front();
+    EXPECT_EQ(_store.GetPlayerEquipment(), equipment) << "a player's template whose equipment cannot be read keeps the equipment before";
 }
 
 TEST_F(ObjectTemplateMgrTest, TheLeastRecentlyUsedTemplateIsDroppedOnceTheCacheIsPastItsBudget)
