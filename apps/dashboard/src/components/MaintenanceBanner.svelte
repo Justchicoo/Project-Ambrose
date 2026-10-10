@@ -1,3 +1,4 @@
+<!-- Project Ambrose by Imjustchico: The banner the panel shows while installation maintenance is active: the current window with a dialog to enter or leave maintenance. -->
 <script lang="ts">
     import { Button } from "$lib/components/ui/button/index.js";
     import { session } from "$lib/api.svelte.js";
