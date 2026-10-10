@@ -189,3 +189,23 @@ TEST_F(InstallFixture, SecondRunUsesCacheAndKeepsBinaryIdentical)
     std::vector<char> secondBytes((std::istreambuf_iterator<char>(secondBinary)), std::istreambuf_iterator<char>());
     EXPECT_EQ(secondBytes, firstBytes);
 }
+
+TEST_F(InstallFixture, FileCrcIsTheClientCrcOfTheFileOrOfARange)
+{
+    std::string error;
+    std::filesystem::path const dll = Root / "Bin" / "a.dll";
+    std::optional<uint32> const whole = PatchListGenerator::FileCrc(dll, 0, std::nullopt, error);
+    ASSERT_TRUE(whole) << error;
+    EXPECT_EQ(*whole, Crc32::ComputeClient(std::string_view("plain")));
+
+    std::optional<uint32> const middle = PatchListGenerator::FileCrc(dll, 1, 3, error);
+    ASSERT_TRUE(middle) << error;
+    EXPECT_EQ(*middle, Crc32::ComputeClient(std::string_view("lai")));
+
+    std::optional<uint32> const tail = PatchListGenerator::FileCrc(dll, 2, std::nullopt, error);
+    ASSERT_TRUE(tail) << error;
+    EXPECT_EQ(*tail, Crc32::ComputeClient(std::string_view("ain")));
+
+    EXPECT_FALSE(PatchListGenerator::FileCrc(dll, 3, 3, error));
+    EXPECT_FALSE(PatchListGenerator::FileCrc(Root / "missing.bin", 0, std::nullopt, error));
+}

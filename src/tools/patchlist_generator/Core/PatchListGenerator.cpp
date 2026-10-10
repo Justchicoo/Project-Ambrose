@@ -645,3 +645,38 @@ std::string PatchListGenerator::Diff(LatestFileList const& generated, LatestFile
     output << differences << " differences\n";
     return output.str();
 }
+
+std::optional<uint32> PatchListGenerator::FileCrc(std::filesystem::path const& path, uint64 offset, std::optional<uint64> length, std::string& error)
+{
+    std::error_code sizeError;
+    uint64 const size = std::filesystem::file_size(path, sizeError);
+    if (sizeError)
+    {
+        error = fmt::format("cannot read {}", ConfigMgr::PathToUtf8(path));
+        return std::nullopt;
+    }
+    if (offset > size || (length && *length > size - offset))
+    {
+        error = fmt::format("{} holds {} bytes, fewer than the range asks for", ConfigMgr::PathToUtf8(path), size);
+        return std::nullopt;
+    }
+    std::ifstream input(path, std::ios::binary);
+    input.seekg(static_cast<std::streamoff>(offset));
+    uint64 left = length.value_or(size - offset);
+    Crc32 crc = Crc32::Client();
+    std::vector<char> buffer(1 << 20);
+    while (left != 0 && input)
+    {
+        std::size_t const want = static_cast<std::size_t>(std::min<uint64>(left, buffer.size()));
+        input.read(buffer.data(), static_cast<std::streamsize>(want));
+        std::size_t const got = static_cast<std::size_t>(input.gcount());
+        crc.Update(std::span<uint8 const>(reinterpret_cast<uint8 const*>(buffer.data()), got));
+        left -= got;
+    }
+    if (left != 0)
+    {
+        error = fmt::format("cannot read {}", ConfigMgr::PathToUtf8(path));
+        return std::nullopt;
+    }
+    return crc.GetValue();
+}
