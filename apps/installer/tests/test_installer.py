@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the installer: that a MariaDB deps installs gets the account with no root password prompt, falling back to the prompt when root refuses that, while one already there is asked for its root password, that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that run starts an app from its bin folder, so a supervisor finds the configurations it names relatively, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent or, like WSL's bash on Windows, cannot take the checkout's paths, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
+# Self-tests for the installer: that a MariaDB deps installs gets the account with no root password prompt, falling back to the prompt when root refuses that, while one already there is asked for its root password, that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that run starts an app from its bin folder, so a supervisor finds the configurations it names relatively, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent or, like WSL's bash on Windows, cannot take the checkout's paths, that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget, and that start in a setup-installed copy makes its private MariaDB once, on its own port and bound to this machine, gives it the account, points the apps at it through conf.d, imports the databases, runs the supervisor from its bin folder and stops that MariaDB when the supervisor ends, while a checkout and a data folder it did not make are refused, and that client writes a chosen install to conf.d and refuses a folder that holds none.
 import functools
 import json
 import os
@@ -277,6 +277,101 @@ class DepsPlanTests(unittest.TestCase):
         result, _, _ = run_powershell_plan("none", "-Bogus")
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("deps takes -Install, -WithDatabase and -Plan", result.stderr + result.stdout)
+
+
+def make_package(folder):
+    package = os.path.join(folder, "Project Ambrose")
+    bin_folder = os.path.join(package, "bin")
+    mariadb = os.path.join(package, "mariadb", "bin")
+    for path in (bin_folder, mariadb):
+        os.makedirs(path)
+    shutil.copy(POWERSHELL, package)
+    with open(os.path.join(package, "ambrose-manifest.json"), "w", encoding="utf-8") as handle:
+        handle.write("{}")
+    etc = prefix_with_templates(package, ("supervisor",))
+    shutil.copy(os.path.join(ROOT, "src", "tools", "dbimport", "dbimport.conf.dist"), etc)
+    log = os.path.join(folder, "ran.log")
+    data = os.path.join(folder, "LocalAppData")
+    up = os.path.join(folder, "database-up")
+    shims = {
+        os.path.join(mariadb, "mariadb-install-db"): f'echo "install-db $*" >> "{log}"\nfor arg in "$@"; do case "$arg" in --datadir=*) dir="${{arg#--datadir=}}";; esac; done\nmkdir -p "$dir" && printf "[mysqld]\\n" > "$dir/my.ini"',
+        os.path.join(mariadb, "mariadbd"): f'echo "mariadbd $*" >> "{log}"\ntouch "{up}"',
+        os.path.join(mariadb, "mariadb-admin"): f'case " $* " in *" shutdown "*) echo "admin shutdown" >> "{log}"; rm -f "{up}";; esac\n[ -f "{up}" ]',
+        os.path.join(mariadb, "mariadb"): f'echo "mariadb $*" >> "{log}"',
+        os.path.join(bin_folder, "dbimport.exe"): f'echo "dbimport $*" >> "{log}"\ncat "$(dirname "$0")/conf.d/database.conf" >> "{log}"',
+        os.path.join(bin_folder, "supervisor.exe"): f'echo "supervisor in $(basename "$PWD") $*" >> "{log}"',
+    }
+    for path, body in shims.items():
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(f"#!/bin/sh\n{body}\n")
+        os.chmod(path, 0o755)
+    return package, data, log
+
+
+def run_packaged(package, data, *arguments):
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("AMBROSE_")}
+    environment["LOCALAPPDATA"] = data
+    return subprocess.run([powershell(), "-NoProfile", "-File", os.path.join(package, "ambrose.ps1"), *arguments],
+                          env=environment, capture_output=True, text=True, timeout=120)
+
+
+@unittest.skipUnless(powershell(), "PowerShell is not installed")
+@unittest.skipIf(os.name == "nt", "the package's programs are shell scripts here; the windows-setup workflow runs the real ones on Windows")
+class PackagedStartTests(unittest.TestCase):
+    def test_start_makes_the_private_database_once_and_runs_the_supervisor_against_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            package, data, log = make_package(folder)
+            result = run_packaged(package, data, "start")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            ran = open(log, encoding="utf-8").read()
+            database = os.path.join(data, "ProjectAmbrose", "database")
+            self.assertIn(f"install-db --datadir={database} --port=3316", ran)
+            ini = open(os.path.join(database, "my.ini"), encoding="utf-8").read()
+            self.assertIn("port=3316", ini)
+            self.assertIn("bind-address=127.0.0.1", ini)
+            self.assertIn("mariadbd --defaults-file=", ran)
+            self.assertIn("mariadb --host=127.0.0.1 --port=3316 --user=root -e CREATE USER IF NOT EXISTS 'ambrose'@'localhost'", ran)
+            self.assertIn('LoginDatabaseInfo = "127.0.0.1;3316;ambrose;ambrose;ambrose_login"', ran)
+            self.assertIn('WorldDatabaseInfo = "127.0.0.1;3316;ambrose;ambrose;ambrose_world"', ran)
+            self.assertIn("supervisor in bin --config", ran)
+            self.assertLess(ran.index("dbimport"), ran.index("supervisor in bin"))
+            self.assertTrue(ran.rstrip().endswith("admin shutdown"), ran)
+            self.assertTrue(os.path.isfile(os.path.join(package, "bin", "supervisor.conf")))
+
+            again = run_packaged(package, data, "start")
+            self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+            self.assertEqual(open(log, encoding="utf-8").read().count("install-db"), 1)
+
+    def test_start_refuses_a_data_folder_it_did_not_make(self):
+        with tempfile.TemporaryDirectory() as folder:
+            package, data, log = make_package(folder)
+            database = os.path.join(data, "ProjectAmbrose", "database")
+            os.makedirs(database)
+            open(os.path.join(database, "ibdata1"), "w").close()
+            result = run_packaged(package, data, "start")
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("is not a database this setup made", result.stderr + result.stdout)
+            self.assertFalse(os.path.exists(log) and "install-db" in open(log, encoding="utf-8").read())
+
+    def test_client_writes_the_chosen_install_for_every_app_and_refuses_a_folder_without_one(self):
+        with tempfile.TemporaryDirectory() as folder:
+            package, data, _ = make_package(folder)
+            install = os.path.join(folder, "Wizard101 Folder")
+            os.makedirs(os.path.join(install, "Data", "GameData"))
+            result = run_packaged(package, data, "client", install + os.sep)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            written = open(os.path.join(package, "bin", "conf.d", "client.conf"), encoding="utf-8").read()
+            self.assertTrue(written.endswith(f"ClientDir = {install}\n"), written)
+            empty = os.path.join(folder, "Empty")
+            os.makedirs(empty)
+            refused = run_packaged(package, data, "client", empty)
+            self.assertNotEqual(refused.returncode, 0, refused.stdout)
+            self.assertIn("is not a Wizard101 install", refused.stderr + refused.stdout)
+
+    def test_start_in_a_checkout_says_what_to_run_instead(self):
+        result = subprocess.run([powershell(), "-NoProfile", "-File", POWERSHELL, "start"], cwd=ROOT, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("in a checkout use deps -WithDatabase, db and run supervisor", result.stderr + result.stdout)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,122 @@
+# Project Ambrose by Imjustchico
+# Builds the Windows setup program: compiles the servers and tools in RelWithDebInfo with no tests through the MSVC developer environment, Ninja and ccache, installs them, packages them with the checked MariaDB server and the Visual C++ runtime through apps/packaging/windows/package.py and NSIS, installs the result silently on the runner, runs the servers until each reports running and uninstalls it, and uploads the setup with its SHA-256; a version tag also publishes both to a pre-release, which needs the MariaDB checksum pinned.
+name: windows-setup
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: [".github/workflows/windows-setup.yml", "apps/packaging/windows/**", "apps/installer/ambrose.ps1", "src/tools/client/**"]
+  pull_request:
+    paths: [".github/workflows/windows-setup.yml", "apps/packaging/windows/**", "apps/installer/ambrose.ps1", "src/tools/client/**"]
+  schedule:
+    - cron: "41 7 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: windows-setup-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: setup
+    runs-on: windows-latest
+    timeout-minutes: 200
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      VCPKG_ROOT: ${{ github.workspace }}/../vcpkg
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/../vcpkg-binary-cache,readwrite
+      CCACHE_DIR: ${{ github.workspace }}/../ccache
+      CCACHE_MAXSIZE: 2G
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up the MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Install ccache and NSIS
+        timeout-minutes: 10
+        run: |
+          choco install ccache nsis -y --no-progress
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Name the version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.${GITHUB_RUN_NUMBER}-dev"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Packaging self-tests
+        run: python apps/packaging/windows/tests/test_package.py
+      - name: Restore compiler cache
+        id: ccache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/../ccache
+          key: ccache-windows-setup-${{ github.sha }}
+          restore-keys: ccache-windows-setup-
+      - name: Restore vcpkg binary cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/../vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-
+          restore-keys: vcpkg-${{ runner.os }}-
+      - name: Install dependencies and configure
+        timeout-minutes: 90
+        run: |
+          python apps/ci/ci_build.py --setup-vcpkg "$env:VCPKG_ROOT" --configure-preset windows-msvc-ninja --build-preset windows-ninja-debug --stage configure
+          cmake --preset windows-msvc-ninja -DBUILD_TESTING=OFF
+      - name: Build the servers and tools
+        timeout-minutes: 120
+        run: cmake --build build/windows-msvc-ninja --config RelWithDebInfo --parallel
+      - name: Save compiler cache
+        if: ${{ !cancelled() && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/../ccache
+          key: ccache-windows-setup-${{ github.sha }}
+      - name: Install into a prefix
+        run: cmake --install build/windows-msvc-ninja --config RelWithDebInfo --prefix "$env:RUNNER_TEMP\ambrose"
+      - name: Package the setup program
+        run: |
+          $runtime = Get-ChildItem (Join-Path $env:VCToolsRedistDir 'x64') -Directory -Filter 'Microsoft.VC*.CRT' | Select-Object -First 1
+          if (-not $runtime) { throw "no Visual C++ runtime under $env:VCToolsRedistDir" }
+          $pin = if ($env:GITHUB_REF -like 'refs/tags/v*') { '--require-pin' } else { $null }
+          python apps/packaging/windows/package.py --prefix "$env:RUNNER_TEMP\ambrose" --version "${{ steps.version.outputs.version }}" --runtime $runtime.FullName --output "dist\ProjectAmbrose-Setup-${{ steps.version.outputs.version }}.exe" $pin
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install, run and uninstall the setup
+        timeout-minutes: 30
+        run: ./apps/packaging/windows/tests/smoke.ps1 -Setup "dist\ProjectAmbrose-Setup-${{ steps.version.outputs.version }}.exe"
+      - name: Upload the setup
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectAmbrose-Setup-${{ steps.version.outputs.version }}
+          path: dist/
+          if-no-files-found: ignore
+
+  release:
+    name: release
+    needs: setup
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ProjectAmbrose-Setup-${{ needs.setup.outputs.version }}
+          path: dist
+      - name: Publish the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --prerelease --title "Project Ambrose $GITHUB_REF_NAME" --notes "The Windows setup program. It is unsigned; check it against the SHA-256 beside it before running it."

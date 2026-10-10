@@ -24,6 +24,16 @@ Project Ambrose itself is MIT licensed, in LICENSE. It uses the libraries below.
 | Zydis and Zycore | Decoding x86 instructions of the user's client program, in the type extractor and the client tool | MIT | Keep the notice |
 | Unicorn 2 | Running the user's own client program in a sandbox to rebuild its type data | GPL-2.0-or-later | Only `typeextract` links it, and only as a shared library. That one program is therefore distributed under GPL-2.0-or-later; every other program here stays MIT. A build without the tools has no GPL code in it |
 
+## What ships in the Windows setup program
+
+Milestone 16.14's setup program carries the servers and tools above, built by CI, and these beside them. None is linked into an Ambrose program.
+
+| Component | Used for | Licence | What it asks |
+|---|---|---|---|
+| MariaDB Server | The private database the setup installs and `ambrose.ps1 start` runs on its own port, open only to the machine | GPL-2.0 | Ship its licence and say where its source is. The setup carries MariaDB's own `COPYING` and `README.md` in its `mariadb` folder, takes the unmodified winx64 zip `apps/packaging/windows/mariadb.json` names from archive.mariadb.org, whose source is published beside it, and checks it against its published and pinned SHA-256. It runs as a separate program, so nothing else in the setup takes on its licence |
+| Microsoft Visual C++ runtime | The C and C++ runtime DLLs every program here and MariaDB's load, placed beside them so nothing needs installing with an administrator | Microsoft Visual Studio redistributable terms | Only the files Visual Studio lists as redistributable, unmodified, beside the programs that load them |
+| NSIS | The setup and uninstall program around the files | zlib/libpng, and CPL-1.0 for its LZMA module | Keep the notice. The setup's stub is under zlib/libpng, which asks nothing of the result, and its LZMA decompressor is used unmodified under the module's own exception, which leaves what it is linked with outside CPL-1.0 |
+
 ## What ships in the panel and the launcher window
 
 Installed with milestone 17.73 at the versions doc/UI-STACK.md settled. Every one is permissive, and every one is vendored, so a surface loads nothing from anyone else's host.
