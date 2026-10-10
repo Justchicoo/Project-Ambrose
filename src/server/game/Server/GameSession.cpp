@@ -1853,6 +1853,7 @@ void GameSession::LeaveWorld()
     _pendingWizBang.reset();
     _sight.Clear();
     _npcRange.Clear();
+    _questOffers.Clear();
     _npcTemplates.clear();
     if (_player)
     {

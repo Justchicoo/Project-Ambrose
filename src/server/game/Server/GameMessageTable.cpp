@@ -67,6 +67,9 @@ namespace
             Accept<&GameSession::HandleInteractNpc>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractNpc");
             Accept<&GameSession::HandleInteractObject>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractObject");
             Accept<&GameSession::HandleInteractOption>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractOption");
+            Accept<&GameSession::HandleInteractAvailableQuest>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractAvailableQuest");
+            Accept<&GameSession::HandleDeclineQuest>(inWorld, MessageProcessing::Queued, "GameSession::HandleDeclineQuest");
+            Accept<&GameSession::HandleAcceptQuest>(inWorld, MessageProcessing::Queued, "GameSession::HandleAcceptQuest");
             Accept<&GameSession::HandleCombatMove>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatMove");
             Accept<&GameSession::HandleCombatDraw>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatDraw");
             Accept<&GameSession::HandleCombatAFK>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatAFK");
@@ -205,6 +208,8 @@ namespace
             Sends<SendNpcOptions>();
             Sends<LeaveServiceRange>();
             Sends<SendInteractOptions>();
+            Sends<ActorDialog>();
+            Sends<QuestOffer>();
 
             SystemMessages::AddRules(*this);
         }

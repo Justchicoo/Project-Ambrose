@@ -28,6 +28,7 @@
 #include "Player.h"
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
+#include "QuestOfferCache.h"
 #include "QuestLog.h"
 #include "SessionBase.h"
 #include "VisibilitySet.h"
@@ -49,6 +50,9 @@
 class InstanceSight;
 struct ChatSpeaker;
 class SocialMgr;
+class NpcServiceProvider;
+struct NpcServiceTarget;
+struct QuestInfo;
 
 struct WorldDeparture
 {
@@ -156,6 +160,9 @@ public:
     void HandleInteractNpc(GameMessages::InteractNpc& message);
     void HandleInteractObject(GameMessages::InteractObject& message);
     void HandleInteractOption(GameMessages::InteractOption& message);
+    void HandleInteractAvailableQuest(GameMessages::InteractAvailableQuest& message);
+    void HandleDeclineQuest(GameMessages::DeclineQuest& message);
+    void HandleAcceptQuest(GameMessages::AcceptQuest& message);
     NpcServiceRange const& GetNpcRange() const noexcept { return _npcRange; }
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
@@ -333,6 +340,8 @@ private:
     void ShowGameEffectsOf(GameSession const& other);
     bool IsNpcTemplate(uint32 templateId);
     void OfferNpcServices(MapObject const& npc);
+    std::unique_ptr<NpcServiceProvider> QuestProviderFor(uint32 templateId);
+    void OfferQuest(NpcServiceTarget const& target, QuestInfo const& quest);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
@@ -344,6 +353,7 @@ private:
     VisibilitySet _sight;
     std::vector<VolumePresence> _volumePresence;
     NpcServiceRange _npcRange;
+    QuestOfferCache _questOffers;
     std::map<uint32, bool> _npcTemplates;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
