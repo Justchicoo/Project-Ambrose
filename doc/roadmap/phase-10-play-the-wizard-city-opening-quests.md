@@ -837,9 +837,9 @@ Clicking teleporter objects (Spiral Door, go-home, marked world teleporters) ope
 **Acceptance**
 
 - [x] 2-node path at speed s takes distance/s +-1 tick (PathMovementGeneratorTest.TwoNodePathCoversDistanceAtConfiguredSpeedWithinOneTick)
-- [ ] Empty Map sends nothing
-- [ ] `.reload zone_path` reroutes walking NPCs live; a failed reload keeps the old paths
-- [ ] Real client: patrol identical on two clients
+- [x] Empty Map sends nothing (PathWalkersTest.AnInstanceWithNoWizardHoldsItsWalkersStillAndSendsNothing)
+- [x] `.reload zone_path` reroutes walking NPCs live; a failed reload keeps the old paths (PathWalkersTest.AReloadedPathCarriesAWalkerOnFromItsNextNodeAndAGonePathStopsIt, ZonePathDatabaseTest.AReloadServesAMovedNodeAndABrokenRowKeepsTheOldPaths)
+- [x] Real client: patrol identical on two clients (path-patrol.json run 20261009-232525 on r806919: a game master and a companion on Unicorn Way see the Lost Souls on Path Ghost02 at the same places in each shot pair and moving between shots, facing the way they walk after ce80e1f, and the maintainer, watching, saw them walk without jumping; the game log shows 24 spawners placing 97 objects and no path or behavior error)
 
 ### Detailed spec from WLD-17: Path-walking NPCs
 
@@ -870,9 +870,9 @@ NPCs with path data walk their routes on the server, and every client sees the s
 **Acceptance**
 
 - [x] Unit: an NPC on a 2-node path with speed s covers the distance in distance/s seconds (+-1 tick) (PathMovementGeneratorTest.TwoNodePathCoversDistanceAtConfiguredSpeedWithinOneTick: speed 5 times scale 2 over 50 units arrives in 250 ticks of 20 ms)
-- [ ] Unit: a Map with no players sends no movement packets
-- [ ] Unit: `.reload zone_path` with a moved node sends a walking NPC to the new node position from its next leg without a restart, and a reload with a broken node keeps the old path
-- [ ] Real client: a patrolling NPC in a Wizard City street walks the same route on clients A and B at the same moment and does not pop on arrival
+- [x] Unit: a Map with no players sends no movement packets (PathWalkersTest.AnInstanceWithNoWizardHoldsItsWalkersStillAndSendsNothing: twenty one-second passes with no wizard send no move and leave the walker on its first node)
+- [x] Unit: `.reload zone_path` with a moved node sends a walking NPC to the new node position from its next leg without a restart, and a reload with a broken node keeps the old path (PathWalkersTest.AReloadedPathCarriesAWalkerOnFromItsNextNodeAndAGonePathStopsIt moves node 20 and the walker heads to its new place from the next leg; ZonePathDatabaseTest.AReloadServesAMovedNodeAndABrokenRowKeepsTheOldPaths reloads a moved node from the world database and keeps generation 1 when a node is not a number)
+- [x] Real client: a patrolling NPC in a Wizard City street walks the same route on clients A and B at the same moment and does not pop on arrival (path-patrol.json run 20261009-232525 on r806919: a game master and a companion on Unicorn Way see the Lost Souls on Path Ghost02 at the same places in each shot pair and moving between shots, facing the way they walk after ce80e1f, and the maintainer, watching, saw them walk without jumping; the game log shows 24 spawners placing 97 objects and no path or behavior error)
 
 **Risks**
 

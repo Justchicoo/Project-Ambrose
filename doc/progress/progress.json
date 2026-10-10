@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 150,
+    "done": 151,
     "total": 469,
-    "percent": 32.0
+    "percent": 32.2
   },
   "checks": {
-    "done": 1164,
+    "done": 1170,
     "total": 2874,
-    "percent": 40.5
+    "percent": 40.7
   },
   "contributor_track": {
     "merged": 94,
@@ -90,9 +90,9 @@
     {
       "phase": 10,
       "title": "Play the wizard city opening quests",
-      "milestones_done": 0,
+      "milestones_done": 1,
       "milestones_total": 18,
-      "checks_done": 2,
+      "checks_done": 8,
       "checks_total": 115
     },
     {
