@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, applies live frame-rate limits, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget, the messages it has already been reported for sending before the server handles them, and queued inbound work. Every DML message it receives or sends passes the network hooks first, which may hold it back, and the packet log, and its socket's opening and closing are told to the hooks.
+ * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, holding DML frames until it arrives unless the app's session takes them at once, applies live frame-rate limits, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget, the messages it has already been reported for sending before the server handles them, and queued inbound work. Every DML message it receives or sends passes the network hooks first, which may hold it back, and the packet log, and its socket's opening and closing are told to the hooks.
  */
 
 #ifndef AMBROSE_SESSIONBASE_H
@@ -83,6 +83,7 @@ protected:
     virtual void OnAccepted();
     virtual void OnMessage(DmlMessageData& message) = 0;
     virtual void OnSessionClosed();
+    virtual bool DispatchesBeforeAccept() const noexcept;
 
     void SendDml(uint8 serviceId, uint8 order, std::span<uint8 const> body);
     void SetKeepAliveTimeoutSuspended(bool suspended) noexcept { _keepAliveTimeoutSuspended = suspended; }
