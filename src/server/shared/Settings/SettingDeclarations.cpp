@@ -102,8 +102,8 @@ namespace
                 "How long an in-world wizard may be idle before its session is disconnected; 0 disables the AFK timer."),
             Float("Potion.RestoreFraction", "1", "0", "1", "fraction", "Player", Game, Live,
                 "The share of maximum health and mana each potion restores, read whenever a wizard uses a potion."),
-            Unsigned("Potion.RefillInterval", "300", "0", "86400", "s", "Player", Game, Live,
-                "How long after a potion is used before one charge refills; 0 disables later refills, and changes apply after the next charge refills. The 300-second default is unsourced, since the game's own refill rate is not known."),
+            Unsigned("Potion.RefillInterval", "0", "0", "86400", "s", "Player", Game, Live,
+                "How long after a potion is used before one charge refills on its own; 0, the default, leaves refills to buying them and to minigames, as the live game does, and changes apply after the next charge refills."),
 
             Unsigned("Queue.BypassSecurityLevel", "2", "0", "4", "", "Realms", Login, Live,
                 "The minimum account security level that bypasses full-realm admission queues, read for each character selection."),

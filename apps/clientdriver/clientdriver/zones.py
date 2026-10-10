@@ -7,7 +7,7 @@ from . import paths
 from .errors import StepFailed
 
 NO_WINDOW = 0x08000000
-LAYOUT = 5
+LAYOUT = 6
 
 
 def cache_path(revision):
