@@ -47,7 +47,7 @@ const list: Preview = { kind: "list", load: () => import("./pages/Lists.svelte")
 export const routes: Route[] = [
     {
         path: "overview",
-        title: "Overview",
+        title: "nav.overview",
         icon: GaugeIcon,
         permission: "status.read",
         nav: true,
@@ -56,7 +56,7 @@ export const routes: Route[] = [
     },
     {
         path: "servers",
-        title: "Servers",
+        title: "nav.servers",
         icon: ServerIcon,
         permission: "status.read",
         nav: true,
@@ -65,7 +65,7 @@ export const routes: Route[] = [
     },
     {
         path: "logs",
-        title: "Logs",
+        title: "nav.logs",
         icon: FileTextIcon,
         permission: "console.read",
         nav: true,
@@ -74,7 +74,7 @@ export const routes: Route[] = [
     },
     {
         path: "console",
-        title: "Console",
+        title: "nav.console",
         icon: SquareTerminalIcon,
         permission: "console.write",
         nav: true,
@@ -83,7 +83,7 @@ export const routes: Route[] = [
     },
     {
         path: "metrics",
-        title: "Metrics",
+        title: "nav.metrics",
         icon: ChartLineIcon,
         permission: "metrics.read",
         nav: true,
@@ -92,7 +92,7 @@ export const routes: Route[] = [
     },
     {
         path: "resources",
-        title: "Resources",
+        title: "nav.resources",
         icon: ChartLineIcon,
         permission: "metrics.read",
         nav: true,
@@ -101,7 +101,7 @@ export const routes: Route[] = [
     },
     {
         path: "database",
-        title: "Database",
+        title: "nav.database",
         icon: DatabaseIcon,
         permission: "database.read",
         nav: true,
@@ -110,7 +110,7 @@ export const routes: Route[] = [
     },
     {
         path: "config",
-        title: "Configuration",
+        title: "nav.configuration",
         icon: SlidersHorizontalIcon,
         permission: "settings.read",
         nav: true,
@@ -119,7 +119,7 @@ export const routes: Route[] = [
     },
     {
         path: "files",
-        title: "Files",
+        title: "nav.files",
         icon: FolderIcon,
         permission: "files.list",
         nav: true,
@@ -128,7 +128,7 @@ export const routes: Route[] = [
     },
     {
         path: "backups",
-        title: "Backups",
+        title: "nav.backups",
         icon: ArchiveIcon,
         permission: "backups.read",
         nav: true,
@@ -137,7 +137,7 @@ export const routes: Route[] = [
     },
     {
         path: "realms",
-        title: "Realms and zones",
+        title: "nav.realms",
         icon: GlobeIcon,
         permission: "realms.read",
         nav: true,
@@ -146,7 +146,7 @@ export const routes: Route[] = [
     },
     {
         path: "players",
-        title: "Players online",
+        title: "nav.players",
         icon: UserIcon,
         permission: "players.read",
         nav: true,
@@ -155,7 +155,7 @@ export const routes: Route[] = [
     },
     {
         path: "accounts",
-        title: "Accounts and bans",
+        title: "nav.accounts",
         icon: ShieldIcon,
         permission: "accounts.read",
         nav: true,
@@ -164,7 +164,7 @@ export const routes: Route[] = [
     },
     {
         path: "client",
-        title: "Client data",
+        title: "nav.clientdata",
         icon: HardDriveIcon,
         permission: "clientdata.read",
         nav: true,
@@ -173,7 +173,7 @@ export const routes: Route[] = [
     },
     {
         path: "users",
-        title: "Panel users",
+        title: "nav.panelusers",
         icon: UsersIcon,
         permission: "users.read",
         nav: true,
@@ -182,7 +182,7 @@ export const routes: Route[] = [
     },
     {
         path: "settings",
-        title: "Settings",
+        title: "nav.settings",
         icon: SettingsIcon,
         permission: "panel.settings",
         nav: true,
@@ -191,7 +191,7 @@ export const routes: Route[] = [
     },
     {
         path: "reload",
-        title: "Reload",
+        title: "nav.reload",
         icon: RefreshCwIcon,
         permission: "reload.read",
         nav: true,
@@ -200,7 +200,7 @@ export const routes: Route[] = [
     },
     {
         path: "activity",
-        title: "Activity",
+        title: "nav.activity",
         icon: ActivityIcon,
         permission: "activity.read",
         nav: true,
@@ -209,7 +209,7 @@ export const routes: Route[] = [
     },
     {
         path: "errors",
-        title: "Error reports",
+        title: "nav.errors",
         icon: BugIcon,
         permission: "errors.read",
         nav: true,
@@ -218,14 +218,14 @@ export const routes: Route[] = [
     },
     {
         path: "two-factor",
-        title: "Two-factor sign-in",
+        title: "nav.twofactor",
         icon: ShieldCheckIcon,
         permission: "none",
         nav: false,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/TwoFactor.svelte") },
     },
-    { path: "denied", title: "Access denied", icon: LockIcon, permission: "none", nav: false, group: "Panel", view: { kind: "denied" } },
+    { path: "denied", title: "nav.denied", icon: LockIcon, permission: "none", nav: false, group: "Panel", view: { kind: "denied" } },
 ];
 
 export const everything = new Set(["*"]);

@@ -26,6 +26,7 @@
     import StatusBadge from "./components/StatusBadge.svelte";
     import StepUp from "./components/StepUp.svelte";
     import { everything, navigation, resolve } from "./routes";
+    import { t } from "$lib/i18n.svelte.js";
     import Denied from "./pages/Denied.svelte";
     import Enroll from "./pages/Enroll.svelte";
     import SignIn from "./pages/SignIn.svelte";
@@ -76,11 +77,13 @@
     });
 
     const shown = $derived(resolve(path, granted));
-    const title = $derived(shown.kind === "missing" ? "Not found" : shown.route.title);
+    const title = $derived(shown.kind === "missing" ? t("app.notFound") : t(shown.route.title));
     const reachable = $derived(navigation(granted));
+    const groupKeys = { Servers: "nav.group.servers", Game: "nav.group.game", Panel: "nav.group.panel" } as const;
     const groups = $derived(
         (["Servers", "Game", "Panel"] as const).map((heading) => ({
             heading,
+            headingKey: groupKeys[heading],
             entries: reachable.filter((entry) => entry.group === heading),
         })),
     );
@@ -152,16 +155,16 @@
             <Sidebar.Content>
                 {#each groups as group (group.heading)}
                     <Sidebar.Group>
-                        <Sidebar.GroupLabel>{group.heading}</Sidebar.GroupLabel>
+                        <Sidebar.GroupLabel>{t(group.headingKey)}</Sidebar.GroupLabel>
                         <Sidebar.GroupContent>
                             <Sidebar.Menu>
                                 {#each group.entries as entry (entry.path)}
                                     <Sidebar.MenuItem>
-                                        <Sidebar.MenuButton isActive={entry.path === path} tooltipContent={entry.title}>
+                                        <Sidebar.MenuButton isActive={entry.path === path} tooltipContent={t(entry.title)}>
                                             {#snippet child({ props })}
                                                 <a href={`#${entry.path}`} {...props}>
                                                     <entry.icon />
-                                                    <span>{entry.title}</span>
+                                                    <span>{t(entry.title)}</span>
                                                 </a>
                                             {/snippet}
                                         </Sidebar.MenuButton>
@@ -292,26 +295,26 @@
                     </div>
                 {/if}
                 {#if shown.kind === "missing"}
-                    <Denied title="No such page" detail={`Nothing in the panel lives at #${shown.path}.`} />
+                    <Denied title={t("denied.noPage")} detail={t("denied.noPageDetail", { path: shown.path })} />
                 {:else if shown.kind === "refused"}
                     <Denied
-                        title="Access denied"
-                        detail={`${shown.route.title} needs the ${shown.route.permission} permission, which this sign-in does not grant.`}
+                        title={t("nav.denied")}
+                        detail={t("denied.detail", { page: t(shown.route.title), permission: shown.route.permission })}
                     />
                 {:else if shown.route.view.kind === "denied"}
-                    <Denied title="Access denied" detail="This page is where a link you may not follow lands." />
+                    <Denied title={t("nav.denied")} detail={t("denied.whereLands")} />
                 {:else if shown.route.view.kind === "arrives"}
                     {#key shown.route.path}
                         <Unavailable
                             path={shown.route.path}
-                            title={shown.route.title}
+                            title={t(shown.route.title)}
                             milestone={shown.route.view.milestone}
                             preview={shown.route.view.preview}
                         />
                     {/key}
                 {:else}
                     {#await shown.route.view.load()}
-                        <div class="space-y-3" aria-busy="true" aria-label={`Loading ${shown.route.title}`}>
+                        <div class="space-y-3" aria-busy="true" aria-label={`${t("app.loading")} ${t(shown.route.title)}`}>
                             <Skeleton class="h-9 w-56" />
                             <Skeleton class="h-4 w-80 max-w-full" />
                             <Skeleton class="h-48 w-full" />
@@ -323,7 +326,7 @@
                             role="alert"
                             class="flex flex-1 flex-col items-center justify-center gap-4 rounded-xl border border-destructive/30 bg-destructive/5 p-12 text-center"
                         >
-                            <h1 class="font-serif text-2xl font-semibold">{shown.route.title} did not load</h1>
+                            <h1 class="font-serif text-2xl font-semibold">{t(shown.route.title)} {t("app.loadFailed")}</h1>
                             <p class="max-w-md text-sm text-muted-foreground">
                                 The panel could not fetch this page's code, usually because a newer build replaced the one this tab started
                                 with, or the connection dropped.
