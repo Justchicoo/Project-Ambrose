@@ -44,6 +44,7 @@
     "MSG_AdvPvPEloData",
     "MSG_BUDDYREQUESTLIST",
     "MSG_CHECK_MAIL",
+    "MSG_COMPLETEDIALOG",
     "MSG_CLIENT_DISCONNECT",
     "MSG_CONNECTIONSTATS",
     "MSG_CrownShopLogging",

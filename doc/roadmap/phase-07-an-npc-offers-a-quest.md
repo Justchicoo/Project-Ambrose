@@ -444,6 +444,16 @@ Clicking a quest giver opens the retail quest offer window (Prep dialog, title, 
 - The offer message order comes from the reference server, not a retail capture.
 - The purpose of MSG_ACCEPTQUESTBOGUS and MSG_NPCINFO in retail offers is unknown.
 
+**Notes**
+
+What the r806919 client does with an offer, read from its own code (`client handlers MSG_ActorDialog`, `MSG_QuestOffer`, and the dialog window's button table) and seen in `quest-offer.json` runs:
+
+- A quest is listed in the NPC's menu as a PrepEntry, and taking it sends MSG_INTERACTNPC with ServiceName QuestOfferService, not MSG_INTERACTAVAILABLEQUEST, which the client never sent in these runs.
+- The client reads MSG_SENDNPCOPTIONS' memento and the blobs of MSG_ACTORDIALOG and MSG_QUESTOFFER as bare objects, class hash first; a SerializerBinary envelope makes it log "Unable to deserialize the dialog data".
+- MSG_QUESTOFFER is shown only after an MSG_ACTORDIALOG for the same MobileID. On the last Prep line of a QuestInfo dialog the right button is ACCEPT, which sends MSG_ACCEPTQUEST as the window closes; the left button is DECLINE, which sends MSG_DECLINEQUEST, and the client hides it for a Mainline offer, so a Mainline quest cannot be declined there. A decline check needs a quest that is not Mainline.
+- IsYesNo adds a generic YES/NO answered with WIZARD3 MSG_SENDYESNOREPLY and is not part of accepting or declining, so offers send 0.
+- The offer window shows the title from QuestTitle and each goal as its m_goalTitle with its madlibs, and its location from m_goalLocation, which must be "zone|world" text; it reads neither Level nor QuestInfo, nor a goal's display key or persona name. WizardQuestGoals_TalkNPC reads "Talk To", so a goal with that title shows "Talk To" and its location. Rewards come with 10.08 and the '!' with 7.08.
+
 ## 7.10 Accept quest and quest book sync (QST-11)
 
 **Goal:** Quest book and helper filled; resume on relog.
