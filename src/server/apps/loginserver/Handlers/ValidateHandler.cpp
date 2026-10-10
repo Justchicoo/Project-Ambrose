@@ -254,10 +254,7 @@ void LoginSession::CompleteValidation(std::shared_ptr<ValidateAttempt> const& at
     response.PayingUser = 1;
     SendDmlMessage(response);
 
-    LoginMessages::UserAdmitInd admit;
-    admit.Status = 1;
-    admit.PositionInQueue = 0;
-    SendDmlMessage(admit);
+    SendAdmission(AdmitStatus::Admitted, 0);
 
     LOG_INFO(ValidateLog, "Session {} from {} validated as {} (id {}) on machine {:016X}: sent MSG_USER_VALIDATE_RSP Error=0 and MSG_USER_ADMIT_IND Status=1",
         GetSessionId(), attempt->AddressText, attempt->Username, attempt->AccountId, attempt->MachineId);

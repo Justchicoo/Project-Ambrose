@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Queues authenticated selections in FIFO order per realm, reserves handoffs until a refresh sees the reserved character online or its key expires, updates queue positions live, and releases as many waiters as each refreshed player limit permits.
+ * Queues authenticated selections in FIFO order per realm, reserves handoffs until a refresh sees the reserved character online or its key expires, updates queue positions live through MSG_USER_ADMIT_IND Status=2, and releases as many waiters as each refreshed player limit permits.
  */
 
 #include "AdmissionQueue.h"
@@ -25,15 +25,6 @@ namespace
     AdmissionQueue::Clock::time_point ReservationExpiry()
     {
         return AdmissionQueue::Clock::now() + sLoginMgr.GetSettings()->KeyTtl + std::chrono::seconds(30);
-    }
-
-    LoginMessages::CharacterSelected QueuePosition(LoginMessages::CharacterSelected reply, uint32 position)
-    {
-        reply.Key.clear();
-        reply.PrepPhase = 1;
-        reply.Slot = static_cast<int32>(position);
-        reply.Error = 0;
-        return reply;
     }
 }
 
@@ -109,7 +100,7 @@ AdmissionQueueRequest AdmissionQueue::Request(Realm const& realm, std::shared_pt
 
 void AdmissionQueue::OnRealmRefresh(std::vector<Realm> const& realms, std::unordered_set<uint64> const& onlineCharacterGuids)
 {
-    std::vector<std::pair<std::shared_ptr<LoginSession>, LoginMessages::CharacterSelected>> positions;
+    std::vector<std::pair<std::shared_ptr<LoginSession>, uint32>> positions;
     std::vector<std::tuple<std::shared_ptr<LoginSession>, uint64, std::string>> failures;
     std::vector<std::tuple<std::shared_ptr<LoginSession>, LoginMessages::CharacterSelected, std::string, uint32>> admissions;
     std::unordered_map<uint32, Realm const*> byId;
@@ -187,7 +178,7 @@ void AdmissionQueue::OnRealmRefresh(std::vector<Realm> const& realms, std::unord
             for (Entry const& entry : queue->second)
             {
                 if (std::shared_ptr<LoginSession> session = entry.Session.lock(); session && session->IsOpen() && !session->IsKicked())
-                    positions.emplace_back(std::move(session), QueuePosition(entry.Reply, PositionAt(index)));
+                    positions.emplace_back(std::move(session), PositionAt(index));
                 ++index;
             }
             ++queue;
@@ -197,8 +188,8 @@ void AdmissionQueue::OnRealmRefresh(std::vector<Realm> const& realms, std::unord
 
     for (auto& [session, character, realmName, realmId] : admissions)
         session->AdmitQueuedCharacter(std::move(character), std::move(realmName), realmId);
-    for (auto& [session, reply] : positions)
-        session->NotifyAdmissionQueuePosition(std::move(reply));
+    for (auto& [session, position] : positions)
+        session->NotifyAdmissionQueuePosition(position);
     for (auto& [session, characterGuid, detail] : failures)
         session->FailQueuedCharacter(characterGuid, std::move(detail));
 }
@@ -206,7 +197,7 @@ void AdmissionQueue::OnRealmRefresh(std::vector<Realm> const& realms, std::unord
 void AdmissionQueue::Update(std::chrono::milliseconds diff)
 {
     uint32 const intervalSeconds = sSettings.Get<uint32>("Queue.PositionUpdateInterval");
-    std::vector<std::pair<std::shared_ptr<LoginSession>, LoginMessages::CharacterSelected>> updates;
+    std::vector<std::pair<std::shared_ptr<LoginSession>, uint32>> updates;
 
     {
         std::lock_guard const lock(_mutex);
@@ -233,15 +224,15 @@ void AdmissionQueue::Update(std::chrono::milliseconds diff)
             for (Entry const& entry : entries)
             {
                 if (std::shared_ptr<LoginSession> session = entry.Session.lock(); session && session->IsOpen() && !session->IsKicked())
-                    updates.emplace_back(std::move(session), QueuePosition(entry.Reply, PositionAt(index)));
+                    updates.emplace_back(std::move(session), PositionAt(index));
                 ++index;
             }
             ++queue;
         }
     }
 
-    for (auto& [session, reply] : updates)
-        session->NotifyAdmissionQueuePosition(std::move(reply));
+    for (auto& [session, position] : updates)
+        session->NotifyAdmissionQueuePosition(position);
 }
 
 uint64 AdmissionQueue::QueuedCount() const
