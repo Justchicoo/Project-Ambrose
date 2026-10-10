@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The page a signed-out browser sees, which asks for what the host it came from signs people in with: a panel with no operator yet asks for the token from the one-time link the supervisor printed, which the page took out of the address and the browser's history as soon as it loaded so it lands on the overview, and the name and password to make the owner with, a password link asks for the new password and signs in with it, a panel that has an operator asks for a name and password and then, for an operator with two-factor sign-in, for a code from their authenticator app or one recovery code, opening straight on that step when a sign-in link asked for it, with the password dropped from the page as soon as it has been checked and a sign-in that ran out sent back to the start, and an app's own listener asks for its admin token, which is traded once for a session so nothing is kept in the browser; a field's own problem sits beside it, any other refusal sits above the form with its request id, a link that did not sign in says why above the form, and a session that has just ended says so. After repeated failed sign-ins with a captcha configured, the page says a captcha is being asked for, was refused or could not be checked, rather than calling it a wrong password. -->
+<!-- Project Ambrose by Imjustchico: The page a signed-out browser sees, which asks for what the host it came from signs people in with: a panel with no operator yet asks for the token from the one-time link the supervisor printed, which the page took out of the address and the browser's history as soon as it loaded so it lands on the overview, and the name and password to make the owner with, a password link asks for the new password and signs in with it, a panel that has an operator asks for a name and password and then, for an operator with two-factor sign-in, for a code from their authenticator app or one recovery code, opening straight on that step when a sign-in link asked for it, with the password dropped from the page as soon as it has been checked and a sign-in that ran out sent back to the start, and an app's own listener asks for its admin token, which is traded once for a session so nothing is kept in the browser; a field's own problem sits beside it, any other refusal sits above the form with its request id, a link that did not sign in says why above the form, and a session that has just ended says so. After repeated failed sign-ins with a captcha configured, the page renders the provider's own challenge from the provider and site key the refusal names, sends the solved token with the next attempt, and says when an answer was refused or could not be checked, rather than calling it a wrong password. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -7,6 +7,7 @@
     import { ApiError, answerSecondFactor, claimOwner, session, setPassword, signIn, signInAsUser } from "$lib/api.svelte.js";
     import { arrivedWith } from "$lib/links.js";
     import { readCode, readRecoveryCode } from "$lib/twofactor.js";
+    import CaptchaWidget from "$lib/CaptchaWidget.svelte";
     import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
     import LogInIcon from "@lucide/svelte/icons/log-in";
 
@@ -28,6 +29,10 @@
     let code = $state("");
     let recovery = $state(false);
     let notice = $state("");
+    let captchaProvider = $state("");
+    let captchaSiteKey = $state("");
+    let captchaToken = $state("");
+    let captchaWidget: CaptchaWidget | undefined = $state();
     session.secondFactorPending = false;
 
     const claiming = $derived(session.panel && session.needsOwner);
@@ -46,8 +51,8 @@
         if (error.code === "link_expired") return "That link has been used or has run out. Restart the supervisor for another.";
         if (error.code === "already_claimed") return "This panel already has an operator. Sign in with a name and password.";
         if (error.code === "second_factor_refused") return "That code does not sign you in.";
-        if (error.code === "captcha_required") return "Too many failed sign-ins for this name. Wait a few minutes and try again.";
-        if (error.code === "captcha_invalid") return "The captcha answer was refused. Try again.";
+        if (error.code === "captcha_required") return "Too many failed sign-ins for this name. Complete the captcha below and try again.";
+        if (error.code === "captcha_invalid") return "The captcha answer was refused. Solve it again and try once more.";
         if (error.code === "captcha_unreachable") return "The captcha could not be checked, so the sign-in was refused. Try again later.";
         if (error.status === 429) return "Too many attempts. Wait a moment and try again.";
         if (error.status === 403)
@@ -95,6 +100,14 @@
         notice = message;
     }
 
+    function readCaptcha(body: unknown): { provider: string; siteKey: string } | null {
+        if (body === null || typeof body !== "object") return null;
+        const record = body as Record<string, unknown>;
+        if (typeof record.captcha_provider !== "string" || typeof record.captcha_site_key !== "string") return null;
+        if (record.captcha_provider === "" || record.captcha_provider === "off") return null;
+        return { provider: record.captcha_provider, siteKey: record.captcha_site_key };
+    }
+
     function switchFactor() {
         recovery = !recovery;
         code = "";
@@ -126,7 +139,7 @@
                 if (next === "second-factor") toCodeStep();
             } else if (claiming) await claimOwner(token.trim(), username.trim(), password);
             else if (asUser) {
-                if ((await signInAsUser(username.trim(), password)) === "second-factor") toCodeStep();
+                if ((await signInAsUser(username.trim(), password, captchaToken || undefined)) === "second-factor") toCodeStep();
             } else await signIn(token.trim());
             token = "";
             password = "";
@@ -139,6 +152,18 @@
                 fields = failure.fields;
                 problem = Object.keys(failure.fields).length === 0 ? failure : null;
                 requestId = failure.requestId;
+                if (failure.code === "captcha_required") {
+                    const asked = readCaptcha(failure.body);
+                    if (asked !== null) {
+                        captchaProvider = asked.provider;
+                        captchaSiteKey = asked.siteKey;
+                        captchaToken = "";
+                    }
+                    problem = null;
+                } else if (failure.code === "captcha_invalid") {
+                    captchaToken = "";
+                    captchaWidget?.reset();
+                }
                 if (resetting && failure.status === 410) {
                     session.linkProblem = failure;
                     problem = null;
@@ -337,6 +362,20 @@
                             aria-describedby={fields.password !== undefined ? "sign-in-password-problem" : undefined}
                         />
                         {#if fields.password}<p id="sign-in-password-problem" class="text-sm text-destructive">{fields.password}</p>{/if}
+                    </div>
+                {/if}
+                {#if captchaProvider !== "" && !secondStep && !resetting && asUser}
+                    <div class="space-y-2">
+                        <p class="text-sm text-muted-foreground">
+                            Too many failed sign-ins for this name. Solve the captcha, then sign in again.
+                        </p>
+                        <CaptchaWidget
+                            bind:this={captchaWidget}
+                            provider={captchaProvider}
+                            siteKey={captchaSiteKey}
+                            onToken={(token) => (captchaToken = token)}
+                            onExpired={() => (captchaToken = "")}
+                        />
                     </div>
                 {/if}
                 <Button type="submit" class="w-full" disabled={busy}>
