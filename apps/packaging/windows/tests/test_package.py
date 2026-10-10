@@ -147,8 +147,12 @@ class MariaDbTests(unittest.TestCase):
             package.mariadb_zip(spec, archive, self.folder, True)
 
     def test_the_published_sum_is_read_from_its_list(self):
-        text = "aa  mariadb-11.8.2-winx64.msi\nBB *mariadb-11.8.2-winx64.zip\n"
-        self.assertEqual(package.published_sum(text, "mariadb-11.8.2-winx64.zip"), "bb")
+        zip_sum, msi_sum = "B" * 64, "a" * 64
+        for listed in (f"{zip_sum} *mariadb-11.8.2-winx64.zip", f"{zip_sum}  ./mariadb-11.8.2-winx64.zip",
+                       f"{zip_sum}  mariadb-11.8.2/winx64-packages/mariadb-11.8.2-winx64.zip", f"SHA256 (mariadb-11.8.2-winx64.zip) = {zip_sum}"):
+            text = f"{msi_sum}  mariadb-11.8.2-winx64.msi\n{listed}\n"
+            self.assertEqual(package.published_sum(text, "mariadb-11.8.2-winx64.zip"), "b" * 64)
+        text = f"{msi_sum}  mariadb-11.8.2-winx64.msi\n"
         with self.assertRaisesRegex(package.PackageError, "list no"):
             package.published_sum(text, "missing.zip")
 

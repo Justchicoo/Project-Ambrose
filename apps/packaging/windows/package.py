@@ -62,10 +62,14 @@ def copy_tree(source, target, kept=("*",), skipped=()):
 
 def published_sum(text, name):
     for line in text.splitlines():
-        parts = line.split()
-        if len(parts) == 2 and parts[1].lstrip("*") == name:
-            return parts[0].lower()
-    raise PackageError(f"MariaDB's published checksums list no {name}")
+        bsd = re.fullmatch(r"\s*SHA256\s*\((.+)\)\s*=\s*([0-9A-Fa-f]{64})\s*", line)
+        parts = [bsd.group(2), bsd.group(1)] if bsd else line.split(None, 1)
+        if len(parts) == 2 and re.fullmatch(r"[0-9A-Fa-f]{64}", parts[0]):
+            listed = parts[1].strip().lstrip("*").replace("\\", "/").rsplit("/", 1)[-1]
+            if listed == name:
+                return parts[0].lower()
+    head = " | ".join(text.splitlines()[:5])[:400]
+    raise PackageError(f"MariaDB's published checksums list no {name}; the list begins: {head}")
 
 
 def fetch(url, target):
