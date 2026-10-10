@@ -274,9 +274,9 @@ A contributor can write a new quest as a dated SQL update that uses only keys an
 
 **Acceptance**
 
-- [ ] accept, 2/5, save, reload keeps quest_gid, goal_gid, count
-- [ ] CompleteQuest sets registry (Q,'Complete')=1
-- [ ] Orphan goals pruned with warning
+- [x] accept, 2/5, save, reload keeps quest_gid, goal_gid, count (`CharacterRepositoryDatabaseTest.AQuestLogCountedToTwoOfFiveReloadsWithTheSameGidsAndCountAndALateOlderSaveChangesNothing`, against MariaDB 10.11 with AMBROSE_TEST_DB set: a quest taken and its goal counted to 2 is saved and read back with the same quest and goal GIDs, from the quest GID line at 1<<50, and count 2, and older saves landing after a newer one change nothing; `QuestLogTest.AQuestCountedToTwoOfFiveKeepsItsGidsAndCountThroughItsRows`)
+- [x] CompleteQuest sets registry (Q,'Complete')=1 (`QuestLogTest.CompletingAQuestRemovesItAndSetsItsCompleteEntry`; the database test above completes the quest, and the reload holds no active row or goal and registry (KeptQuest, Complete) = 1)
+- [x] Orphan goals pruned with warning (`QuestLogTest.AnOrphanQuestAndAnOrphanGoalArePrunedOnLoadWithAWarningEach`: a quest whose template is gone, with its goals, and a goal its quest no longer has are dropped with a warning each, which the game server logs as it loads the wizard, and the pruned log is saved again; with no quest store loaded nothing is dropped)
 
 ### Detailed spec from QST-7: Character quest persistence and quest registry
 
@@ -298,9 +298,9 @@ Active quests, goal progress, completion history, registry entries and hidden-qu
 
 **Acceptance**
 
-- [ ] Unit test: accept -> progress 2/5 -> save -> reload gives the same quest_gid, goal_gid and count.
-- [ ] Unit test: CompleteQuest removes the active row and sets registry (Q, 'Complete') = 1, and HasCompletedQuest(Q) is true.
-- [ ] Unit test: an orphan goal row whose quest template was removed is pruned on load with a warning.
+- [x] Unit test: accept -> progress 2/5 -> save -> reload gives the same quest_gid, goal_gid and count. (`CharacterRepositoryDatabaseTest.AQuestLogCountedToTwoOfFiveReloadsWithTheSameGidsAndCountAndALateOlderSaveChangesNothing`)
+- [x] Unit test: CompleteQuest removes the active row and sets registry (Q, 'Complete') = 1, and HasCompletedQuest(Q) is true. (`QuestLogTest.CompletingAQuestRemovesItAndSetsItsCompleteEntry`)
+- [x] Unit test: an orphan goal row whose quest template was removed is pruned on load with a warning. (`QuestLogTest.AnOrphanQuestAndAnOrphanGoalArePrunedOnLoadWithAWarningEach`)
 
 **Risks**
 
