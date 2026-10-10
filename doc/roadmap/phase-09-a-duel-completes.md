@@ -247,7 +247,7 @@ world.zone_object and world.spawn_* hold every NPC and interactable placement an
 
 - [x] Sub-circle positions match hand-computed coordinates (SubCircleTest.AnUnturnedSigilPutsEachCircleOnItsAxisFacingTheCentre and SubCircleTest.ATurnedSigilPutsItsMonsterAndPlayerCirclesWhereTheClientDoes)
 - [x] WizardClientDuelBehavior and CombatParticipant round-trip (DuelTest.TheCirclesDuelBehaviorAndEachParticipantDecodeBackToIdenticalObjects)
-- [ ] Real client: .duel start shows ring, circles and nameplates; .duel end frees the player
+- [x] Real client: .duel start shows ring, circles and nameplates; .duel end frees the player (clientdriver duel-start-and-end.json on Unicorn Way, run 20261010-191853-s1: the ring drawn with the wizard on circle 4 and the Lost Soul on circle 0, the planning window's plates over both, the Lost Soul's 55/55 and the wizard's 415/415; after .duel end the ring is gone and the wizard walks off)
 
 ### Detailed spec from CMB-3: Duel instance and sigil placement (visual only)
 
@@ -273,7 +273,7 @@ A GM can start a duel at a combat sigil, and the real client shows the player an
 
 - [x] Unit test: sub-circle positions for a sigil at a known location and yaw match hand-computed coordinates (4 monster and 4 player slots mirrored) (SubCircleTest.ATurnedSigilPutsItsMonsterAndPlayerCirclesWhereTheClientDoes, eight circles of a sigil at (1000, -2000, 50) with yaw 0.5, and DuelTest.AWizardAndACreatureSitOnTheFirstCircleOfTheirSidesWhereSubCircleSaysAndAFullSideIsRefused)
 - [x] Unit test: a serialized WizardClientDuelBehavior and CombatParticipant decode back to identical objects (DuelTest.TheCirclesDuelBehaviorAndEachParticipantDecodeBackToIdenticalObjects)
-- [ ] Real client: after .duel start, the player and creature run to opposite circles (MSG_AGGRO, MSG_ENTERSTATE 'Sigil' then 'Stationary'), the sigil ring renders (MSG_DUEL), and health/name plates appear over both (MSG_COMBATADD)
+- [x] Real client: after .duel start, the player and creature run to opposite circles (MSG_AGGRO, MSG_ENTERSTATE 'Sigil' then 'Stationary'), the sigil ring renders (MSG_DUEL), and health/name plates appear over both (MSG_COMBATADD) (clientdriver duel-start-and-end.json on Unicorn Way, run 20261010-191853-s1: the wizard runs onto circle 4 opposite the Lost Soul on circle 0, the ring renders from the circle object's NEWOBJECT, since the r806919 client has no MSG_DUEL handler, and after MSG_COMBATADD the client's log shows MSG_CombatPhase(kPhase_Planning) with the wizard as PlayerID adding both participants to the planning window, whose plates show the Lost Soul's 55/55 and the wizard's 415/415)
 - [x] Real client: .duel end sends MSG_COMBATMATCHRESULT, MSG_COMBATPHASE kPhase_Ended and MSG_ENDDUEL; the ring disappears and the player can walk again (clientdriver duel-start-and-end.json, run 20261010-165433-s1 on Unicorn Way: the game server logged the wizard shown the duel's end and the circle and creature taken away; screen after-duel shows the plain street with no ring, and walked-free shows the wizard walked up the street off its circle)
 
 **Risks**
