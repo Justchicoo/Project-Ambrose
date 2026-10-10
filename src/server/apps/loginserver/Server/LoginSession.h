@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 and validates MSG_USER_VALIDATE's PassKey3 against the login database without blocking its network thread, holds the account it claimed and admitted, deletes one of its wizards for MSG_DELETECHARACTER, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, creates a wizard the same way again and answers only that it did or did not, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down. It also keeps the account's security level for the queue bypass and carries picks a full realm queued from the admission queue onto its own executor, telling the client its place in line with MSG_USER_ADMIT_IND.
+ * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 and validates MSG_USER_VALIDATE's PassKey3 against the login database without blocking its network thread, holds the account it claimed and admitted, deletes one of its wizards for MSG_DELETECHARACTER, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, creates a wizard the same way again and answers only that it did or did not, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down. It also keeps the account's security level for the queue bypass and carries picks a full realm queued from the admission queue onto its own executor.
  */
 
 #ifndef AMBROSE_LOGINSESSION_H
@@ -78,7 +78,7 @@ private:
     void RefuseUnsupportedAuthentication(std::string_view tag);
     void ContinueValidation(std::shared_ptr<ValidateAttempt> const& attempt, PreparedQueryResult result);
     void CompleteValidation(std::shared_ptr<ValidateAttempt> const& attempt, bool committed);
-    void FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate = 0);
+    void FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate = 0, std::string_view reasonOverride = {});
     void StartCharacterList();
     void SelectCharacter(uint64 charId, std::string const& realmName, PreparedQueryResult result);
     void IssueCharacterSelected(LoginMessages::CharacterSelected reply, std::string realmName, uint32 realmId);
