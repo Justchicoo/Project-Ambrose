@@ -173,6 +173,32 @@ namespace
         host = address ? address->to_string() : Ambrose::ToLower(name);
         return true;
     }
+
+    struct UptimeParts
+    {
+        UptimeSummary Summary;
+        std::vector<TimelineIncident> Timeline;
+        std::vector<RealmSparkline> Sparklines;
+    };
+
+    UptimeParts BuildUptimeParts(std::vector<ProbeSample> samples, std::vector<std::string> const& realmNames,
+        MaintenanceState const& maintenance, std::string const& operatorNote, int64 nowEpochMs)
+    {
+        UptimeParts parts;
+        parts.Summary = PanelUptimeHistory::ComputeSummary(samples, realmNames, nowEpochMs);
+        std::vector<PlannedWindow> planned;
+        if (maintenance.WindowStartEpochMs && maintenance.WindowEndEpochMs)
+        {
+            PlannedWindow window;
+            window.StartEpochMs = *maintenance.WindowStartEpochMs;
+            window.EndEpochMs = *maintenance.WindowEndEpochMs;
+            window.Reason = maintenance.Reason;
+            planned.push_back(std::move(window));
+        }
+        parts.Timeline = PanelUptimeHistory::BuildTimeline(samples, planned, operatorNote, nowEpochMs);
+        parts.Sparklines = PanelUptimeHistory::BuildSparklines(samples, realmNames, nowEpochMs);
+        return parts;
+    }
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
@@ -234,6 +260,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     RegisterCommandHistory();
     RegisterMaintenance();
     RegisterPublicStatus();
+    RegisterUptimeHistory();
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
@@ -1213,9 +1240,56 @@ AdminResponse Panel::PublicStatusGet(AdminRequest const& request)
     PublicIncident incident;
     if (!PanelPublicStatus::ReadIncident(_store, incident, error))
         return AdminResponse::Problem(503, "status_unavailable", error);
-    std::string const body = PanelPublicStatus::Answer(source, maintenance, incident, PanelStore::NowEpochMs()).dump();
+    int64 const nowEpochMs = PanelStore::NowEpochMs();
+    nlohmann::json answer = PanelPublicStatus::Answer(source, maintenance, incident, nowEpochMs);
+    std::vector<std::string> realmNames;
+    for (PublicRealmStatus const& realm : source.Realms)
+        realmNames.push_back(realm.Name);
+    UptimeParts const parts = BuildUptimeParts(
+        _uptimeSampleSource ? _uptimeSampleSource() : std::vector<ProbeSample>{}, realmNames,
+        maintenance, incident.Active ? incident.Note : "", nowEpochMs);
+    PanelUptimeHistory::AppendPublicFields(answer, parts.Summary, parts.Timeline, parts.Sparklines);
+    std::string const body = answer.dump();
     _publicStatusCache.Put(body);
     return AdminResponse::Json(200, body);
+}
+
+void Panel::RegisterUptimeHistory()
+{
+    _listener.Routes().AddGuarded("GET", "/api/panel/uptime/summary", "status.read", [this](AdminRequest const& request)
+    {
+        return UptimeSummaryGet(request);
+    });
+}
+
+AdminResponse Panel::UptimeSummaryGet(AdminRequest const& request)
+{
+    (void)request;
+    std::lock_guard const lock(_storeMutex);
+    if (!_store.IsOpen())
+        return AdminResponse::Problem(503, "status_unavailable", "The panel store is not open");
+    MaintenanceState maintenance;
+    std::string error;
+    if (!PanelMaintenance::Read(_store, maintenance, error))
+        return AdminResponse::Problem(503, "status_unavailable", error);
+    PublicIncident incident;
+    if (!PanelPublicStatus::ReadIncident(_store, incident, error))
+        return AdminResponse::Problem(503, "status_unavailable", error);
+    PublicSourceState const source = _publicSource ? _publicSource() : PublicSourceState{};
+    std::vector<std::string> realmNames;
+    for (PublicRealmStatus const& realm : source.Realms)
+        realmNames.push_back(realm.Name);
+    int64 const nowEpochMs = PanelStore::NowEpochMs();
+    UptimeParts const parts = BuildUptimeParts(
+        _uptimeSampleSource ? _uptimeSampleSource() : std::vector<ProbeSample>{}, realmNames,
+        maintenance, incident.Active ? incident.Note : "", nowEpochMs);
+    return AdminResponse::Json(200,
+        PanelUptimeHistory::OperatorAnswer(parts.Summary, parts.Timeline, parts.Sparklines, nowEpochMs).dump());
+}
+
+void Panel::SetUptimeSampleSource(ProbeSampleSource source)
+{
+    _uptimeSampleSource = std::move(source);
 }
 
 AdminResponse Panel::IncidentPost(AdminRequest const& request)

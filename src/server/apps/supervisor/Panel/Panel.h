@@ -25,6 +25,7 @@
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
 #include "PanelTwoFactor.h"
+#include "PanelUptimeHistory.h"
 #include "PanelUsers.h"
 #include "PanelStore.h"
 #include "PanelSettings.h"
@@ -172,6 +173,9 @@ private:
     AdminResponse PublicStatusGet(AdminRequest const& request);
     AdminResponse IncidentPost(AdminRequest const& request);
     AdminResponse IncidentClear(AdminRequest const& request);
+    void RegisterUptimeHistory();
+    AdminResponse UptimeSummaryGet(AdminRequest const& request);
+    void SetUptimeSampleSource(ProbeSampleSource source);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
@@ -252,6 +256,7 @@ private:
     MaintenanceAppCall _appCall;
     PublicStatusSource _publicSource;
     PublicStatusCache _publicStatusCache;
+    ProbeSampleSource _uptimeSampleSource;
     bool _publicStatusEnabled = false;
     AdminServer _listener;
     bool _secure = false;
