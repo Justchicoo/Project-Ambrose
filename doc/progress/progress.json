@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 151,
+    "done": 153,
     "total": 469,
-    "percent": 32.2
+    "percent": 32.6
   },
   "checks": {
-    "done": 1170,
+    "done": 1180,
     "total": 2874,
-    "percent": 40.7
+    "percent": 41.1
   },
   "contributor_track": {
     "merged": 94,
@@ -66,9 +66,9 @@
     {
       "phase": 7,
       "title": "An npc offers a quest",
-      "milestones_done": 4,
+      "milestones_done": 5,
       "milestones_total": 13,
-      "checks_done": 31,
+      "checks_done": 39,
       "checks_total": 88
     },
     {
@@ -138,9 +138,9 @@
     {
       "phase": 16,
       "title": "Patch server and tooling ownership",
-      "milestones_done": 4,
+      "milestones_done": 5,
       "milestones_total": 13,
-      "checks_done": 26,
+      "checks_done": 28,
       "checks_total": 80
     },
     {

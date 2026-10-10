@@ -112,7 +112,7 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 **Acceptance**
 
 - [x] Synthetic dir gives {Base, ZoneA, ZoneB} with correct Size/CRC/HeaderSize/HeaderCRC (`InstallFixture.SyntheticInstallProducesExpectedPackagesAndMetrics`)
-- [ ] Reference diff: 100% match on type 3/5 CRC/HeaderSize/HeaderCRC, all 3590 packages
+- [x] Reference diff: 100% match on type 3/5 CRC/HeaderSize/HeaderCRC, all 3590 packages [patchlist_generator at b98c3ab on a complete r806919 install, the Steam edition, against its own PatchInfo/LatestFileList.bin on 2026-10-10: 3589 of 3589 type 3 and 5 records match Size, CRC, HeaderSize and HeaderCRC, and package membership matches for 3590 of 3590 tables; the 2 other differences are the install's own edited PatchConfig.xml files. The KingsIsle-launcher install streams its WADs, so 31 still had segments pending and only its fully fetched files can match]
 - [x] Second run faster, identical .bin (`InstallFixture.SecondRunUsesCacheAndKeepsBinaryIdentical`)
 
 ### Detailed spec from PAT-5: Install scanner: generate the manifest from the user's client install
@@ -126,7 +126,7 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 - CRC cache keyed by path+size+mtime so reruns skip rehashing Root.wad (295 MB)
 - FileType assignment: 3 = WAD (default), 5 = WAD listed in a rules override, 1 = plain file, 4 = rules override (see open questions)
 - Optional --reference <LatestFileList.xml> mode that copies FileType/CompressedHeaderSize/package membership from a list the user supplies and prints a diff report
-- conf/dist/patchlist_generator.conf.dist
+- src/tools/patchlist_generator/patchlist_generator.conf.dist
 
 **Data sources**
 
@@ -136,7 +136,7 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 **Acceptance**
 
 - [x] Unit (synthetic temp dir): 2 zone WADs + Root.wad + Bin/a.dll give packages {Base, ZoneA, ZoneB} with the correct Size/CRC/HeaderSize/HeaderCRC (`InstallFixture.SyntheticInstallProducesExpectedPackagesAndMetrics`)
-- [ ] Env-gated diff run on r806919 with a reference list: Size, CRC, HeaderSize and HeaderCRC match 100% of type 3/5 records, and package membership matches for all 3590 tables
+- [x] Env-gated diff run on r806919 with a reference list: Size, CRC, HeaderSize and HeaderCRC match 100% of type 3/5 records, and package membership matches for all 3590 tables [patchlist_generator at b98c3ab on a complete r806919 install, the Steam edition, against its own PatchInfo/LatestFileList.bin on 2026-10-10: 3589 of 3589 type 3 and 5 records match Size, CRC, HeaderSize and HeaderCRC, and package membership matches for 3590 of 3590 tables; the 2 other differences are the install's own edited PatchConfig.xml files. The KingsIsle-launcher install streams its WADs, so 31 still had segments pending and only its fully fetched files can match]
 - [x] Second run finishes much faster than the first (CRC cache hit) and gives an identical .bin (`InstallFixture.SecondRunUsesCacheAndKeepsBinaryIdentical`)
 
 **Risks**

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the game message table against the user's own client install: its declarations resolve, every GAME, WIZARD, DOODLEDOUG_MESSAGES, WIZARD2 and WIZARD3 message has exactly one rule, named for it or standing for the rest of its service, the requests and notes a client sends as it enters are handled, MSG_PETHATCHREADYSTATUS, which the XML defines twice, is one message at one order, 122 on r806919, and the WIZARD and combat orders are the 1-based places of their tags sorted without repeats.
+ * Checks the game message table against the user's own client install: its declarations resolve, every GAME, WIZARD, DOODLEDOUG_MESSAGES, QUEST_MESSAGES, WIZARD2 and WIZARD3 message has exactly one rule, named for it or standing for the rest of its service, the requests and notes a client sends as it enters are handled, MSG_PETHATCHREADYSTATUS, which the XML defines twice, is one message at one order, 122 on r806919, and the WIZARD and combat orders are the 1-based places of their tags sorted without repeats.
  */
 
 #include "Environment.h"
@@ -57,7 +57,7 @@ TEST(GameMessageTableClientTest, EveryWorldMessageHasExactlyOneRuleAndTheEntryCh
     ASSERT_TRUE(table.Validate(*loaded.Catalog, errors)) << (errors.empty() ? std::string() : errors.front());
 
     auto const& protocols = loaded.Catalog->GetDefinitions().GetProtocols();
-    for (uint8 const service : { GameMessages::GameService, GameMessages::WizardService, GameMessages::CombatService, GameMessages::Wizard2Service, GameMessages::Wizard3Service })
+    for (uint8 const service : { GameMessages::GameService, GameMessages::WizardService, GameMessages::CombatService, GameMessages::QuestService, GameMessages::Wizard2Service, GameMessages::Wizard3Service })
     {
         auto const protocol = protocols.find(service);
         ASSERT_NE(protocol, protocols.end()) << "service " << unsigned{ service };
