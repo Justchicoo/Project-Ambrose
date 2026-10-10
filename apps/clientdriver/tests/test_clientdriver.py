@@ -1238,17 +1238,18 @@ class EngineTests(TemporaryFolder):
         running.run()
         self.assertEqual(self.client.typed, ["\r"])
         self.assertEqual(self.client.presses, [])
-        self.assertIn("pressed Enter for press", running.steps[0]["result"])
+        self.assertIn("pressed Enter 1 time(s) for press", running.steps[0]["result"])
         clicked = self.build([dict(steps[0], until=dict(steps[0]["until"], pattern="stands in the world"))])
 
         def after_one(taken):
             self.write(os.path.join("client", "WizardClient.log"), ["09/17/26 [STAT] stands in the world"], encoding="latin-1")
 
         self.client.on_click = after_one
-        clicked.run()
-        self.assertEqual(self.client.typed, ["\r"])
+        with mock.patch.object(engine, "ENTER_CHECK", 0.05):
+            clicked.run()
+        self.assertEqual(self.client.typed, ["\r"] * engine.ENTER_TRIES)
         self.assertEqual(len(self.client.presses), 1)
-        self.assertIn("Enter did not press press", str(clicked.notes))
+        self.assertIn("Enter presses did not press press", str(clicked.notes))
 
     def test_a_press_is_repeated_until_the_check_that_it_took_passes(self):
         running = self.build([{"action": "click", "name": "press the button that reconnects", "target": "press",
