@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The login database's statement ids and the connection type that prepares them.
+ * The login database's statement ids and the connection type that prepares them, including account email verification state.
  */
 
 #ifndef AMBROSE_LOGINDATABASE_H
@@ -16,6 +16,7 @@ enum LoginDatabaseStatements : uint32
     LOGIN_SEL_ACCOUNT_BY_ID,
     LOGIN_INS_ACCOUNT,
     LOGIN_UPD_VERIFIER,
+    LOGIN_UPD_ACCOUNT_EMAIL_VERIFIED,
     LOGIN_UPD_SECURITY_LEVEL,
     LOGIN_UPD_ACCOUNT_LOCKED,
     LOGIN_UPD_LAST_LOGIN,

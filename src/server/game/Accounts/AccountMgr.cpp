@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Validates accounts and credentials, stores sealed password verifiers, manages account permissions, deletion, bans and timed mutes, revokes session keys where required, and reads account and active moderation records through synchronous login database statements.
+ * Validates accounts and credentials, stores sealed password verifiers and email verification state, manages account permissions, deletion, bans and timed mutes, revokes session keys where required, and reads account and active moderation records through synchronous login database statements.
  */
 
 #include "AccountMgr.h"
@@ -36,6 +36,7 @@ namespace
         account.LastMachineId = row[13].Get<uint64>();
         if (!row[14].IsNull())
             account.Permissions = row[14].Get<uint32>();
+        account.EmailVerified = row[15].Get<bool>();
         return account;
     }
 }
@@ -120,7 +121,7 @@ AccountOpResult AccountMgr::ValidatePassword(std::string_view password) const
     return AccountOpResult::Ok;
 }
 
-AccountOpResult AccountMgr::CreateAccount(std::string_view username, std::string_view password, std::string_view email, uint64* accountId)
+AccountOpResult AccountMgr::CreateAccount(std::string_view username, std::string_view password, std::string_view email, uint64* accountId, bool emailVerified)
 {
     if (AccountOpResult const result = ValidateUsername(username); result != AccountOpResult::Ok)
         return result;
@@ -146,6 +147,7 @@ AccountOpResult AccountMgr::CreateAccount(std::string_view username, std::string
     statement->SetData(2, sealed.KeyId);
     statement->SetData(3, email);
     statement->SetData(4, Now());
+    statement->SetData(5, emailVerified);
     bool const inserted = LoginDatabase.DirectExecute(*statement);
 
     AccountLookup const created = GetAccountByName(username);
@@ -160,6 +162,16 @@ AccountOpResult AccountMgr::CreateAccount(std::string_view username, std::string
         *accountId = created.Account->Id;
     LOG_INFO("accounts", "Created account {} (id {})", created.Account->Username, created.Account->Id);
     return AccountOpResult::Ok;
+}
+
+AccountOpResult AccountMgr::SetEmailVerified(uint64 accountId, bool verified)
+{
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_EMAIL_VERIFIED);
+    if (!statement)
+        return AccountOpResult::DatabaseError;
+    statement->SetData(0, verified);
+    statement->SetData(1, accountId);
+    return LoginDatabase.DirectExecute(*statement) ? AccountOpResult::Ok : AccountOpResult::DatabaseError;
 }
 
 AccountOpResult AccountMgr::StoreVerifier(uint64 accountId, std::string_view username, std::string_view password)
@@ -490,9 +502,9 @@ std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> AccountMgr::PrepareG
 
 std::optional<AccountMute> AccountMgr::ReadAccountMuteRow(PreparedResultSet const& row)
 {
-    if (row[14].IsNull())
+    if (row[16].IsNull())
         return std::nullopt;
-    return AccountMute{ row[14].Get<uint64>(), row[15].Get<std::string>(), row[16].Get<std::string>() };
+    return AccountMute{ row[16].Get<uint64>(), row[17].Get<std::string>(), row[18].Get<std::string>() };
 }
 
 AccountInfo AccountMgr::ReadAccountRow(PreparedResultSet const& row)

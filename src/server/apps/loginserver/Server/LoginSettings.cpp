@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Login options from config, refusing an empty or overlong server name, clamping out-of-range values and the AFK warning byte, refusing to enforce an empty revision list, reading maintenance mode with its trimmed reason and refusing a bypass level above 4, and reporting each problem.
+ * Reads the Login options from config, refusing an empty or overlong server name, clamping out-of-range values and the AFK warning byte, refusing to enforce an empty revision list, reading email verification and maintenance mode with its trimmed reason and refusing a bypass level above 4, and reporting each problem.
  */
 
 #include "LoginSettings.h"
@@ -76,6 +76,7 @@ LoginSettings LoginSettings::Load(ConfigMgr const& config, std::vector<std::stri
         report(fmt::format("Login.DuplicateLoginPolicy = {} is not 0 (reject) or 1 (kick the existing session); using 1", policy));
 
     settings.Maintenance = config.GetOption<bool>("Login.Maintenance", false, true);
+    settings.RequireVerifiedEmail = config.GetOption<bool>("Login.RequireVerifiedEmail", false, true);
     settings.MaintenanceReason = std::string(Ambrose::Trim(config.GetOption<std::string>("Login.MaintenanceReason", "", true)));
     uint32 const bypass = config.GetOption<uint32>("Login.MaintenanceBypassLevel", 2, true);
     if (bypass <= 4)
