@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The duel group: 'duel start <creature template id> [wizard]' starts a duel at the combat sigil nearest a wizard, the game master who types it when none is named, seating the wizard on the sigil's first player circle and a creature of that template, placed on its first monster circle, and placing the duel circle the sigil's placement names with the duel its WizardClientDuelBehavior carries; 'duel end [wizard]' ends the duel a wizard is in with the wizard's team winning, which frees the wizard and takes the circle and creature away. Both run on the world thread, where the instances and duels are kept, and are answered once they have.
+ * The duel group: 'duel start <creature template id> [wizard]' starts a duel at the combat sigil nearest a wizard, the game master who types it when none is named, seating the wizard, carrying its game stats, on the sigil's first player circle and a creature of that template, placed on its first monster circle, and placing the duel circle the sigil's placement names with the duel its WizardClientDuelBehavior carries; 'duel end [wizard]' ends the duel a wizard is in with the wizard's team winning, which frees the wizard and takes the circle and creature away. Both run on the world thread, where the instances and duels are kept, and are answered once they have.
  */
 
 #include "AccountMgr.h"
@@ -10,6 +10,7 @@
 #include "GameSession.h"
 #include "MapMgr.h"
 #include "ObjectTemplateMgr.h"
+#include "PlayerObjectBuilder.h"
 #include "ScriptMgr.h"
 #include "Settings.h"
 #include "SigilMgr.h"
@@ -141,6 +142,14 @@ namespace
         wizard.Health = stats->GetHitpoints();
         wizard.MaxHealth = stats->GetMaxHitpoints();
         wizard.Level = stats->GetLevel();
+    PropertyObjectPtr gameStats = PropertyObject::Create(sTypeRegistry.GetCatalog(), PlayerObjectBuilder::StatsClass);
+    if (!gameStats || !stats->WriteGameStats(*gameStats, outcome.Problem))
+    {
+        if (outcome.Problem.empty())
+            outcome.Problem = fmt::format("the type dump has no {}", PlayerObjectBuilder::StatsClass);
+        return;
+    }
+    wizard.GameStats = std::move(gameStats);
         DuelCombatant monster;
         monster.TemplateId = creatureTemplate;
         monster.SchoolId = creatureStats->SchoolId;

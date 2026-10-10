@@ -1064,6 +1064,14 @@ void GameSession::UpdateDuels()
             add.ParticipantData = data;
             SendDmlMessage(add);
         }
+        if (duel->FindParticipant(_worldGuid))
+        {
+            GameMessages::CombatPhase planning;
+            planning.DuelId = id;
+            planning.NewPhase = static_cast<uint8>(DuelPhase::Planning);
+            planning.PlayerId = _worldGuid;
+            SendDmlMessage(planning);
+        }
         for (DuelParticipant const& participant : participants)
         {
             ShowStateOf(participant.Combatant.OwnerId, DuelStates::Sigil);

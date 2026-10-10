@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One duel as the server holds it: its id, which is the global id of the circle object the client draws it with, the instance and the sigil it stands on with the sigil's place, yaw and circles, its round, phase and first team, and its participants, each seated on the first free circle of its own side, players on the player circles and creatures on the monster circles, with the place and facing SubCircle gives that circle. It takes the global id its circle is given as its own and fills the circle's behaviors, the Duel its WizardClientDuelBehavior carries and the start state of each of its state categories, so the ring plays its opening animation and settles into its idle loop on its own, the CombatParticipant each MSG_COMBATADD carries, written with the Public mask and no serializer flags as the client's MSG_CombatAdd reads it, and reads the health, level and school a creature's NPCBehaviorTemplate gives it; with the states a duel puts its participants in, Sigil then Stationary as it starts and Idle as it ends, and the start states of the circle's two state categories, OnAdd and NotInteracting.
+ * One duel as the server holds it: its id, which is the global id of the circle object the client draws it with, the instance and the sigil it stands on with the sigil's place, yaw and circles, its round, phase and first team, and its participants, each seated on the first free circle of its own side, players on the player circles and creatures on the monster circles, with the place and facing SubCircle gives that circle. It takes the global id its circle is given as its own and fills the circle's behaviors, the Duel its WizardClientDuelBehavior carries and the start state of each of its state categories, so the ring plays its opening animation and settles into its idle loop on its own, the CombatParticipant each MSG_COMBATADD carries, a wizard's with its WizGameStats, which the client's planning window reads the wizard's own plate from, written with the Public mask and no serializer flags as the client's MSG_CombatAdd reads it, and reads the health, level and school a creature's NPCBehaviorTemplate gives it; with the states a duel puts its participants in, Sigil then Stationary as it starts and Idle as it ends, and the start states of the circle's two state categories, OnAdd and NotInteracting.
  */
 
 #ifndef AMBROSE_DUEL_H
@@ -13,6 +13,7 @@
 #include "TypeRegistry.h"
 #include "Types.h"
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -48,6 +49,7 @@ struct DuelCombatant
     int32 Health = 0;
     int32 MaxHealth = 0;
     int32 Level = 0;
+    std::shared_ptr<PropertyObject const> GameStats;
 };
 
 struct DuelParticipant

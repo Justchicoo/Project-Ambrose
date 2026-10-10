@@ -143,6 +143,8 @@ PropertyObjectPtr Duel::BuildParticipant(TypeCatalogPtr const& catalog, DuelPart
         .Set("m_subcircle", participant.Circle)
         .Set("m_isMonster", uint32{ combatant.IsPlayer ? 0u : 1u })
         .Set("m_mobLevel", combatant.IsPlayer ? 0 : combatant.Level);
+    if (combatant.GameStats)
+        PropertyFiller(*made, problem).Set("m_pGameStats", combatant.GameStats->Clone());
     if (!problem.empty())
         return nullptr;
     return made;

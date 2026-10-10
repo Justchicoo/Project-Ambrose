@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests a duel on a type dump the test writes with the duel classes laid out as the client's dump gives them: a wizard and a creature are seated on the first player and monster circles at the places SubCircle gives them, with each circle's angle and radius copied into them, and a side with no free circle is refused; the circle's WizardClientDuelBehavior carrying its Duel, and each CombatParticipant MSG_COMBATADD carries, decode back to identical objects; the circle's behaviors are filled with the duel and its state categories' start states under the global id it is given; a creature's health, level and school are read from its NPCBehaviorTemplate; and the duel manager finds a duel by participant and sigil and hands an ended one back once.
+ * Tests a duel on a type dump the test writes with the duel classes laid out as the client's dump gives them: a wizard and a creature are seated on the first player and monster circles at the places SubCircle gives them, with each circle's angle and radius copied into them, and a side with no free circle is refused; the circle's WizardClientDuelBehavior carrying its Duel, and each CombatParticipant MSG_COMBATADD carries, the wizard's with its WizGameStats and the creature's with none, decode back to identical objects; the circle's behaviors are filled with the duel and its state categories' start states under the global id it is given; a creature's health, level and school are read from its NPCBehaviorTemplate; and the duel manager finds a duel by participant and sigil and hands an ended one back once.
  */
 
 #include "Duel.h"
@@ -65,7 +65,9 @@ namespace
         AddClass(classes, "class CombatParticipant", Json::array({ "PropertyClass" }),
             { { "unsigned __int64", "m_ownerID.m_full" }, { "unsigned __int64", "m_templateID.m_full" }, { "bool", "m_isPlayer" }, { "unsigned __int64", "m_zoneID.m_full" },
                 { "int", "m_teamID" }, { "int", "m_primaryMagicSchoolID" }, { "int", "m_originalTeam" }, { "int", "m_playerHealth" }, { "int", "m_maxPlayerHealth" },
-                { "int", "m_curMaxHP" }, { "float", "m_rotation" }, { "float", "m_radius" }, { "int", "m_subcircle" }, { "unsigned int", "m_isMonster" }, { "int", "m_mobLevel" } });
+                { "int", "m_curMaxHP" }, { "float", "m_rotation" }, { "float", "m_radius" }, { "int", "m_subcircle" }, { "unsigned int", "m_isMonster" }, { "int", "m_mobLevel" },
+                { "class SharedPointer<class WizGameStats>", "m_pGameStats" } });
+        AddClass(classes, "class WizGameStats", Json::array({ "PropertyClass" }), { { "int", "m_maxHitPoints" }, { "int", "m_maxMana" } });
         AddClass(classes, "class Circle", Json::array({ "PropertyClass" }), { { "class SharedPointer<class BehaviorInstance>", "m_inactiveBehaviors" } }, { "m_inactiveBehaviors" });
         AddClass(classes, "class BehaviorTemplate", Json::array({ "PropertyClass" }), { { "std::string", "m_behaviorName" } });
         AddClass(classes, "class NPCBehaviorTemplate", Json::array({ "BehaviorTemplate", "PropertyClass" }),
@@ -126,7 +128,13 @@ namespace
         {
             Duel duel(7, 41, { 1000.0f, -2000.0f, 50.0f }, 0.5f, EightCircles());
             std::string problem;
-            EXPECT_TRUE(duel.Seat(Wizard(), problem)) << problem;
+            DuelCombatant wizard = Wizard();
+            PropertyObjectPtr stats = PropertyObject::Create(_catalog, "class WizGameStats");
+            EXPECT_TRUE(stats);
+            if (stats)
+                EXPECT_EQ(stats->Set("m_maxHitPoints", int32{ 500 }), PropertySetResult::Ok);
+            wizard.GameStats = std::move(stats);
+            EXPECT_TRUE(duel.Seat(wizard, problem)) << problem;
             EXPECT_TRUE(duel.Seat(Creature(), problem)) << problem;
             return duel;
         }
@@ -208,6 +216,12 @@ TEST_F(DuelTest, TheCirclesDuelBehaviorAndEachParticipantDecodeBackToIdenticalOb
     EXPECT_EQ(*creature.Object->Get("m_playerHealth")->GetIf<int32>(), 55);
     EXPECT_EQ(*creature.Object->Get("m_isMonster")->GetIf<uint32>(), 1u);
     EXPECT_FLOAT_EQ(*creature.Object->Get("m_rotation")->GetIf<float>(), 144.0f) << "the client places a participant from its own rotation and radius";
+    EXPECT_EQ(creature.Object->Get("m_pGameStats")->AsObject(), nullptr);
+    DecodeResult const wizard = ObjectSerializer::DecodeField(_catalog, *field,
+        std::vector<uint8>(duel.GetEncodedParticipants()[0].begin(), duel.GetEncodedParticipants()[0].end()), participantOptions);
+    PropertyObject const* const stats = wizard.Object->Get("m_pGameStats")->AsObject();
+    ASSERT_NE(stats, nullptr) << "the client's planning window reads the wizard's own plate from its game stats without a null check";
+    EXPECT_EQ(*stats->Get("m_maxHitPoints")->GetIf<int32>(), 500);
 }
 
 TEST_F(DuelTest, TheCircleIsGivenItsDuelAndItsStartStatesUnderTheGlobalIdItIsHanded)
