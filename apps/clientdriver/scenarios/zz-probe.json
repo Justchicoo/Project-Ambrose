@@ -1,0 +1,376 @@
+{
+  "title": "probe",
+  "include": "parts/common.json",
+  "notes": [
+    "probe"
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the main wizard backs away from the start",
+      "vk": "0x53",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard alone",
+      "file": "main-alone",
+      "settle": 1
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion arrive",
+      "file": "main-sees-companion",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "the companion faces away from the main wizard",
+      "file": "companion-faces-away",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "the companion turns to face the main wizard",
+      "vk": "0x44",
+      "seconds": 1.27,
+      "client": "companion",
+      "watch": "main",
+      "watch_every": 0.25,
+      "watch_after": 1
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard",
+      "file": "companion-sees-main",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .additem",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .additem",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .additem",
+      "text": ".additem 1446127"
+    },
+    {
+      "action": "char",
+      "name": "send .additem",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server gives the wizard the hat",
+      "pattern": "gave wizard {wizard_guid} item (\\d+) of template 1446127, and its backpack holds 1 of \\d+ item\\(s\\)",
+      "timeout": 30,
+      "record": true,
+      "keep": "hat_guid"
+    },
+    {
+      "action": "key",
+      "name": "open the backpack with the hat",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "backpack",
+      "file": "backpack",
+      "settle": 3
+    },
+    {
+      "action": "click",
+      "name": "double-click the hat",
+      "target": "backpack_first_item",
+      "clicks": 2
+    },
+    {
+      "action": "shot",
+      "name": "after double click",
+      "file": "after-double",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "companion view",
+      "file": "companion-view",
+      "client": "companion",
+      "settle": 1
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_BUDDYSTATS",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_PLAYERWIZBANG",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTPRIVACYOPTIONS",
+    "MSG_REQUESTSHOWPVPOPTION",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}

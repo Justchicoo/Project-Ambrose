@@ -474,6 +474,9 @@ class Engine:
         until = step.get("until")
         name = step.get("name", target)
         dwell = min(step.get("dwell", 0.35), MAX_DWELL)
+        clicks = int(step.get("clicks", 1))
+        if clicks not in (1, 2):
+            raise StepFailed("a click presses once, or twice for a double click")
         last = None
         said = "nothing was pressed"
         for attempt in range(attempts):
@@ -482,10 +485,10 @@ class Engine:
             if step.get("on_screen") and not self.on_screen(step["on_screen"]):
                 raise StepFailed(f"the {step['on_screen']} screen is no longer there, so {target} was not pressed")
             if step.get("watch"):
-                (said, active), filmed = self.watch_while(step, lambda: self.client.click(x, y, dwell=dwell), "the press was made")
+                (said, active), filmed = self.watch_while(step, lambda: self.client.click(x, y, dwell=dwell, clicks=clicks), "the press was made")
                 said = f"{said}; {filmed}"
             else:
-                said, active = self.client.click(x, y, dwell=dwell)
+                said, active = self.client.click(x, y, dwell=dwell, clicks=clicks)
             self.current = None
             if until:
                 try:
@@ -498,6 +501,18 @@ class Engine:
             else:
                 last = StepFailed("the client's window never became the active one, so its interface dropped the press")
         raise StepFailed(f"{attempts} press(es) on {target} did not take, the last of them {said}: {last}")
+
+    def act_drag(self, step):
+        start = self.store.references.target_of(step["target"])
+        end = self.store.references.target_of(step["to"])
+        steps = int(step.get("steps", 8))
+        if steps < 1 or steps > 50:
+            raise StepFailed("a drag moves the pointer in 1 to 50 steps")
+        said, active = self.client.drag(start, end, dwell=min(step.get("dwell", 0.35), MAX_DWELL), steps=steps)
+        self.current = None
+        if not active:
+            raise StepFailed(f"the client's window never became the active one, so its interface dropped the drag from {step['target']} to {step['to']}")
+        return f"dragged {step['target']} onto {step['to']}: {said}"
 
     def act_hover(self, step):
         target = step["target"]

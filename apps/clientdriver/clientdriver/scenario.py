@@ -20,9 +20,10 @@ ACTIONS = {
     "char": (("code",), ()),
     "key": (("vk",), ()),
     "hold_key": (("vk", "seconds"), ("moves", "watch", "watch_every", "watch_after")),
-    "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
+    "click": (("target",), ("attempts", "clicks", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
     "shot": ((), ("file", "settle")),
     "hover": (("target",), ("file", "settle")),
+    "drag": (("target", "to"), ("dwell", "steps")),
     "server_command": (("command",), ("pattern", "timeout")),
     "game_command": (("command",), ("pattern", "timeout")),
     "stop_game_server": ((), ()),
@@ -137,7 +138,7 @@ class Scenario:
         return sorted(used)
 
     def targets_used(self):
-        return sorted({step["target"] for step in self.steps_with_checks() if step.get("target")})
+        return sorted({step[key] for step in self.steps_with_checks() for key in ("target", "to") if step.get(key)})
 
     def names_against(self, references):
         problems = []

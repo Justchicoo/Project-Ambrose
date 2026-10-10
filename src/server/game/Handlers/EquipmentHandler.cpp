@@ -213,7 +213,10 @@ void GameSession::QueuePublicEquip(uint32 templateId)
 {
     std::string problem;
     PropertyObjectPtr const info = ItemObjectBuilder::BuildPublicInfo(sTypeRegistry.GetCatalog(), templateId, problem);
-    std::optional<std::string> const encoded = info ? ItemObjectBuilder::EncodePublicInfo(GameMessages::EquipmentBehaviorPublicEquipItem::Tag, *info, problem) : std::nullopt;
+    CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
+    if (info && !types)
+        problem = "no core object table is loaded";
+    std::optional<std::string> const encoded = info && types ? ItemObjectBuilder::EncodePublicInfo(GameMessages::EquipmentBehaviorPublicEquipItem::Tag, *info, *types, problem) : std::nullopt;
     if (!encoded)
     {
         LOG_WARN(EquipmentLog, "Session {} cannot show the wizards around wizard {} that it wears template {}, since {}", GetSessionId(), _worldGuid, templateId, problem);

@@ -320,12 +320,13 @@ class ScenarioTests(TemporaryFolder):
     def test_the_screens_and_targets_a_scenario_uses_are_checked_against_the_references(self):
         self.scenario_file("one.json", {"title": "x", "steps": [
             {"action": "wait_screen", "name": "a", "screens": ["login", "nowhere"], "timeout": 1},
-            {"action": "click", "name": "b", "target": "missing", "on_screen": "login"}]})
+            {"action": "click", "name": "b", "target": "missing", "on_screen": "login"},
+            {"action": "drag", "name": "c", "target": "missing", "to": "elsewhere"}]})
         loaded = scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
         self.assertEqual(loaded.screens_used(), ["login", "nowhere"])
-        self.assertEqual(loaded.targets_used(), ["missing"])
+        self.assertEqual(loaded.targets_used(), ["elsewhere", "missing"])
         problems = loaded.names_against(references.References("references.json", REFERENCE_DOCUMENT))
-        self.assertEqual(len(problems), 2)
+        self.assertEqual(len(problems), 3)
 
     def test_a_scenario_can_expect_to_fail(self):
         self.scenario_file("one.json", {"title": "x", "expect": "failure", "steps": []})
@@ -871,11 +872,15 @@ class FakeClient:
         self.held = hold
         time.sleep(hold)
 
-    def click(self, x, y, dwell=0.35):
-        self.presses.append((x, y, round(dwell, 2)))
+    def click(self, x, y, dwell=0.35, clicks=1):
+        self.presses.append((x, y, round(dwell, 2)) if clicks == 1 else (x, y, round(dwell, 2), clicks))
         if self.on_click:
             self.on_click(len(self.presses))
         return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if self.active else "NOT active"), self.active
+
+    def drag(self, start, end, dwell=0.35, steps=8):
+        self.presses.append((start, end, steps))
+        return f"{start[0]},{start[1]} to {end[0]},{end[1]} in {steps} move(s)", self.active
 
 
 class FakeLauncherClient(FakeClient):
@@ -1230,6 +1235,26 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(len(self.client.presses), 3)
         self.assertEqual(self.client.presses[0][:2], (5, 5))
         self.assertIn("3 attempt(s)", running.steps[0]["result"])
+
+    def test_a_double_click_presses_twice_and_nothing_else_is_taken(self):
+        running = self.build([{"action": "click", "name": "put the hat on", "target": "press", "clicks": 2, "dwell": 0.0}])
+        running.run()
+        self.assertEqual(self.client.presses, [(5, 5, 0.0, 2)])
+        running = self.build([{"action": "click", "name": "put the hat on", "target": "press", "clicks": 3, "dwell": 0.0}])
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("twice for a double click", str(raised.exception))
+
+    def test_a_drag_presses_on_one_target_and_lets_go_on_another(self):
+        running = self.build([{"action": "drag", "name": "put the hat on", "target": "press", "to": "press", "steps": 4, "dwell": 0.0}])
+        running.run()
+        self.assertEqual(self.client.presses, [((5, 5), (5, 5), 4)])
+        self.assertIn("dragged press onto press", running.steps[0]["result"])
+        running = self.build([{"action": "drag", "name": "put the hat on", "target": "press", "to": "press", "dwell": 0.0}])
+        self.client.active = False
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("dropped the drag", str(raised.exception))
 
     def test_a_press_that_never_takes_fails_and_names_the_check(self):
         running = self.build([{"action": "click", "name": "press the button", "target": "press", "attempts": 2,

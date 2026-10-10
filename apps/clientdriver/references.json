@@ -77,6 +77,7 @@
     "friend_card_ignore": {"at": [1255, 105], "presses": "the speech bubble crossed out, second down the right edge of the card clicking a friend opens, below the button that removes the friend, which ignores that wizard"},
     "teleport_zone_no": {"at": [772, 440], "presses": "No on the two-line Teleport question that names the zone a friend is in"},
     "friends_card_close": {"at": [1038, 397], "presses": "the red X at the bottom right of the card a friends list row opens beside the list"},
+    "backpack_paper_doll": {"at": [478, 370], "presses": "the middle of the starry paper doll on the backpack's left page, where an item dragged from the list is put on"},
     "card_close": {"at": [1255, 397], "presses": "the red X at the bottom right of the card clicking another wizard opens, which closes it"}
   },
   "client_writes": [

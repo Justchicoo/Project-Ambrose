@@ -243,7 +243,7 @@ PropertyObjectPtr ItemObjectBuilder::BuildPublicInfo(TypeCatalogPtr const& catal
     return info;
 }
 
-std::optional<std::string> ItemObjectBuilder::EncodePublicInfo(std::string_view message, PropertyObject const& info, std::string& problem)
+std::optional<std::string> ItemObjectBuilder::EncodePublicInfo(std::string_view message, PropertyObject const& info, CoreObjectTypeTable const& types, std::string& problem)
 {
     ObjectField const* const field = ObjectFields::Find(message, SerializedInfoField);
     if (!field)
@@ -251,7 +251,7 @@ std::optional<std::string> ItemObjectBuilder::EncodePublicInfo(std::string_view 
         problem = fmt::format("no field describes the {} of {}", SerializedInfoField, message);
         return std::nullopt;
     }
-    EncodeResult const encoded = ObjectSerializer::EncodeField(*field, &info);
+    EncodeResult const encoded = CoreObjectSerializer::EncodeField(*field, info, types);
     if (!encoded.Ok())
     {
         problem = fmt::format("the equipped item's public entry does not encode: {}", encoded.Detail);

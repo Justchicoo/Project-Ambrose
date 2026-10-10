@@ -25,6 +25,7 @@ PW_RENDERFULLCONTENT = 2
 SMTO_ABORTIFHUNG = 0x0002
 SEND_MESSAGE_TIMEOUT_MS = 10000
 MK_LBUTTON = 0x0001
+DOUBLE_CLICK_GAP = 0.06
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 MODIFIER_KEYS = (0x10, 0x11, 0x12, 0x5B, 0x5C)
 MOUSE_BUTTONS = (0x01, 0x02, 0x04)
@@ -531,7 +532,7 @@ class Client:
             win32gui.SetWindowPos(self.handle, win32con.HWND_BOTTOM, 0, 0, 0, 0,
                                   win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
 
-    def click(self, x, y, dwell=0.35):
+    def click(self, x, y, dwell=0.35, clicks=1):
         import win32con
         import win32gui
 
@@ -546,10 +547,43 @@ class Client:
             send(win32con.WM_MOUSEMOVE, 0)
             time.sleep(dwell)
             send(win32con.WM_LBUTTONDOWN, MK_LBUTTON)
-            time.sleep(dwell)
+            time.sleep(dwell if clicks == 1 else DOUBLE_CLICK_GAP)
             send(win32con.WM_LBUTTONUP, 0)
+            for _ in range(clicks - 1):
+                time.sleep(DOUBLE_CLICK_GAP)
+                send(win32con.WM_LBUTTONDOWN, MK_LBUTTON)
+                time.sleep(DOUBLE_CLICK_GAP)
+                send(win32con.WM_LBUTTONUP, 0)
             time.sleep(0.2)
-        return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if active else "NOT active"), active
+        twice = "" if clicks == 1 else f" {clicks} times"
+        return f"{x},{y}{twice} after {dwell:.2f}s with the window " + ("active" if active else "NOT active"), active
+
+    def drag(self, start, end, dwell=0.35, steps=8):
+        import win32api
+        import win32con
+        import win32gui
+
+        wait_until_released(modifiers_held, "a modifier key")
+        wait_until_released(buttons_held, "a mouse button")
+
+        def send(message, wparam, x, y):
+            win32api.SetCursorPos(win32gui.ClientToScreen(self.handle, (x, y)))
+            win32gui.SendMessageTimeout(self.handle, message, wparam, (y << 16) | (x & 0xFFFF), SMTO_ABORTIFHUNG, SEND_MESSAGE_TIMEOUT_MS)
+
+        with self.activated() as active, self.cursor_at(*start):
+            send(win32con.WM_MOUSEMOVE, 0, *start)
+            time.sleep(dwell)
+            send(win32con.WM_LBUTTONDOWN, MK_LBUTTON, *start)
+            time.sleep(dwell)
+            for step in range(1, steps + 1):
+                x = start[0] + (end[0] - start[0]) * step // steps
+                y = start[1] + (end[1] - start[1]) * step // steps
+                send(win32con.WM_MOUSEMOVE, MK_LBUTTON, x, y)
+                time.sleep(dwell / steps)
+            time.sleep(dwell)
+            send(win32con.WM_LBUTTONUP, 0, *end)
+            time.sleep(0.2)
+        return f"{start[0]},{start[1]} to {end[0]},{end[1]} in {steps} move(s) with the window " + ("active" if active else "NOT active"), active
 
     def hover(self, x, y, seconds, then):
         import win32con

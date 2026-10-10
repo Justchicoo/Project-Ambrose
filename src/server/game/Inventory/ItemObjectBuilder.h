@@ -40,7 +40,7 @@ public:
         std::vector<uint64>& missing, std::string& problem);
     static PropertyObject* FindEquipment(PropertyValue::List& behaviors);
     static PropertyObjectPtr BuildPublicInfo(TypeCatalogPtr const& catalog, uint32 templateId, std::string& problem);
-    static std::optional<std::string> EncodePublicInfo(std::string_view message, PropertyObject const& info, std::string& problem);
+    static std::optional<std::string> EncodePublicInfo(std::string_view message, PropertyObject const& info, CoreObjectTypeTable const& types, std::string& problem);
     static uint32 SlotNameId(std::string_view slot) noexcept;
     static std::optional<std::string> Encode(std::string_view message, PropertyObject const& object, CoreObjectTypeTable const& types, std::string& problem);
 };
