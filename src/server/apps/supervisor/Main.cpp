@@ -216,6 +216,18 @@ namespace
                 result.Error = answer->Error;
                 return result;
             });
+            _panel.SetPublicSource([this]
+            {
+                PublicSourceState state;
+                for (AppSnapshot const& snapshot : _supervisor.Snapshots())
+                {
+                    if (snapshot.Name == "loginserver")
+                        state.LoginServerUp = snapshot.State == AppState::Running;
+                    if (!snapshot.Identity.Realm.empty())
+                        state.Realms.push_back(PublicRealmStatus{ snapshot.Identity.Realm, snapshot.State == AppState::Running });
+                }
+                return state;
+            });
             std::string error;
             bool const started = _supervisor.Start(Config(), settings, !IsCheckOnly(), problems, error);
             for (std::string const& problem : problems)
