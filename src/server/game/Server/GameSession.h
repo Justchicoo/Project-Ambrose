@@ -296,7 +296,7 @@ private:
     void SendEquipped(CharacterEquippedItem const& worn);
     void SendUnequipped(uint64 itemGuid);
     void RefuseEquip(uint64 itemGuid, std::string_view slotName);
-    void QueuePublicEquip(uint32 templateId);
+    void QueuePublicEquip(CharacterItem const& item);
     void RefreshPublicObject();
     void SavePosition(PlayerPosition const& position);
     void SendHealthUpdate(uint8 displayDiff);

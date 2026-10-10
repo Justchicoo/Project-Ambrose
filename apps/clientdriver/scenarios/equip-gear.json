@@ -1,0 +1,956 @@
+{
+  "title": "A wizard puts on a hat from its backpack, its paper doll and a second client show it, it is still worn after a relog, and it goes back to the backpack",
+  "include": "parts/common.json",
+  "notes": [
+    "Two Fire wizards enter the Commons on accounts of their own. The main wizard backs away from the Start and opens its backpack, whose",
+    "paper doll wears the hat the wizard was made with; the companion arrives and turns to face it. '.additem 1446127' gives the main wizard",
+    "WC1-Hat-Tier1, the Dramaturgist's Hat, which a level 1 wizard may wear. Double-clicking its row sends MSG_EQUIPITEM with the slot Hat;",
+    "the server stores it in character_equipment, answers MSG_EQUIPMENTBEHAVIOR_EQUIPITEM and relays MSG_EQUIPMENTBEHAVIOR_PUBLICEQUIPITEM,",
+    "so the paper doll and the companion's view of the main wizard's head both change.",
+    "The main client is quit and started again: the hat is still in its slot row, the doll still wears it, and the companion sees the main wizard",
+    "come back in it, from the m_publicItemList sent with the wizard. Double-clicking the worn row takes the hat off into the backpack,",
+    "and the row, the wearer's own view and the companion's view go back; the doll is not judged then, since it shows the row the backpack has chosen. The regions compared are the doll's head on the backpack's left page and the main wizard's",
+    "head where the companion's turn leaves it on its screen. The hue of what the hat changed on the doll, in the wearer's own view and on the",
+    "companion's screen must agree, and neither client may log that it found no texture for a worn item, which is what a public entry that is",
+    "not a WizardEquippedItemInfo makes it say before it draws the hat in its fallback texture."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_BUDDYSTATS",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_PLAYERWIZBANG",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTPRIVACYOPTIONS",
+    "MSG_REQUESTSHOWPVPOPTION",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the main wizard backs away from the start",
+      "vk": "0x53",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard alone with its own hat",
+      "file": "main-alone",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the backpack before the hat",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the paper doll wears the hat the wizard was made with",
+      "file": "doll-bare",
+      "settle": 8
+    },
+    {
+      "action": "key",
+      "name": "close the backpack before the hat",
+      "vk": "0x42"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion arrive",
+      "file": "main-sees-companion",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "the companion faces away from the main wizard",
+      "file": "companion-faces-away",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "the companion turns to face the main wizard",
+      "vk": "0x44",
+      "seconds": 1.27,
+      "client": "companion",
+      "watch": "main",
+      "watch_every": 0.25,
+      "watch_after": 1
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard in the hat it was made with",
+      "file": "seen-bare",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .additem",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .additem",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .additem",
+      "text": ".additem 1446127"
+    },
+    {
+      "action": "char",
+      "name": "send .additem",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server gives the wizard the hat",
+      "pattern": "gave wizard {wizard_guid} item (\\d+) of template 1446127, and its backpack holds 1 of \\d+ item\\(s\\)",
+      "timeout": 30,
+      "record": true,
+      "keep": "hat_guid"
+    },
+    {
+      "action": "key",
+      "name": "open the backpack with the hat",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the hat in the backpack",
+      "file": "backpack-with-hat",
+      "settle": 3
+    },
+    {
+      "action": "click",
+      "name": "double-click the hat to put it on",
+      "target": "backpack_first_item",
+      "clicks": 2,
+      "attempts": 3,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "put item {hat_guid} of template 1446127 on wizard {wizard_guid}'s slot (\\S+), and it wears 1 item\\(s\\)",
+        "timeout": 15,
+        "expect": "Hat",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the companion is shown the hat",
+      "pattern": "showed \\d+ change\\(s\\) to what wizard {wizard_guid} wears to it and (\\d+) other wizard\\(s\\)",
+      "timeout": 15,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat is stored in the hat slot",
+      "query": "SELECT `slot` FROM `character_equipment` WHERE `guid` = {wizard_guid} AND `item` = {hat_guid}",
+      "timeout": 15,
+      "expect": "Hat",
+      "record": true
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat left the backpack's rows",
+      "query": "SELECT COUNT(*) FROM `character_inventory` WHERE `item` = {hat_guid}",
+      "timeout": 15,
+      "expect": "0"
+    },
+    {
+      "action": "shot",
+      "name": "the backpack shows the hat worn",
+      "file": "backpack-worn",
+      "settle": 2
+    },
+    {
+      "action": "compare_shots",
+      "name": "the hat's row turns to the worn color",
+      "first": "backpack-with-hat",
+      "second": "backpack-worn",
+      "region": [
+        660,
+        188,
+        905,
+        214
+      ],
+      "expect": "differ"
+    },
+    {
+      "action": "key",
+      "name": "close the backpack after the hat is on",
+      "vk": "0x42"
+    },
+    {
+      "action": "key",
+      "name": "open the backpack with the hat on",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the paper doll wears the new hat",
+      "file": "doll-hat",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the backpack with the hat on",
+      "vk": "0x42"
+    },
+    {
+      "action": "compare_shots",
+      "name": "the paper doll changed hats",
+      "first": "doll-bare",
+      "second": "doll-hat",
+      "region": [
+        400,
+        270,
+        560,
+        430
+      ],
+      "expect": "differ"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard wears the new hat in its own view",
+      "file": "self-hat",
+      "settle": 2
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard in the new hat",
+      "file": "seen-hat",
+      "client": "companion",
+      "settle": 2
+    },
+    {
+      "action": "compare_shots",
+      "name": "the companion sees the main wizard's hat change",
+      "first": "seen-bare",
+      "second": "seen-hat",
+      "region": [
+        520,
+        212,
+        760,
+        258
+      ],
+      "expect": "differ",
+      "fraction": 0.98
+    },
+    {
+      "action": "compare_colors",
+      "name": "the companion sees the hat in the color the paper doll shows",
+      "first": [
+        "doll-bare",
+        "doll-hat"
+      ],
+      "first_region": [
+        400,
+        270,
+        560,
+        430
+      ],
+      "second": [
+        "seen-bare",
+        "seen-hat"
+      ],
+      "second_region": [
+        520,
+        212,
+        760,
+        258
+      ]
+    },
+    {
+      "action": "compare_colors",
+      "name": "the companion sees the hat in the color its wearer sees in the world",
+      "first": [
+        "main-alone",
+        "self-hat"
+      ],
+      "first_region": [
+        600,
+        300,
+        680,
+        350
+      ],
+      "second": [
+        "seen-bare",
+        "seen-hat"
+      ],
+      "second_region": [
+        520,
+        212,
+        760,
+        258
+      ]
+    },
+    {
+      "action": "restart_client",
+      "name": "quit the main client and start it again",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up, again",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen, again",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in, again",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password, again",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted, again",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads, again",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen, again",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play, again",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key, again",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons, again",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other again",
+      "pattern": "Session \\d+'s wizard {wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it, again",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat is still stored in the hat slot after relogging",
+      "query": "SELECT `slot` FROM `character_equipment` WHERE `guid` = {wizard_guid} AND `item` = {hat_guid}",
+      "timeout": 5,
+      "expect": "Hat"
+    },
+    {
+      "action": "key",
+      "name": "open the backpack after relogging",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the paper doll still wears the new hat after relogging",
+      "file": "doll-relog",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the backpack after relogging",
+      "vk": "0x42"
+    },
+    {
+      "action": "compare_colors",
+      "name": "the paper doll still shows the new hat in its color",
+      "first": [
+        "doll-bare",
+        "doll-hat"
+      ],
+      "first_region": [
+        400,
+        270,
+        560,
+        430
+      ],
+      "second": [
+        "doll-bare",
+        "doll-relog"
+      ],
+      "second_region": [
+        400,
+        270,
+        560,
+        430
+      ]
+    },
+    {
+      "action": "compare_shots",
+      "name": "the paper doll did not go back to the old hat",
+      "first": "doll-bare",
+      "second": "doll-relog",
+      "region": [
+        400,
+        270,
+        560,
+        430
+      ],
+      "expect": "differ"
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard come back in the new hat",
+      "file": "seen-relog",
+      "client": "companion",
+      "settle": 3
+    },
+    {
+      "action": "compare_shots",
+      "name": "the companion sees the new hat after the relog",
+      "first": "seen-bare",
+      "second": "seen-relog",
+      "region": [
+        520,
+        212,
+        760,
+        258
+      ],
+      "expect": "differ",
+      "fraction": 0.98
+    },
+    {
+      "action": "compare_colors",
+      "name": "the companion sees the hat after the relog in the color the paper doll shows",
+      "first": [
+        "doll-bare",
+        "doll-relog"
+      ],
+      "first_region": [
+        400,
+        270,
+        560,
+        430
+      ],
+      "second": [
+        "seen-bare",
+        "seen-relog"
+      ],
+      "second_region": [
+        520,
+        212,
+        760,
+        258
+      ]
+    },
+    {
+      "action": "key",
+      "name": "open the backpack to take the hat off",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the worn hat in the backpack after relogging",
+      "file": "backpack-relog",
+      "settle": 3
+    },
+    {
+      "action": "compare_shots",
+      "name": "the hat's row still has the worn color after relogging",
+      "first": "backpack-worn",
+      "second": "backpack-relog",
+      "region": [
+        660,
+        188,
+        905,
+        214
+      ],
+      "expect": "match",
+      "fraction": 0.9
+    },
+    {
+      "action": "click",
+      "name": "double-click the hat to take it off",
+      "target": "backpack_first_item",
+      "clicks": 2,
+      "attempts": 3,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "took item {hat_guid} of template 1446127 off wizard {wizard_guid}'s slot Hat, and it wears (\\d+) item\\(s\\)",
+        "timeout": 15,
+        "expect": "0",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat's slot row is gone",
+      "query": "SELECT COUNT(*) FROM `character_equipment` WHERE `guid` = {wizard_guid}",
+      "timeout": 15,
+      "expect": "0"
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat is back in the backpack's rows",
+      "query": "SELECT COUNT(*) FROM `character_inventory` WHERE `item` = {hat_guid}",
+      "timeout": 15,
+      "expect": "1"
+    },
+    {
+      "action": "shot",
+      "name": "the backpack shows the hat back in it",
+      "file": "backpack-off",
+      "settle": 2
+    },
+    {
+      "action": "key",
+      "name": "close the backpack after the hat is off",
+      "vk": "0x42"
+    },
+    {
+      "action": "compare_shots",
+      "name": "the hat's row is back to the color of an item not worn",
+      "first": "backpack-with-hat",
+      "second": "backpack-off",
+      "region": [
+        660,
+        188,
+        905,
+        214
+      ],
+      "expect": "match",
+      "fraction": 0.9
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard wears its own hat again in its own view",
+      "file": "self-off",
+      "settle": 2
+    },
+    {
+      "action": "compare_shots",
+      "name": "the main wizard lost the new hat in its own view",
+      "first": "self-hat",
+      "second": "self-off",
+      "region": [
+        600,
+        300,
+        680,
+        350
+      ],
+      "expect": "differ"
+    },
+    {
+      "action": "compare_shots",
+      "name": "the main wizard is back in the hat it was made with",
+      "first": "main-alone",
+      "second": "self-off",
+      "region": [
+        600,
+        300,
+        680,
+        350
+      ],
+      "expect": "match",
+      "fraction": 0.85
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard without the new hat",
+      "file": "seen-off",
+      "client": "companion",
+      "settle": 2
+    },
+    {
+      "action": "compare_shots",
+      "name": "the companion sees the hat come off",
+      "first": "seen-relog",
+      "second": "seen-off",
+      "region": [
+        520,
+        212,
+        760,
+        258
+      ],
+      "expect": "differ",
+      "fraction": 0.98
+    },
+    {
+      "action": "compare_colors",
+      "name": "what the companion no longer sees is the hat in the paper doll's color",
+      "first": [
+        "seen-off",
+        "seen-relog"
+      ],
+      "first_region": [
+        520,
+        212,
+        760,
+        258
+      ],
+      "second": [
+        "doll-bare",
+        "doll-hat"
+      ],
+      "second_region": [
+        400,
+        270,
+        560,
+        430
+      ]
+    },
+    {
+      "action": "compare_shots",
+      "name": "the companion sees the main wizard in the hat it was made with again",
+      "first": "seen-bare",
+      "second": "seen-off",
+      "region": [
+        520,
+        212,
+        760,
+        258
+      ],
+      "expect": "match",
+      "fraction": 0.95
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the main wizard is still connected at the next keepalive",
+      "pattern": "Session \\d+ keepalive from the client",
+      "timeout": 90,
+      "fail": "Closing session \\d+"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the main client loaded every object and item the server sent",
+      "side": "client",
+      "pattern": "LoadObject Failed|LoadObject tried to read more data|Failed to deserialize|Failed to find core template"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the companion loaded every object and item the server sent",
+      "side": "client",
+      "client": "companion",
+      "pattern": "LoadObject Failed|LoadObject tried to read more data|Failed to deserialize|Failed to find core template"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the main client found a texture for everything worn",
+      "side": "client",
+      "pattern": "AvatarTextureOption null for item"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the companion found a texture for everything worn",
+      "side": "client",
+      "client": "companion",
+      "pattern": "AvatarTextureOption null for item"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the game server refused no equip",
+      "side": "server",
+      "pattern": "refused wizard \\d+'s request to (un)?equip"
+    }
+  ]
+}

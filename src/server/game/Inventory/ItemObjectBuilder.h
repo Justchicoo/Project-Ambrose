@@ -25,7 +25,7 @@ public:
     static constexpr std::string_view SlotListProperty = "m_slotList";
     static constexpr std::string_view PublicItemListProperty = "m_publicItemList";
     static constexpr std::string_view SlotInfoClass = "class EquippedSlotInfo";
-    static constexpr std::string_view ItemInfoClass = "class EquippedItemInfo";
+    static constexpr std::string_view ItemInfoClass = "class WizardEquippedItemInfo";
     static constexpr std::string_view SerializedInfoField = "SerializedInfo";
 
     ItemObjectBuilder() = delete;
@@ -39,7 +39,7 @@ public:
     static bool FillEquipment(PropertyObject& player, CoreObjectTypeTable const& types, ItemTemplateStore const& templates, std::vector<CharacterEquippedItem> const& items,
         std::vector<uint64>& missing, std::string& problem);
     static PropertyObject* FindEquipment(PropertyValue::List& behaviors);
-    static PropertyObjectPtr BuildPublicInfo(TypeCatalogPtr const& catalog, uint32 templateId, std::string& problem);
+    static PropertyObjectPtr BuildPublicInfo(TypeCatalogPtr const& catalog, CharacterItem const& item, std::string& problem);
     static std::optional<std::string> EncodePublicInfo(std::string_view message, PropertyObject const& info, CoreObjectTypeTable const& types, std::string& problem);
     static uint32 SlotNameId(std::string_view slot) noexcept;
     static std::optional<std::string> Encode(std::string_view message, PropertyObject const& object, CoreObjectTypeTable const& types, std::string& problem);

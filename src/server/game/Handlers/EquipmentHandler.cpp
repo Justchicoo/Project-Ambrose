@@ -70,7 +70,7 @@ EquipResult GameSession::EquipItem(uint64 itemGuid, std::string_view slotName)
     }
     SendItemRemoved(worn.Item.Guid);
     SendEquipped(worn);
-    QueuePublicEquip(worn.Item.TemplateId);
+    QueuePublicEquip(worn.Item);
     RefreshPublicObject();
     sScriptMgr.OnEquip(*_player, worn.Item.Guid, worn.Item.TemplateId, worn.Slot);
     LOG_INFO(EquipmentLog, "Session {} put item {} of template {} on wizard {}'s slot {}, and it wears {} item(s)", GetSessionId(), worn.Item.Guid, worn.Item.TemplateId,
@@ -209,17 +209,17 @@ void GameSession::RefuseEquip(uint64 itemGuid, std::string_view slotName)
     LOG_DEBUG(EquipmentLog, "Session {} told its client item {} stays where it was", GetSessionId(), itemGuid);
 }
 
-void GameSession::QueuePublicEquip(uint32 templateId)
+void GameSession::QueuePublicEquip(CharacterItem const& item)
 {
     std::string problem;
-    PropertyObjectPtr const info = ItemObjectBuilder::BuildPublicInfo(sTypeRegistry.GetCatalog(), templateId, problem);
+    PropertyObjectPtr const info = ItemObjectBuilder::BuildPublicInfo(sTypeRegistry.GetCatalog(), item, problem);
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     if (info && !types)
         problem = "no core object table is loaded";
     std::optional<std::string> const encoded = info && types ? ItemObjectBuilder::EncodePublicInfo(GameMessages::EquipmentBehaviorPublicEquipItem::Tag, *info, *types, problem) : std::nullopt;
     if (!encoded)
     {
-        LOG_WARN(EquipmentLog, "Session {} cannot show the wizards around wizard {} that it wears template {}, since {}", GetSessionId(), _worldGuid, templateId, problem);
+        LOG_WARN(EquipmentLog, "Session {} cannot show the wizards around wizard {} that it wears template {}, since {}", GetSessionId(), _worldGuid, item.TemplateId, problem);
         return;
     }
     _equipmentChanges.push_back({ *encoded, 0 });
