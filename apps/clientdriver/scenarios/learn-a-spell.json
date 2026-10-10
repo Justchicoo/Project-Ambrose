@@ -12,9 +12,12 @@
     "The client is then quit and started again; the wizard must enter with Fire Cat in the player object's spellbook, which",
     "the client builds its book from, and the book is shot a third time. 'unlearn' sends MSG_REMOVESPELLFROMBOOK and the",
     "last shot shows the book without it. The client must never fail to load an object or to find a spell it is sent.",
-    "No card shows on any page of the Spell Deck for this wizard, a plain Ice spell no more than Fire Cat, and the deck page",
-    "on its left is empty: the wizard has no deck yet, which 8.10 equips and 8.11 fills, so the shots record the Fire page as it",
-    "stands and the check that Fire Cat shows on it is run again then."
+    "The spellbook is the Spell Deck window, which shows the book's cards only beside a worn deck: its DeckConfigurationWindow works",
+    "through the worn deck's DeckBehavior and logs m_deckBehavior NULL without one. So before anything is learned the game server's",
+    "console gives the wizard Deck-Tutorial-001, the Starter Deck, which nothing restricts, and a double-click on its backpack row wears",
+    "it in the Deck slot, stored in character_equipment and still worn after the relog. Wearing it makes the client send",
+    "MSG_SetDeckArchmastery with the deck's school, which waits for 8.11's decks, so the run allows it. The first card slot of the Fire",
+    "page is compared: empty, Fire Cat once learned, still Fire Cat after the relog and empty again once unlearned."
   ],
   "requires": {
     "gameserver": true
@@ -204,6 +207,65 @@
       "record": true
     },
     {
+      "action": "game_command",
+      "name": "a game master gives the wizard a deck",
+      "command": "additem 126983 1 {wizard_guid}",
+      "pattern": "was given 1 Deck-Tutorial-001 \\(template 126983\\), which its backpack shows now and keeps",
+      "timeout": 30
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the deck in the backpack",
+      "pattern": "gave wizard {wizard_guid} item (\\d+) of template 126983, and its backpack holds 1 of \\d+ item\\(s\\)",
+      "timeout": 30,
+      "record": true,
+      "keep": "deck_guid"
+    },
+    {
+      "action": "key",
+      "name": "open the backpack with the deck",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the deck in the backpack",
+      "file": "backpack-with-deck",
+      "settle": 3
+    },
+    {
+      "action": "click",
+      "name": "double-click the deck to wear it",
+      "target": "backpack_first_item",
+      "clicks": 2,
+      "attempts": 3,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "put item {deck_guid} of template 126983 on wizard {wizard_guid}'s slot (\\S+), and it wears 1 item\\(s\\)",
+        "timeout": 15,
+        "expect": "Deck",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_db",
+      "name": "the deck is stored in the deck slot",
+      "query": "SELECT `slot` FROM `character_equipment` WHERE `guid` = {wizard_guid} AND `item` = {deck_guid}",
+      "timeout": 15,
+      "expect": "Deck",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the backpack shows the deck worn",
+      "file": "backpack-deck-worn",
+      "settle": 2
+    },
+    {
+      "action": "key",
+      "name": "close the backpack with the deck worn",
+      "vk": "0x42"
+    },
+    {
       "action": "key",
       "name": "open the spellbook (before)",
       "vk": "0x50"
@@ -261,6 +323,19 @@
       "name": "the Fire page once Fire Cat is learned, without relogging",
       "file": "spellbook-with-fire-cat",
       "settle": 3
+    },
+    {
+      "action": "compare_shots",
+      "name": "Fire Cat's card fills the first slot of the Fire page",
+      "first": "spellbook-before",
+      "second": "spellbook-with-fire-cat",
+      "region": [
+        675,
+        175,
+        770,
+        320
+      ],
+      "expect": "differ"
     },
     {
       "action": "key",
@@ -363,6 +438,13 @@
       "expect": "WizardCity/WC_Ravenwood"
     },
     {
+      "action": "wait_db",
+      "name": "the deck is still worn after relogging",
+      "query": "SELECT `slot` FROM `character_equipment` WHERE `guid` = {wizard_guid} AND `item` = {deck_guid}",
+      "timeout": 5,
+      "expect": "Deck"
+    },
+    {
       "action": "key",
       "name": "open the spellbook (after relog)",
       "vk": "0x50"
@@ -377,6 +459,20 @@
       "name": "the Fire page after relogging",
       "file": "spellbook-after-relog",
       "settle": 3
+    },
+    {
+      "action": "compare_shots",
+      "name": "Fire Cat's card is still on the Fire page after relogging",
+      "first": "spellbook-with-fire-cat",
+      "second": "spellbook-after-relog",
+      "region": [
+        675,
+        175,
+        770,
+        320
+      ],
+      "expect": "match",
+      "fraction": 0.9
     },
     {
       "action": "key",
@@ -413,6 +509,20 @@
       "name": "the Fire page once Fire Cat is unlearned",
       "file": "spellbook-after-unlearn",
       "settle": 3
+    },
+    {
+      "action": "compare_shots",
+      "name": "the Fire page is back to an empty slot once Fire Cat is unlearned",
+      "first": "spellbook-before",
+      "second": "spellbook-after-unlearn",
+      "region": [
+        675,
+        175,
+        770,
+        320
+      ],
+      "expect": "match",
+      "fraction": 0.9
     },
     {
       "action": "key",
@@ -452,6 +562,7 @@
     "MSG_REQUESTTSDONEPREPFORMP",
     "MSG_REQUESTTSMARKEDASUNTRAINED",
     "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_SetDeckArchmastery",
     "MSG_SplashEnabled",
     "MSG_TOURNAMENTLOOTROLLINFO"
   ]
