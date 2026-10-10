@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 148,
+    "done": 149,
     "total": 469,
-    "percent": 31.6
+    "percent": 31.8
   },
   "checks": {
-    "done": 1158,
+    "done": 1160,
     "total": 2870,
-    "percent": 40.3
+    "percent": 40.4
   },
   "contributor_track": {
     "merged": 94,
@@ -106,9 +106,9 @@
     {
       "phase": 12,
       "title": "Social wizards instances and realms",
-      "milestones_done": 3,
+      "milestones_done": 4,
       "milestones_total": 23,
-      "checks_done": 26,
+      "checks_done": 28,
       "checks_total": 139
     },
     {
