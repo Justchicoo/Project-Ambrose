@@ -32,6 +32,8 @@ import {
     EventsAnswer,
     PanelSettingsAnswer,
     PanelMailTestAnswer,
+    ProxyCheckAnswer,
+    ProxyConfigAnswer,
     FileContent,
     FileListing,
     FileRootsAnswer,
@@ -159,6 +161,18 @@ export function updatePanelSettings(values: Record<string, string>) {
 
 export function testPanelMail() {
     return request("POST", "api/panel/settings/mail/test", PanelMailTestAnswer, {});
+}
+
+export function proxyCheck(signal?: AbortSignal) {
+    return request("GET", "api/panel/proxy/check", ProxyCheckAnswer, undefined, signal);
+}
+
+export function renderProxyConfig(product: string, hostname: string, includePatchserver: boolean) {
+    return request("POST", "api/panel/proxy/config", ProxyConfigAnswer, {
+        product,
+        hostname,
+        include_patchserver: includePatchserver,
+    });
 }
 
 export function errors(signal?: AbortSignal) {
