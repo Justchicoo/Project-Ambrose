@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, and Enter sent as a key only once Alt is up, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
 import json
 import os
 import re
@@ -814,6 +814,25 @@ class ClientInputTests(unittest.TestCase):
         activate.assert_called_once_with()
         self.assertEqual(gui.PostMessage.call_count, 2)
 
+    def test_enter_is_a_key_only_through_enter_which_waits_for_alt(self):
+        api = mock.Mock()
+        api.GetAsyncKeyState.return_value = 0
+        api.MapVirtualKey.side_effect = lambda virtual_key, _mode: virtual_key
+        gui = mock.Mock()
+        con = SimpleNamespace(VK_RETURN=0x0D, WM_KEYDOWN=0x0100, WM_KEYUP=0x0101)
+        client_window = client.Client.__new__(client.Client)
+        client_window.handle = 0x1234
+        with (mock.patch.dict(sys.modules, {"win32api": api, "win32con": con, "win32gui": gui}),
+              mock.patch.object(client.Client, "activated", return_value=mock.MagicMock()),
+              mock.patch("clientdriver.client.wait_until_released") as released,
+              mock.patch("clientdriver.client.time.sleep")):
+            with self.assertRaises(StepFailed):
+                client_window.keys([0x0D])
+            client_window.enter()
+
+        released.assert_called_with(client.modifiers_held, "a modifier key")
+        self.assertEqual([call.args[1:3] for call in gui.PostMessage.call_args_list], [(0x0100, 0x0D), (0x0101, 0x0D)])
+
 
 class FakeClient:
     def __init__(self, log_path, picture):
@@ -870,6 +889,9 @@ class FakeClient:
         self.typed.append(tuple(virtual_keys))
         self.held = hold
         time.sleep(hold)
+
+    def enter(self, hold=0.05):
+        self.typed.append("enter")
 
     def click(self, x, y, dwell=0.35):
         self.presses.append((x, y, round(dwell, 2)))
@@ -1236,7 +1258,7 @@ class EngineTests(TemporaryFolder):
         running = self.build(steps)
         self.write(os.path.join("client", "WizardClient.log"), ["09/17/26 [STAT] entered the world"], encoding="latin-1")
         running.run()
-        self.assertEqual(self.client.typed, ["\r"])
+        self.assertEqual(self.client.typed, ["enter"])
         self.assertEqual(self.client.presses, [])
         self.assertIn("pressed Enter 1 time(s) for press", running.steps[0]["result"])
         clicked = self.build([dict(steps[0], until=dict(steps[0]["until"], pattern="stands in the world"))])
@@ -1247,7 +1269,7 @@ class EngineTests(TemporaryFolder):
         self.client.on_click = after_one
         with mock.patch.object(engine, "ENTER_CHECK", 0.05):
             clicked.run()
-        self.assertEqual(self.client.typed, ["\r"] * engine.ENTER_TRIES)
+        self.assertEqual(self.client.typed, ["enter"] * engine.ENTER_TRIES)
         self.assertEqual(len(self.client.presses), 1)
         self.assertIn("Enter presses did not press press", str(clicked.notes))
 
