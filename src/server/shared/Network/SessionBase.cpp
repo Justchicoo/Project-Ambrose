@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, closes on mismatched ids, silence or too many strikes, holds inbound work for the app to drain, answers pings within the ping budget, and sends server messages and forced disconnects, a ban's carrying the ban's end and every other one no TimeStamp. Each DML message received is written to the packet log and offered to the network hooks before the app sees it, each one sent is offered to them before it is encoded and written to the log when it is on, and a session that was offered tells the hooks once that its socket opened and once that it closed.
+ * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept unless its app's session takes them at once, closes on mismatched ids, silence or too many strikes, holds inbound work for the app to drain, answers pings within the ping budget, and sends server messages and forced disconnects, a ban's carrying the ban's end and every other one no TimeStamp. Each DML message received is written to the packet log and offered to the network hooks before the app sees it, each one sent is offered to them before it is encoded and written to the log when it is on, and a session that was offered tells the hooks once that its socket opened and once that it closed.
  */
 
 #include "SessionBase.h"
@@ -61,6 +61,11 @@ void SessionBase::OnAccepted()
 
 void SessionBase::OnSessionClosed()
 {
+}
+
+bool SessionBase::DispatchesBeforeAccept() const noexcept
+{
+    return false;
 }
 
 bool SessionBase::AddStrike(std::string_view reason)
@@ -276,7 +281,7 @@ void SessionBase::OnFrame(Frame& frame)
         HandleControl(frame);
         return;
     }
-    if (GetState() == SessionState::Offered)
+    if (GetState() == SessionState::Offered && !DispatchesBeforeAccept())
     {
         if (_pendingFrames.size() >= MaxPendingFrames || _pendingBytes + frame.Payload.size() > MaxPendingBytes)
         {

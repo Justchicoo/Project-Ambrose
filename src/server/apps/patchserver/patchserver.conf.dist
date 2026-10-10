@@ -3,6 +3,13 @@
 LogsDir = logs
 BindIP = 0.0.0.0
 PatchServerPort = 12500
+ClientDir =
+Setup.Mode = auto
+Setup.PromptTimeout = 120
+Http.PublicBaseUrl = "http://127.0.0.1:12501"
+Patch.OutputDir =
+Patch.Revision =
+Patch.SupportedLocales = English
 Network.Threads = 1
 Network.MaxFrameSize = 4194304
 Network.MaxDmlMessages = 1024
