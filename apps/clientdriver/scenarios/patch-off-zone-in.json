@@ -1,0 +1,356 @@
+{
+  "title": "16.07: with -P 0 the client zones in and transfers with no package download, and the patch and revision switches act live",
+  "include": "parts/common.json",
+  "notes": [
+    "The client starts with -P 0 from a run folder whose PatchConfig.xml points at a live local listener, and a second listener holds 12500, as in patch-off.json; neither may see a connection.",
+    "Patch.Enabled is turned on with .settings on the running game server before the wizard enters Ravenwood as in enter-world.json, with the game server's packet log kept to the package download messages, and none is sent. MSG_LOGINCOMPLETE is kept too, to show the filtered packet log writes.",
+    "Patch.Enabled is then turned off with .settings on the running game server, and a .tele zone transfer to the Commons sends none either.",
+    "Login.AllowedRevision names a revision no client has, so the first login, with Login.EnforceRevision off, is let in; the setting is then turned on with .settings on the running login server,",
+    "and the next login after a client restart is refused for its revision without restarting the login server.",
+    "Both switches are changed with .settings rather than given on the command line, since a command-line override holds a setting against any live change."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "patch_config": {
+    "host": "127.0.0.2",
+    "port": 12700
+  },
+  "listeners": [
+    {
+      "name": "the patch port the roadmap names",
+      "address": "127.0.0.1",
+      "port": 12500,
+      "expect": 0
+    },
+    {
+      "name": "the patch host PatchConfig.xml names",
+      "address": "127.0.0.2",
+      "port": 12700,
+      "expect": 0
+    }
+  ],
+  "server_settings": [
+    "Login.AllowedRevision=r1.NoSuchClient"
+  ],
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Network.PacketLog.Enable=true",
+    "Network.PacketLog.Filter=MSG_DOWNLOADPACKAGE MSG_DOWNLOADPACKAGEELEMENT MSG_DOWNLOADBROWSER MSG_PATCHINGBLOCKED MSG_LOGPATCHCLIENTPATCHTIME MSG_LOGINCOMPLETE"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "game_command",
+      "name": "turn Patch.Enabled on on the running game server before the wizard enters",
+      "command": "settings set Patch.Enabled 1 the 16.07 live check",
+      "pattern": "Patch\\.Enabled is now",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server decodes the authentication message field by field",
+      "pattern": "sent MSG_USER_AUTHEN_V3: version (W\\.\\d+\\.\\d+\\.\\d+), revision \\S+, data revision \\S+, locale \\S+, machine [0-9A-F]+,",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the revision is let in while Login.EnforceRevision is off",
+      "pattern": "sent MSG_USER_AUTHEN_V3: version \\S+, revision (\\S+),",
+      "timeout": 5,
+      "from": "start",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard the run made",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "shot",
+      "name": "the wizard on the character selection screen",
+      "file": "character-selection"
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server sends the wizard its object",
+      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the client loading the zone",
+      "file": "loading-the-zone"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard standing in Ravenwood",
+      "file": "standing-in-ravenwood"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the client never starts a patch with -P 0",
+      "side": "client",
+      "pattern": "Patch failed|PatchingFailed|Error connecting Patch Server|Start Patcher|Connecting to Patch Server"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the packet log writes what its filter keeps",
+      "pattern": "session \\d+ S->C \\S+ (MSG_LOGINCOMPLETE) ",
+      "timeout": 10,
+      "from": "start",
+      "record": true
+    },
+    {
+      "action": "forbid_log",
+      "name": "the game server sent no package download on the way in",
+      "side": "game",
+      "pattern": "S->C GAME (MSG_DOWNLOADPACKAGE|MSG_DOWNLOADPACKAGEELEMENT|MSG_DOWNLOADBROWSER) "
+    },
+    {
+      "action": "game_command",
+      "name": "turn Patch.Enabled off on the running game server",
+      "command": "settings set Patch.Enabled 0 the 16.07 live check",
+      "pattern": "Patch\\.Enabled is now (\\S+)",
+      "timeout": 20
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele zone WizardCity/WC_Hub",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele zone WizardCity/WC_Hub",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele zone WizardCity/WC_Hub",
+      "text": ".tele zone WizardCity/WC_Hub"
+    },
+    {
+      "action": "char",
+      "name": "send .tele zone WizardCity/WC_Hub",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client is asked to leave Ravenwood",
+      "pattern": "Session \\d+ asked its client to leave WizardCity/WC_Ravenwood for WizardCity/WC_Hub",
+      "timeout": 20
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client is sent with a transfer key",
+      "pattern": "sent wizard {wizard_guid} from WizardCity/WC_Ravenwood to WizardCity/WC_Hub at (\\S+) with a single-use transfer key",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client attaches again with the transfer key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the Commons after the transfer",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard in the Commons after the transfer",
+      "file": "after-transfer",
+      "settle": 2
+    },
+    {
+      "action": "forbid_log",
+      "name": "the game server sent no package download for the transfer",
+      "side": "game",
+      "pattern": "S->C GAME (MSG_DOWNLOADPACKAGE|MSG_DOWNLOADPACKAGEELEMENT|MSG_DOWNLOADBROWSER) "
+    },
+    {
+      "action": "server_command",
+      "name": "turn Login.EnforceRevision on on the running login server",
+      "command": "settings set Login.EnforceRevision 1 the 16.07 live check",
+      "pattern": "Login\\.EnforceRevision is now (\\S+)",
+      "timeout": 20
+    },
+    {
+      "action": "restart_client",
+      "name": "quit the client and start it again",
+      "timeout": 240
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen again",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in again",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the next login is refused for its revision without a restart",
+      "pattern": "revision (\\S+) is not in Login\\.AllowedRevision",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the client refused for its revision",
+      "file": "revision-refused",
+      "settle": 3
+    },
+    {
+      "action": "forbid_log",
+      "name": "the client still never started a patch",
+      "side": "client",
+      "pattern": "Patch failed|PatchingFailed|Error connecting Patch Server|Start Patcher|Connecting to Patch Server"
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Ravenwood",
+    "zone_display": "Ravenwood",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  }
+}

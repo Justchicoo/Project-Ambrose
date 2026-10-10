@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; the launcher window is read and pressed through UI Automation, a read passing when every pattern matches some text the window shows and a press of Play going on to find the client the launcher starts and its window; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, Enter is pressed every second to skip what comes before the login window and is pressed as a key, with the window active, for Play while character selection stays on the screen, a click following when two presses two seconds apart do not take, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; the launcher window is read and pressed through UI Automation, a read passing when every pattern matches some text the window shows and a press of Play going on to find the client the launcher starts and its window; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after.
 import os
 import re
 import threading
@@ -24,6 +24,12 @@ def answered(said, wanted):
 SETTLE_SECONDS = 0.3
 WATCH_EVERY = 0.5
 MOVE_MARGIN = 0.2
+ENTER = 13
+SKIP_EVERY = 1.0
+SKIPPED_BY_ENTER = ("login",)
+PRESSED_BY_ENTER = ("charselect_play",)
+ENTER_TRIES = 2
+ENTER_CHECK = 2.0
 
 
 def keys_of(vk):
@@ -60,6 +66,7 @@ class Engine:
         self.listeners = {}
         self.automation = WindowAutomation()
         self.background = True
+        self.enter = True
 
     def fill(self, value):
         return fill(value, self.variables)
@@ -204,6 +211,9 @@ class Engine:
     def wait_screen(self, names, timeout, poll=0.25):
         deadline = time.monotonic() + timeout
         scored = {}
+        skip = self.enter and any(name in SKIPPED_BY_ENTER for name in names)
+        skipped = 0
+        next_skip = time.monotonic()
         while True:
             if not self.client.alive():
                 raise StepFailed(f"the client stopped while the driver waited for the screen {'/'.join(names)}")
@@ -211,10 +221,15 @@ class Engine:
             self.current = picture
             found, scored = self.store.identify(picture, names)
             if found:
-                return f"{found} is on the screen ({scored[found]['fraction']} of its pixels match)"
+                said = f"{found} is on the screen ({scored[found]['fraction']} of its pixels match)"
+                return said + (f", after {skipped} Enter press(es) to skip what came before it" if skipped else "")
             if time.monotonic() > deadline:
                 raise StepFailed(f"the screen {'/'.join(names)} did not appear within {timeout}s; "
                                  f"the closest match was {scored}")
+            if skip and time.monotonic() >= next_skip:
+                self.client.post_char(ENTER)
+                skipped += 1
+                next_skip = time.monotonic() + SKIP_EVERY
             time.sleep(poll)
 
     def act_wait_db(self, step):
@@ -479,10 +494,31 @@ class Engine:
             raise StepFailed("a click presses once, or twice for a double click")
         last = None
         said = "nothing was pressed"
+        entered = False
+        if self.enter and until and target in PRESSED_BY_ENTER:
+            if step.get("on_screen") and not self.on_screen(step["on_screen"]):
+                raise StepFailed(f"the {step['on_screen']} screen is no longer there, so {target} was not pressed")
+            check = dict(until, name=f"{name}: the check that Enter took", timeout=min(float(until.get("timeout", ENTER_CHECK)), ENTER_CHECK))
+            for press in range(ENTER_TRIES):
+                if press and step.get("on_screen") and not self.on_screen(step["on_screen"]):
+                    self.perform(dict(until, name=f"{name}: the check that Enter took"))
+                    return f"pressed Enter {press} time(s) for {target}, and it took"
+                self.client.enter()
+                self.current = None
+                try:
+                    self.perform(check)
+                    return f"pressed Enter {press + 1} time(s) for {target}, and it took"
+                except StepFailed as error:
+                    last = error
+            entered = True
+            self.notes.append({"step": name, "note": f"{ENTER_TRIES} Enter presses did not press {target}, so it is clicked instead: {last}"})
         for attempt in range(attempts):
             if attempt:
                 time.sleep(step.get("dwell_step", 0.3) * attempt)
             if step.get("on_screen") and not self.on_screen(step["on_screen"]):
+                if entered:
+                    self.perform(dict(until, name=f"{name}: the check that the late Enter took"))
+                    return f"pressed Enter for {target}, and it took late"
                 raise StepFailed(f"the {step['on_screen']} screen is no longer there, so {target} was not pressed")
             if step.get("watch"):
                 (said, active), filmed = self.watch_while(step, lambda: self.client.click(x, y, dwell=dwell, clicks=clicks), "the press was made")

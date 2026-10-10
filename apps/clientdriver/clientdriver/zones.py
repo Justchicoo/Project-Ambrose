@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# The zone rows a run's world database needs before its game server starts: extracted once per client revision and row layout by the extractor's zones command from the user's own install into the Ambrose data folder, never into the repository, and read from there on every later run, because extracting every zone costs about a minute and the rows only change when the install or the zone tables do.
+# The zone rows a run's world database needs before its game server starts: extracted once per client revision, row layout and world schema of the checkout by the extractor's zones command from the user's own install into the Ambrose data folder, never into the repository, and read from there on every later run, because extracting every zone costs about a minute and the rows only change when the install or the zone tables do.
+import hashlib
 import os
 import subprocess
 
@@ -8,10 +9,30 @@ from .errors import StepFailed
 
 NO_WINDOW = 0x08000000
 LAYOUT = 6
+WORLD_SCHEMA = (("data", "sql", "base", "db_world"), ("data", "sql", "custom", "db_world"), ("data", "sql", "updates", "db_world"),
+                ("data", "sql", "updates", "pending_db_world"))
 
 
-def cache_path(revision):
-    return os.path.join(paths.driver_folder(), "zones", f"{revision}.v{LAYOUT}.sql")
+def world_schema(repository=None):
+    root = repository or paths.REPOSITORY
+    digest = hashlib.sha256()
+    found = False
+    for parts in WORLD_SCHEMA:
+        folder = os.path.join(root, *parts)
+        for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+            if not name.endswith(".sql"):
+                continue
+            found = True
+            digest.update("/".join(parts + (name,)).encode("utf-8") + b"\0")
+            with open(os.path.join(folder, name), "rb") as handle:
+                digest.update(handle.read().replace(b"\r\n", b"\n") + b"\0")
+    return digest.hexdigest()[:10] if found else ""
+
+
+def cache_path(revision, repository=None):
+    schema = world_schema(repository)
+    name = f"{revision}.v{LAYOUT}.{schema}.sql" if schema else f"{revision}.v{LAYOUT}.sql"
+    return os.path.join(paths.driver_folder(), "zones", name)
 
 
 def ensure(binaries, install, revision, world_info=None, timeout=1800):

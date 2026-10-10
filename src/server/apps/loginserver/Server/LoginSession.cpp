@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Dispatches each client message against the live message catalog and counts it as activity, checks once a second from its network thread's update whether a client that has not chosen a character and is not being authenticated has idled past Login.AfkTimeout and drops it with MSG_DISCONNECT_LOGIN_AFK, sends the shutdown notice, derives the login salt from the session's offer, runs database callbacks on the session's own network thread when the database signals their results, fails an attempt or a character list whose callback was lost, and releases the session's account claim when it closes. It also posts queue positions, admissions and failures from the admission queue onto the session's own executor and takes a closed session out of every queue.
+ * Dispatches each client message against the live message catalog and counts it as activity, checks once a second from its network thread's update whether a client that has not chosen a character and is not being authenticated has idled past Login.AfkTimeout and drops it with MSG_DISCONNECT_LOGIN_AFK, sends the shutdown notice, derives the login salt from the session's offer, runs database callbacks on the session's own network thread when the database signals their results, fails an attempt or a character list whose callback was lost, and releases the session's account claim when it closes. It also posts queue positions as MSG_USER_ADMIT_IND Status=2, admissions as Status=1 ahead of the cached pick, and failures from the admission queue onto the session's own executor and takes a closed session out of every queue.
  */
 
 #include "LoginSession.h"
@@ -39,14 +39,22 @@ void LoginSession::HandleLoginNotAfk(LoginMessages::LoginNotAfk&)
 {
 }
 
-void LoginSession::NotifyAdmissionQueuePosition(LoginMessages::CharacterSelected reply)
+void LoginSession::NotifyAdmissionQueuePosition(uint32 position)
 {
     std::shared_ptr<LoginSession> self = SharedSelf();
-    asio::post(GetExecutor(), [self = std::move(self), reply = std::move(reply)]
+    asio::post(GetExecutor(), [self = std::move(self), position]
     {
         if (self->IsOpen() && !self->IsKicked() && self->GetStatus() == SessionStatus::Authenticated)
-            self->SendDmlMessage(reply);
+            self->SendAdmission(AdmitStatus::Queued, position);
     });
+}
+
+void LoginSession::SendAdmission(AdmitStatus status, uint32 position)
+{
+    LoginMessages::UserAdmitInd admit;
+    admit.Status = static_cast<int32>(status);
+    admit.PositionInQueue = position;
+    SendDmlMessage(admit);
 }
 
 void LoginSession::AdmitQueuedCharacter(LoginMessages::CharacterSelected reply, std::string realmName, uint32 realmId)
@@ -59,6 +67,7 @@ void LoginSession::AdmitQueuedCharacter(LoginMessages::CharacterSelected reply, 
             sAdmissionQueue.CancelReservation(realmId, reply.CharId);
             return;
         }
+        self->SendAdmission(AdmitStatus::Admitted, 0);
         self->IssueCharacterSelected(std::move(reply), std::move(realmName), realmId);
     });
 }

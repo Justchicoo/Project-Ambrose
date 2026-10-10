@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 148,
+    "done": 150,
     "total": 469,
-    "percent": 31.6
+    "percent": 32.0
   },
   "checks": {
-    "done": 1162,
+    "done": 1168,
     "total": 2870,
-    "percent": 40.5
+    "percent": 40.7
   },
   "contributor_track": {
     "merged": 94,
@@ -106,9 +106,9 @@
     {
       "phase": 12,
       "title": "Social wizards instances and realms",
-      "milestones_done": 3,
+      "milestones_done": 4,
       "milestones_total": 23,
-      "checks_done": 26,
+      "checks_done": 28,
       "checks_total": 139
     },
     {
@@ -138,9 +138,9 @@
     {
       "phase": 16,
       "title": "Patch server and tooling ownership",
-      "milestones_done": 3,
+      "milestones_done": 4,
       "milestones_total": 13,
-      "checks_done": 22,
+      "checks_done": 26,
       "checks_total": 80
     },
     {

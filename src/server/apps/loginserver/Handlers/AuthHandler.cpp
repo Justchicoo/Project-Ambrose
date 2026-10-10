@@ -324,10 +324,7 @@ void LoginSession::CompleteAuthentication(std::shared_ptr<AuthAttempt> const& at
     response.PayingUser = 1;
     SendDmlMessage(response);
 
-    LoginMessages::UserAdmitInd admit;
-    admit.Status = 1;
-    admit.PositionInQueue = 0;
-    SendDmlMessage(admit);
+    SendAdmission(AdmitStatus::Admitted, 0);
 
     LOG_INFO(AuthLog, "Session {} from {} authenticated as {} (id {}) on machine {:016X}: sent MSG_USER_AUTHEN_RSP Error=0 and MSG_USER_ADMIT_IND Status=1",
         GetSessionId(), attempt->AddressText, attempt->Username, attempt->AccountId, attempt->MachineId);
