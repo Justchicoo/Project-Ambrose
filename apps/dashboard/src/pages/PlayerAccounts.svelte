@@ -59,11 +59,12 @@
             info = await playerRegistrationInfo();
             captchaRequired = info.captcha_required;
         } catch (problem) {
-            failure = problem instanceof ApiError && problem.status === 404
-                ? "Player registration and password recovery are turned off."
-                : problem instanceof ApiError
-                  ? problem.message
-                  : "The player-account service could not be reached.";
+            failure =
+                problem instanceof ApiError && problem.status === 404
+                    ? "Player registration and password recovery are turned off."
+                    : problem instanceof ApiError
+                      ? problem.message
+                      : "The player-account service could not be reached.";
         }
     }
 
@@ -130,10 +131,9 @@
         </Card.Header>
         <Card.Content>
             {#if failure}
-                <p
-                    class="mb-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                    role="alert">{failure}</p
-                >
+                <p class="mb-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+                    {failure}
+                </p>
             {/if}
             {#if notice}
                 <p class="mb-4 rounded-md border border-healthy/30 bg-healthy/5 p-3 text-sm text-healthy" role="status">{notice}</p>
