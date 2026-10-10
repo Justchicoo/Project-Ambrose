@@ -295,7 +295,7 @@ Players can set privacy toggles (friend requests, teleports, trade, hatch, party
 
 - [x] Blacklisted word flagged; whitelisted phrase passes [ChatFilterTest.FindsBlacklistedWordsAndLetsWhitelistEntriesPass]
 - [x] Muted REQUESTRADIALCHAT dropped with notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
-- [ ] Real client: '.mute <name> 5m' works
+- [x] Real client: '.mute <name> 5m' works [real client run 20261009-200227 with apps/clientdriver/scenarios/chat-moderation.json on 92a5b29: the game master's `.mute Adam AngleBane 5m` in chat was stored and the muted wizard was shown "This account has been muted for 5 minutes."; its quick chat Yes reached nobody and the companion saw no bubble; after `.unmute` the filtered-chat wizard saw the companion's off-whitelist line as "a ... hums softly."; a 10s mute then expired with "You have been unmuted." and the next quick chat reached the companion]
 - [x] `.reload chatfilter` keeps the old lists on a failed load [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
 
 ### Detailed spec from WIZ-21: Chat moderation: filter, permissions and mute
@@ -326,7 +326,7 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 - [x] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
 - [x] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
 - [x] Successful reload additions reach connected clients in CHATFILTERBLACK/CHATFILTERWHITE carrying the recipient wizard's GlobalID [ChatFilterTest.SuccessfulReloadSendsAddedWordsToConnectedWizards]
-- [ ] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text.
+- [x] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text. [real client run 20261009-200227 with apps/clientdriver/scenarios/chat-moderation.json on 92a5b29: the game master's `.mute Adam AngleBane 5m` in chat was stored and the muted wizard was shown "This account has been muted for 5 minutes."; its quick chat Yes reached nobody and the companion saw no bubble; after `.unmute` the filtered-chat wizard saw the companion's off-whitelist line as "a ... hums softly."; a 10s mute then expired with "You have been unmuted." and the next quick chat reached the companion]
 
 **Risks**
 

@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 141,
+    "done": 142,
     "total": 469,
-    "percent": 30.1
+    "percent": 30.3
   },
   "checks": {
-    "done": 1141,
+    "done": 1143,
     "total": 2870,
     "percent": 39.8
   },
@@ -106,9 +106,9 @@
     {
       "phase": 12,
       "title": "Social wizards instances and realms",
-      "milestones_done": 0,
+      "milestones_done": 1,
       "milestones_total": 23,
-      "checks_done": 20,
+      "checks_done": 22,
       "checks_total": 139
     },
     {
