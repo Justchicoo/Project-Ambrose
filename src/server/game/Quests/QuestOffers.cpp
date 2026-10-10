@@ -35,7 +35,7 @@ namespace
             error = fmt::format("its {} could not be built: {}", what, built.Error);
             return {};
         }
-        QuestWireEncoder::BlobEncodeResult const encoded = QuestWireEncoder::Encode(*built.Object, mask);
+        QuestWireEncoder::BlobEncodeResult const encoded = QuestWireEncoder::EncodeBare(*built.Object, mask);
         if (!encoded.Ok())
         {
             error = fmt::format("its {} could not be encoded: {}", what, encoded.Error);
@@ -98,6 +98,7 @@ QuestWireEncoder::GoalCompilation QuestOffers::BuildStartGoals(QuestInfo const& 
         QuestGoalRow const& row = found->second.Row;
         QuestWireEncoder::GoalEntryFull goal;
         goal.DisplayKey = row.TitleKey;
+        goal.GoalTitle = row.TitleKey;
         goal.PersonaName = row.PersonaName;
         goal.Type = WireType(found->second.Type);
         goal.Total = static_cast<int32>(row.TallyCount);

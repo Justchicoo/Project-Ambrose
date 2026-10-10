@@ -1,11 +1,11 @@
 {
-  "title": "Merle Ambrose offers a new wizard WC-MAIN-C01-001 in his house: its Prep lines, then the offer window, and a decline that leaves the quest offered",
+  "title": "Merle Ambrose offers a new wizard WC-MAIN-C01-001 in his house: its Prep lines with his portrait, then the offer window, and ACCEPT on the last line takes it",
   "include": "parts/common.json",
   "notes": [
     "7.09: Merle Ambrose, template 38168 (WC-HUB-NPC01), is the first actor of the Prep dialog of WC-MAIN-C01-001, the enrollment quest authored in",
     "data/sql/updates/db_world/2026_10_10_02.sql, so a wizard that does not hold it is offered it as a Prep option when it walks up to him.",
-    "Taking the option, the client asks for the quest and the server sends MSG_ACTORDIALOG with the Prep lines and MSG_QUESTOFFER with the title,",
-    "level and the Talk To goal; declining sends MSG_DECLINEQUEST, the offer lapses, and walking up again offers the quest again."
+    "Taking the option sends MSG_INTERACTNPC for QuestOfferService, and the server sends MSG_ACTORDIALOG with the Prep lines and MSG_QUESTOFFER with the title,",
+    "the Talk To goal and its location. The last line's right button is ACCEPT, which sends MSG_ACCEPTQUEST; a mainline quest shows no DECLINE."
   ],
   "requires": {
     "gameserver": true
@@ -200,6 +200,35 @@
       "action": "shot",
       "name": "the first Prep line",
       "file": "prep-1",
+      "settle": 3
+    },
+    {
+      "action": "click",
+      "name": "MORE shows the second Prep line beside the offer window",
+      "target": "quest_dialog_more"
+    },
+    {
+      "action": "shot",
+      "name": "the second Prep line and the offer window",
+      "file": "offer",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "ACCEPT takes the quest",
+      "target": "quest_offer_accept",
+      "attempts": 2,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "wizard {wizard_guid} accepted quest (\\S+) from NPC \\d+, an offer that stands",
+        "timeout": 10,
+        "expect": "WC-MAIN-C01-001"
+      }
+    },
+    {
+      "action": "shot",
+      "name": "the dialogue and offer window close on ACCEPT",
+      "file": "accepted",
       "settle": 3
     }
   ]

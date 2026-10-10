@@ -474,4 +474,14 @@ namespace QuestWireEncoder
             return { {}, "SerializerBinary envelope could not allocate the payload" };
         }
     }
+
+    BlobEncodeResult EncodeBare(PropertyObject const& object, uint32 mask)
+    {
+        SerializerOptions options;
+        options.Mask = mask;
+        EncodeResult encoded = ObjectSerializer::Encode(&object, options);
+        if (!encoded.Ok())
+            return { {}, "ObjectProperty encoding failed: " + std::string(ObjectSerializer::GetStatusName(encoded.Status)) + ": " + encoded.Detail };
+        return { std::move(encoded.Bytes), {} };
+    }
 }

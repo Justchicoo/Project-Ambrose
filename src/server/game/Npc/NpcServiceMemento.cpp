@@ -50,10 +50,5 @@ QuestWireEncoder::BlobEncodeResult NpcServiceMemento::Encode(TypeCatalogPtr cons
         failed.Error = built.Error.empty() ? std::string("the service memento could not be built") : std::move(built.Error);
         return failed;
     }
-    SerializerOptions options;
-    options.Mask = QuestWireEncoder::ServiceMementoMask;
-    EncodeResult encoded = ObjectSerializer::Encode(built.Object.get(), options);
-    if (!encoded.Ok())
-        return { {}, "ObjectProperty encoding failed: " + std::string(ObjectSerializer::GetStatusName(encoded.Status)) + ": " + encoded.Detail };
-    return { std::move(encoded.Bytes), {} };
+    return QuestWireEncoder::EncodeBare(*built.Object, QuestWireEncoder::ServiceMementoMask);
 }

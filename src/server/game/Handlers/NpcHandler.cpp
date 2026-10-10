@@ -218,7 +218,6 @@ void GameSession::OfferQuest(NpcServiceTarget const& target, QuestInfo const& qu
     dialog.CompletionType = std::string(QuestOffers::CompletionType);
     dialog.Dialog = encoded.Dialog;
     dialog.RangeCheck = 1;
-    dialog.IsYesNo = 1;
     SendDmlMessage(dialog);
     GameMessages::QuestOffer offer;
     offer.MobileId = target.Npc;
