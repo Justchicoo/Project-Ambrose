@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 149,
+    "done": 150,
     "total": 469,
-    "percent": 31.8
+    "percent": 32.0
   },
   "checks": {
-    "done": 1160,
+    "done": 1164,
     "total": 2870,
-    "percent": 40.4
+    "percent": 40.6
   },
   "contributor_track": {
     "merged": 94,
@@ -138,9 +138,9 @@
     {
       "phase": 16,
       "title": "Patch server and tooling ownership",
-      "milestones_done": 3,
+      "milestones_done": 4,
       "milestones_total": 13,
-      "checks_done": 22,
+      "checks_done": 26,
       "checks_total": 80
     },
     {
