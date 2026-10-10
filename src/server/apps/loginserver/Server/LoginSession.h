@@ -52,7 +52,7 @@ public:
     void HandleCreateCharacter(LoginMessages::CreateCharacter& message);
     void HandleDeleteCharacter(LoginMessages::DeleteCharacter& message);
     void HandleLoginLogCharacterCreation(LoginMessages::LoginLogCharacterCreation& message);
-    void NotifyAdmissionQueuePosition(LoginMessages::CharacterSelected reply);
+    void NotifyAdmissionQueuePosition(uint32 position);
     void AdmitQueuedCharacter(LoginMessages::CharacterSelected reply, std::string realmName, uint32 realmId);
     void FailQueuedCharacter(uint64 characterGuid, std::string detail);
 
@@ -62,6 +62,12 @@ protected:
     void OnSessionClosed() override;
 
 private:
+    enum class AdmitStatus : int32
+    {
+        Admitted = 1,
+        Queued = 2
+    };
+
     struct AuthAttempt;
     struct ValidateAttempt;
 
@@ -77,6 +83,7 @@ private:
     void SelectCharacter(uint64 charId, std::string const& realmName, PreparedQueryResult result);
     void IssueCharacterSelected(LoginMessages::CharacterSelected reply, std::string realmName, uint32 realmId);
     void FailCharacterSelect(uint64 charId, std::string_view detail);
+    void SendAdmission(AdmitStatus status, uint32 position);
     void ListCharacters(uint32 purchasedSlots, uint32 expected);
     void FinishCharacterList(uint32 purchasedSlots, PreparedQueryResult result);
     void FailCharacterList(std::string_view detail);
