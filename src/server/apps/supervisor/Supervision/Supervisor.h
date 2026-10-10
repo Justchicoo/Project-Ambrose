@@ -95,6 +95,8 @@ public:
     PowerResult Power(std::string_view name, PowerAction action, uint32 countdownSeconds);
     std::vector<AppSnapshot> Snapshots() const;
     std::optional<std::string> AskApp(std::string_view name, std::string_view path, std::chrono::milliseconds timeout) const;
+    std::optional<AdminClientResponse> CallApp(std::string_view name, std::string_view method, std::string_view path, std::string_view body,
+        std::chrono::milliseconds timeout) const;
     std::vector<OutputLine> Output(std::string_view name, OutputRun run, uint64 after) const;
 
     static std::string SupervisionJson(std::vector<AppSnapshot> const& snapshots);
