@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lays extracted zones out for the world tables in the order they were read: one zone_template row per zone, then its locations, objects, volumes, triggers and spawners in list order, each volume and trigger known by its place in its list, with every event of each in order and every result of each trigger, replacing zone_template first so the rows that name a zone are only ever written after it, zone_trigger before its results and zone_spawner before the entries each spawner may place, with every float carried as the double it widens to and requirements, placed objects and result bytes NULL where there are none.
+ * Lays extracted zones out for the world tables in the order they were read: one zone_template row per zone, then its locations, objects, volumes, triggers, spawners and paths in list order, each volume and trigger known by its place in its list, with every event of each in order and every result of each trigger, replacing zone_template first so the rows that name a zone are only ever written after it, zone_trigger before its results zone_spawner before the entries each spawner may place, and zone_path before the nodes each path visits in its order, with every float carried as the double it widens to and requirements, placed objects and result bytes NULL where there are none.
  */
 
 #include "ZoneSqlScript.h"
@@ -20,6 +20,8 @@ WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
     std::vector<WorldSqlScript::Row> results;
     std::vector<WorldSqlScript::Row> spawners;
     std::vector<WorldSqlScript::Row> spawnEntries;
+    std::vector<WorldSqlScript::Row> paths;
+    std::vector<WorldSqlScript::Row> pathNodes;
     auto const bytes = [](std::optional<std::vector<uint8>> const& data)
     {
         return data ? WorldSqlScript::Value{ std::string(data->begin(), data->end()) } : WorldSqlScript::Value{ std::monostate{} };
@@ -93,6 +95,16 @@ WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
                     whole(object.LoadingType), bytes(object.SpawnRequirements), whole(item.StartNodeType), uint64{ item.StartNode }, item.PathId, whole(item.UniqueLoc) });
             }
         }
+        for (ExtractedPath const& path : zone.Paths)
+        {
+            paths.push_back({ zone.Path, path.Id, path.Name });
+            for (std::size_t position = 0; position < path.Nodes.size(); ++position)
+            {
+                ExtractedPathNode const& node = path.Nodes[position];
+                pathNodes.push_back({ zone.Path, path.Id, uint64{ position }, node.Id, number(node.Location.X), number(node.Location.Y), number(node.Location.Z), number(node.Radius),
+                    number(node.Direction), number(node.Roll) });
+            }
+        }
     }
 
     std::vector<std::string_view> const tables = GetTables();
@@ -113,10 +125,12 @@ WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
     script.ReplaceTable(tables[8], { "zone_path", "spawner_index", "position", "percent_chance", "class_name", "template_id", "object_id", "position_x", "position_y", "position_z",
         "orientation_x", "orientation_y", "orientation_z", "scale", "zone_tag", "start_state", "override_name", "global_dynamic", "undetectable", "loading_type", "spawn_requirements",
         "start_node_type", "start_node", "path_id", "unique_loc" }, spawnEntries);
+    script.ReplaceTable(tables[9], { "zone_path", "path_id", "name" }, paths);
+    script.ReplaceTable(tables[10], { "zone_path", "path_id", "position", "node_id", "position_x", "position_y", "position_z", "radius", "direction", "roll" }, pathNodes);
     return script;
 }
 
 std::vector<std::string_view> ZoneSqlScript::GetTables()
 {
-    return { "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result", "zone_spawner", "zone_spawner_entry" };
+    return { "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result", "zone_spawner", "zone_spawner_entry", "zone_path", "zone_path_node" };
 }

@@ -69,7 +69,9 @@ namespace
             _world.Database = fmt::format("{}_{:08x}", prefix, std::random_device()());
             _server = *server;
             _server.Database.clear();
-            EXPECT_TRUE(DBUpdater::Run(_world, "world", UpdaterSettings{}));
+            UpdaterSettings updates;
+            updates.AllowPending = true;
+            EXPECT_TRUE(DBUpdater::Run(_world, "world", updates));
             EXPECT_TRUE(WorldDatabase.SetConnectionInfo(_world.ToConnectionString(), 1, 1));
             EXPECT_EQ(WorldDatabase.Open(), 0u);
             _open = true;
@@ -202,6 +204,35 @@ TEST_F(ZoneExtractorClientTest, NoObjectListEntryIsLeftOutAndSigilsKeepTheirClas
     EXPECT_GT(sigils, 0u) << "a sigil entry is read as the CoreObjectInfo it derives from and keeps its own class name";
 }
 
+TEST_F(ZoneExtractorClientTest, EveryPathFileReadsWithUnicornWaysGhostPathsAndTheCommonsFlaxPath)
+{
+    for (TriggerFileFailure const& failure : s_extraction->TriggerFailures)
+        EXPECT_TRUE(failure.File != ZoneExtractor::PathEntry && failure.File != ZoneExtractor::PathNodeEntry) << failure.Zone << " " << failure.File << ": " << failure.Detail;
+    EXPECT_GT(s_extraction->GetPathCount(), 0u);
+    auto const nodes = [](ExtractedZone const& zone)
+    {
+        std::size_t count = 0;
+        for (ExtractedPath const& path : zone.Paths)
+            count += path.Nodes.size();
+        return count;
+    };
+    ExtractedZone const& unicorn = Zone("WizardCity/WC_Streets/WC_Unicorn");
+    InstalledRevision::Expect(unicorn.Paths.size(), { { "r806919", 24u } }, "Unicorn Way paths");
+    InstalledRevision::Expect(nodes(unicorn), { { "r806919", 263u } }, "Unicorn Way path nodes");
+    auto const ghost = std::find_if(unicorn.Paths.begin(), unicorn.Paths.end(), [](ExtractedPath const& path) { return path.Id == 82136; });
+    ASSERT_NE(ghost, unicorn.Paths.end()) << "Path Ghost 01";
+    EXPECT_EQ(ghost->Name, "Path Ghost 01");
+    ASSERT_FALSE(ghost->Nodes.empty());
+    EXPECT_EQ(ghost->Nodes.front().Id, 19u);
+    ExtractedZone const& hub = Zone(Commons);
+    InstalledRevision::Expect(hub.Paths.size(), { { "r806919", 11u } }, "Commons paths");
+    InstalledRevision::Expect(nodes(hub), { { "r806919", 156u } }, "Commons path nodes");
+    auto const flax = std::find_if(hub.Paths.begin(), hub.Paths.end(), [](ExtractedPath const& path) { return path.Name == "Path_Flax_01"; });
+    ASSERT_NE(flax, hub.Paths.end());
+    EXPECT_EQ(flax->Id, 8021750u);
+    EXPECT_EQ(flax->Nodes.size(), 10u) << "nodes 109 to 118";
+}
+
 TEST_F(ZoneExtractorClientTest, TheCommonsHoldsItsObjectsAndPlaces)
 {
     ExtractedZone const& hub = Zone(Commons);
@@ -258,7 +289,9 @@ TEST_F(ZoneExtractorClientTest, TheRowsFillAWorldDatabaseTheZoneManagerLoads)
         }
     } const cleanup{ *server, world.Database };
 
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    UpdaterSettings updates;
+    updates.AllowPending = true;
+    ASSERT_TRUE(DBUpdater::Run(world, "world", updates));
     std::string error;
     ASSERT_TRUE(ZoneSqlScript::Build(*s_extraction).Apply(world, error)) << error;
     ASSERT_TRUE(WorldDatabase.SetConnectionInfo(world.ToConnectionString(), 1, 1));
