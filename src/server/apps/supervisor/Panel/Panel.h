@@ -19,6 +19,7 @@
 #include "PanelEventStreams.h"
 #include "PanelEventTickets.h"
 #include "PanelKeyring.h"
+#include "PanelLaunchSettings.h"
 #include "PanelLinks.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
@@ -96,6 +97,7 @@ public:
     PanelErrors& Errors() { return _errors; }
     PanelGrants& Grants() { return _grants; }
     PanelKeyring& Keyring() { return _keyring; }
+    PanelLaunchSettings& LaunchStore() { return _launch; }
     PanelTwoFactor& TwoFactor() { return _twoFactor; }
     PanelTwoFactorSettings TwoFactorSettings() const;
     PanelFileRules& FileRules() { return _fileRules; }
@@ -117,6 +119,7 @@ public:
     PanelEventTickets& Tickets() { return _tickets; }
     PanelEventSocket& EventSocket() { return *_eventSocket; }
     void SetAppSource(PanelEventSocket::AppSource source);
+    void SetLaunchAppSource(std::function<std::vector<std::string>()> source);
     void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
@@ -127,6 +130,10 @@ public:
     std::string CommandActorName(AdminRequest const& request);
     bool StoreCommandHistoryWithinAudit(AdminRequest const& request, std::string_view app, std::string_view command, std::string& error);
     AdminResponse CommandHistoryGet(AdminRequest const& request);
+    AdminResponse PanelAppsRoute(AdminRequest const& request);
+    AdminResponse LaunchGet(AdminRequest const& request);
+    AdminResponse LaunchUpdate(AdminRequest const& request);
+    std::string_view LaunchAppName(AdminRequest const& request, bool& wellFormed) const;
     std::string NameOf(AdminRequest const& request);
     void RecordRelayed(AdminRequest const& request, std::string_view app, std::string_view method, std::string_view path, int status, std::string const& body);
     void RecordReveal(AdminRequest const& request, std::string_view app, std::vector<std::string> const& keys);
@@ -203,6 +210,7 @@ private:
     std::filesystem::path _dataFolder;
     PanelStore _store;
     PanelSettings _settings;
+    PanelLaunchSettings _launch;
     PanelUsers _users;
     PanelSessions _sessions;
     PanelErrors _errors;
@@ -223,6 +231,7 @@ private:
     PanelTwoFactorSettings _twoFactorSettings;
     PanelRateLimit _rateLimit;
     std::mutex _storeMutex;
+    std::function<std::vector<std::string>()> _launchAppSource;
     PanelAuditForwarder _auditForwarder;
     bool _auditForwarding = false;
     std::shared_ptr<PanelSettingStore> _settingStore;
