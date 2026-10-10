@@ -484,13 +484,18 @@ class Client:
     def key(self, virtual_key, hold=0.05):
         self.keys([virtual_key], hold)
 
-    def keys(self, virtual_keys, hold=0.05):
+    def enter(self, hold=0.05):
+        import win32con
+
+        self.keys([win32con.VK_RETURN], hold, enter=True)
+
+    def keys(self, virtual_keys, hold=0.05, enter=False):
         import win32api
         import win32con
         import win32gui
 
-        if win32con.VK_RETURN in virtual_keys:
-            raise StepFailed("send Enter as character 13: a VK_RETURN key-up with Alt held switches the client to fullscreen")
+        if win32con.VK_RETURN in virtual_keys and not enter:
+            raise StepFailed("press Enter with enter(), which waits for Alt to be released: a VK_RETURN key-up with Alt held switches the client to fullscreen")
         wait_until_released(modifiers_held, "a modifier key")
 
         def parameter(virtual_key):
