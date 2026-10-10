@@ -20,6 +20,7 @@
 #include "LootListBuilder.h"
 #include "MapObjectSpawner.h"
 #include "MovementRelay.h"
+#include "NpcServiceRange.h"
 #include "PlayerBackpack.h"
 #include "PlayerEquipment.h"
 #include "PlayerMovement.h"
@@ -149,6 +150,11 @@ public:
     void HandlePostZoneEventFromClient(GameMessages::PostZoneEventFromClient& message);
     void ArriveInVolumes();
     void CheckVolumes();
+    void CheckNpcServices();
+    void HandleInteractNpc(GameMessages::InteractNpc& message);
+    void HandleInteractObject(GameMessages::InteractObject& message);
+    void HandleInteractOption(GameMessages::InteractOption& message);
+    NpcServiceRange const& GetNpcRange() const noexcept { return _npcRange; }
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
     uint64 GetWorldGuid() const noexcept { return _worldGuid; }
@@ -317,6 +323,8 @@ private:
     void FollowReloadedVolumes();
     void WalkThroughDoor(std::vector<std::string> const& doors);
     void ShowGameEffectsOf(GameSession const& other);
+    bool IsNpcTemplate(uint32 templateId);
+    void OfferNpcServices(MapObject const& npc);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
@@ -326,6 +334,8 @@ private:
     std::shared_ptr<ZoneTriggerData const> _volumeData;
     VisibilitySet _sight;
     std::vector<VolumePresence> _volumePresence;
+    NpcServiceRange _npcRange;
+    std::map<uint32, bool> _npcTemplates;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
     std::atomic<uint64> _unhandled{ 0 };

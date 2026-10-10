@@ -78,7 +78,8 @@
     "teleport_zone_no": {"at": [772, 440], "presses": "No on the two-line Teleport question that names the zone a friend is in"},
     "friends_card_close": {"at": [1038, 397], "presses": "the red X at the bottom right of the card a friends list row opens beside the list"},
     "backpack_paper_doll": {"at": [478, 370], "presses": "the middle of the starry paper doll on the backpack's left page, where an item dragged from the list is put on"},
-    "card_close": {"at": [1255, 397], "presses": "the red X at the bottom right of the card clicking another wizard opens, which closes it"}
+    "card_close": {"at": [1255, 397], "presses": "the red X at the bottom right of the card clicking another wizard opens, which closes it"},
+    "npc06_beside": {"at": [690, 440], "presses": "WC-RAV-NPC06, Simeon, his red robe just right of the wizard where npc-service-menu.json's go_to_npc and step leave it, whose prompt says to press X or click to talk"}
   },
   "client_writes": [
     {"path": "^Data/GameData/CharacterRegistry/\\d+\\.xml$", "because": "the client keeps a registry file for each wizard that has entered the world, named by its character id, in its own data folder, and writes it itself on every entry"},
