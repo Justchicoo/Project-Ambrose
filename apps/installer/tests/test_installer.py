@@ -3,6 +3,7 @@
 import functools
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -263,7 +264,8 @@ class DepsPlanTests(unittest.TestCase):
     def test_build_tools_still_missing_after_winget_gives_up_fail_clearly(self):
         result = run_build_tools_install(vs_arrives=False)
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("winget failed with exit code 1 and Microsoft.VisualStudio.2022.BuildTools is not installed", result.stderr + result.stdout)
+        error = re.sub(r"\s*\n\s*\|\s*", " ", re.sub(r"\x1b\[[0-9;]*m", "", result.stderr))
+        self.assertIn("winget failed with exit code 1 and Microsoft.VisualStudio.2022.BuildTools is not installed", error)
 
     def test_install_fails_clearly_without_winget(self):
         result, _, _ = run_powershell_plan("none", "-Install", "-Plan", with_winget=False)
