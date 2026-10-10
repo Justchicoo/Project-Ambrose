@@ -5,7 +5,7 @@ import re
 import secrets
 import time
 
-from . import install, paths, report, screens, zones
+from . import install, paths, report, screens, slots, zones
 from .capture import Capture
 from .client import Client, prepare_process
 from .database import Scratch
@@ -234,6 +234,7 @@ class Run:
                 "screenshots": engine.screenshots,
                 "recorded_lines": engine.notes,
                 "capture": capture.facts(),
+                "input_turn": slots.input_waits(),
                 "needs_client": self.scenario.needs_client,
                 "install": self.environment.get("install"),
                 "install_files": len(before),

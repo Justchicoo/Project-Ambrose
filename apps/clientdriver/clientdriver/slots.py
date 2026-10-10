@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Lets driver runs share the machine: each run holds the first free slot, a lock file in the driver folder that gives it a login port, a game port and a database prefix no other run uses, and every press or held key waits for the one machine-wide input turn, because a press borrows the real cursor and the foreground.
+# Lets driver runs share the machine: each run holds the first free slot, a lock file in the driver folder that gives it a login port, a game port and a database prefix no other run uses, and every press or held key waits for the one machine-wide input turn, because a press borrows the real cursor and the foreground, and the run counts how long it waited for it.
 import contextlib
 import os
 import threading
@@ -16,6 +16,7 @@ INPUT_POLL = 0.05
 _input_turns = threading.RLock()
 _held = []
 _depth = []
+_waits = {"turns": 0, "waited_seconds": 0.0, "longest_wait_seconds": 0.0}
 
 
 def lock(handle):
@@ -87,6 +88,11 @@ def shifted(options, slot, port, game_port, prefix):
     return changed
 
 
+def input_waits():
+    return {"turns": _waits["turns"], "waited_seconds": round(_waits["waited_seconds"], 2),
+            "longest_wait_seconds": round(_waits["longest_wait_seconds"], 2)}
+
+
 @contextlib.contextmanager
 def input_turn(folder=None, wait=INPUT_WAIT, poll=INPUT_POLL):
     with _input_turns:
@@ -99,11 +105,16 @@ def input_turn(folder=None, wait=INPUT_WAIT, poll=INPUT_POLL):
             return
         handle = open_lock(os.path.join(folder or paths.driver_folder(), "input.lock"))
         try:
-            deadline = time.monotonic() + wait
+            started = time.monotonic()
+            deadline = started + wait
             while not lock(handle):
                 if time.monotonic() > deadline:
                     raise StepFailed(f"another driver run held the keyboard and mouse for more than {wait:.0f}s")
                 time.sleep(poll)
+            waited = time.monotonic() - started
+            _waits["turns"] += 1
+            _waits["waited_seconds"] += waited
+            _waits["longest_wait_seconds"] = max(_waits["longest_wait_seconds"], waited)
             _depth.append(True)
             try:
                 yield

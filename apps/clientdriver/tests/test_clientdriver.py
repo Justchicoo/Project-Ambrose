@@ -1732,6 +1732,16 @@ class SlotTests(TemporaryFolder):
         finally:
             other.close()
 
+    def test_the_run_counts_how_long_it_waited_for_the_input_turn(self):
+        before = slots.input_waits()
+        with slots.input_turn(self.folder):
+            with slots.input_turn(self.folder):
+                pass
+        after = slots.input_waits()
+        self.assertEqual(after["turns"], before["turns"] + 1)
+        self.assertGreaterEqual(after["waited_seconds"], before["waited_seconds"])
+        self.assertGreaterEqual(after["longest_wait_seconds"], 0.0)
+
     def test_a_press_waits_for_the_input_turn(self):
         window = client.Client.__new__(client.Client)
         turns = []
