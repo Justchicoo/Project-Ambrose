@@ -103,7 +103,7 @@ namespace
             Float("Potion.RestoreFraction", "1", "0", "1", "fraction", "Player", Game, Live,
                 "The share of maximum health and mana each potion restores, read whenever a wizard uses a potion."),
             Unsigned("Potion.RefillInterval", "300", "0", "86400", "s", "Player", Game, Live,
-                "How long after a potion is used before one charge refills; 0 disables later refills, and changes apply after the next charge refills."),
+                "How long after a potion is used before one charge refills; 0 disables later refills, and changes apply after the next charge refills. The 300-second default is unsourced, since the game's own refill rate is not known."),
 
             Unsigned("Queue.BypassSecurityLevel", "2", "0", "4", "", "Realms", Login, Live,
                 "The minimum account security level that bypasses full-realm admission queues, read for each character selection."),

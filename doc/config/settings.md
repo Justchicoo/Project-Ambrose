@@ -125,7 +125,7 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Player.AfkTime` | unsigned | 1800 s | from 0 to 86400 s | live | gameserver | normal | How long an in-world wizard may be idle before its session is disconnected; 0 disables the AFK timer. |
 | `Player.AfkWarnTime` | unsigned | 900 s | from 0 to 86400 s | live | gameserver | normal | How long an in-world wizard may be idle before the client receives MSG_DISCONNECT_AFK. |
 | `Player.LinkDeadTime` | unsigned | 60 s | from 0 to 86400 s | live | gameserver | normal | How long a disconnected wizard remains visible and may reattach before being removed from the world. |
-| `Potion.RefillInterval` | unsigned | 300 s | from 0 to 86400 s | live | gameserver | normal | How long after a potion is used before one charge refills; 0 disables later refills, and changes apply after the next charge refills. |
+| `Potion.RefillInterval` | unsigned | 300 s | from 0 to 86400 s | live | gameserver | normal | How long after a potion is used before one charge refills; 0 disables later refills, and changes apply after the next charge refills. The 300-second default is unsourced, since the game's own refill rate is not known. |
 | `Potion.RestoreFraction` | float | 1 fraction | from 0 to 1 fraction | live | gameserver | normal | The share of maximum health and mana each potion restores, read whenever a wizard uses a potion. |
 
 ## Rates
