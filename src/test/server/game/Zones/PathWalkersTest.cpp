@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the path walkers of a zone instance: a walker in an instance with no wizard is held still and nothing is sent, one with a wizard walks its path at its speed and is sent at most once a send interval with its walking state first, a reload that moves its path's nodes carries it on from its next node on the new path, and one whose path is gone stops where it stands.
+ * Tests the path walkers of a zone instance: a walker in an instance with no wizard is held still and nothing is sent, one with a wizard walks its path at its speed and is sent at most once a send interval with its walking state first, facing the way it walks as the client turns a wizard, a reload that moves its path's nodes carries it on from its next node on the new path, and one whose path is gone stops where it stands.
  */
 
 #include "Map.h"
@@ -10,6 +10,8 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cmath>
+#include <numbers>
 #include <string>
 
 namespace
@@ -81,7 +83,21 @@ TEST(PathWalkersTest, AWalkerWalksItsPathAtItsSpeedAndIsSentAtMostOnceASendInter
     EXPECT_NEAR(later.Moved.front().Position.X, 200.0f, 0.01f) << "100 units a second for two seconds";
     EXPECT_FALSE(later.Moved.front().State) << "a walker still walking says no new state";
     EXPECT_NEAR(map.FindObject(Ghost)->Spawn.Position.X, 200.0f, 0.01f) << "the instance's object stands where the walker is";
-    EXPECT_NEAR(later.Moved.front().Yaw, 0.0f, 0.001f) << "it faces the way it travels";
+    EXPECT_NEAR(later.Moved.front().Yaw, -std::numbers::pi_v<float> / 2.0f, 0.001f) << "walking along +x it faces a quarter turn clockwise of the client's zero";
+}
+
+TEST(PathWalkersTest, AWalkerFacesTheWayItWalksAsTheClientTurnsAWizard)
+{
+    Map map(1, Zone, true);
+    ZonePath path = Straight(1000.0f);
+    path.Nodes[1].Position = { 0.0f, 1000.0f, 0.0f };
+    AddWalker(map, path, 1);
+    Map::Clock::time_point const start{};
+    ASSERT_TRUE(map.AddPlayer(7, start));
+    PathWalkers::Advance(map, start, 100ms, Holding(&path), 1);
+    MapObjectChanges const later = PathWalkers::Advance(map, start + 1s, 100ms, Holding(&path), 1);
+    ASSERT_EQ(later.Moved.size(), 1u);
+    EXPECT_NEAR(std::abs(later.Moved.front().Yaw), std::numbers::pi_v<float>, 0.001f) << "walking along +y it faces a half turn, as a wizard placed at yaw pi faces up the street";
 }
 
 TEST(PathWalkersTest, AReloadedPathCarriesAWalkerOnFromItsNextNodeAndAGonePathStopsIt)
