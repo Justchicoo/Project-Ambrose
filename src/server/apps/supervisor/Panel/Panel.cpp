@@ -1720,7 +1720,33 @@ AdminResponse Panel::PlayerPasswordReset(AdminRequest const& request)
     std::string auditError;
     if (!Record(completed, {}, auditError))
         AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The completed player password reset could not be recorded: {}", auditError);
-    return AdminResponse::Json(200, R"({"changed":true})");
+    auto const recordKickFailure = [this, &request, &token](std::string_view reason)
+    {
+        AuditEvent refused;
+        refused.Name = "player:password_reset.session_revocation_failed";
+        refused.Address = request.RemoteAddress;
+        refused.UserAgent = request.UserAgent;
+        refused.Result = AuditResult::Refused;
+        refused.Reason = reason;
+        refused.On("player_account", std::to_string(token.AccountId));
+        std::string failure;
+        if (!Record(refused, {}, failure))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A player session-revocation failure could not be recorded: {}", failure);
+    };
+    if (!_playerSessionKicker)
+    {
+        recordKickFailure("the password changed but no session-revocation service was available");
+        return AdminResponse::Problem(503, "session_revocation_unavailable", "The password changed, but the running game sessions could not be reached; sign in again after they disconnect");
+    }
+    uint64 kicked = 0;
+    std::string kickError;
+    if (!_playerSessionKicker(token.AccountId, kickError))
+    {
+        recordKickFailure("the password changed but a running game app did not confirm session revocation");
+        return AdminResponse::Problem(503, "session_revocation_unavailable",
+            "The password changed, but a running game app did not confirm session revocation; sign in again after those sessions disconnect");
+    }
+    return AdminResponse::Json(200, nlohmann::json{ { "changed", true }, { "sessions_kicked", kicked } }.dump());
 }
 
 AdminResponse Panel::PlayerRegistrationsGet(AdminRequest const& request)

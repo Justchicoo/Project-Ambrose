@@ -76,6 +76,7 @@ public:
 
     void SetDashboard(EmbeddedPage const* page);
     void SetAccountsReady(bool ready) noexcept { _accountsReady.store(ready, std::memory_order_release); }
+    void SetPlayerSessionKicker(std::function<bool(uint64, std::string&)> kicker) { _playerSessionKicker = std::move(kicker); }
     bool Start(ConfigMgr const& config, std::string& error);
     bool Reload(ConfigMgr const& config);
     void Stop();
@@ -258,6 +259,7 @@ private:
     AdminServer _listener;
     bool _secure = false;
     std::atomic<bool> _accountsReady{ false };
+    std::function<bool(uint64, std::string&)> _playerSessionKicker;
 };
 
 #endif

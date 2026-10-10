@@ -829,6 +829,9 @@ Operators should not have to type console commands to make a player an account, 
 - Player-driven reset answers the same whether or not the address is known, carries its single-use token in the request body, and a new password under the same policy seals the verifier with the active key, deletes `account_session` and kicks live sessions.
 - Throttles run per address, per account and per email domain through the listener's limiter, the 17.35 captcha applies after repeated attempts, and mails per address per day are capped. Every registration, verification, reset request and reset is audited with the client address, and no response tells a stranger whether a username or email exists.
 - An operator page lists recent registrations with their verification state, resend and block, behind `accounts.read` and `accounts.registration`.
+- The panel store keeps only hashes of random single-use verification and recovery tokens; verification links expire after 24 hours, recovery links after 30 minutes, and one remote address may receive at most five messages per UTC day.
+- The password reset revokes database sessions transactionally and asks every running gameserver to kick matching live sessions through its guarded admin API. If any running game app cannot confirm the kick, the response says the password has already changed and session revocation needs attention.
+- The public dashboard currently has a captcha response field but does not render the configured provider's challenge widget; completing captcha-backed registration and recovery remains unfinished.
 
 Player registration is offered, off by default, on these terms, as Panel operations in doc/ARCHITECTURE.md settles.
 

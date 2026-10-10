@@ -184,6 +184,11 @@ namespace
             _supervisor.SetRelayHooks({ [this](AdminRequest const& request) { return _panel.NameOf(request); },
                 [this](AdminRequest const& request, RelayedAnswer const& answer) { _panel.RecordRelayed(request, answer.App, answer.Method, answer.Path, answer.Status, answer.Body); } });
             _supervisor.Register(admin.Routes(), [this] { return BuildStatus(); });
+            _panel.SetPlayerSessionKicker([this](uint64 accountId, std::string& error)
+            {
+                uint64 kicked = 0;
+                return _supervisor.KickAccountSessions(accountId, kicked, error);
+            });
             AdminGraphsView::Register(admin.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
             _files.Register(admin.Routes());
             _panel.RegisterAdminRoutes(admin.Routes());
