@@ -80,7 +80,7 @@ Health, mana, gold, power-pip and potion changes on the server show up immediate
 
 **Risks**
 
-- A potion restores all of a wizard's health and mana, which players of the live game confirm, so Potion.RestoreFraction's default of 1 is the real value. The refill rate is a server-side value not in the client files and is still unknown: Potion.RefillInterval's default of 300 seconds is a placeholder with no source, and needs one.
+- A potion restores all of a wizard's health and mana, which players of the live game confirm, so Potion.RestoreFraction's default of 1 is the real value. The live game does not refill potions over time: a wizard buys refills with gold from a potion vendor or the bottle's refill option, at a cost that rises with level (10.11), or earns them in minigames such as Potion Motion (13.10). Potion.RefillInterval therefore defaults to 0, and its timer stays only for servers that want one.
 
 ## 8.02 Experience and level-up (WIZ-7)
 
