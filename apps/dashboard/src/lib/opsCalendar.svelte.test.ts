@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import * as v from "valibot";
+import { primitiveColors } from "@ambrose/ui/tokens";
 import {
     addDaysMs,
     conflictReasonFor,
@@ -18,11 +19,12 @@ import { OpsCalendarAnswer } from "./schemas";
 describe("OpsCalendarAnswer", () => {
     it("parses the panel's answer", () => {
         const parsed = v.safeParse(OpsCalendarAnswer, {
+            
             events: [
                 {
                     id: "installation-maintenance",
                     source: "installation_maintenance",
-                    color: "#ef4444",
+                    color: primitiveColors["ember"],
                     title: "Installation maintenance",
                     detail: "db upgrade",
                     start_epoch_ms: 2000,
@@ -32,8 +34,8 @@ describe("OpsCalendarAnswer", () => {
                 },
             ],
             sources: [
-                { source: "schedules", color: "#3b82f6", available: false, unavailable_reason: "17.15 has not landed" },
-                { source: "installation_maintenance", color: "#ef4444", available: true },
+                { source: "schedules", color: primitiveColors["value-address"], available: false, unavailable_reason: "17.15 has not landed" },
+                { source: "installation_maintenance", color: primitiveColors["ember"], available: true },
             ],
             conflicts: [{ event_a_id: "a", event_b_id: "b", reason: "a runs across b" }],
             server_utc_offset_minutes: -240,
@@ -54,8 +56,8 @@ describe("OpsCalendarAnswer", () => {
 
 describe("week and month starts", () => {
     const zone = "America/Santo_Domingo";
-    // 2026-10-10 is a Saturday.
-    const saturday = Date.UTC(2026, 9, 10, 12, 0, 0);
+            const saturday = Date.UTC(2026, 9, 10, 12, 0, 0);
+    
 
     it("starts the week on Monday", () => {
         const monday = startOfWeekMs(saturday, zone);
@@ -81,7 +83,7 @@ describe("ranges and conflicts", () => {
             formatRange({
                 id: "x",
                 source: "installation_maintenance",
-                color: "#ef4444",
+                color: primitiveColors["ember"],
                 title: "t",
                 detail: "",
                 start_epoch_ms: 1000,
