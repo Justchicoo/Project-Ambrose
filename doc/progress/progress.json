@@ -6,9 +6,9 @@
     "percent": 32.6
   },
   "checks": {
-    "done": 1180,
+    "done": 1185,
     "total": 2874,
-    "percent": 41.1
+    "percent": 41.2
   },
   "contributor_track": {
     "merged": 94,
@@ -84,7 +84,7 @@
       "title": "A duel completes",
       "milestones_done": 4,
       "milestones_total": 12,
-      "checks_done": 30,
+      "checks_done": 35,
       "checks_total": 83
     },
     {

@@ -245,8 +245,8 @@ world.zone_object and world.spawn_* hold every NPC and interactable placement an
 
 **Acceptance**
 
-- [ ] Sub-circle positions match hand-computed coordinates
-- [ ] WizardClientDuelBehavior and CombatParticipant round-trip
+- [x] Sub-circle positions match hand-computed coordinates (SubCircleTest.AnUnturnedSigilPutsEachCircleOnItsAxisFacingTheCentre and SubCircleTest.ATurnedSigilPutsItsMonsterAndPlayerCirclesWhereTheClientDoes)
+- [x] WizardClientDuelBehavior and CombatParticipant round-trip (DuelTest.TheCirclesDuelBehaviorAndEachParticipantDecodeBackToIdenticalObjects)
 - [ ] Real client: .duel start shows ring, circles and nameplates; .duel end frees the player
 
 ### Detailed spec from CMB-3: Duel instance and sigil placement (visual only)
@@ -271,10 +271,10 @@ A GM can start a duel at a combat sigil, and the real client shows the player an
 
 **Acceptance**
 
-- [ ] Unit test: sub-circle positions for a sigil at a known location and yaw match hand-computed coordinates (4 monster and 4 player slots mirrored)
-- [ ] Unit test: a serialized WizardClientDuelBehavior and CombatParticipant decode back to identical objects
+- [x] Unit test: sub-circle positions for a sigil at a known location and yaw match hand-computed coordinates (4 monster and 4 player slots mirrored) (SubCircleTest.ATurnedSigilPutsItsMonsterAndPlayerCirclesWhereTheClientDoes, eight circles of a sigil at (1000, -2000, 50) with yaw 0.5, and DuelTest.AWizardAndACreatureSitOnTheFirstCircleOfTheirSidesWhereSubCircleSaysAndAFullSideIsRefused)
+- [x] Unit test: a serialized WizardClientDuelBehavior and CombatParticipant decode back to identical objects (DuelTest.TheCirclesDuelBehaviorAndEachParticipantDecodeBackToIdenticalObjects)
 - [ ] Real client: after .duel start, the player and creature run to opposite circles (MSG_AGGRO, MSG_ENTERSTATE 'Sigil' then 'Stationary'), the sigil ring renders (MSG_DUEL), and health/name plates appear over both (MSG_COMBATADD)
-- [ ] Real client: .duel end sends MSG_COMBATMATCHRESULT, MSG_COMBATPHASE kPhase_Ended and MSG_ENDDUEL; the ring disappears and the player can walk again
+- [x] Real client: .duel end sends MSG_COMBATMATCHRESULT, MSG_COMBATPHASE kPhase_Ended and MSG_ENDDUEL; the ring disappears and the player can walk again (clientdriver duel-start-and-end.json, run 20261010-165433-s1 on Unicorn Way: the game server logged the wizard shown the duel's end and the circle and creature taken away; screen after-duel shows the plain street with no ring, and walked-free shows the wizard walked up the street off its circle)
 
 **Risks**
 
