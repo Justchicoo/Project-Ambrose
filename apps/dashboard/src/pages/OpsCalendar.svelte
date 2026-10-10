@@ -135,7 +135,7 @@
                         <a
                             href={event.url || undefined}
                             class="block truncate rounded border-l-4 px-1.5 py-1 text-xs hover:bg-accent"
-                            style="border-color: {event.color}"
+                            style:border-color={event.color}
                             title={`${event.title} · ${formatRange(event)}${conflict ? ` · ⚠ ${conflict}` : ""}`}
                         >
                             <span class="font-medium">{event.title}</span>
@@ -151,7 +151,7 @@
     <div class="mt-4 flex flex-wrap gap-4">
         {#each answer.sources as source (source.source)}
             <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span class="inline-block h-3 w-3 rounded-sm" style="background-color: {source.color}"></span>
+                <span class="inline-block h-3 w-3 rounded-sm" style:background-color={source.color}></span>
                 {sourceLabel(source.source)}
                 {#if !source.available}<em>· {source.unavailable_reason}</em>{/if}
             </span>
