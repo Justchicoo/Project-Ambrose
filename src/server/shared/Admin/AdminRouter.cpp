@@ -366,6 +366,37 @@ void AdminRouter::SetSecure(bool secure)
     _secure.store(secure);
 }
 
+void AdminRouter::SetCaptchaProvider(std::string_view provider)
+{
+    std::string scripts;
+    std::string frames;
+    if (provider == "recaptcha")
+    {
+        scripts = "https://www.google.com https://www.gstatic.com";
+        frames = "https://www.google.com https://www.gstatic.com";
+    }
+    else if (provider == "hcaptcha")
+    {
+        scripts = "https://js.hcaptcha.com";
+        frames = "https://js.hcaptcha.com https://newassets.hcaptcha.com";
+    }
+    else if (provider == "turnstile")
+    {
+        scripts = "https://challenges.cloudflare.com";
+        frames = "https://challenges.cloudflare.com";
+    }
+    std::string policy(SecurityPolicy);
+    if (!scripts.empty())
+    {
+        std::string const scriptDirective = "script-src 'self'";
+        if (std::size_t const at = policy.find(scriptDirective); at != std::string::npos)
+            policy.replace(at, scriptDirective.size(), "script-src 'self' " + scripts);
+        policy += "; frame-src " + frames;
+    }
+    std::unique_lock const lock(_mutex);
+    _contentSecurityPolicy = std::move(policy);
+}
+
 void AdminRouter::SetTrustedProxies(TrustedProxies proxies)
 {
     std::unique_lock lock(_mutex);
@@ -600,7 +631,10 @@ AdminResponse AdminRouter::Answer(AdminRequest& request) const
 void AdminRouter::Finish(AdminRequest const& request, AdminResponse& response) const
 {
     response.Headers.emplace_back("X-Request-Id", request.Id);
-    response.Headers.emplace_back("Content-Security-Policy", std::string(SecurityPolicy));
+    {
+        std::shared_lock const lock(_mutex);
+        response.Headers.emplace_back("Content-Security-Policy", _contentSecurityPolicy);
+    }
     response.Headers.emplace_back("X-Content-Type-Options", "nosniff");
     response.Headers.emplace_back("X-Frame-Options", "DENY");
     response.Headers.emplace_back("Referrer-Policy", "same-origin");

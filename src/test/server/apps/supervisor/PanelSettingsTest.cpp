@@ -219,10 +219,16 @@ TEST_F(PanelSettingsTest, KeepsSavedSecretsOutOfAnswersLogsAndAuditRows)
     EXPECT_EQ(unchanged.Body.find(secret), std::string::npos);
 
     std::string error;
-    std::optional<PanelStore::Statement> saved = _panel->Store().Prepare("SELECT value FROM panel_setting WHERE key = 'Mail.Password'", error);
+    std::optional<PanelStore::Statement> saved = _panel->Store().Prepare(
+        "SELECT value, sealed_value, sealed_key_id FROM panel_setting WHERE key = 'Mail.Password'", error);
     ASSERT_TRUE(saved.has_value()) << error;
     ASSERT_TRUE(saved->Step(error)) << error;
-    EXPECT_TRUE(saved->Text(0) == secret);
+    EXPECT_TRUE(saved->Text(0).empty());
+    EXPECT_FALSE(saved->IsNull(1));
+    EXPECT_FALSE(saved->Text(1).empty());
+    EXPECT_EQ(saved->Text(1).find(secret), std::string::npos);
+    EXPECT_GT(saved->Int64(2), 0);
+    EXPECT_EQ(_panel->Settings().ValueOf("Mail.Password"), secret);
 
     std::optional<PanelStore::Statement> audit = _panel->Store().Prepare(
         "SELECT name, actor_name, address, user_agent, node, error, reason, properties FROM audit_event", error);
@@ -238,6 +244,87 @@ TEST_F(PanelSettingsTest, KeepsSavedSecretsOutOfAnswersLogsAndAuditRows)
     EXPECT_TRUE(sawSettingsChange);
     for (std::string const& line : _harness.Store().Texts("Capture"))
         EXPECT_EQ(line.find(secret), std::string::npos);
+}
+
+TEST_F(PanelSettingsTest, SealsTheCaptchaSecretAndReadsItBack)
+{
+    Credentials owner;
+    ASSERT_TRUE(MakeOwner(owner));
+    std::string const secret = "captcha-secret-never-plain";
+    std::string error;
+
+    AdminClientResponse const changed = Send("PATCH", "/api/panel/settings",
+        { { "values", { { "Security.CaptchaSecret", secret } } } }, &owner);
+    ASSERT_EQ(changed.Status, 200) << changed.Body;
+    EXPECT_EQ(changed.Body.find(secret), std::string::npos);
+
+    std::optional<PanelStore::Statement> saved = _panel->Store().Prepare(
+        "SELECT value, sealed_value, sealed_key_id FROM panel_setting WHERE key = 'Security.CaptchaSecret'", error);
+    ASSERT_TRUE(saved.has_value()) << error;
+    ASSERT_TRUE(saved->Step(error)) << error;
+    EXPECT_TRUE(saved->Text(0).empty());
+    EXPECT_FALSE(saved->IsNull(1));
+    EXPECT_EQ(saved->Text(1).find(secret), std::string::npos);
+    EXPECT_GT(saved->Int64(2), 0);
+    EXPECT_EQ(_panel->Settings().ValueOf("Security.CaptchaSecret"), secret);
+
+    nlohmann::json const answer = nlohmann::json::parse(
+        Send("GET", "/api/panel/settings?group=security", {}, &owner).Body);
+    auto const stored = std::find_if(answer["settings"].begin(), answer["settings"].end(),
+        [](nlohmann::json const& setting) { return setting["key"] == "Security.CaptchaSecret"; });
+    ASSERT_NE(stored, answer["settings"].end());
+    EXPECT_EQ((*stored)["value"], "***");
+}
+
+TEST_F(PanelSettingsTest, ClearingASecretRemovesItsSealedValue)
+{
+    Credentials owner;
+    ASSERT_TRUE(MakeOwner(owner));
+    std::string error;
+    ASSERT_TRUE(_panel->Settings().Update({ { "Mail.Password", "to-be-cleared" } }, owner.UserId, error)) << error;
+    EXPECT_EQ(_panel->Settings().ValueOf("Mail.Password"), "to-be-cleared");
+
+    AdminClientResponse const cleared = Send("PATCH", "/api/panel/settings",
+        { { "values", { { "Mail.Password", "" } } } }, &owner);
+    ASSERT_EQ(cleared.Status, 200) << cleared.Body;
+    EXPECT_EQ(_panel->Settings().ValueOf("Mail.Password"), "");
+
+    std::optional<PanelStore::Statement> saved = _panel->Store().Prepare(
+        "SELECT value, sealed_value, sealed_key_id FROM panel_setting WHERE key = 'Mail.Password'", error);
+    ASSERT_TRUE(saved.has_value()) << error;
+    ASSERT_TRUE(saved->Step(error)) << error;
+    EXPECT_TRUE(saved->Text(0).empty());
+    EXPECT_TRUE(saved->IsNull(1));
+    EXPECT_TRUE(saved->IsNull(2));
+}
+
+TEST_F(PanelSettingsTest, CaptchaRequiredAnswerNamesTheProviderAndSiteKey)
+{
+    Credentials owner;
+    ASSERT_TRUE(MakeOwner(owner));
+    std::string error;
+    ASSERT_TRUE(_panel->Settings().Update({
+        { "Security.CaptchaProvider", "turnstile" },
+        { "Security.CaptchaSiteKey", "test-site-key" },
+        { "Security.CaptchaSecret", "test-secret" },
+    }, owner.UserId, error)) << error;
+
+    for (int attempt = 0; attempt < 3; ++attempt)
+    {
+        AdminClientResponse const wrong = Send("POST", "/api/panel/session",
+            { { "username", "owner" }, { "password", "not the password" } });
+        EXPECT_EQ(wrong.Status, 401) << wrong.Body;
+    }
+
+    AdminClientResponse const asked = Send("POST", "/api/panel/session",
+        { { "username", "owner" }, { "password", "a good long password" } });
+    EXPECT_EQ(asked.Status, 401) << asked.Body;
+    nlohmann::json const body = nlohmann::json::parse(asked.Body, nullptr, false);
+    ASSERT_TRUE(body.is_object()) << asked.Body;
+    EXPECT_EQ(body.value("error", ""), "captcha_required");
+    EXPECT_EQ(body.value("captcha_provider", ""), "turnstile");
+    EXPECT_EQ(body.value("captcha_site_key", ""), "test-site-key");
+    EXPECT_EQ(asked.Body.find("test-secret"), std::string::npos);
 }
 
 TEST_F(PanelSettingsTest, KeepsTrustedProxiesLockedToTheEnvironmentLayer)
