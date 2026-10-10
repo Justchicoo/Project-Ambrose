@@ -822,6 +822,7 @@ Clicking teleporter objects (Spiral Door, go-home, marked world teleporters) ope
 
 - How the Spiral Door is identified is unverified: the reference hard-codes template 84113. Prefer a behavior-based match.
 - Ownership overlap with the NPC interaction and service-menu domain. Only teleport-type options belong here.
+- GoHome.CooldownSeconds's default of 30 has no source: no client file or observation of the live game backs it, so the real Go Home cooldown is unknown until a player who knows says or a run shows it.
 
 ## 10.14 Path-walking NPCs (WLD-17)
 
