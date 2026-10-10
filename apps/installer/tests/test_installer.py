@@ -179,6 +179,30 @@ def run_powershell_plan(found, *options, with_winget=True, client=None):
     return result, folder, ran
 
 
+def run_build_tools_install(vs_arrives):
+    folder = tempfile.mkdtemp()
+    tools = os.path.join(folder, "tools")
+    installer = os.path.join(folder, "Microsoft Visual Studio", "Installer")
+    os.makedirs(tools)
+    os.makedirs(installer)
+    marker = os.path.join(folder, "winget-ran")
+    write_shim(tools, "winget", f'echo ran> "{marker}"\nexit /b 1', f'echo ran > "{marker}"\nexit 1')
+    arrived = f'if exist "{marker}" echo C:\\BuildTools' if vs_arrives else "exit /b 0"
+    arrived_sh = f'[ -f "{marker}" ] && echo /BuildTools\nexit 0' if vs_arrives else "exit 0"
+    if os.name == "nt":
+        write_shim(installer, "vswhere", arrived, arrived_sh)
+        os.rename(os.path.join(installer, "vswhere.cmd"), os.path.join(installer, "vswhere.exe.cmd"))
+    else:
+        write_shim(installer, "vswhere.exe", arrived, arrived_sh)
+    environment = {key: value for key, value in os.environ.items() if key.upper() != "VCPKG_ROOT"}
+    environment.update({"AMBROSE_DEPS_FOUND": "cmake,git,vcpkg", "USERPROFILE": folder, "ProgramFiles": folder,
+                        "ProgramFiles(x86)": folder, "PATH": tools + os.pathsep + environment.get("PATH", "")})
+    result = subprocess.run([powershell(), "-NoProfile", "-File", POWERSHELL, "deps", "-Install"], cwd=ROOT,
+                            env=environment, capture_output=True, text=True)
+    shutil.rmtree(folder, ignore_errors=True)
+    return result
+
+
 @unittest.skipUnless(powershell(), "PowerShell is not installed")
 class DepsPlanTests(unittest.TestCase):
     def test_the_plan_lists_every_install_step_when_nothing_is_found(self):
@@ -227,6 +251,19 @@ class DepsPlanTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("MariaDB", result.stdout)
         self.assertNotIn("create:", result.stdout)
+
+    @unittest.skipIf(os.name == "nt", "the vswhere shim is a shell script")
+    def test_build_tools_that_finish_after_winget_gives_up_count_as_installed(self):
+        result = run_build_tools_install(vs_arrives=True)
+        self.assertIn("winget ended with exit code 1; waiting for the installer it started", result.stdout, result.stderr)
+        self.assertIn("Microsoft.VisualStudio.2022.BuildTools finished installing after winget ended", result.stdout, result.stderr)
+        self.assertNotIn("winget failed", result.stderr + result.stdout)
+
+    @unittest.skipIf(os.name == "nt", "the vswhere shim is a shell script")
+    def test_build_tools_still_missing_after_winget_gives_up_fail_clearly(self):
+        result = run_build_tools_install(vs_arrives=False)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("winget failed with exit code 1 and Microsoft.VisualStudio.2022.BuildTools is not installed", result.stderr + result.stdout)
 
     def test_install_fails_clearly_without_winget(self):
         result, _, _ = run_powershell_plan("none", "-Install", "-Plan", with_winget=False)
