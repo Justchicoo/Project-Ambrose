@@ -25,6 +25,7 @@ ACTIONS = {
     "hover": (("target",), ("file", "settle")),
     "server_command": (("command",), ("pattern", "timeout")),
     "game_command": (("command",), ("pattern", "timeout")),
+    "go_to_npc": (("npc",), ("wizard", "distance", "timeout")),
     "stop_game_server": ((), ()),
     "start_game_server": ((), ("timeout",)),
     "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record", "keep")),
