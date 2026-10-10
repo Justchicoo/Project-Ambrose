@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests synthetic install scanning, WAD header metrics, a played install's launcher banks, Src and Tar rules, type patterns under them, type 5 sidecars and the WADs still streaming, skipped player files, the reference diff and the one field it takes, deterministic output, and the persistent checksum cache.
+ * Tests synthetic install scanning, WAD header metrics, a played install's launcher banks, Src and Tar rules, type patterns under them, rule lines scoped to the Steam or Windows edition, a type rule naming a WAD type 5 without a sidecar, type 5 sidecars and the WADs still streaming, skipped player files, the reference diff and the one field it takes, deterministic output, and the persistent checksum cache.
  */
 
 #include "Compression.h"
@@ -126,6 +126,45 @@ TEST_F(InstallFixture, PlayedInstallMapsBanksRulesTypePatternsSidecarsAndSkipsWh
         "ZoneB|Data/GameData/ZoneB.wad||5|" + wadHeader }));
     EXPECT_EQ(result->FilesScanned, 8u);
     EXPECT_EQ(result->StillStreaming, (std::vector<std::string>{ "Data/GameData/ZoneB.wad" }));
+}
+
+TEST_F(InstallFixture, EditionLinesApplyOnlyToTheirEditionAndATypeRuleNamesAWadWithoutASidecar)
+{
+    std::ofstream(Root / "Bin" / "libcef.dll", std::ios::binary) << "browser";
+    std::ofstream(Root / "rules.conf") << "type|Data/GameData/ZoneA.wad|5\n"
+                                          "windows|Windows/Bin/a.dll|Bin/a.dll|Base|1\n"
+                                          "steam|Steam/Bin/a.dll|Bin/a.dll|Base|1\n"
+                                          "windows|skip|Bin/libcef.dll\n"
+                                          "steam|skip|steam_api.dll\n"
+                                          "skip|rules.conf\nskip|output/**\n";
+    auto const scan = [&](std::string const& output) {
+        std::string error;
+        PatchListGenerator::Options options{ Root, Root / "output" / output, Root / "rules.conf", std::nullopt };
+        std::optional<PatchListGenerator::Result> result = PatchListGenerator::Generate(options, error);
+        EXPECT_TRUE(result) << error;
+        std::vector<std::string> seen;
+        if (result)
+            for (auto const& package : result->Manifest.Packages)
+                for (auto const& record : package.Records)
+                    seen.push_back(fmt::format("{}|{}|{}", package.Name, record.SrcFileName, record.FileType));
+        return seen;
+    };
+
+    EXPECT_EQ(scan("windows"), (std::vector<std::string>{
+        "Base|Bin/revision.dat|1",
+        "Base|Root.wad|3",
+        "Base|Windows/Bin/a.dll|1",
+        "ZoneA|Data/GameData/ZoneA.wad|5",
+        "ZoneB|Data/GameData/ZoneB.wad|3" }));
+
+    std::ofstream(Root / "steam_api.dll", std::ios::binary) << "steam";
+    EXPECT_EQ(scan("steam"), (std::vector<std::string>{
+        "Base|Bin/libcef.dll|1",
+        "Base|Bin/revision.dat|1",
+        "Base|Root.wad|3",
+        "Base|Steam/Bin/a.dll|1",
+        "ZoneA|Data/GameData/ZoneA.wad|5",
+        "ZoneB|Data/GameData/ZoneB.wad|3" }));
 }
 
 TEST_F(InstallFixture, ReferenceDiffSetsAsideWhatIsNotInstalledAndTakesOnlyCompressedHeaderSize)

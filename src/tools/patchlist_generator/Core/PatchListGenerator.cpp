@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Walks an installation through Src and Tar rules, type patterns, launcher banks and skip patterns, derives packages, file types and header metrics, notes the streamed WADs whose data is not all downloaded yet, writes XML and binary manifests, and diffs them against a reference list, taking from it only the CompressedHeaderSize it cannot derive.
+ * Walks an installation through Src and Tar rules, type patterns, launcher banks and skip patterns, each optionally scoped to the Steam or Windows edition the install is, derives packages, file types and header metrics, notes the streamed WADs whose data is not all downloaded yet, writes XML and binary manifests, and diffs them against a reference list, taking from it only the CompressedHeaderSize it cannot derive.
  */
 
 #include "PatchListGenerator.h"
@@ -140,7 +140,7 @@ namespace
         return fields;
     }
 
-    Rules ReadRules(std::optional<std::filesystem::path> const& path, std::string& error)
+    Rules ReadRules(std::optional<std::filesystem::path> const& path, std::string_view edition, std::string& error)
     {
         Rules rules;
         if (!path)
@@ -160,6 +160,12 @@ namespace
             if (line.empty() || line.starts_with('#'))
                 continue;
             std::vector<std::string> fields = SplitFields(line);
+            if (fields.size() > 1 && (fields[0] == "steam" || fields[0] == "windows"))
+            {
+                if (fields[0] != edition)
+                    continue;
+                fields.erase(fields.begin());
+            }
             if (fields.size() == 2 && fields[0] == "skip" && !fields[1].empty())
             {
                 rules.Skip.push_back(fields[1]);
@@ -180,7 +186,7 @@ namespace
             }
             if (fields.size() != 4)
             {
-                error = fmt::format("rules file {} line {} needs src|tar|package|type, skip|pattern or type|pattern|type", ConfigMgr::PathToUtf8(*path), lineNumber);
+                error = fmt::format("rules file {} line {} needs src|tar|package|type, skip|pattern or type|pattern|type, each optionally after steam| or windows|",ConfigMgr::PathToUtf8(*path), lineNumber);
                 return {};
             }
             try
@@ -449,7 +455,9 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
         return std::nullopt;
     }
 
-    Rules const rules = ReadRules(options.Rules, error);
+    std::error_code steamError;
+    std::string_view const edition = std::filesystem::is_regular_file(options.Client / "steam_api.dll", steamError) ? "steam" : "windows";
+    Rules const rules = ReadRules(options.Rules, edition, error);
     if (!error.empty())
         return std::nullopt;
     std::optional<LatestFileList> reference;
