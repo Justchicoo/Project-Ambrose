@@ -9,6 +9,7 @@ import { live } from "./status.svelte";
 import {
     CommandAnswer,
     CommandHistoryAnswer,
+    LaunchAnswer,
     LogAnswer,
     DatabaseAnswer,
     DatabaseApplyAnswer,
@@ -111,6 +112,14 @@ export function runCommand(app: string, command: string, confirm = false) {
 
 export function commandHistory(app: string, signal?: AbortSignal) {
     return request("GET", `api/panel/apps/${encodeURIComponent(app)}/command-history`, CommandHistoryAnswer, undefined, signal);
+}
+
+export function launchOf(app: string, signal?: AbortSignal) {
+    return request("GET", `api/panel/apps/${encodeURIComponent(app)}/launch`, LaunchAnswer, undefined, signal);
+}
+
+export function updateLaunch(app: string, settings: Record<string, unknown>, reason: string) {
+    return request("PUT", `api/panel/apps/${encodeURIComponent(app)}/launch`, LaunchAnswer, { ...settings, reason });
 }
 
 export function settingsOf(app: string, signal?: AbortSignal, reveal?: string) {
