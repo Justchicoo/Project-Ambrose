@@ -244,8 +244,13 @@ TEST(SocialMgrTest, SocialActionsCanOmitTheCurrentWizardAsOwner)
 TEST(SocialMgrTest, AFriendsZoneIsNamedByTheKeyOfItsDisplayNameOrElseByItsPath)
 {
     std::map<std::string, ZoneTemplate, std::less<>> zones;
-    zones["WizardCity/WC_Hub"] = ZoneTemplate{ .Path = "WizardCity/WC_Hub", .DisplayNameKey = "WizardZone_TheCommons" };
-    zones["WizardCity/WC_Unnamed"] = ZoneTemplate{ .Path = "WizardCity/WC_Unnamed" };
+    ZoneTemplate hub;
+    hub.Path = "WizardCity/WC_Hub";
+    hub.DisplayNameKey = "WizardZone_TheCommons";
+    zones[hub.Path] = hub;
+    ZoneTemplate unnamed;
+    unnamed.Path = "WizardCity/WC_Unnamed";
+    zones[unnamed.Path] = unnamed;
     ZoneTemplates const templates(std::move(zones));
     EXPECT_EQ(SocialMgr::FriendZoneName("WizardCity/WC_Hub", &templates), "WizardZone_TheCommons");
     EXPECT_EQ(SocialMgr::FriendZoneName("WizardCity/WC_Unnamed", &templates), "WizardCity/WC_Unnamed");
