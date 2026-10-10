@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * schemaprobe entry point: sweeps the user's own Root.wad or every GameData WAD, BINd files and headerless versionable objects such as a zone's gamedata.bin alike, and every plain-XML object file, reports unknown classes with each property an object of one holds and unknown properties, with counts, paths and bit-width distributions, and the XML files' unknown classes with each element their objects hold, how often, whether repeated or keyed, the classes it holds and its distinct values, names each unknown class from the client program's own strings read as class names and each property hash through the property oracle from every type and name the loaded registry lists, every property name the client program holds or prints and every one the swept archives' text files spell out, and any candidates given, and writes the report with a draft schema of every property the oracle names one way only, in JSON. Given --server-classes it first finds the classes those archives hold, in BINd and XML files alike, that every object of reads cleanly with and writes them, with the evidence for each, the sweeps before and after and the version of the way they were found, as a class file in the type dump's own format, which --supplement loads back before a sweep, so the unknown classes it removes are seen gone; with no --output as well, the class file is all it writes.
+ * schemaprobe entry point: sweeps the user's own Root.wad or every GameData WAD, BINd files and headerless versionable objects such as a zone's gamedata.bin alike, and every plain-XML object file, reports unknown classes with each property an object of one holds and unknown properties, with counts, paths and bit-width distributions, and the XML files' unknown classes with each element their objects hold, how often, whether repeated or keyed, the classes it holds and its distinct values, names each unknown class from the client program's own strings read as class names and each property hash through the property oracle from every type and name the loaded registry lists, every property name the client program holds or prints and every one the swept archives' text files spell out, and any candidates given, and writes the report with a draft schema of every property the oracle names one way only, in JSON. Given --server-classes it first finds the classes those archives hold, in BINd and XML files alike, that every object of reads cleanly with and writes them, with the evidence for each, the sweeps before and after and the version of the way they were found, as a class file in the type dump's own format, which --supplement loads back before a sweep, so the unknown classes it removes are seen gone; with no --output as well, the class file is all it writes, and it says every few seconds how far each round's sweep has got, so a caller waiting on it sees it working.
  */
 
 #include "ArchiveText.h"
@@ -26,6 +26,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -47,6 +48,7 @@ namespace
     constexpr int Failure = 1;
     constexpr int BadUsage = 2;
     constexpr std::size_t XmlExamples = 5;
+    constexpr std::chrono::seconds SweepNoteEvery{ 10 };
 
     struct Arguments
     {
@@ -388,6 +390,14 @@ int main(int argc, char** argv)
             ServerClassExtractorOptions options;
             options.Threads = arguments->Threads;
             options.Progress = [](uint32 round, std::size_t kept) { std::cerr << fmt::format("schemaprobe: round {} keeps {} class(es)\n", round, kept); };
+            options.Sweeping = [said = std::chrono::steady_clock::time_point()](uint32 round, std::size_t swept, std::size_t total) mutable
+            {
+                std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
+                if (swept != 0 && swept != total && now - said < SweepNoteEvery)
+                    return;
+                said = now;
+                std::cerr << fmt::format("schemaprobe: round {} swept {} of {} archive(s)\n", round, swept, total);
+            };
             ServerClassExtraction const found = ServerClassExtractor::Run(archives, registry, existing, oracle, classNames, options);
             for (std::string const& problem : found.Errors)
                 std::cerr << "schemaprobe: " << problem << '\n';

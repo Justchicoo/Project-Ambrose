@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Finds the classes an install's data holds and its type dump does not describe, in its BINd files and headerless objects and in its plain-XML object files alike, and keeps only those every object of which then reads cleanly: each round opens and sweeps the archives one at a time, since an install holds more than a process may keep open, with the classes kept so far, proposes one for every class still unknown, a class the XML files hold only when no BINd file does, tries a property that did not decode as a list before refusing its class, and rebuilds the registry's supplement, until a round changes nothing, which is the sweep that proves the classes kept.
+ * Finds the classes an install's data holds and its type dump does not describe, in its BINd files and headerless objects and in its plain-XML object files alike, and keeps only those every object of which then reads cleanly: each round opens and sweeps the archives one at a time, since an install holds more than a process may keep open, with the classes kept so far, proposes one for every class still unknown, a class the XML files hold only when no BINd file does, tries a property that did not decode as a list before refusing its class, and rebuilds the registry's supplement, until a round changes nothing, which is the sweep that proves the classes kept, and says after each archive how far the round's sweep has got.
  */
 
 #ifndef AMBROSE_SERVERCLASSEXTRACTOR_H
@@ -43,6 +43,7 @@ struct ServerClassExtractorOptions
     unsigned Threads = 0;
     uint32 MaxRounds = 8;
     std::function<void(uint32 round, std::size_t kept)> Progress;
+    std::function<void(uint32 round, std::size_t swept, std::size_t total)> Sweeping;
 };
 
 class ServerClassExtractor
