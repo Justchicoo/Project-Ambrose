@@ -9,6 +9,7 @@
 #include "AdminClient.h"
 #include "AppDefinition.h"
 #include "ChildProcess.h"
+#include "LaunchSettings.h"
 #include "OutputLog.h"
 #include "SupervisorState.h"
 #include "Types.h"
@@ -61,9 +62,30 @@ struct AppExit
     std::optional<int64> Code;
     std::optional<int> Signal;
     bool Requested = false;
+    bool OutOfMemory = false;
     AppState During = AppState::Running;
     int64 UptimeMs = 0;
 };
+
+struct ResolvedLaunch
+{
+    std::filesystem::path Program;
+    std::filesystem::path WorkingDirectory;
+    std::chrono::seconds StartTimeout{ AppDefinition::DefaultStartTimeoutSeconds };
+    std::chrono::seconds StopTimeout{ AppDefinition::DefaultStopTimeoutSeconds };
+    LaunchRestartPolicy RestartPolicy = LaunchRestartPolicy::OnCrash;
+    std::chrono::seconds Backoff{ 1 };
+    uint32 MaxRestarts = 0;
+    std::chrono::seconds CrashWindow{ 300 };
+    bool Autostart = true;
+    int Priority = 0;
+    uint64 MemoryLimitBytes = 0;
+    uint32 CpuLimitPercent = 0;
+    std::vector<std::string> ExtraArguments;
+    std::vector<std::pair<std::string, std::string>> Environment;
+};
+
+using LaunchSettingsProvider = std::function<LaunchSettings(std::string_view app)>;
 
 struct AppIdentity
 {
@@ -143,6 +165,9 @@ public:
     std::vector<OutputLine> Output(OutputRun run, uint64 after) const;
     std::optional<AdminClient> GetAdminClient() const;
     AppDefinition const& GetDefinition() const noexcept { return _definition; }
+    void SetLaunchSettingsProvider(LaunchSettingsProvider provider);
+    ResolvedLaunch ResolveLaunch() const;
+    std::chrono::seconds CurrentStopTimeout() const;
 
     static std::string_view StateName(AppState state) noexcept;
     static std::string_view StopMethodName(StopMethod method) noexcept;
@@ -216,6 +241,9 @@ private:
     AppStatusObserver _observer;
 
     ChildProcessHandle _process;
+    LaunchSettingsProvider _launchSettings;
+    std::deque<int64> _crashEpochMs;
+    std::chrono::seconds _stopTimeout{ AppDefinition::DefaultStopTimeoutSeconds };
     Clock::time_point _startedAt{};
     Clock::time_point _startGrantedUntil{};
     Clock::time_point _nextHealth{};
