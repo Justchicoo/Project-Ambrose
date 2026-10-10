@@ -141,7 +141,7 @@ public:
     static MapObjectChanges Update(Map& map, std::vector<ZoneSpawner> const& spawners, uint64 generation, SpawnerContext const& context);
     static bool Despawn(Map& map, uint64 globalId, std::optional<uint32> effect, uint64 killer, SpawnerContext const& context, MapObjectChanges& changes);
     static std::optional<uint64> SpawnTemporary(Map& map, uint64 templateId, PropertyTypes::Vector3D const& position, float yaw, SpawnerContext const& context,
-        MapObjectChanges& changes);
+        MapObjectChanges& changes, MapObjectDecorator const& decorate = {});
     static MapObject const* FindNearest(Map const& map, PropertyTypes::Vector3D const& position, float range);
     static std::optional<ZoneSpawnResult> ReadResult(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string& error);
     static void RunResults(Map& map, std::vector<ZoneSpawner> const& spawners, std::vector<ZoneSpawnResult> const& results, std::string_view trigger, uint64 wizard,

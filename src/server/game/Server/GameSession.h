@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook, backpack and live player stats stay with the world thread, stat changes update the HUD and character persistence, and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it, as are the game effects its wizard carries, each added or taken away on the world thread and shown to the wizard and every wizard in its instance at the next tick, and to each that comes to see it after the object. Its friend, best-friend, friend-cap and ignore messages are answered through the social manager, and the display name of the zone its wizard stands in is kept for the presence its friends are shown. Its backpack holds as many items as Inventory.Slots, read as it enters and shown to its client, and the live Inventory.ExtraSlots allow, read at each add, so an add to a full one is refused with MSG_ITEMDROP and stores nothing, and an item it trashes is taken only from its own backpack.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook, backpack and live player stats stay with the world thread, stat changes update the HUD and character persistence, and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it, as are the game effects its wizard carries, each added or taken away on the world thread and shown to the wizard and every wizard in its instance at the next tick, and to each that comes to see it after the object. Its friend, best-friend, friend-cap and ignore messages are answered through the social manager, and the display name of the zone its wizard stands in is kept for the presence its friends are shown. Its backpack holds as many items as Inventory.Slots, read as it enters and shown to its client, and the live Inventory.ExtraSlots allow, read at each add, so an add to a full one is refused with MSG_ITEMDROP and stores nothing, and an item it trashes is taken only from its own backpack. A duel in its instance is shown to it once the circle and every participant are in its sight: its own wizard is sent to its circle with MSG_AGGRO, each participant is added with MSG_COMBATADD and put in the Sigil and Stationary states; when the duel ends it is shown the match result, the Ended phase and MSG_ENDDUEL, and every participant goes back to Idle. A wizard that leaves the world ends its duel.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -38,6 +38,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -165,6 +166,7 @@ public:
     std::optional<uint32> TakeWizBangChange() noexcept { return std::exchange(_pendingWizBang, std::nullopt); }
     std::optional<uint8> TakeJump() noexcept;
     void ShowStateOf(uint64 worldGuid, uint32 state);
+    void UpdateDuels();
     std::vector<Speech> TakeSpeech();
     void HearSpeech(ChatSpeaker const& speaker, Speech const& speech);
     void HearCustomEmote(ChatSpeaker const& speaker, Speech const& speech);
@@ -309,6 +311,7 @@ private:
     std::optional<GameMessages::ServerTransfer> _lastTransfer;
     std::shared_ptr<ZoneTriggerData const> _volumeData;
     VisibilitySet _sight;
+    std::set<uint64> _shownDuels;
     std::vector<VolumePresence> _volumePresence;
     NpcServiceRange _npcRange;
     std::map<uint32, bool> _npcTemplates;
