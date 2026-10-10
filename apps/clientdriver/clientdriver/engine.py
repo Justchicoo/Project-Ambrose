@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, Enter is pressed every second to skip what comes before the login window and is pressed as a key, with the window active, for Play while character selection stays on the screen, a click following when two presses two seconds apart do not take, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; the launcher window is read and pressed through UI Automation, a read passing when every pattern matches some text the window shows and a press of Play going on to find the client the launcher starts and its window; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, Enter is pressed every second to skip what comes before the login window and is pressed as a key, with the window active, for Play while character selection stays on the screen, a click following when two presses two seconds apart do not take, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; the launcher window is read and pressed through UI Automation, a read passing when every pattern matches some text the window shows and a press of Play going on to find the client the launcher starts and its window; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after; a wizard can be teleported to stand a little way from an NPC, facing it, by the game server's .tele npc, so a scenario reaches an NPC without walking.
 import os
 import re
 import threading
@@ -30,6 +30,7 @@ SKIPPED_BY_ENTER = ("login",)
 PRESSED_BY_ENTER = ("charselect_play",)
 ENTER_TRIES = 2
 ENTER_CHECK = 2.0
+NPC_REFUSALS = r"Not moved:|nobody was moved|No wizard in the world has|wizards in the world are named|is not a number|Give the name, template id"
 
 
 def keys_of(vk):
@@ -460,6 +461,19 @@ class Engine:
         if self.game is None:
             raise StepFailed("the scenario gives the game server a command, but it does not require the game server")
         return self.console_command(self.game, step)
+
+    def act_go_to_npc(self, step):
+        if self.game is None:
+            raise StepFailed("the scenario teleports the wizard to an NPC, but it does not require the game server")
+        npc = self.fill(step["npc"])
+        if '"' in npc:
+            raise StepFailed(f"the NPC {npc!r} holds a quote, which a console command cannot carry")
+        command = f'tele npc "{npc}" {self.fill(step.get("wizard", "{wizard_guid}"))}'
+        if "distance" in step:
+            command += f" {float(step['distance']):g}"
+        self.game.send(command)
+        found = self.game.console.wait(r"Moved .* to beside .*", step.get("timeout", 30), fail=NPC_REFUSALS, alive=self.game.alive)
+        return found.group(0).strip()
 
     def act_stop_game_server(self, step):
         if self.game is None:

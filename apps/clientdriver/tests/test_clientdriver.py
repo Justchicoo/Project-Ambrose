@@ -1367,6 +1367,24 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(self.server.commands, [], "a game command never reaches the login server")
         self.assertIn("Shown to 1 wizard", running.steps[0]["result"])
 
+    def test_going_to_an_npc_teleports_the_wizard_beside_it_through_the_game_server(self):
+        running = self.build([{"action": "go_to_npc", "name": "stand by the headmaster", "npc": "Merle Ambrose", "distance": 80}])
+        running.variables["wizard_guid"] = "7"
+        game_console = self.write(os.path.join("game", "console.txt"), ["Moved Tester to beside Merle Ambrose in WizardCity/WC_Hub, at (1.00, 2.00, 3.00)"])
+        running.game = FakeServer(self.write(os.path.join("game", "Server.log"), []), game_console)
+        running.run()
+        self.assertEqual(running.game.commands, ['tele npc "Merle Ambrose" 7 80'])
+        self.assertIn("beside Merle Ambrose", running.steps[0]["result"])
+
+    def test_going_to_an_npc_fails_at_once_when_the_game_server_refuses(self):
+        running = self.build([{"action": "go_to_npc", "name": "stand by nobody", "npc": "Nobody", "wizard": "Tester", "timeout": 5}])
+        game_console = self.write(os.path.join("game", "console.txt"), ["Not moved: in WizardCity/WC_Hub, nothing placed answers to Nobody"])
+        running.game = FakeServer(self.write(os.path.join("game", "Server.log"), []), game_console)
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertEqual(running.game.commands, ['tele npc "Nobody" Tester'])
+        self.assertIn("nothing placed answers to Nobody", str(raised.exception))
+
     def test_a_game_command_is_refused_without_the_game_server(self):
         running = self.build([{"action": "game_command", "name": "tell the world", "command": "server announce Hello"}])
         with self.assertRaises(StepFailed) as raised:
