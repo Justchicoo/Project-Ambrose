@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names, made as root with no password when it installed MariaDB itself and with the root password asked for when MariaDB was already there; -Plan prints those steps without taking them. It reads PATH, and VCPKG_ROOT when the shell has none, afresh before looking, so a tool an earlier run installed is found from a shell opened before it, and winget's answer that a package is already installed counts as done.
+# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names, made as root with no password when it installed MariaDB itself, asking for the root password when MariaDB was already there or the passwordless login is refused; -Plan prints those steps without taking them. It reads PATH, and VCPKG_ROOT when the shell has none, afresh before looking, so a tool an earlier run installed is found from a shell opened before it, and winget's answer that a package is already installed counts as done.
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $EnvFile = if ($env:AMBROSE_INSTALL_ENV) { $env:AMBROSE_INSTALL_ENV } else { Join-Path $Root 'conf\dist\env.dist' }
@@ -125,8 +125,12 @@ function Install-Database {
     $password = $account.Password
     $grant = "``${user}\_%``.*"
     $sql = "CREATE USER IF NOT EXISTS '$user'@'localhost' IDENTIFIED BY '$password'; CREATE USER IF NOT EXISTS '$user'@'127.0.0.1' IDENTIFIED BY '$password'; GRANT ALL PRIVILEGES ON $grant TO '$user'@'localhost'; GRANT ALL PRIVILEGES ON $grant TO '$user'@'127.0.0.1';"
-    $login = if ($mariadb) { @('-u', 'root', '-p') } else { @('-u', 'root') }
-    Invoke-Checked $client ($login + @('-e', $sql))
+    if (-not $mariadb) {
+        & $client @('-u', 'root', '-e', $sql)
+        if ($LASTEXITCODE -eq 0) { Write-Output "MariaDB has the $user account the shipped configuration names"; return }
+        Write-Output 'root on this MariaDB has a password after all, so the MariaDB client asks for it'
+    }
+    Invoke-Checked $client @('-u', 'root', '-p', '-e', $sql)
     Write-Output "MariaDB has the $user account the shipped configuration names"
 }
 
