@@ -47,13 +47,15 @@
     "https://www.w3.org/",
     "https://svelte.dev/e/",
     "https://tailwindcss.com",
-    "https://github.com/partykit/partykit"
+    "https://github.com/partykit/partykit",
+    "https://www.google.com/recaptcha/"
   ],
   "reasons": {
     "http://www.w3.org/": "The XML namespace an inline SVG declares. Nothing is fetched from it.",
     "https://www.w3.org/": "The same namespace in its secure spelling.",
     "https://svelte.dev/e/": "The address Svelte prints beside a runtime error. It is a string in a message, never a request.",
     "https://tailwindcss.com": "The address the styling engine prints beside its own error text, for the same reason.",
-    "https://github.com/partykit/partykit": "The address partysocket, the one browser socket client 17.26 uses, prints in an error message asking to file an issue. It is a string in a message, never a request."
+    "https://github.com/partykit/partykit": "The address partysocket, the one browser socket client 17.26 uses, prints in an error message asking to file an issue. It is a string in a message, never a request.",
+    "https://www.google.com/recaptcha/": "The captcha provider script 17.35's sign-in widget loads for provider verification; a live verification service cannot be vendored."
   }
 }
