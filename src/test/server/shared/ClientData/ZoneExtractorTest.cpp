@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry.
+ * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing sigil class is read as the CoreObjectInfo it derives from and kept under its own class name, which the zone manager never sends, an entry of a missing class no sigil name proves is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry.
  */
 
 #include "BindFile.h"
@@ -40,6 +40,7 @@ namespace
     constexpr char const* Hub = "WizardCity/WC_Hub";
     constexpr char const* HubArchive = "WizardCity-WC_Hub";
     constexpr char const* Sigil = "class MinigameSigilInfo";
+    constexpr char const* Mystery = "class MysteryObjectInfo";
 
     Json Property(std::string const& type, std::string const& name, uint32 id, std::string const& container)
     {
@@ -111,6 +112,7 @@ namespace
             std::vector<std::pair<std::string, std::string>> sigil = ObjectInfoFields();
             sigil.emplace_back("std::string", "m_sigilName");
             AddClass(classes, Sigil, { "class CoreObjectInfo", "class PropertyClass" }, sigil);
+            AddClass(classes, Mystery, { "class CoreObjectInfo", "class PropertyClass" }, ObjectInfoFields());
             AddClass(classes, "class ReqQuestState", { "class Requirement", "class PropertyClass" }, { { "unsigned int", "m_questID" } });
         }
         AddClass(classes, "class WizZoneData", plain, { { "std::string", "m_zoneName" }, { "std::string", "m_zoneDisplayName" }, { "class LocationTemplate", "m_locationList" },
@@ -183,6 +185,7 @@ namespace
                 { Sigil, 4400, 114612, { 1.0f, 2.0f, 3.0f }, { 0.0f, 0.0f, 0.0f }, "", 3, false, false },
                 { "class PositionalSoundEmitterInfo", 2960, 0, { 4401.12f, 573.98f, -75.28f }, { 0.0f, 0.0f, 0.0f }, "Playing", 1, false, false },
                 { "class CoreObjectInfo", 1451035, 114613, { 10.0f, 20.0f, 30.0f }, { 0.1f, 0.2f, 1.25f }, "Idle", 3, true, true },
+                { Mystery, 4500, 114614, { 4.0f, 5.0f, 6.0f }, { 0.0f, 0.0f, 0.0f }, "", 3, false, false },
             };
         }
 
@@ -310,7 +313,7 @@ TEST_F(ZoneExtractorTest, EachLocationAndEachEntryTheDumpDescribesBecomesARow)
     EXPECT_FLOAT_EQ(zone.Locations[0].Direction, -0.75f);
     EXPECT_EQ(zone.Locations[0].Location, (PropertyTypes::Vector3D{ 707.2f, -231.1f, -30.5f }));
 
-    ASSERT_EQ(zone.Objects.size(), 3u) << "the sigil entry the reader's dump cannot describe is left out";
+    ASSERT_EQ(zone.Objects.size(), 4u) << "the sigil entry the reader's dump cannot describe is read as the CoreObjectInfo it derives from; the entry of an unnamed class is left out";
     ExtractedObject const& kiosk = zone.Objects[0];
     EXPECT_EQ(kiosk.ClassName, "class CoreObjectInfo");
     EXPECT_EQ(kiosk.TemplateId, 4336u);
@@ -328,7 +331,15 @@ TEST_F(ZoneExtractorTest, EachLocationAndEachEntryTheDumpDescribesBecomesARow)
     DecodeResult const requirements = ObjectSerializer::Decode(_reader->GetCatalog(), *kiosk.SpawnRequirements, versionable);
     ASSERT_TRUE(requirements.Ok()) << requirements.Detail;
     EXPECT_EQ(requirements.Object->GetClass().Name, "class RequirementList") << "the requirements are kept as the bytes the zone data holds them in";
-    ExtractedObject const& emitter = zone.Objects[1];
+    ExtractedObject const& sigil = zone.Objects[1];
+    EXPECT_EQ(sigil.ClassName, Sigil) << "a sigil keeps its own class name, which its hash proves";
+    EXPECT_EQ(sigil.TemplateId, 4400u);
+    EXPECT_EQ(sigil.ObjectId, 114612u);
+    EXPECT_EQ(sigil.Location, (PropertyTypes::Vector3D{ 1.0f, 2.0f, 3.0f }));
+    EXPECT_FLOAT_EQ(sigil.Scale, 1.0f);
+    EXPECT_EQ(sigil.ZoneTag, "tag 114612");
+    EXPECT_EQ(sigil.LoadingType, 3);
+    ExtractedObject const& emitter = zone.Objects[2];
     EXPECT_EQ(emitter.ClassName, "class PositionalSoundEmitterInfo") << "a subclass of CoreObjectInfo is kept with its own class";
     EXPECT_EQ(emitter.StartState, "Playing") << "the start state is the name of a state, not a number";
     EXPECT_EQ(emitter.LoadingType, 1);
@@ -336,11 +347,11 @@ TEST_F(ZoneExtractorTest, EachLocationAndEachEntryTheDumpDescribesBecomesARow)
     EXPECT_TRUE(emitter.OverrideName.empty());
     EXPECT_FALSE(emitter.GlobalDynamic);
     EXPECT_FALSE(emitter.Undetectable);
-    EXPECT_EQ(zone.Objects[2].TemplateId, 1451035u);
-    EXPECT_EQ(zone.Objects[2].StartState, "Idle");
+    EXPECT_EQ(zone.Objects[3].TemplateId, 1451035u);
+    EXPECT_EQ(zone.Objects[3].StartState, "Idle");
 }
 
-TEST_F(ZoneExtractorTest, AnEntryOfAClassTheDumpLacksIsReportedWithItsHash)
+TEST_F(ZoneExtractorTest, AnEntryOfAClassTheDumpLacksAndNoSigilNameProvesIsReportedWithItsHash)
 {
     ZoneExtraction const extraction = ReadHub();
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
@@ -348,14 +359,14 @@ TEST_F(ZoneExtractorTest, AnEntryOfAClassTheDumpLacksIsReportedWithItsHash)
     auto const whole = std::find_if(extraction.Skipped.begin(), extraction.Skipped.end(), [](SkippedZonePart const& part) { return part.WholeObject; });
     ASSERT_NE(whole, extraction.Skipped.end());
     EXPECT_EQ(whole->Zone, Hub);
-    EXPECT_EQ(whole->ClassHash, StringHash::KiStringHash(Sigil));
-    EXPECT_NE(whole->Path.find("m_objectList[1]"), std::string::npos) << whole->Path;
+    EXPECT_EQ(whole->ClassHash, StringHash::KiStringHash(Mystery));
+    EXPECT_NE(whole->Path.find("m_objectList[4]"), std::string::npos) << whole->Path;
 
     auto const part = std::find_if(extraction.Skipped.begin(), extraction.Skipped.end(), [](SkippedZonePart const& skipped) { return !skipped.WholeObject; });
     ASSERT_NE(part, extraction.Skipped.end()) << "a requirement the reader's dump lacks, inside an entry that is kept, is reported";
     EXPECT_EQ(part->ClassHash, StringHash::KiStringHash("class ReqQuestState"));
     EXPECT_NE(part->Path.find("m_objectList[3]"), std::string::npos) << part->Path;
-    EXPECT_EQ(extraction.Zones.front().Objects.size(), 3u) << "the entry holding the unknown requirement is still a row";
+    EXPECT_EQ(extraction.Zones.front().Objects.size(), 4u) << "the entry holding the unknown requirement is still a row";
 }
 
 TEST_F(ZoneExtractorTest, AZoneWhoseNameIsNotItsArchivesIsAnError)
@@ -384,7 +395,7 @@ TEST_F(ZoneExtractorTest, ArchivesAreReadInNameOrderAndOneWithoutZoneDataGivesNo
     EXPECT_EQ(extraction.Zones[0].Path, "WizardCity/Interiors/WC_Headmistress_House") << "every dash of a nested zone's archive is a slash of its path";
     EXPECT_EQ(extraction.Zones[1].Path, Hub);
     EXPECT_EQ(extraction.GetLocationCount(), 4u);
-    EXPECT_EQ(extraction.GetObjectCount(), 6u);
+    EXPECT_EQ(extraction.GetObjectCount(), 8u);
     EXPECT_NE(extraction.Find(Hub), nullptr);
     EXPECT_EQ(ZoneExtractor::ArchiveStemOf("WizardCity/Interiors/WC_Headmistress_House"), "WizardCity-Interiors-WC_Headmistress_House");
 }
@@ -447,13 +458,13 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
         ASSERT_TRUE(loaded.Loaded) << (loaded.Errors.empty() ? std::string() : loaded.Errors.front());
         EXPECT_EQ(loaded.Zones, 1u);
         EXPECT_EQ(loaded.Locations, 2u);
-        EXPECT_EQ(loaded.Objects, 3u);
+        EXPECT_EQ(loaded.Objects, 4u);
         ZonePlace const start = sZoneMgr.FindPlace(Hub, "Start");
         ASSERT_TRUE(start.Found());
         EXPECT_FLOAT_EQ(start.Location.Yaw, -0.75f);
         std::vector<ZoneObjectSpawn> const* const objects = sZoneMgr.GetObjects()->In(Hub);
         ASSERT_NE(objects, nullptr);
-        ASSERT_EQ(objects->size(), 3u);
+        ASSERT_EQ(objects->size(), 4u);
         EXPECT_EQ(objects->at(0).TemplateId, 4336u);
         EXPECT_EQ(objects->at(0).Orientation, (PropertyTypes::Vector3D{ 0.0f, 0.0f, 0.5387f }));
         EXPECT_TRUE(objects->at(0).IsSentByServer());
@@ -461,10 +472,14 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
         EXPECT_EQ(objects->at(0).OverrideName, "Kiosk Keeper");
         EXPECT_TRUE(objects->at(0).GlobalDynamic);
         EXPECT_TRUE(objects->at(0).Undetectable);
-        EXPECT_EQ(objects->at(1).ClassName, "class PositionalSoundEmitterInfo");
-        EXPECT_EQ(objects->at(1).Loading, ZoneObjectLoading::StaticClient);
-        EXPECT_FALSE(objects->at(1).HasSpawnRequirements);
-        EXPECT_EQ(objects->at(2).StartState, "Idle");
+        EXPECT_EQ(objects->at(1).ClassName, Sigil);
+        EXPECT_EQ(objects->at(1).Loading, objects->at(0).Loading);
+        EXPECT_TRUE(objects->at(1).IsSigil());
+        EXPECT_FALSE(objects->at(1).IsSentByServer()) << "a sigil row is kept but never sent as an object, whatever its loading type";
+        EXPECT_EQ(objects->at(2).ClassName, "class PositionalSoundEmitterInfo");
+        EXPECT_EQ(objects->at(2).Loading, ZoneObjectLoading::StaticClient);
+        EXPECT_FALSE(objects->at(2).HasSpawnRequirements);
+        EXPECT_EQ(objects->at(3).StartState, "Idle");
         sZoneMgr.Clear();
         WorldDatabase.Close();
     }
