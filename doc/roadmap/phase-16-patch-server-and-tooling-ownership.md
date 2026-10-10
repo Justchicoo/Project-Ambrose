@@ -292,9 +292,9 @@ The retail client patches against Ambrose, finds nothing to change on a complete
 **Acceptance**
 
 - [x] PATCHINGBLOCKED and LOGPATCHCLIENTPATCHTIME registered 'logged in' [WizardDispatchTest.PatchNoticesAreHandledForLoggedInWizards; GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled]
-- [ ] -P 0 zones in with no download-package messages
+- [x] -P 0 zones in with no download-package messages [patch-off-zone-in.json run 20261009-223932 on the r806919 install: the client launched with -P 0 entered WizardCity/WC_Ravenwood and then WizardCity/WC_Hub, with the game server's packet log filtered to MSG_DOWNLOADPACKAGE, MSG_DOWNLOADPACKAGEELEMENT and MSG_DOWNLOADBROWSER showing none sent, neither patch port seeing a connection and no patch line in the client log; patch-off.json run 20261009-222129 saw 0 connections on 12500 and the PatchConfig.xml host]
 - [x] Revision mismatch rejected only with Login.EnforceRevision=1 [AuthHandlerDatabaseTest.RevisionEnforcementCanBeChangedForTheNextLogin, run against MySQL on linux-gcc: a mismatched revision is admitted with Login.EnforceRevision off and refused with ErrorNoLock once it is on]
-- [ ] Login.EnforceRevision and Patch.Enabled changes apply live
+- [x] Login.EnforceRevision and Patch.Enabled changes apply live [patch-off-zone-in.json run 20261009-223932: the login server let the first login in with revision r806919.Wizard_1_610 while Login.AllowedRevision named another, then after `.settings set Login.EnforceRevision 1`, with no restart, refused the next login of the restarted client with MSG_USER_AUTHEN_RSP Error=ErrorNoLock, which the client showed; `.settings set Patch.Enabled 0` on the running game server was followed by a transfer from WC_Ravenwood to WC_Hub with no MSG_DOWNLOAD* sent. Nothing on main sends a download package yet, so that send gate reading the live value each time is what PatchHandlerTest.PackageDownloadsFollowTheLiveSetting proves]
 
 ### Detailed spec from PAT-9: Game/login integration switches for patching
 
@@ -317,9 +317,9 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 **Acceptance**
 
 - [x] Unit: dispatch table has MSG_PATCHINGBLOCKED and MSG_LOGPATCHCLIENTPATCHTIME registered with state 'logged in' [WizardDispatchTest.PatchNoticesAreHandledForLoggedInWizards; GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled]
-- [ ] Real client with -P 0 logs in and zones in without the gameserver sending any download-package message (sniffer or server log shows none)
+- [x] Real client with -P 0 logs in and zones in without the gameserver sending any download-package message (sniffer or server log shows none) [patch-off-zone-in.json run 20261009-223932 on the r806919 install: the client launched with -P 0 entered WizardCity/WC_Ravenwood and then WizardCity/WC_Hub, with the game server's packet log filtered to MSG_DOWNLOADPACKAGE, MSG_DOWNLOADPACKAGEELEMENT and MSG_DOWNLOADBROWSER showing none sent, neither patch port seeing a connection and no patch line in the client log; patch-off.json run 20261009-222129 saw 0 connections on 12500 and the PatchConfig.xml host]
 - [x] Login with mismatched Revision is rejected with a clear login error only when Login.EnforceRevision=1 [AuthHandlerDatabaseTest.RevisionEnforcementCanBeChangedForTheNextLogin, run against MySQL on linux-gcc: a mismatched revision is admitted with Login.EnforceRevision off and refused with ErrorNoLock once it is on]
-- [ ] `.settings set Login.EnforceRevision 1` on a running loginserver rejects the next mismatched login without a restart, and setting Patch.Enabled to 0 stops download-package messages from the next zone transfer
+- [x] `.settings set Login.EnforceRevision 1` on a running loginserver rejects the next mismatched login without a restart, and setting Patch.Enabled to 0 stops download-package messages from the next zone transfer [patch-off-zone-in.json run 20261009-223932: the login server let the first login in with revision r806919.Wizard_1_610 while Login.AllowedRevision named another, then after `.settings set Login.EnforceRevision 1`, with no restart, refused the next login of the restarted client with MSG_USER_AUTHEN_RSP Error=ErrorNoLock, which the client showed; `.settings set Patch.Enabled 0` on the running game server was followed by a transfer from WC_Ravenwood to WC_Hub with no MSG_DOWNLOAD* sent. Nothing on main sends a download package yet, so that send gate reading the live value each time is what PatchHandlerTest.PackageDownloadsFollowTheLiveSetting proves]
 
 **Risks**
 

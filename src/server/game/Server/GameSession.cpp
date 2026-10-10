@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, chat, outbound instance updates, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, chat, outbound instance updates with the moves and walking states of the objects that walk a path, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -1370,6 +1370,13 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
             GameMessages::NewObject message;
             message.Data.assign(object->Data.begin(), object->Data.end());
             SendDmlMessage(message);
+            if (map.GetWalkers().contains(id))
+            {
+                MapObjectChanges walked;
+                walked.DynamicZoneId = map.GetDynamicZoneId();
+                walked.Moved.push_back({ id, object->MobileId, object->Spawn.Position, object->Spawn.Orientation.Z, std::nullopt });
+                SendObjectChanges(walked);
+            }
         }
         else if (auto const wizard = wizards.find(id); wizard != wizards.end())
         {
@@ -1430,6 +1437,31 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
     }
     for (uint64 const removed : changes.Removed)
         ForgetSight(removed);
+    for (MapObjectMove const& moved : changes.Moved)
+    {
+        if (!_sight.IsVisible(moved.GlobalId))
+            continue;
+        std::optional<int16> const x = MovementPacking::TryPackLocation(moved.Position.X);
+        std::optional<int16> const y = MovementPacking::TryPackLocation(moved.Position.Y);
+        std::optional<int16> const z = MovementPacking::TryPackLocation(moved.Position.Z);
+        if (x && y && z)
+        {
+            GameMessages::ServerMove move;
+            move.LocationX = static_cast<uint16>(*x);
+            move.LocationY = static_cast<uint16>(*y);
+            move.LocationZ = static_cast<uint16>(*z);
+            move.Direction = MovementPacking::PackYaw(moved.Yaw);
+            move.MobileId = moved.MobileId;
+            SendDmlMessage(move);
+        }
+        if (moved.State)
+        {
+            GameMessages::MoveState state;
+            state.GlobalId = moved.GlobalId;
+            state.NewState = *moved.State;
+            SendDmlMessage(state);
+        }
+    }
 }
 
 void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
@@ -1712,6 +1744,8 @@ void GameSession::LeaveWorld()
     _wizBangId = 0;
     _pendingWizBang.reset();
     _sight.Clear();
+    _npcRange.Clear();
+    _npcTemplates.clear();
     if (_player)
     {
         SaveStats();

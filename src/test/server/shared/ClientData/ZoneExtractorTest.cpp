@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing sigil class is read as the CoreObjectInfo it derives from and kept under its own class name, which the zone manager never sends, an entry of a missing class no sigil name proves is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry.
+ * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing sigil class is read as the CoreObjectInfo it derives from and kept under its own class name, which the zone manager never sends, an entry of a missing class no sigil name proves is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry. A zone's pathData.xml, written as BINd, and the node list its pathNodeData.bin holds as a bare versionable object become paths with their nodes in the order each path names them, which the SQL script writes to zone_path and zone_path_node, and a path naming a node the list lacks, or files given the wrong way round, fail that file alone.
  */
 
 #include "BindFile.h"
@@ -89,6 +89,12 @@ namespace
             { "class SpawnItem*", "m_spawnList" }, { "class RequirementList*", "m_globalDynamicReqs" }, { "bool", "m_globalDynamic" }, { "bool", "m_waitForTimer" },
             { "unsigned int", "m_zoneLevelMin" }, { "unsigned int", "m_zoneLevelMax" }, { "unsigned int", "m_zoneLevelUp" } }, { "m_spawnList" });
         AddClass(classes, "class SpawnManager", plain, { { "class SharedPointer<class SpawnObject>", "m_spawners" } }, { "m_spawners" });
+        AddClass(classes, "class NodeDescriptor", plain, {});
+        AddClass(classes, "class NodeObject", plain, { { "class Vector3D", "m_location" }, { "float", "m_fRadius" }, { "gid", "m_id" }, { "float", "m_direction" },
+            { "float", "m_roll" }, { "class SharedPointer<class NodeDescriptor>", "m_descriptor" } });
+        AddClass(classes, "class PathManager::NodeTemplateList", plain, { { "class NodeObject*", "m_nodeList" } }, { "m_nodeList" });
+        AddClass(classes, "class PathObjectTemplate", plain, { { "gid", "m_id" }, { "std::string", "m_name" }, { "gid", "m_nodeIDs" } }, { "m_nodeIDs" });
+        AddClass(classes, "class PathManager::PathTemplateList", plain, { { "class PathObjectTemplate*", "m_pathList" } }, { "m_pathList" });
     }
 
     std::string ZoneDump(bool withMissingClasses)
@@ -406,7 +412,7 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
     WorldSqlScript const script = ZoneSqlScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
-    ASSERT_EQ(statements.size(), 12u) << "the volume, trigger and spawner tables are emptied too, with no rows to write";
+    ASSERT_EQ(statements.size(), 14u) << "the volume, trigger, spawner and path tables are emptied too, with no rows to write";
     EXPECT_EQ(statements[0], "DELETE FROM `zone_template`");
     EXPECT_NE(statements[1].find(WorldSqlScript::Literal(std::string(Hub))), std::string::npos) << statements[1];
     EXPECT_EQ(statements[4], "DELETE FROM `zone_object`");
@@ -416,8 +422,10 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     EXPECT_EQ(statements[9], "DELETE FROM `zone_trigger_result`");
     EXPECT_EQ(statements[10], "DELETE FROM `zone_spawner`");
     EXPECT_EQ(statements[11], "DELETE FROM `zone_spawner_entry`");
+    EXPECT_EQ(statements[12], "DELETE FROM `zone_path`");
+    EXPECT_EQ(statements[13], "DELETE FROM `zone_path_node`");
     EXPECT_EQ(WorldSqlScript::Literal(std::monostate{}), "NULL");
-    EXPECT_EQ(ZoneSqlScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result", "zone_spawner", "zone_spawner_entry" }));
+    EXPECT_EQ(ZoneSqlScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result", "zone_spawner", "zone_spawner_entry", "zone_path", "zone_path_node" }));
 }
 
 TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtracted)
@@ -447,7 +455,9 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
     ZoneExtraction const extraction = ReadHub();
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
     WorldSqlScript const script = ZoneSqlScript::Build(extraction);
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    UpdaterSettings updates;
+    updates.AllowPending = true;
+    ASSERT_TRUE(DBUpdater::Run(world, "world", updates));
     std::string error;
     for (int round = 0; round < 2; ++round)
     {
@@ -703,4 +713,100 @@ TEST(ZoneSpawnTest, ASpawnDataFileBecomesSpawnersWithTheItemsTheyPlaceAndTheirRe
     EXPECT_NE(sql.find("`zone_spawner_entry`"), std::string::npos);
     EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("SpawnPoint_Wood_01"))), std::string::npos);
     EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("HalloweenSpawner1"))), std::string::npos);
+}
+
+TEST(ZonePathTest, APathFileAndItsNodeListBecomePathsWithTheirNodesInOrder)
+{
+    TypeRegistry writer;
+    ASSERT_TRUE(writer.LoadFromText(ZoneDump(false), "writer.json")) << writer.GetErrors().front();
+    TypeRegistry reader;
+    ASSERT_TRUE(reader.LoadFromText(ZoneDump(false), "reader.json")) << reader.GetErrors().front();
+    auto const create = [&writer](std::string_view type)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(writer.GetCatalog(), type);
+        EXPECT_TRUE(object) << type;
+        return object;
+    };
+    PropertyValue::List nodeList;
+    for (uint64 id = 1; id <= 4; ++id)
+    {
+        PropertyObjectPtr node = create("class NodeObject");
+        EXPECT_EQ(node->Set("m_location", PropertyTypes::Vector3D{ 10.0f * static_cast<float>(id), -5.0f, 0.5f }), PropertySetResult::Ok);
+        EXPECT_EQ(node->Set("m_id", id), PropertySetResult::Ok);
+        EXPECT_EQ(node->Set("m_direction", id == 2 ? 1.5f : 0.0f), PropertySetResult::Ok);
+        nodeList.emplace_back(std::move(node));
+    }
+    PropertyObjectPtr nodes = create("class PathManager::NodeTemplateList");
+    ASSERT_EQ(nodes->Set("m_nodeList", std::move(nodeList)), PropertySetResult::Ok);
+    SerializerOptions options;
+    options.Versionable = true;
+    options.Flags = SerializerFlag::None;
+    options.Mask = 0;
+    EncodeResult const nodeFile = ObjectSerializer::Encode(nodes.get(), options);
+    ASSERT_TRUE(nodeFile.Ok()) << nodeFile.Detail;
+
+    auto const path = [&create](uint64 id, std::string name, std::vector<uint64> const& ids)
+    {
+        PropertyObjectPtr made = create("class PathObjectTemplate");
+        EXPECT_EQ(made->Set("m_id", id), PropertySetResult::Ok);
+        EXPECT_EQ(made->Set("m_name", std::move(name)), PropertySetResult::Ok);
+        PropertyValue::List list;
+        for (uint64 const node : ids)
+            list.emplace_back(node);
+        EXPECT_EQ(made->Set("m_nodeIDs", std::move(list)), PropertySetResult::Ok);
+        return made;
+    };
+    auto const pathFile = [&create](std::vector<PropertyObjectPtr> paths)
+    {
+        PropertyObjectPtr list = create("class PathManager::PathTemplateList");
+        PropertyValue::List entries;
+        for (PropertyObjectPtr& made : paths)
+            entries.emplace_back(std::move(made));
+        EXPECT_EQ(list->Set("m_pathList", std::move(entries)), PropertySetResult::Ok);
+        return BindFile::Write(list.get());
+    };
+    std::vector<PropertyObjectPtr> good;
+    good.push_back(path(323289, "Treasure 2 Options", { 4, 2, 3 }));
+    good.push_back(path(82136, "Path Ghost 01", { 1 }));
+    EncodeResult const file = pathFile(std::move(good));
+    ASSERT_TRUE(file.Ok()) << file.Detail;
+
+    ZoneExtraction extraction;
+    ExtractedZone zone;
+    zone.Path = "WizardCity/WC_Streets/WC_Unicorn";
+    ZoneExtractor::ReadPaths(reader.GetCatalog(), zone, file.Bytes, nodeFile.Bytes, extraction);
+    ASSERT_TRUE(extraction.TriggerFailures.empty()) << extraction.TriggerFailures.front().Detail;
+    ASSERT_EQ(zone.Paths.size(), 2u);
+    ExtractedPath const& treasure = zone.Paths[0];
+    EXPECT_EQ(treasure.Id, 323289u);
+    EXPECT_EQ(treasure.Name, "Treasure 2 Options");
+    ASSERT_EQ(treasure.Nodes.size(), 3u);
+    EXPECT_EQ(treasure.Nodes[0].Id, 4u) << "the nodes come in the order the path names them";
+    EXPECT_EQ(treasure.Nodes[0].Location, (PropertyTypes::Vector3D{ 40.0f, -5.0f, 0.5f }));
+    EXPECT_EQ(treasure.Nodes[1].Direction, 1.5f);
+    EXPECT_EQ(zone.Paths[1].Nodes.size(), 1u);
+
+    extraction.Zones.push_back(zone);
+    std::string const sql = ZoneSqlScript::Build(extraction).ToText();
+    EXPECT_NE(sql.find("`zone_path`"), std::string::npos);
+    EXPECT_NE(sql.find("`zone_path_node`"), std::string::npos);
+    EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("Treasure 2 Options"))), std::string::npos);
+
+    std::vector<PropertyObjectPtr> stray;
+    stray.push_back(path(9, "Stray", { 1, 7 }));
+    EncodeResult const strayFile = pathFile(std::move(stray));
+    ASSERT_TRUE(strayFile.Ok()) << strayFile.Detail;
+    ZoneExtraction broken;
+    ExtractedZone other;
+    other.Path = zone.Path;
+    ZoneExtractor::ReadPaths(reader.GetCatalog(), other, strayFile.Bytes, nodeFile.Bytes, broken);
+    ASSERT_EQ(broken.TriggerFailures.size(), 1u);
+    EXPECT_EQ(broken.TriggerFailures.front().File, ZoneExtractor::PathEntry);
+    EXPECT_NE(broken.TriggerFailures.front().Detail.find("names node 7"), std::string::npos) << broken.TriggerFailures.front().Detail;
+    EXPECT_TRUE(other.Paths.empty()) << "a path file naming a node the list lacks fails that file alone";
+
+    ZoneExtraction swapped;
+    ZoneExtractor::ReadPaths(reader.GetCatalog(), other, nodeFile.Bytes, file.Bytes, swapped);
+    ASSERT_EQ(swapped.TriggerFailures.size(), 1u);
+    EXPECT_EQ(swapped.TriggerFailures.front().File, ZoneExtractor::PathNodeEntry);
 }

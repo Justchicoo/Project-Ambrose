@@ -123,7 +123,7 @@ namespace
 
 TEST_F(TeleCommandTest, APlayerCannotTeleportOrAskWhereItStands)
 {
-    for (std::string const line : { "tele Start", "tele add Here", "tele del Here", "go xyz 1 2 3", "gps" })
+    for (std::string const line : { "tele Start", "tele add Here", "tele del Here", "tele npc Gamma", "go xyz 1 2 3", "gps" })
     {
         WizardCaller player(SEC_PLAYER, 7301);
         EXPECT_EQ(sCommandMgr.Execute(player, line), CommandResult::Unknown) << line;
