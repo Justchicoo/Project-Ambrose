@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The object templates the world builds its objects from (sObjectTemplateMgr), read from the user's own install the way the client reads them: TemplateManifest.xml names the archive and entry that hold each template id, and that entry's object, of any class derived from CoreTemplate, is the template, whose behaviors every object made from it carries in the order the client expects, with an empty name where the list holds no behavior, as many NPC and prop templates do, and nothing for an entry whose name is empty, which the client leaves out of the object altogether. The manifest is read once and swapped in whole when it reloads; a template is decoded the first time it is asked for and kept, the least recently used dropped once the kept templates pass the memory budget, and a reload of the manifest retires every template decoded under the one before. A caller reads a template's fields through the typed view of its class, and holds the template it was given for as long as it needs it, so an object keeps the template it was made from through any reload. The player's template, id 1, which every wizard is made from, is held apart and read again when it reloads.
+ * The object templates the world builds its objects from (sObjectTemplateMgr), read from the user's own install the way the client reads them: TemplateManifest.xml names the archive and entry that hold each template id, and that entry's object, of any class derived from CoreTemplate, is the template, whose behaviors every object made from it carries in the order the client expects, with an empty name where the list holds no behavior, as many NPC and prop templates do, and nothing for an entry whose name is empty, which the client leaves out of the object altogether. The manifest is read once and swapped in whole when it reloads; a template is decoded the first time it is asked for and kept, the least recently used dropped once the kept templates pass the memory budget, and a reload of the manifest retires every template decoded under the one before. A caller reads a template's fields through the typed view of its class, and holds the template it was given for as long as it needs it, so an object keeps the template it was made from through any reload. The player's template, id 1, which every wizard is made from, is held apart and read again when it reloads, with the equipment template its equipment behavior names, which gives the slots a wizard wears items in and which the manifest does not list, read beside it from the ObjectData folder of Root.wad.
  */
 
 #ifndef AMBROSE_OBJECTTEMPLATEMGR_H
@@ -72,6 +72,8 @@ public:
     static constexpr std::string_view PlayerTarget = "player_template";
     static constexpr uint32 PlayerTemplateId = 1;
     static constexpr std::size_t DefaultBudget = std::size_t{ 256 } << 20;
+    static constexpr std::string_view EquipmentFolder = "ObjectData/";
+    static constexpr std::string_view EquipmentTemplateProperty = "m_equipmentTemplate";
 
     static ObjectTemplateMgr& Instance();
 
@@ -88,6 +90,7 @@ public:
     TemplateLookup Lookup(uint32 templateId);
     std::shared_ptr<ObjectTemplate const> GetTemplate(uint32 templateId) { return Lookup(templateId).Template; }
     std::shared_ptr<ObjectTemplate const> GetPlayer() const { return _player.Get(); }
+    std::shared_ptr<ObjectTemplate const> GetPlayerEquipment() const { return _playerEquipment.Get(); }
     std::shared_ptr<TemplateManifest const> GetManifest() const { return _manifest.Get(); }
     TemplateCacheStats GetCacheStats() const;
     uint64 GetGeneration() const noexcept { return _manifest.GetGeneration(); }
@@ -95,6 +98,7 @@ public:
 
     static std::optional<ObjectTemplate> Decode(TypeCatalogPtr const& catalog, uint32 templateId, TemplateLocation const& location, std::span<uint8 const> bytes, std::string& error);
     static std::size_t EstimateBytes(PropertyObject const& object) noexcept;
+    static std::optional<std::string> EquipmentTemplateName(PropertyObject const& player);
 
 private:
     struct Cached
@@ -113,6 +117,7 @@ private:
     std::filesystem::path _install;
     ReloadableStore<TemplateManifest> _manifest;
     ReloadableStore<ObjectTemplate> _player;
+    ReloadableStore<ObjectTemplate> _playerEquipment;
     std::mutex _archiveMutex;
     std::map<std::string, std::shared_ptr<KiwadArchive const>, std::less<>> _archives;
     mutable std::mutex _cacheMutex;

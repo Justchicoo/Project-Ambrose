@@ -301,6 +301,34 @@ class ScenarioTests(TemporaryFolder):
             scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
         self.assertIn("two steps named", str(raised.exception))
 
+    def test_a_comparison_of_shots_is_refused_unless_both_were_taken_and_its_region_and_outcome_make_sense(self):
+        shot = {"action": "shot", "name": "the doll", "file": "doll"}
+        cases = [
+            ({"first": "doll", "second": "later", "region": [0, 0, 10, 10], "expect": "differ"}, "no earlier shot step takes"),
+            ({"first": "doll", "second": "doll", "region": [10, 0, 5, 10], "expect": "differ"}, "four pixel edges"),
+            ({"first": "doll", "second": "doll", "region": [0, 0, 10], "expect": "differ"}, "four pixel edges"),
+            ({"first": "doll", "second": "doll", "region": [0, 0, 10, 10], "expect": "same"}, "differ or match"),
+            ({"first": "doll", "second": "doll", "region": [0, 0, 10, 10], "expect": "match", "fraction": 1.5}, "fraction of matching pixels"),
+        ]
+        for compared, said in cases:
+            self.scenario_file("one.json", {"title": "x", "steps": [shot, dict(compared, action="compare_shots", name="the doll changed")]})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
+            self.assertIn(said, str(raised.exception))
+        colors = {"action": "compare_colors", "name": "one color", "first": ["doll", "doll"], "first_region": [0, 0, 10, 10],
+                  "second": ["doll", "doll"], "second_region": [0, 0, 10, 10]}
+        for changed, said in [({"first": "doll"}, "names of two shots"), ({"second": ["doll", "later"]}, "no earlier shot step takes"),
+                              ({"second_region": [5, 5, 5, 9]}, "second region of four pixel edges"), ({"degrees": 120}, "at most 90 degrees"),
+                              ({"at_least": 0}, "one or more changed colored pixels")]:
+            self.scenario_file("one.json", {"title": "x", "steps": [shot, dict(colors, **changed)]})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
+            self.assertIn(said, str(raised.exception))
+        self.scenario_file("one.json", {"title": "x", "steps": [shot, dict(shot, name="the doll again")]})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertIn("a second time", str(raised.exception))
+
     def test_a_scenario_without_a_title_is_refused(self):
         self.scenario_file("one.json", {"steps": []})
         with self.assertRaises(Refused):
@@ -321,12 +349,13 @@ class ScenarioTests(TemporaryFolder):
     def test_the_screens_and_targets_a_scenario_uses_are_checked_against_the_references(self):
         self.scenario_file("one.json", {"title": "x", "steps": [
             {"action": "wait_screen", "name": "a", "screens": ["login", "nowhere"], "timeout": 1},
-            {"action": "click", "name": "b", "target": "missing", "on_screen": "login"}]})
+            {"action": "click", "name": "b", "target": "missing", "on_screen": "login"},
+            {"action": "drag", "name": "c", "target": "missing", "to": "elsewhere"}]})
         loaded = scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
         self.assertEqual(loaded.screens_used(), ["login", "nowhere"])
-        self.assertEqual(loaded.targets_used(), ["missing"])
+        self.assertEqual(loaded.targets_used(), ["elsewhere", "missing"])
         problems = loaded.names_against(references.References("references.json", REFERENCE_DOCUMENT))
-        self.assertEqual(len(problems), 2)
+        self.assertEqual(len(problems), 3)
 
     def test_a_scenario_can_expect_to_fail(self):
         self.scenario_file("one.json", {"title": "x", "expect": "failure", "steps": []})
@@ -908,11 +937,15 @@ class FakeClient:
     def enter(self, hold=0.05):
         self.typed.append("enter")
 
-    def click(self, x, y, dwell=0.35):
-        self.presses.append((x, y, round(dwell, 2)))
+    def click(self, x, y, dwell=0.35, clicks=1):
+        self.presses.append((x, y, round(dwell, 2)) if clicks == 1 else (x, y, round(dwell, 2), clicks))
         if self.on_click:
             self.on_click(len(self.presses))
         return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if self.active else "NOT active"), self.active
+
+    def drag(self, start, end, dwell=0.35, steps=8):
+        self.presses.append((start, end, steps))
+        return f"{start[0]},{start[1]} to {end[0]},{end[1]} in {steps} move(s)", self.active
 
 
 class FakeLauncherClient(FakeClient):
@@ -1305,6 +1338,26 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(self.client.presses[0][:2], (5, 5))
         self.assertIn("3 attempt(s)", running.steps[0]["result"])
 
+    def test_a_double_click_presses_twice_and_nothing_else_is_taken(self):
+        running = self.build([{"action": "click", "name": "put the hat on", "target": "press", "clicks": 2, "dwell": 0.0}])
+        running.run()
+        self.assertEqual(self.client.presses, [(5, 5, 0.0, 2)])
+        running = self.build([{"action": "click", "name": "put the hat on", "target": "press", "clicks": 3, "dwell": 0.0}])
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("twice for a double click", str(raised.exception))
+
+    def test_a_drag_presses_on_one_target_and_lets_go_on_another(self):
+        running = self.build([{"action": "drag", "name": "put the hat on", "target": "press", "to": "press", "steps": 4, "dwell": 0.0}])
+        running.run()
+        self.assertEqual(self.client.presses, [((5, 5), (5, 5), 4)])
+        self.assertIn("dragged press onto press", running.steps[0]["result"])
+        running = self.build([{"action": "drag", "name": "put the hat on", "target": "press", "to": "press", "dwell": 0.0}])
+        self.client.active = False
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("dropped the drag", str(raised.exception))
+
     def test_a_press_that_never_takes_fails_and_names_the_check(self):
         running = self.build([{"action": "click", "name": "press the button", "target": "press", "attempts": 2,
                                "dwell": 0.0, "dwell_step": 0.0,
@@ -1502,6 +1555,69 @@ class EngineTests(TemporaryFolder):
         self.assertIn("the disk is full", str(raised.exception))
         self.assertEqual(len(running.screenshots), 1)
         self.assertEqual(running.screenshots[0]["step"], "the login window")
+
+    def test_two_shots_are_compared_over_a_region_only(self):
+        running = self.build([
+            {"action": "shot", "name": "before the hat", "file": "before"},
+            {"action": "shot", "name": "after the hat", "file": "after"},
+            {"action": "compare_shots", "name": "the left side changed", "first": "before", "second": "after", "region": [0, 0, 10, 20], "expect": "differ"},
+            {"action": "compare_shots", "name": "the right side stayed", "first": "before", "second": "after", "region": [10, 0, 40, 20], "expect": "match"},
+        ])
+        running.execute(running.scenario.steps[0])
+        self.client.current = frame_of(GREEN, BLUE)
+        for step in running.scenario.steps[1:]:
+            running.execute(step)
+        self.assertIn("0.0 of the pixels in [0, 0, 10, 20] match between 01-before.png and 02-after.png", running.steps[2]["result"])
+        self.assertIn("1.0 of the pixels", running.steps[3]["result"])
+
+    def test_a_comparison_fails_when_the_shots_do_not_say_what_it_expects(self):
+        running = self.build([
+            {"action": "shot", "name": "before the hat", "file": "before"},
+            {"action": "shot", "name": "after the hat", "file": "after"},
+            {"action": "compare_shots", "name": "the hat changed the doll", "first": "before", "second": "after", "region": [10, 0, 40, 20], "expect": "differ"},
+        ])
+        running.execute(running.scenario.steps[0])
+        self.client.current = frame_of(GREEN, BLUE)
+        running.execute(running.scenario.steps[1])
+        with self.assertRaises(StepFailed) as raised:
+            running.execute(running.scenario.steps[2])
+        self.assertIn("so they do not differ", str(raised.exception))
+
+    def color_steps(self):
+        return [
+            {"action": "shot", "name": "the doll before", "file": "doll-bare"},
+            {"action": "shot", "name": "the doll after", "file": "doll-hat"},
+            {"action": "shot", "name": "the companion before", "file": "seen-bare"},
+            {"action": "shot", "name": "the companion after", "file": "seen-hat"},
+            {"action": "compare_colors", "name": "both see one hat color", "first": ["doll-bare", "doll-hat"], "first_region": [0, 0, 10, 20],
+             "second": ["seen-bare", "seen-hat"], "second_region": [10, 0, 40, 20]},
+        ]
+
+    def test_two_views_of_one_change_agree_on_its_color_and_the_scene_behind_it_does_not_count(self):
+        running = self.build(self.color_steps())
+        frames = [frame_of(GREEN, GREEN), frame_of(BLUE, GREEN), frame_of(GREEN, GREEN), frame_of(GREEN, BLUE)]
+        for step, frame in zip(running.scenario.steps, frames + [frames[-1]]):
+            self.client.current = frame
+            running.execute(step)
+        self.assertIn("hue 248 over 200 pixel(s) in 02-doll-hat.png and hue 248 over 600 pixel(s) in 04-seen-hat.png, 0 degrees apart", running.steps[4]["result"])
+
+    def test_a_hat_one_client_draws_blue_and_the_other_red_fails(self):
+        running = self.build(self.color_steps())
+        frames = [frame_of(GREEN, GREEN), frame_of(BLUE, GREEN), frame_of(GREEN, GREEN), frame_of(GREEN, RED)]
+        for step, frame in zip(running.scenario.steps[:4], frames):
+            self.client.current = frame
+            running.execute(step)
+        with self.assertRaises(StepFailed) as raised:
+            running.execute(running.scenario.steps[4])
+        self.assertIn("degrees apart, more than the 30 the same color may be", str(raised.exception))
+
+    def test_a_color_is_not_read_from_a_change_too_small_to_see(self):
+        running = self.build(self.color_steps())
+        for step in running.scenario.steps[:4]:
+            running.execute(step)
+        with self.assertRaises(StepFailed) as raised:
+            running.execute(running.scenario.steps[4])
+        self.assertIn("only 0 strongly colored pixel(s)", str(raised.exception))
 
     def test_the_first_shot_of_a_run_failing_names_the_reason_rather_than_an_index(self):
         running = self.build([{"action": "shot", "name": "the login window", "file": "login-window"}])

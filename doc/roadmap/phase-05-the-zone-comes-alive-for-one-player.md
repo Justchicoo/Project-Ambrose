@@ -331,7 +331,7 @@ Server start does not re-parse the 13.8 MB JSON dump each time, and a revision m
 
 **Acceptance**
 
-- [ ] Clean Ubuntu and Windows reach 'ready' on all 3 apps
+- [x] Clean Ubuntu and Windows reach 'ready' on all 3 apps (a clean ubuntu:24.04 container on 2026-10-01; a clean Windows 11 VM on 2026-10-10, from a fresh main zip through `deps -Install -WithDatabase`, `compile`, `conf`, `db` and `run supervisor` with no prompt, patchserver, loginserver and gameserver each printing its ready line)
 - [x] `conf` twice never overwrites an edited .conf (`apps/installer/tests/test_installer.py`, which builds a prefix of templates, runs conf, edits a .conf and runs conf again, against both scripts)
 
 ### Detailed spec from FND-22: apps/installer: one-command build, config copy and DB setup
@@ -346,7 +346,7 @@ A new contributor goes from clone to running servers with one script on Windows 
 
 **Acceptance**
 
-- [ ] On a clean Ubuntu VM and a clean Windows machine, following doc/INSTALL.md with the installer yields running loginserver, gameserver and patchserver that log 'ready'
+- [x] On a clean Ubuntu VM and a clean Windows machine, following doc/INSTALL.md with the installer yields running loginserver, gameserver and patchserver that log 'ready' (Ubuntu in a clean container on 2026-10-01; Windows on 2026-10-10 in a clean Windows 11 VM, where the gameserver's first start read a full install's classes, names, levels and zones before its ready line, held open by #199's progress lines)
 - [x] Running `conf` twice never overwrites an edited .conf (`apps/installer/tests/test_installer.py`, which builds a prefix of templates, runs conf, edits a .conf and runs conf again, against both scripts)
 - [x] Real client: n/a (5.08 installs, configures and starts the servers and shows a client nothing; the first behavior a client sees arrives with NET/LOG)
 

@@ -241,6 +241,16 @@ void ScriptMgr::OnHealthChanged(Player& player, int32 oldValue, int32 newValue)
     ForEachPlayer("OnHealthChanged", [&player, oldValue, newValue](PlayerScript* script) { script->OnHealthChanged(player, oldValue, newValue); });
 }
 
+void ScriptMgr::OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot)
+{
+    ForEachPlayer("OnEquip", [&player, itemGuid, templateId, slot](PlayerScript* script) { script->OnEquip(player, itemGuid, templateId, slot); });
+}
+
+void ScriptMgr::OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot)
+{
+    ForEachPlayer("OnUnequip", [&player, itemGuid, templateId, slot](PlayerScript* script) { script->OnUnequip(player, itemGuid, templateId, slot); });
+}
+
 std::optional<bool> ScriptMgr::EvaluateCondition(RequirementRow const& requirement, RequirementContext const& context) const
 {
     for (ConditionScript* script : _conditionScripts)

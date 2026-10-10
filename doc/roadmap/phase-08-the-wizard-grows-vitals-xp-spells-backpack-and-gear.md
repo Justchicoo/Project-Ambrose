@@ -257,7 +257,7 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 - [x] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell. `SpellMgrTest.EverySpellUnderSpellsIsReadAndFoundByIdByNameAndBySearch`, and `SpellMgrClientTest.EverySpellIsFoundByTheHashOfItsNameAsByItsId` for all 18173 of r806919's spells
 - [x] Unit test: learning a known spell twice does not duplicate it. `PlayerSpellbookTest.LearningASpellItKnowsDoesNotAddItTwice`: a second learn gives nothing to write or send, which matters because the client's own ClientSpellbookBehavior::AddSpell (0x142101b60) appends without looking; the real-client run's second learn was answered 'already knows Fire Cat'
-- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. 8.05 built the spellbook, and the check waits for a deck, as 8.05 records
+- [x] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. [real client run 20261010-144121 with apps/clientdriver/scenarios/learn-a-spell.json: the Spell Deck window shows the book's cards only beside a worn deck, as its DeckConfigurationWindow works through the worn deck's DeckBehavior, so the level 5 Fire wizard is first given Deck-Tutorial-001, the Starter Deck, and wears it in the Deck slot with a double-click on its backpack row; `learn "Fire Cat" <wizard>` on the game server's console, which a game master's chat line reaches, sent MSG_ADDSPELLTOBOOK and Fire Cat's card filled the first slot of the Fire page with no relog, a second learn was refused as already known, after the client was quit and started again the deck was still worn and Fire Cat still on the page, and `unlearn` sent MSG_REMOVESPELLFROMBOOK and left the slot empty again; the client never failed to load an object or find a spell]
 
 **Risks**
 
@@ -275,7 +275,7 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 **Acceptance**
 
 - [x] Learning twice does not duplicate
-- [ ] Real client: '.learn Fire Cat' appears on the Fire page and survives relog; '.unlearn' removes
+- [x] Real client: '.learn Fire Cat' appears on the Fire page and survives relog; '.unlearn' removes [real client run 20261010-144121 with apps/clientdriver/scenarios/learn-a-spell.json: the Spell Deck window shows the book's cards only beside a worn deck, as its DeckConfigurationWindow works through the worn deck's DeckBehavior, so the level 5 Fire wizard is first given Deck-Tutorial-001, the Starter Deck, and wears it in the Deck slot with a double-click on its backpack row; `learn "Fire Cat" <wizard>` on the game server's console, which a game master's chat line reaches, sent MSG_ADDSPELLTOBOOK and Fire Cat's card filled the first slot of the Fire page with no relog, a second learn was refused as already known, after the client was quit and started again the deck was still worn and Fire Cat still on the page, and `unlearn` sent MSG_REMOVESPELLFROMBOOK and left the slot empty again; the client never failed to load an object or find a spell]
 
 ### Detailed spec from WIZ-9: Spell template extractor and spellbook
 
@@ -305,7 +305,7 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 - [x] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell. Earned in 8.04: `SpellMgrTest.EverySpellUnderSpellsIsReadAndFoundByIdByNameAndBySearch`, and `SpellMgrClientTest.EverySpellIsFoundByTheHashOfItsNameAsByItsId` for all 18173 of r806919's spells
 - [x] Unit test: learning a known spell twice does not duplicate it. `PlayerSpellbookTest.LearningASpellItKnowsDoesNotAddItTwice`: a second learn gives nothing to write or send, which matters because the client's own ClientSpellbookBehavior::AddSpell (0x142101b60) appends without looking; the real-client run's second learn was answered 'already knows Fire Cat'
-- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. Waits for a deck. The client driver's learn-a-spell.json on r806919 (run 20260926-122731) proves the rest, with the command given on the game server's console as `learn "Fire Cat" <wizard>`, which a game master's chat line reaches once 6.04 carries it: the server sent MSG_ADDSPELLTOBOOK with Fire Cat's template id and the client took it, a second learn was refused as already known, the wizard entered again after a relog with Fire Cat in its book, and `unlearn` sent MSG_REMOVESPELLFROMBOOK; the client never failed to load an object or find a spell it was sent. But no card shows on any page of the Spell Deck for that wizard, a plain Ice spell no more than Fire Cat, and the deck page on its left is empty: it has no deck, which 8.10 equips and 8.11 fills, and the check is run again then
+- [x] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. [real client run 20261010-144121 with apps/clientdriver/scenarios/learn-a-spell.json: the Spell Deck window shows the book's cards only beside a worn deck, as its DeckConfigurationWindow works through the worn deck's DeckBehavior, so the level 5 Fire wizard is first given Deck-Tutorial-001, the Starter Deck, and wears it in the Deck slot with a double-click on its backpack row; `learn "Fire Cat" <wizard>` on the game server's console, which a game master's chat line reaches, sent MSG_ADDSPELLTOBOOK and Fire Cat's card filled the first slot of the Fire page with no relog, a second learn was refused as already known, after the client was quit and started again the deck was still worn and Fire Cat still on the page, and `unlearn` sent MSG_REMOVESPELLFROMBOOK and left the slot empty again; the client never failed to load an object or find a spell]
 
 **Risks**
 
@@ -514,9 +514,9 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Fire-only robe on an Ice wizard refused
-- [ ] Occupied slot swaps back to the backpack
-- [ ] Real client: hat changes model; second client sees it; persists
+- [x] Fire-only robe on an Ice wizard refused [PlayerEquipmentTest.AFireOnlyRobeOnAnIceWizardIsRefusedAndStaysInTheBackpack; ItemMgrClientTest.ThePlayersSlotsAndTheItemsRequirementsDecideAnEquip runs the same rule on r806919's robe 1652037 and the player's own slots]
+- [x] Occupied slot swaps back to the backpack [PlayerEquipmentTest.EquippingIntoAnOccupiedSlotMovesTheOldItemBackToTheBackpack, with the swap stored by CharacterRepositoryDatabaseTest.WornItemsMoveBetweenTheBackpackAndTheirSlotAndStayWithTheirOwner]
+- [x] Real client: hat changes model; second client sees it; persists [real client run 20261010-114657 with apps/clientdriver/scenarios/equip-gear.json: two Fire wizards in the Commons, the main one given WC1-Hat-Tier1 by `.additem` and wearing it by a double-click on its row, which the client sends as MSG_EQUIPITEM with the slot Hat; the row took the worn color, the paper doll and the wearer's own view changed hats, and the companion saw the hat in the same hue as the doll and the wearer (232 degrees in all three), the public entry now being the WizardEquippedItemInfo the client's avatar rules read colors from, so neither client logged AvatarTextureOption null; after the main client was quit and started again the hat was still in character_equipment, its row worn and the companion saw it in the same hue, and a double-click put it back in the backpack, which both clients showed. m_itemSlotNameID is the KI string id of the slot name, as the client's own equip handler hashes it; runs 20261010-112856 and 20261010-113449 passed the same way]
 
 ### Detailed spec from WIZ-12: Equip and unequip gear
 
@@ -543,9 +543,9 @@ Players can drag items between backpack and equipment slots, and other players s
 
 **Acceptance**
 
-- [ ] Unit test: equipping a Fire-only robe on an Ice wizard is refused and the item stays in the backpack
-- [ ] Unit test: equipping into an occupied slot moves the old item back to the backpack
-- [ ] Real client: dragging a hat onto the hat slot changes the paper-doll and the 3D model. A second nearby client sees the new hat. It is still equipped after relogging.
+- [x] Unit test: equipping a Fire-only robe on an Ice wizard is refused and the item stays in the backpack [PlayerEquipmentTest.AFireOnlyRobeOnAnIceWizardIsRefusedAndStaysInTheBackpack; ItemMgrClientTest.ThePlayersSlotsAndTheItemsRequirementsDecideAnEquip runs the same rule on r806919's robe 1652037 and the player's own slots]
+- [x] Unit test: equipping into an occupied slot moves the old item back to the backpack [PlayerEquipmentTest.EquippingIntoAnOccupiedSlotMovesTheOldItemBackToTheBackpack, with the swap stored by CharacterRepositoryDatabaseTest.WornItemsMoveBetweenTheBackpackAndTheirSlotAndStayWithTheirOwner]
+- [x] Real client: dragging a hat onto the hat slot changes the paper-doll and the 3D model. A second nearby client sees the new hat. It is still equipped after relogging. [real client run 20261010-114657 with apps/clientdriver/scenarios/equip-gear.json: two Fire wizards in the Commons, the main one given WC1-Hat-Tier1 by `.additem` and wearing it by a double-click on its row, which the client sends as MSG_EQUIPITEM with the slot Hat; the row took the worn color, the paper doll and the wearer's own view changed hats, and the companion saw the hat in the same hue as the doll and the wearer (232 degrees in all three), the public entry now being the WizardEquippedItemInfo the client's avatar rules read colors from, so neither client logged AvatarTextureOption null; after the main client was quit and started again the hat was still in character_equipment, its row worn and the companion saw it in the same hue, and a double-click put it back in the backpack, which both clients showed. m_itemSlotNameID is the KI string id of the slot name, as the client's own equip handler hashes it; runs 20261010-112856 and 20261010-113449 passed the same way; the hat is put on by a double-click on its row, the client's other way of equipping it]
 
 **Risks**
 

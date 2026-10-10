@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, the install the driver found taken literally inside a pattern, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a launch other than the launcher's console or its window, a launcher window opened beside the patching default or a companion, a step that reads or presses the launcher window in a scenario that does not open it or a restart in one that does, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started; it accepts the three purchased-emote masks for radial-page scenarios.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, the install the driver found taken literally inside a pattern, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a launch other than the launcher's console or its window, a launcher window opened beside the patching default or a companion, a step that reads or presses the launcher window in a scenario that does not open it or a restart in one that does, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, a wait on a listener the scenario does not name, or a comparison of shots no earlier step took, of a region that is not four edges in order, of an outcome other than differ or match or of colors read from anything but two shots on each side, before anything is started; it accepts the three purchased-emote masks for radial-page scenarios.
 import json
 import os
 import re
@@ -20,9 +20,10 @@ ACTIONS = {
     "char": (("code",), ()),
     "key": (("vk",), ()),
     "hold_key": (("vk", "seconds"), ("moves", "watch", "watch_every", "watch_after")),
-    "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
+    "click": (("target",), ("attempts", "clicks", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
     "shot": ((), ("file", "settle")),
     "hover": (("target",), ("file", "settle")),
+    "drag": (("target", "to"), ("dwell", "steps")),
     "server_command": (("command",), ("pattern", "timeout")),
     "game_command": (("command",), ("pattern", "timeout")),
     "go_to_npc": (("npc",), ("wizard", "distance", "timeout")),
@@ -35,6 +36,8 @@ ACTIONS = {
     "wait_listener": (("listener", "timeout"), ()),
     "launcher_shows": (("patterns", "timeout"), ()),
     "launcher_press": (("control", "timeout"), ()),
+    "compare_shots": (("first", "second", "region", "expect"), ("fraction",)),
+    "compare_colors": (("first", "first_region", "second", "second_region"), ("degrees", "at_least")),
 }
 COMMON_KEYS = ("action", "name", "client")
 CLIENTS = ("main", "companion")
@@ -62,6 +65,8 @@ MAX_SETTLE_SECONDS = 30
 WATCH_EVERY = (0.1, 5)
 MAX_WATCH_AFTER = 10
 MAX_HELD_KEYS = 4
+COMPARISONS = ("differ", "match")
+MAX_HUE_DEGREES = 90
 RUN_VARIABLES = ("user", "password", "wizard", "wizard_guid", "companion_user", "companion_password", "companion_wizard", "companion_wizard_guid",
                  "install", "window")
 LITERAL_IN_PATTERNS = ("install",)
@@ -138,7 +143,7 @@ class Scenario:
         return sorted(used)
 
     def targets_used(self):
-        return sorted({step["target"] for step in self.steps_with_checks() if step.get("target")})
+        return sorted({step[key] for step in self.steps_with_checks() for key in ("target", "to") if step.get(key)})
 
     def names_against(self, references):
         problems = []
@@ -225,6 +230,25 @@ def _check_step(path, index, step):
             _check_pattern(f"{where} ({name})", key, step[key])
     if action == "click" and isinstance(step.get("until"), dict):
         _check_step(path, index, dict(step["until"], name=f"{name}: the check that it took"))
+    for key in ("region", "first_region", "second_region"):
+        region = step.get(key)
+        if action in ("compare_shots", "compare_colors") and key in ACTIONS[action][0] and (
+                not isinstance(region, list) or len(region) != 4 or any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in region)
+                or not region[0] < region[2] or not region[1] < region[3]):
+            raise Refused(f"{where} ({name}) needs a {key.replace('_', ' ')} of four pixel edges, [left, top, right, bottom], with left before right and top above bottom")
+    if action == "compare_colors":
+        for key in ("first", "second"):
+            if not isinstance(step[key], list) or len(step[key]) != 2 or not all(isinstance(shot, str) for shot in step[key]):
+                raise Refused(f"{where} ({name}) needs its {key} as the names of two shots, before and after the change whose color it reads")
+        if "degrees" in step and (isinstance(step["degrees"], bool) or not isinstance(step["degrees"], (int, float)) or not 0 < step["degrees"] <= MAX_HUE_DEGREES):
+            raise Refused(f"{where} ({name}) lets the two hues be more than 0 and at most {MAX_HUE_DEGREES} degrees apart")
+        if "at_least" in step and (isinstance(step["at_least"], bool) or not isinstance(step["at_least"], int) or step["at_least"] < 1):
+            raise Refused(f"{where} ({name}) needs at_least as a count of one or more changed colored pixels")
+    if action == "compare_shots":
+        if step["expect"] not in COMPARISONS:
+            raise Refused(f"{where} ({name}) expects the two shots to {' or '.join(COMPARISONS)}, not {step['expect']!r}")
+        if "fraction" in step and (isinstance(step["fraction"], bool) or not isinstance(step["fraction"], (int, float)) or not 0 < step["fraction"] <= 1):
+            raise Refused(f"{where} ({name}) needs a fraction of matching pixels more than 0 and at most 1")
 
 
 def _check_wizard(path, wizard, what):
@@ -322,12 +346,22 @@ def _check_document(path, document):
         for entry in entries:
             _check_pattern(f"{os.path.basename(path)} {key}", "entry", entry)
     named = []
+    shots = []
     for index, step in enumerate(document.get("steps") or []):
         _check_step(path, index, step)
         name = step.get("name") or step["action"]
         if name in named:
             raise Refused(f"{path} has two steps named {name!r}, and a step's name is how its failure and its screenshot are read")
         named.append(name)
+        if step["action"] in ("compare_shots", "compare_colors"):
+            for key in ("first", "second"):
+                for shot in (step[key] if step["action"] == "compare_colors" else [step[key]]):
+                    if shot not in shots:
+                        raise Refused(f"{path} step {index + 1} ({name}) compares the shot {shot!r}, which no earlier shot step takes")
+        if step["action"] == "shot":
+            if (step.get("file") or name) in shots:
+                raise Refused(f"{path} step {index + 1} ({name}) takes the shot {step.get('file') or name!r} a second time, so a comparison could not tell them apart")
+            shots.append(step.get("file") or name)
 
 
 def _check_launch(scenario):
