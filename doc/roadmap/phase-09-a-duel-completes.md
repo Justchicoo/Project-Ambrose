@@ -580,3 +580,4 @@ Players can leave a duel by fleeing, disconnecting or logging out without breaki
 **Risks**
 
 - Whether retail uses MSG_COMBATFLEE or MSG_COMBATREMOVE (or both) for flee is unverified
+- Combat.FleeManaDrainPercent's default of 100 has no source: no client file or observation of the live game backs it, so what fleeing costs is unknown until a player who knows says or a run shows it
