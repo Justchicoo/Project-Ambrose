@@ -17,6 +17,7 @@
 #include "QueryResult.h"
 #include "Settings.h"
 #include "TypeRegistry.h"
+#include "ZoneMgr.h"
 
 #include <algorithm>
 #include <chrono>
@@ -518,6 +519,13 @@ void SocialMgr::SendLists(GameSession& session)
     });
 }
 
+std::string SocialMgr::FriendZoneName(std::string_view zonePath, ZoneTemplates const* templates)
+{
+    if (ZoneTemplate const* const zone = templates ? templates->Find(zonePath) : nullptr; zone && !zone->DisplayNameKey.empty())
+        return zone->DisplayNameKey;
+    return std::string(zonePath);
+}
+
 void SocialMgr::AddFriendRequest(GameSession& session, GameMessages::BuddyRequestAdd const& message)
 {
     uint64 const ownerId = session.GetCharacterId();
@@ -720,7 +728,7 @@ void SocialMgr::FinishAcceptFriendRequest(GameSession& session, uint64 ownerId, 
         if (auto const remote = _online.find(requesterId); remote != _online.end())
             if (std::shared_ptr<GameSession> recipient = remote->second.Session.lock())
                 SendFriendEntry(*recipient, ownerId, owner->GetChatName(), now, now);
-        SendPresenceToFriends(ownerId, PlayerStatusOnline, owner->GetZoneDisplay());
+        SendPresenceToFriends(ownerId, PlayerStatusOnline, FriendZoneName(owner->GetZonePath(), sZoneMgr.GetTemplates().get()));
         if (auto const remote = _online.find(requesterId); remote != _online.end())
             SendPresenceToFriends(requesterId, remote->second.Status, remote->second.ZoneName);
     });
@@ -759,7 +767,7 @@ void SocialMgr::DropFriendRequest(GameSession& session, GameMessages::BuddyReque
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const friendId = message.EntryGid;
-    if (message.ListOwnerGid != ownerId || friendId == 0 || friendId == ownerId)
+    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || friendId == 0 || friendId == ownerId)
     {
         LOG_WARN("server.social", "Session {} sent an invalid friend removal for wizard {}", session.GetSessionId(), friendId);
         return;
@@ -810,7 +818,7 @@ void SocialMgr::SetBestFriend(GameSession& session, GameMessages::BestFriend con
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const friendId = message.BuddyId;
-    if (message.ListOwnerGid != ownerId || friendId == 0 || friendId == ownerId)
+    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || friendId == 0 || friendId == ownerId)
     {
         LOG_WARN("server.social", "Session {} tried to set a best-friend symbol for a wizard outside its friend list", session.GetSessionId());
         return;
@@ -1010,9 +1018,7 @@ void SocialMgr::UpdatePresence(std::vector<std::shared_ptr<GameSession>> const& 
             continue;
         present.insert(characterId);
         uint8 const status = session->IsLinkDead() ? PlayerStatusLinkDead : PlayerStatusOnline;
-        std::string zoneName = session->GetZoneDisplay();
-        if (zoneName.empty())
-            zoneName = session->GetZonePath();
+        std::string const zoneName = FriendZoneName(session->GetZonePath(), sZoneMgr.GetTemplates().get());
         auto [position, inserted] = _online.try_emplace(characterId);
         bool const changed = inserted || position->second.Status != status || position->second.ZoneName != zoneName;
         position->second.Session = session;
