@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the forced teleport that snaps a wizard to a place in its zone, packed the same way, the zone transfer request a wizard's client acknowledges or refuses, the transfer that sends it to reconnect for another zone with a single-use key, and the client's request to send that transfer again, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits; the item a wizard's backpack gains, carried as a serialized game object, and the one it loses, by the item's global id, each under the wizard's own global id, the item a client asks to trash, by its global id and its template's id, the note that an item could not be given because the backpack is full, and the loot a wizard is shown it received; and what a wizard says for the others around it to see: a typed line, whose Message holds the text as a wide string packed into the byte field, a quick chat phrase by id, a phrase in the extended form and an emote a wizard plays, each with the reply that shows it but the emote, which is shown as a state, which names the speaker by the name the client's name codec packs and by global id. It also declares MSG_QUERY_LOGOUT, which the server answers, MSG_CLIENT_DISCONNECT and MSG_NOT_AFK, and the MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN notices it sends when a wizard drops, idles or the server stops, and the wizbang state a wizard's client names with the wizbang the server shows the wizards around it, and the fifteen GAME messages of the friends and ignore lists: the list request answered by each entry and the list's end, a friend request with its acceptance, denial and withdrawal, a dropped friend, a friend's presence, the best-friend mark, the friend cap, an ignored wizard added, dropped and listed, and the chat error a refused social action gets, and the WIZARD live vitals, gold, potion and pip updates with MSG_USEPOTION, and the game effect the server adds to an object, carried as the effect object itself, with the one it takes away, which the client finds by its internal id, and MSG_CLIENTNOTIFYTEXT, the zone-entry text a fired trigger's result shows its wizard's client.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the forced teleport that snaps a wizard to a place in its zone, packed the same way, the zone transfer request a wizard's client acknowledges or refuses, the transfer that sends it to reconnect for another zone with a single-use key, and the client's request to send that transfer again, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits; the item a wizard's backpack gains, carried as a serialized game object, and the one it loses, by the item's global id, each under the wizard's own global id, the item a client asks to trash, by its global id and its template's id, the note that an item could not be given because the backpack is full, and the loot a wizard is shown it received; and what a wizard says for the others around it to see: a typed line, whose Message holds the text as a wide string packed into the byte field, a quick chat phrase by id, a phrase in the extended form and an emote a wizard plays, each with the reply that shows it but the emote, which is shown as a state, which names the speaker by the name the client's name codec packs and by global id. It also declares MSG_QUERY_LOGOUT, which the server answers, MSG_CLIENT_DISCONNECT and MSG_NOT_AFK, and the MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN notices it sends when a wizard drops, idles or the server stops, and the wizbang state a wizard's client names with the wizbang the server shows the wizards around it, and the fifteen GAME messages of the friends and ignore lists: the list request answered by each entry and the list's end, a friend request with its acceptance, denial and withdrawal, a dropped friend, a friend's presence, the best-friend mark, the friend cap, an ignored wizard added, dropped and listed, and the chat error a refused social action gets, and the WIZARD live vitals, gold, potion and pip updates with MSG_USEPOTION, and the game effect the server adds to an object, carried as the effect object itself, with the one it takes away, which the client finds by its internal id, and MSG_CLIENTNOTIFYTEXT, the zone-entry text a fired trigger's result shows its wizard's client, and the GAME equip request a client sends to put an item on or, with IsEquip 0, take one off, with the item it puts on, the item it takes off and the public item changes other wizards see.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -1180,6 +1180,80 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("GlobalID", &InventoryBehaviorRemoveItem::GlobalId), DmlField("ItemID", &InventoryBehaviorRemoveItem::ItemId) };
+        }
+    };
+
+    struct EquipItem
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_EQUIPITEM";
+
+        int32 IsEquip = 0;
+        uint64 ItemId = 0;
+        std::string SlotName;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("IsEquip", &EquipItem::IsEquip), DmlField("ItemID", &EquipItem::ItemId), DmlField("SlotName", &EquipItem::SlotName) };
+        }
+    };
+
+    struct EquipmentBehaviorEquipItem
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_EQUIPMENTBEHAVIOR_EQUIPITEM";
+
+        uint64 GlobalId = 0;
+        std::string SlotName;
+        int32 IsValid = 0;
+        std::string SerializedItem;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &EquipmentBehaviorEquipItem::GlobalId), DmlField("SlotName", &EquipmentBehaviorEquipItem::SlotName),
+                DmlField("IsValid", &EquipmentBehaviorEquipItem::IsValid), DmlField("SerializedItem", &EquipmentBehaviorEquipItem::SerializedItem) };
+        }
+    };
+
+    struct EquipmentBehaviorPublicEquipItem
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_EQUIPMENTBEHAVIOR_PUBLICEQUIPITEM";
+
+        uint64 GlobalId = 0;
+        std::string SerializedInfo;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &EquipmentBehaviorPublicEquipItem::GlobalId), DmlField("SerializedInfo", &EquipmentBehaviorPublicEquipItem::SerializedInfo) };
+        }
+    };
+
+    struct EquipmentBehaviorPublicUnequipItem
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_EQUIPMENTBEHAVIOR_PUBLICUNEQUIPITEM";
+
+        uint64 GlobalId = 0;
+        uint8 IndexToRemove = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &EquipmentBehaviorPublicUnequipItem::GlobalId), DmlField("IndexToRemove", &EquipmentBehaviorPublicUnequipItem::IndexToRemove) };
+        }
+    };
+
+    struct EquipmentBehaviorUnequipItem
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_EQUIPMENTBEHAVIOR_UNEQUIPITEM";
+
+        uint64 GlobalId = 0;
+        uint64 ItemId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &EquipmentBehaviorUnequipItem::GlobalId), DmlField("ItemID", &EquipmentBehaviorUnequipItem::ItemId) };
         }
     };
 

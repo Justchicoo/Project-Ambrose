@@ -514,8 +514,8 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Fire-only robe on an Ice wizard refused
-- [ ] Occupied slot swaps back to the backpack
+- [x] Fire-only robe on an Ice wizard refused [PlayerEquipmentTest.AFireOnlyRobeOnAnIceWizardIsRefusedAndStaysInTheBackpack; ItemMgrClientTest.ThePlayersSlotsAndTheItemsRequirementsDecideAnEquip runs the same rule on r806919's robe 1652037 and the player's own slots]
+- [x] Occupied slot swaps back to the backpack [PlayerEquipmentTest.EquippingIntoAnOccupiedSlotMovesTheOldItemBackToTheBackpack, with the swap stored by CharacterRepositoryDatabaseTest.WornItemsMoveBetweenTheBackpackAndTheirSlotAndStayWithTheirOwner]
 - [ ] Real client: hat changes model; second client sees it; persists
 
 ### Detailed spec from WIZ-12: Equip and unequip gear
@@ -543,8 +543,8 @@ Players can drag items between backpack and equipment slots, and other players s
 
 **Acceptance**
 
-- [ ] Unit test: equipping a Fire-only robe on an Ice wizard is refused and the item stays in the backpack
-- [ ] Unit test: equipping into an occupied slot moves the old item back to the backpack
+- [x] Unit test: equipping a Fire-only robe on an Ice wizard is refused and the item stays in the backpack [PlayerEquipmentTest.AFireOnlyRobeOnAnIceWizardIsRefusedAndStaysInTheBackpack; ItemMgrClientTest.ThePlayersSlotsAndTheItemsRequirementsDecideAnEquip runs the same rule on r806919's robe 1652037 and the player's own slots]
+- [x] Unit test: equipping into an occupied slot moves the old item back to the backpack [PlayerEquipmentTest.EquippingIntoAnOccupiedSlotMovesTheOldItemBackToTheBackpack, with the swap stored by CharacterRepositoryDatabaseTest.WornItemsMoveBetweenTheBackpackAndTheirSlotAndStayWithTheirOwner]
 - [ ] Real client: dragging a hat onto the hat slot changes the paper-doll and the 3D model. A second nearby client sees the new hat. It is still equipped after relogging.
 
 **Risks**

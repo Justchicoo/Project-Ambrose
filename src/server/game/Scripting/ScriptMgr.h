@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The hooks every content script hangs off: a script names itself and registers as it is constructed, the manager keeps each kind in its own list and calls them in registration order, and a hook that throws is reported with the script's name and does not stop the others; WorldScript and CommandScript are the first kinds, ZoneScript hears a wizard enter or leave a volume and a trigger fire in its own zone, or in every zone when it names none, carrying the server's startup, shutdown, configuration reload and update tick, PlayerScript hears a wizard's live gold and health changes, and later milestones add the npc, quest and zone kinds beside them. It knows nothing of the scripts themselves: the caller hands it the loader CMake wrote, so the hooks do not depend on the content that uses them. ServerScript sees the network: when it starts, each socket as it opens and closes, and each DML message a session receives or sends, which any server script may hold back, so a module can stop a message without the core being edited. ConditionScript answers a requirement type the requirement engine does not know itself, the first that gives a definite answer deciding it.
+ * The hooks every content script hangs off: a script names itself and registers as it is constructed, the manager keeps each kind in its own list and calls them in registration order, and a hook that throws is reported with the script's name and does not stop the others; WorldScript and CommandScript are the first kinds, ZoneScript hears a wizard enter or leave a volume and a trigger fire in its own zone, or in every zone when it names none, carrying the server's startup, shutdown, configuration reload and update tick, PlayerScript hears a wizard's live gold and health changes and each item it puts on or takes off, and later milestones add the npc, quest and zone kinds beside them. It knows nothing of the scripts themselves: the caller hands it the loader CMake wrote, so the hooks do not depend on the content that uses them. ServerScript sees the network: when it starts, each socket as it opens and closes, and each DML message a session receives or sends, which any server script may hold back, so a module can stop a message without the core being edited. ConditionScript answers a requirement type the requirement engine does not know itself, the first that gives a definite answer deciding it.
  */
 
 #ifndef AMBROSE_SCRIPTMGR_H
@@ -70,6 +70,8 @@ class PlayerScript : public ScriptObject
 public:
     virtual void OnGoldChanged(Player& player, int32 oldValue, int32 newValue) { (void)player; (void)oldValue; (void)newValue; }
     virtual void OnHealthChanged(Player& player, int32 oldValue, int32 newValue) { (void)player; (void)oldValue; (void)newValue; }
+    virtual void OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot) { (void)player; (void)itemGuid; (void)templateId; (void)slot; }
+    virtual void OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot) { (void)player; (void)itemGuid; (void)templateId; (void)slot; }
 
 protected:
     explicit PlayerScript(std::string name);
@@ -142,6 +144,8 @@ public:
     void OnTriggerFired(std::string_view zone, uint32 mapId, std::string_view trigger, uint64 wizard);
     void OnGoldChanged(Player& player, int32 oldValue, int32 newValue);
     void OnHealthChanged(Player& player, int32 oldValue, int32 newValue);
+    void OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot);
+    void OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot);
     std::optional<bool> EvaluateCondition(RequirementRow const& requirement, RequirementContext const& context) const;
 
     std::vector<ChatCommand> GetCommands() const;

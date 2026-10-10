@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads templates from the user's own install through the template store, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: the manifest lists the templates, archives and World-Part.wad templates recorded for the installed revision, r806919's 137423 in 27 archives, 12807 of them in a World-Part.wad, template 1 is the PlayerObject every wizard is made from and 1652259 the Balance hat, read through their typed views, a recipe is a template named by its recipe name, a manifest path the install does not hold is named with its archive and entry, a first access takes under 5 ms once its archive is open, every one of them in an optimized build and on average in a debug build, which runs about ten times slower, and 10000 random templates of every kind, game objects, items, spells, recipes, decks and sounds among them, decode with each game object template carrying the id the manifest lists it under, and under a small budget never hold more than it.
+ * Reads templates from the user's own install through the template store, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: the manifest lists the templates, archives and World-Part.wad templates recorded for the installed revision, r806919's 137423 in 27 archives, 12807 of them in a World-Part.wad, template 1 is the PlayerObject every wizard is made from, whose equipment behavior names BasicMobileEquipment, read beside it, r806919's fifteen slots with the weapon slot taking a wand through its OR adjectives and the elixir slot holding three behind a requirement, and 1652259 the Balance hat, read through their typed views, a recipe is a template named by its recipe name, a manifest path the install does not hold is named with its archive and entry, a first access takes under 5 ms once its archive is open, every one of them in an optimized build and on average in a debug build, which runs about ten times slower, and 10000 random templates of every kind, game objects, items, spells, recipes, decks and sounds among them, decode with each game object template carrying the id the manifest lists it under, and under a small budget never hold more than it.
  */
 
 #include "Environment.h"
 #include "AnimationListMgr.h"
 #include "CustomEmoteMgr.h"
+#include "EquipmentSlots.h"
 #include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "KiwadBuilder.h"
@@ -125,6 +126,35 @@ TEST_F(ObjectTemplateMgrClientTest, TemplateOneIsThePlayerObjectEveryWizardIsMad
     std::vector<std::string> errors;
     ASSERT_TRUE(_store.LoadPlayer(errors)) << errors.front();
     EXPECT_EQ(_store.GetPlayer()->Behaviors, player.Behaviors);
+}
+
+TEST_F(ObjectTemplateMgrClientTest, ThePlayersEquipmentTemplateGivesTheSlotsAWizardWears)
+{
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_store.LoadPlayer(errors)) << errors.front();
+    std::shared_ptr<ObjectTemplate const> const equipment = _store.GetPlayerEquipment();
+    ASSERT_TRUE(equipment && equipment->Object) << "the player's equipment behavior names an equipment template";
+    EXPECT_EQ(equipment->Archive, "Root.wad");
+    std::string problem;
+    std::optional<EquipmentSlots> const slots = EquipmentSlots::Read(*equipment->Object, problem);
+    ASSERT_TRUE(slots) << problem;
+    InstalledRevision::Expect(slots->GetSlots().size(), { { "r806919", 15u } }, "player equipment slots");
+    if (!InstalledRevision::Is("r806919"))
+        return;
+    EXPECT_EQ(equipment->File, "ObjectData/BasicMobileEquipment.xml");
+    EquipSlot const* const weapon = slots->Find("Weapon");
+    ASSERT_NE(weapon, nullptr);
+    EXPECT_TRUE(weapon->AdjectivesAnd.empty());
+    EXPECT_TRUE(weapon->Accepts({ "Wand" }));
+    EXPECT_FALSE(weapon->Accepts({ "Hat" }));
+    EquipSlot const* const hat = slots->Find("Hat");
+    ASSERT_NE(hat, nullptr);
+    EXPECT_EQ(hat->MaxItems, 1u);
+    EXPECT_FALSE(hat->Requirements);
+    EquipSlot const* const elixir = slots->Find("Elixir");
+    ASSERT_NE(elixir, nullptr);
+    EXPECT_EQ(elixir->MaxItems, 3u);
+    EXPECT_TRUE(elixir->Requirements) << "the elixir slot is the one with a requirement list";
 }
 
 TEST_F(ObjectTemplateMgrClientTest, CustomEmoteCatalogReadsAnimationsAndLeavesTeleportEffectsSeparate)

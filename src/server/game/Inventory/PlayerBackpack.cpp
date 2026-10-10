@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps a wizard's backpack in arrival order, works out its capacity, which never goes below zero or past the 32-bit range, and adds, checks, removes, locks and unlocks items by the rules its header gives.
+ * Keeps a wizard's backpack in arrival order, works out its capacity, which never goes below zero or past the 32-bit range, and adds, checks, removes, puts back, locks and unlocks items by the rules its header gives.
  */
 
 #include "PlayerBackpack.h"
@@ -70,6 +70,15 @@ std::optional<CharacterItem> PlayerBackpack::Remove(uint64 itemGuid)
     CharacterItem removed = *found;
     _items.erase(found);
     return removed;
+}
+
+CharacterItem PlayerBackpack::Put(CharacterItem item)
+{
+    item.Slot = _nextSlot;
+    if (_nextSlot != std::numeric_limits<uint32>::max())
+        ++_nextSlot;
+    _items.push_back(item);
+    return item;
 }
 
 BackpackLockResult PlayerBackpack::ToggleLock(uint64 itemGuid) noexcept

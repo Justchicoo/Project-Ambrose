@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Loads, validates and evaluates nested world requirement lists, retaining the serving generation on an invalid reload and treating unavailable facts and unrecognized types as false.
+ * Loads, validates and evaluates nested world requirement lists, and a flat list a caller builds itself, such as an item's equip requirements, retaining the serving generation on an invalid reload and treating unavailable facts and unrecognized types as false.
  */
 
 #include "RequirementMgr.h"
@@ -45,6 +45,24 @@ namespace
             while (result->NextRow());
         }
         return true;
+    }
+
+    void Combine(std::string_view listOperator, std::optional<bool>& result, std::optional<bool> value)
+    {
+        if (listOperator == "AND")
+        {
+            if ((result && !*result) || (value && !*value))
+                result = false;
+            else if (!result || !value)
+                result = std::nullopt;
+        }
+        else
+        {
+            if ((result && *result) || (value && *value))
+                result = true;
+            else if (!result || !value)
+                result = std::nullopt;
+        }
     }
 
     std::optional<bool> Compare(double actual, std::optional<double> expected, std::optional<std::uint32_t> operatorType)
@@ -354,6 +372,21 @@ bool RequirementMgr::Evaluate(std::string_view listId, RequirementContext const&
     return EvaluateList(*store, listId, context, activeLists).value_or(false);
 }
 
+bool RequirementMgr::EvaluateRequirements(RequirementListRow const& list, std::vector<RequirementRow> const& requirements, RequirementContext const& context) const
+{
+    std::optional<bool> result = list.Operator == "AND";
+    for (RequirementRow const& row : requirements)
+    {
+        std::optional<bool> value = EvaluateRequirement(row, context);
+        if (value && row.ApplyNot)
+            value = !*value;
+        Combine(list.Operator, result, value);
+    }
+    if (result && list.ApplyNot)
+        result = !*result;
+    return result.value_or(false);
+}
+
 std::optional<bool> RequirementMgr::EvaluateList(
     RequirementStore const& store,
     std::string_view listId,
@@ -365,23 +398,7 @@ std::optional<bool> RequirementMgr::EvaluateList(
         return std::nullopt;
 
     std::optional<bool> result = list->second.Row.Operator == "AND";
-    auto combine = [&result, &list](std::optional<bool> value)
-    {
-        if (list->second.Row.Operator == "AND")
-        {
-            if ((result && !*result) || (value && !*value))
-                result = false;
-            else if (!result || !value)
-                result = std::nullopt;
-        }
-        else
-        {
-            if ((result && *result) || (value && *value))
-                result = true;
-            else if (!result || !value)
-                result = std::nullopt;
-        }
-    };
+    auto combine = [&result, &list](std::optional<bool> value) { Combine(list->second.Row.Operator, result, value); };
 
     for (RequirementRow const& row : list->second.Requirements)
     {
