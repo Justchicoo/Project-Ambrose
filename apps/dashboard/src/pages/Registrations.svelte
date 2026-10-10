@@ -9,6 +9,11 @@
     import StatusBadge from "../components/StatusBadge.svelte";
 
     type Registration = InferOutput<typeof PlayerRegistrationsAnswer>["registrations"][number];
+    const stateTones = {
+        pending: "waiting",
+        verified: "healthy",
+        blocked: "wrong",
+    } as const;
     let registrations = $state<Registration[]>([]);
     let failure = $state("");
     let notice = $state("");
@@ -95,17 +100,7 @@
                             <tr class="border-b last:border-0">
                                 <td class="p-2 font-medium">{registration.username}</td>
                                 <td class="p-2">
-                                    <StatusBadge
-                                        tone={
-                                            registration.state === "verified"
-                                                ? "healthy"
-                                                : registration.state === "pending"
-                                                  ? "waiting"
-                                                  : "wrong"
-                                        }
-                                    >
-                                        {registration.state}
-                                    </StatusBadge>
+                                    <StatusBadge tone={stateTones[registration.state]}>{registration.state}</StatusBadge>
                                 </td>
                                 <td class="p-2">{new Date(registration.created_epoch_ms).toLocaleString()}</td>
                                 <td class="p-2">
@@ -115,20 +110,16 @@
                                                 size="sm"
                                                 variant="outline"
                                                 disabled={busyId !== null}
-                                                onclick={() => void resend(registration)}
+                                                onclick={() => void resend(registration)}>Resend</Button
                                             >
-                                                Resend
-                                            </Button>
                                         {/if}
                                         {#if registration.state !== "blocked"}
                                             <Button
                                                 size="sm"
                                                 variant="destructive"
                                                 disabled={busyId !== null}
-                                                onclick={() => void block(registration)}
+                                                onclick={() => void block(registration)}>Block</Button
                                             >
-                                                Block
-                                            </Button>
                                         {/if}
                                     </div>
                                 </td>

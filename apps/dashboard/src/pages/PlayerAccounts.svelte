@@ -132,17 +132,17 @@
             {#if failure}
                 <p
                     class="mb-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                    role="alert"
+                    role="alert">{failure}</p
                 >
-                    {failure}
-                </p>
             {/if}
             {#if notice}
                 <p class="mb-4 rounded-md border border-healthy/30 bg-healthy/5 p-3 text-sm text-healthy" role="status">{notice}</p>
             {/if}
             {#if mode === "verify"}
                 <form class="space-y-4" onsubmit={submit}>
-                    <p class="text-sm text-muted-foreground">The verification token is kept in this page fragment and sent only in the request body.</p>
+                    <p class="text-sm text-muted-foreground">
+                        The verification token is kept in this page fragment and sent only in the request body.
+                    </p>
                     <Button class="w-full" disabled={busy || token === ""}>{busy ? "Verifying…" : "Verify email"}</Button>
                 </form>
             {:else if mode === "register"}
@@ -176,7 +176,9 @@
                         <div class="space-y-2">
                             <Label for="player-captcha">Captcha response</Label>
                             <Input id="player-captcha" bind:value={captcha} required />
-                            <p class="text-xs text-muted-foreground">Captcha provider: {info?.captcha_provider}. Complete its challenge and enter the response.</p>
+                            <p class="text-xs text-muted-foreground">
+                                Captcha provider: {info?.captcha_provider}. Complete its challenge and enter the response.
+                            </p>
                         </div>
                     {/if}
                     <Button class="w-full" disabled={busy || info === null}>{busy ? "Submitting…" : "Create account"}</Button>
