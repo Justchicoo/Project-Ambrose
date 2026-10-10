@@ -9,6 +9,7 @@ import ArchiveIcon from "@lucide/svelte/icons/archive";
 import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import BugIcon from "@lucide/svelte/icons/bug";
+import CalendarIcon from "@lucide/svelte/icons/calendar";
 import FileTextIcon from "@lucide/svelte/icons/file-text";
 import FolderIcon from "@lucide/svelte/icons/folder";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
@@ -53,6 +54,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Servers",
         view: { kind: "page", load: () => import("./pages/Overview.svelte") },
+    },
+    {
+        path: "ops-calendar",
+        title: "Operations calendar",
+        icon: CalendarIcon,
+        permission: "status.read",
+        nav: true,
+        group: "Servers",
+        view: { kind: "page", load: () => import("./pages/OpsCalendar.svelte") },
     },
     {
         path: "servers",
