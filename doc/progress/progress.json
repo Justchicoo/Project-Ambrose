@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 143,
+    "done": 148,
     "total": 469,
-    "percent": 30.5
+    "percent": 31.6
   },
   "checks": {
-    "done": 1147,
+    "done": 1158,
     "total": 2870,
-    "percent": 40.0
+    "percent": 40.3
   },
   "contributor_track": {
     "merged": 94,
@@ -74,9 +74,9 @@
     {
       "phase": 8,
       "title": "The wizard grows vitals xp spells backpack and gear",
-      "milestones_done": 4,
+      "milestones_done": 6,
       "milestones_total": 14,
-      "checks_done": 52,
+      "checks_done": 57,
       "checks_total": 101
     },
     {
@@ -106,9 +106,9 @@
     {
       "phase": 12,
       "title": "Social wizards instances and realms",
-      "milestones_done": 0,
+      "milestones_done": 3,
       "milestones_total": 23,
-      "checks_done": 20,
+      "checks_done": 26,
       "checks_total": 139
     },
     {

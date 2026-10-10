@@ -44,7 +44,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - [x] A wizard that enters below full starts its potion refill countdown [PlayerStatsTest.AWizardThatEntersBelowFullStartsItsRefillCountdown]
 - [x] Session-handled gold and potion changes persist before world departure [GameSessionStatsSaveTest.LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld]
 - [x] Changing Potion.RestoreFraction applies to the next potion without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
-- [ ] Real client: '.character gold 500' updates live; heal animates; potion restores and empties by one
+- [x] Real client: '.character gold 500' updates live; heal animates; potion restores and empties by one [real client run 20261009-195835 with apps/clientdriver/scenarios/wizard-stats.json on 92a5b29: `.character gold 500` typed in chat with the backpack open showed the new gold at once and the character stats read 500/300,000 with no relog; with health at 300 of 503, the first potion at Potion.RestoreFraction 0.1 floated +50 and raised health to 350 and mana, emptying one of two bottles, the second at 0.2 took health to 451 and emptied the other, and `.character heal` floated +52 and filled the globe to 503/503]
 
 ### Detailed spec from WIZ-6: Live vitals, gold and potions
 
@@ -76,7 +76,7 @@ Health, mana, gold, power-pip and potion changes on the server show up immediate
 - [x] Unit test: a wizard entering below full starts its refill countdown [PlayerStatsTest.AWizardThatEntersBelowFullStartsItsRefillCountdown]
 - [x] Database-backed lifecycle test: live gold and potion changes persist before leaving the world [GameSessionStatsSaveTest.LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld]
 - [x] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
-- [ ] Real client: '.character gold 500' makes the backpack gold counter update without relogging. Damaging then '.character heal' makes the health globe animate up (DisplayDiff=1 floats the number). Clicking a filled potion restores health and mana, and the potion bottle empties by one.
+- [x] Real client: '.character gold 500' makes the backpack gold counter update without relogging. Damaging then '.character heal' makes the health globe animate up (DisplayDiff=1 floats the number). Clicking a filled potion restores health and mana, and the potion bottle empties by one. [real client run 20261009-195835 with apps/clientdriver/scenarios/wizard-stats.json on 92a5b29: `.character gold 500` typed in chat with the backpack open showed the new gold at once and the character stats read 500/300,000 with no relog; with health at 300 of 503, the first potion at Potion.RestoreFraction 0.1 floated +50 and raised health to 350 and mana, emptying one of two bottles, the second at 0.2 took health to 451 and emptied the other, and `.character heal` floated +52 and filled the globe to 503/503]
 
 **Risks**
 
@@ -396,9 +396,9 @@ Every equippable and backpack item in the user's client is available to the serv
 **Acceptance**
 
 - [x] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects [ItemExtractorTest.ASyntheticWizItemTemplateMapsToOneItemTemplateRow: the synthetic robe keeps its ReqMagicLevel requirement (5, Ice, operator 3) and its MaxHealth equip effect]
-- [ ] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently)
-- [ ] sItemMgr load time and memory are logged at gameserver startup
-- [ ] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it
+- [x] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently) [`extractor templates` on r806919 into a scratch world database made by dbimport on 2026-10-09: before `extractor classes` stored the install's classes it stopped with "extractor: 8 problems; nothing was written", naming Elixir-040.xml's class hash 1064312042 and seven shards' 1036560141; after it, "item_template: 80164 rows", 76,679 of them class WizItemTemplate beside 1,810 ItemBundleTemplate, 867 ReagentItemTemplate, 478 PetSnackItemTemplate, 301 BoosterPackTemplate and 29 currency templates, with 89,731 requirement rows of 24 classes and 304,171 effect rows of 8 classes, every one named]
+- [x] sItemMgr load time and memory are logged at gameserver startup [the game server's start-up log in real client run 20261009-195835: "Read 80164 item templates (... 76679 class WizItemTemplate) from the 117676 templates under ObjectData/, 851 of their behaviors of classes nothing describes, holding 326.8 MiB, in 2051 ms on 16 thread(s)"]
+- [x] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it [ItemMgrClientTest.AnItemEditedInACopyOfTheInstallAppliesOnReloadAndAReloadMeetingAClassTheDumpLacksKeepsIt on r806919, through the reload manager `.reload item_template` calls: in a copy of the install's Root.wad, the Balance hat 1652259 re-encoded at cost 4242 reloads as generation 2 with its cost 27250 before and 4242 after, all 80,164 items still held and the set handed out before keeping 27250; with the install's classes taken away the next reload reports "item_template was not reloaded and generation 2 goes on serving", naming class hash 1036560141 in Shard-GazeOfFate-01.xml and six more and 1064312042 in Elixir-040.xml, and the edited hat keeps serving]
 
 **Risks**
 

@@ -1,0 +1,774 @@
+{
+  "title": "Two wizards become friends, see each other online and offline, then one ignores the other",
+  "include": "parts/common.json",
+  "notes": [
+    "Two clients enter WizardCity/WC_Hub as say-and-emote.json has them, the companion facing the main wizard across the fountain.",
+    "The main wizard clicks the companion, whose card opens on the right, chooses the face with a plus and says Yes to the client's",
+    "Friend question; the game server stores the request, the companion's client asks whether to accept the main wizard and the",
+    "companion says Yes, and both friendships are stored. Each client opens its friends list from the portrait at the top right,",
+    "which lists the other under Online Friends, then opens the friend's card from the list and asks to go to that friend: the",
+    "client looks the ZoneName MSG_BUDDYENTRY carried up as a locale key and names the zone in its Teleport question, which is",
+    "answered No. The companion then quits from its in-world menu and the main client logs its friend's status turning to offline",
+    "and says so; the companion is started again and plays back to where it stood. It speaks, which the main wizard is shown; the",
+    "main wizard opens the companion's card again, now a friend's, chooses its crossed-out speech bubble and says Yes to the",
+    "question that ignoring removes the friend, the ignore is stored, and the companion's next line is shown to nobody while its",
+    "own client still shows it. Opening a card sends MSG_BUDDYSTATS, which waits for the character sheet 12.03 builds, and makes",
+    "the client cache that wizard's files in its own CharacterRegistry folder, which references.json lists as client writes."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the main wizard backs away from the start",
+      "vk": "0x53",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard alone",
+      "file": "main-alone",
+      "settle": 1
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion arrive",
+      "file": "main-sees-companion",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "the companion faces away from the main wizard",
+      "file": "companion-faces-away",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "the companion turns to face the main wizard",
+      "vk": "0x44",
+      "seconds": 1.27,
+      "client": "companion",
+      "watch": "main",
+      "watch_every": 0.25,
+      "watch_after": 1
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard",
+      "file": "companion-sees-main",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "click",
+      "name": "the main wizard clicks the companion",
+      "target": "wizard_ahead"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion's card",
+      "file": "main-companion-card",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "choose Add Friend on the card",
+      "target": "card_add_friend"
+    },
+    {
+      "action": "shot",
+      "name": "the client asks before adding the friend",
+      "file": "main-add-friend-dialog",
+      "settle": 1
+    },
+    {
+      "action": "click",
+      "name": "confirm the friend request",
+      "target": "friend_confirm_yes"
+    },
+    {
+      "action": "wait_db",
+      "name": "the game server stores the friend request",
+      "database": "characters",
+      "query": "SELECT COUNT(*) FROM character_friend_request WHERE requester_guid = {wizard_guid} AND target_guid = {companion_wizard_guid}",
+      "expect": 1,
+      "timeout": 15
+    },
+    {
+      "action": "shot",
+      "name": "the companion gets the friend request popup",
+      "file": "companion-friend-request",
+      "client": "companion",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "the companion accepts the friend request",
+      "target": "friend_confirm_yes",
+      "client": "companion"
+    },
+    {
+      "action": "wait_db",
+      "name": "both wizards are stored as friends",
+      "database": "characters",
+      "query": "SELECT COUNT(*) FROM character_friend WHERE (owner_guid = {wizard_guid} AND friend_guid = {companion_wizard_guid}) OR (owner_guid = {companion_wizard_guid} AND friend_guid = {wizard_guid})",
+      "expect": 2,
+      "timeout": 15
+    },
+    {
+      "action": "wait_db",
+      "name": "the accepted request is gone",
+      "database": "characters",
+      "query": "SELECT COUNT(*) FROM character_friend_request",
+      "expect": 0,
+      "timeout": 15
+    },
+    {
+      "action": "click",
+      "name": "close the companion's card",
+      "target": "card_close"
+    },
+    {
+      "action": "click",
+      "name": "the main wizard opens its friends list",
+      "target": "friends_open"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard's friends list shows the companion online",
+      "file": "main-friends-online",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "the main wizard opens its friend's card from the list",
+      "target": "friends_first"
+    },
+    {
+      "action": "click",
+      "name": "the main wizard asks to go to its friend",
+      "target": "friends_card_go_to"
+    },
+    {
+      "action": "shot",
+      "name": "the client names the zone its friend is in",
+      "file": "main-go-to-friend-zone",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "the main wizard stays where it is",
+      "target": "teleport_zone_no"
+    },
+    {
+      "action": "click",
+      "name": "the main wizard closes its friend's card",
+      "target": "friends_card_close"
+    },
+    {
+      "action": "click",
+      "name": "the companion opens its friends list",
+      "target": "friends_open",
+      "client": "companion"
+    },
+    {
+      "action": "shot",
+      "name": "the companion's friends list shows the main wizard online",
+      "file": "companion-friends-online",
+      "client": "companion",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "the companion opens its friend's card from the list",
+      "target": "friends_first",
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "the companion asks to go to its friend",
+      "target": "friends_card_go_to",
+      "client": "companion"
+    },
+    {
+      "action": "shot",
+      "name": "the companion's client names the zone its friend is in",
+      "file": "companion-go-to-friend-zone",
+      "client": "companion",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "the companion stays where it is",
+      "target": "teleport_zone_no",
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "the companion closes its friend's card",
+      "target": "friends_card_close",
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "the companion closes its friends list",
+      "target": "friends_close",
+      "client": "companion"
+    },
+    {
+      "action": "key",
+      "name": "the companion opens its in-world menu",
+      "client": "companion",
+      "vk": "0x1B"
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the in-world menu",
+      "client": "companion",
+      "file": "companion-in-world-menu",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "the companion chooses Quit from the menu",
+      "client": "companion",
+      "target": "game_menu_quit"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the menu logout saves the companion's position",
+      "pattern": "saved wizard {companion_wizard_guid} at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 30,
+      "keep": "companion_saved_place",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the main wizard sees the companion leave",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} was taken away from the (\\d+) wizard\\(s\\) still in instance",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the main client is told its friend is offline",
+      "pattern": "MSG_BuddyStatusUpdate charID:{companion_wizard_guid} ownerID:{wizard_guid} status:(1) ",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard's friends list after the companion logs out",
+      "file": "main-friends-after-logout",
+      "settle": 3
+    },
+    {
+      "action": "click",
+      "name": "the main wizard closes its friends list",
+      "target": "friends_close"
+    },
+    {
+      "action": "kill_client",
+      "name": "stop the companion after its menu logout",
+      "client": "companion"
+    },
+    {
+      "action": "restart_client",
+      "name": "restart the companion after its menu logout",
+      "client": "companion",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion renderer starts again after menu logout",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion login screen appears after menu logout",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in again after menu logout",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the companion account is accepted after menu logout",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion is admitted after menu logout",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion character selection scene loads after menu logout",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion reaches character selection after menu logout",
+      "client": "companion",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the menu-quit companion removed",
+      "file": "main-sees-menu-quit-companion-gone",
+      "settle": 1
+    },
+    {
+      "action": "click",
+      "name": "the companion plays again after menu logout",
+      "client": "companion",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the menu-quit companion returns to its saved position",
+      "pattern": "put wizard {companion_wizard_guid} in \\S+ instance \\d+ at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "{companion_saved_place}",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the companion after menu logout",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion return after menu logout",
+      "file": "main-sees-menu-quit-companion-return",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "the companion stands in the world again",
+      "file": "companion-back",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "the companion shows its chat box",
+      "vk": "0x4F",
+      "client": "companion"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to say can you hear me",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before can you hear me",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type can you hear me",
+      "text": "can you hear me",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send can you hear me",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the main wizard is shown the companion's line before ignoring it",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} sent a chat line, shown to (\\d+) other wizard",
+      "timeout": 20,
+      "record": true,
+      "expect": "1"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion's bubble",
+      "file": "main-sees-bubble",
+      "settle": 1
+    },
+    {
+      "action": "click",
+      "name": "the main wizard clicks the companion again",
+      "target": "wizard_ahead"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion's card again",
+      "file": "main-companion-card-again",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "choose Ignore on the card",
+      "target": "friend_card_ignore"
+    },
+    {
+      "action": "shot",
+      "name": "the client asks before ignoring",
+      "file": "main-ignore-dialog",
+      "settle": 1
+    },
+    {
+      "action": "click",
+      "name": "confirm ignoring the companion",
+      "target": "friend_confirm_yes"
+    },
+    {
+      "action": "wait_db",
+      "name": "the game server stores the ignore",
+      "database": "characters",
+      "query": "SELECT COUNT(*) FROM character_ignore WHERE owner_guid = {wizard_guid} AND ignored_guid = {companion_wizard_guid}",
+      "expect": 1,
+      "timeout": 15
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard after ignoring",
+      "file": "main-after-ignore",
+      "settle": 2
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to say are you still there",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before are you still there",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type are you still there",
+      "text": "are you still there",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send are you still there",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the ignored companion's line is shown to nobody",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} sent a chat line, shown to (\\d+) other wizard",
+      "timeout": 20,
+      "record": true,
+      "expect": "0"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees no bubble from the ignored companion",
+      "file": "main-sees-no-bubble",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the companion's own bubble",
+      "file": "companion-own-bubble",
+      "client": "companion",
+      "settle": 0.2
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_BUDDYSTATS",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_PLAYERWIZBANG",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTPRIVACYOPTIONS",
+    "MSG_REQUESTSHOWPVPOPTION",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}
