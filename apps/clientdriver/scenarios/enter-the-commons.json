@@ -147,7 +147,7 @@
     {
       "action": "wait_game_log",
       "name": "the game server sends the wizard its object",
-      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object and the zone's \\d+ object\\(s\\)",
+      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object and the \\d+ of the zone's \\d+ object\\(s\\)",
       "timeout": 60,
       "fail": "cannot enter the world",
       "expect": "WizardCity/WC_Hub",

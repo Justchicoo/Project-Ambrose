@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Owns realm-wide online friend presence, cached friend and ignore records and pending requests, using asynchronous character-database reads, queued writes and a live friend cap.
+ * Owns realm-wide online friend presence, naming a friend's zone by the locale key of its display name as the client looks it up, cached friend and ignore records and pending requests, using asynchronous character-database reads, queued writes and a live friend cap.
  */
 
 #ifndef AMBROSE_SOCIALMGR_H
@@ -18,10 +18,12 @@
 #include <set>
 #include <string>
 #include <unordered_set>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 class GameSession;
+class ZoneTemplates;
 class QueryCallback;
 
 struct SocialFriend
@@ -69,6 +71,7 @@ public:
     SocialMgr(SocialMgr const&) = delete;
     SocialMgr& operator=(SocialMgr const&) = delete;
 
+    static std::string FriendZoneName(std::string_view zonePath, ZoneTemplates const* templates);
     static bool CanAcceptFriendRequest(bool requestExists) noexcept { return requestExists; }
     static bool CanRequestFriend(uint32 friendCount, uint32 maximum) noexcept { return friendCount < maximum; }
     static bool IsRequestOwnerForCharacter(uint64 requestedOwnerId, uint64 characterId) noexcept

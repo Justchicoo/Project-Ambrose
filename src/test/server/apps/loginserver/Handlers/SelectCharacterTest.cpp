@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives MSG_SELECTCHARACTER over loopback against a real LoginSession with AMBROSE_TEST_DB set: picking a live wizard of this account while a realm is online answers MSG_CHARACTERSELECTED Error=0 carrying that realm's address and port, the wizard's zone and place, and a key that is in login_key against the right account, wizard and realm; picking a full realm queues in order without a key, then admits when a slot opens or its limit rises, while a game master bypasses the queue, and every refused pick leaves login_key empty.
+ * Drives MSG_SELECTCHARACTER over loopback against a real LoginSession with AMBROSE_TEST_DB set: picking a live wizard of this account while a realm is online answers MSG_CHARACTERSELECTED Error=0 carrying that realm's address and port, the wizard's zone and place, and a key that is in login_key against the right account, wizard and realm; picking a full realm queues in order without a key and tells each waiter its place with MSG_USER_ADMIT_IND Status=2, sends Status=1 ahead of the key, then admits when a slot opens or its limit rises, while a game master bypasses the queue, and every refused pick leaves login_key empty.
  */
 
 #include "AccountMgr.h"
@@ -177,6 +177,14 @@ namespace
             return ReadMessage<LoginMessages::CharacterSelected>(client);
         }
 
+        void ExpectAdmission(LoginClient& client, int32 status, uint32 position)
+        {
+            std::optional<LoginMessages::UserAdmitInd> const admit = ReadMessage<LoginMessages::UserAdmitInd>(client);
+            ASSERT_TRUE(admit);
+            EXPECT_EQ(admit->Status, status);
+            EXPECT_EQ(admit->PositionInQueue, position);
+        }
+
         uint64 CountKeys()
         {
             QueryResult const result = LoginDatabase.Query("SELECT COUNT(*) FROM `login_key`");
@@ -292,6 +300,7 @@ TEST_F(SelectCharacterTest, AFullRealmQueuesTheNextSelectionAndAdmitsItAfterTheO
     EXPECT_EQ(queued->PrepPhase, 1);
     EXPECT_EQ(queued->Slot, 1);
     EXPECT_TRUE(queued->Key.empty());
+    ExpectAdmission(client, 2, 1);
     EXPECT_EQ(CountKeys(), 0u) << "a waiting selection has no handoff key yet";
     EXPECT_EQ(sAdmissionQueue.QueuedCount(), 1u);
 
@@ -304,21 +313,17 @@ TEST_F(SelectCharacterTest, AFullRealmQueuesTheNextSelectionAndAdmitsItAfterTheO
     ASSERT_TRUE(secondQueued);
     EXPECT_EQ(secondQueued->Slot, 2);
     EXPECT_TRUE(secondQueued->Key.empty());
+    ExpectAdmission(secondClient, 2, 2);
     EXPECT_EQ(sAdmissionQueue.QueuedCount(), 2u);
 
     sAdmissionQueue.Update(std::chrono::seconds(5));
-    std::optional<LoginMessages::CharacterSelected> const position = ReadMessage<LoginMessages::CharacterSelected>(client);
-    ASSERT_TRUE(position);
-    EXPECT_EQ(position->PrepPhase, 1);
-    EXPECT_EQ(position->Slot, 1);
-    std::optional<LoginMessages::CharacterSelected> const secondPosition = ReadMessage<LoginMessages::CharacterSelected>(secondClient);
-    ASSERT_TRUE(secondPosition);
-    EXPECT_EQ(secondPosition->PrepPhase, 1);
-    EXPECT_EQ(secondPosition->Slot, 2);
+    ExpectAdmission(client, 2, 1);
+    ExpectAdmission(secondClient, 2, 2);
 
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("DELETE FROM `realm_online_character` WHERE `character_guid` = {}", OwnWizard)));
     loader.LoadNow();
 
+    ExpectAdmission(client, 1, 0);
     std::optional<LoginMessages::CharacterSelected> const admitted = ReadMessage<LoginMessages::CharacterSelected>(client);
     ASSERT_TRUE(admitted);
     EXPECT_EQ(admitted->Error, 0);
@@ -328,10 +333,7 @@ TEST_F(SelectCharacterTest, AFullRealmQueuesTheNextSelectionAndAdmitsItAfterTheO
     EXPECT_EQ(CountKeys(), 1u);
     EXPECT_EQ(sAdmissionQueue.QueuedCount(), 1u);
 
-    std::optional<LoginMessages::CharacterSelected> const updatedPosition = ReadMessage<LoginMessages::CharacterSelected>(secondClient);
-    ASSERT_TRUE(updatedPosition);
-    EXPECT_EQ(updatedPosition->PrepPhase, 1);
-    EXPECT_EQ(updatedPosition->Slot, 1);
+    ExpectAdmission(secondClient, 2, 1);
 }
 
 TEST_F(SelectCharacterTest, ARefreshedIncreaseInPlayerLimitAdmitsAQueuedSelection)
@@ -349,10 +351,12 @@ TEST_F(SelectCharacterTest, ARefreshedIncreaseInPlayerLimitAdmitsAQueuedSelectio
     ASSERT_TRUE(queued);
     EXPECT_EQ(queued->Slot, 1);
     EXPECT_TRUE(queued->Key.empty());
+    ExpectAdmission(client, 2, 1);
 
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("UPDATE `realmlist` SET `player_limit` = 2 WHERE `id` = {}", RealmId)));
     loader.LoadNow();
 
+    ExpectAdmission(client, 1, 0);
     std::optional<LoginMessages::CharacterSelected> const admitted = ReadMessage<LoginMessages::CharacterSelected>(client);
     ASSERT_TRUE(admitted);
     EXPECT_EQ(admitted->Error, 0);
@@ -379,6 +383,7 @@ TEST_F(SelectCharacterTest, AnUnrelatedOnlineCharacterDoesNotConsumeAQueuedChara
     std::optional<LoginMessages::CharacterSelected> const queued = ReadMessage<LoginMessages::CharacterSelected>(client);
     ASSERT_TRUE(queued);
     ASSERT_EQ(queued->PrepPhase, 1);
+    ExpectAdmission(client, 2, 1);
     ASSERT_EQ(sAdmissionQueue.QueuedCount(), 1u);
 
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format(
@@ -389,10 +394,7 @@ TEST_F(SelectCharacterTest, AnUnrelatedOnlineCharacterDoesNotConsumeAQueuedChara
 
     EXPECT_EQ(sAdmissionQueue.QueuedCount(), 1u) << "the unrelated online row must not clear the first wizard's outstanding reservation";
     EXPECT_EQ(CountKeys(), 1u) << "the queued wizard must not receive a key while the reservation still occupies capacity";
-    std::optional<LoginMessages::CharacterSelected> const position = ReadMessage<LoginMessages::CharacterSelected>(client);
-    ASSERT_TRUE(position);
-    EXPECT_EQ(position->PrepPhase, 1);
-    EXPECT_EQ(position->Slot, 1);
+    ExpectAdmission(client, 2, 1);
 
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("DELETE FROM `realm_online_character` WHERE `character_guid` = {}", OwnWizard)));
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format(
@@ -403,6 +405,7 @@ TEST_F(SelectCharacterTest, AnUnrelatedOnlineCharacterDoesNotConsumeAQueuedChara
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("DELETE FROM `realm_online_character` WHERE `character_guid` = {}", DeletedWizard)));
     loader.LoadNow();
 
+    ExpectAdmission(client, 1, 0);
     std::optional<LoginMessages::CharacterSelected> const admittedSecond = ReadMessage<LoginMessages::CharacterSelected>(client);
     ASSERT_TRUE(admittedSecond);
     EXPECT_EQ(admittedSecond->CharId, ThirdWizard);

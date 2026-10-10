@@ -24,7 +24,7 @@
 The experiment is simple: see how far AI-driven development can take a complete game server. Humans set direction and review; AI agents write the code. Nothing here is copied from another emulator, and nothing extracted from the game client is ever committed.
 
 > [!NOTE]
-> **Pre-alpha.** Press Play in Ambrose's own launcher and a real Wizard101 client signs in, creates, picks or deletes a wizard and enters the world: it stands in the Commons with the zone's objects and NPCs around it, walks, sees other players and chats with them, quits back to character select, and logs out where it stood. Teleports and changing zones are being finished, quests, gear and combat are being built alongside them, and each server shows itself live in its own web panel.
+> **Pre-alpha.** Press Play in Ambrose's own launcher and a real Wizard101 client signs in, creates, picks or deletes a wizard and enters the world: it stands in the Commons with the zone's objects and NPCs around it, walks, sees other players and chats with them, walks through doors from one Wizard City zone to the next, quits back to character select, and logs out where it stood. Quests, gear and combat are being built, and each server shows itself live in its own web panel.
 
 ## Where the project is
 
@@ -40,14 +40,15 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 
 | Working | Not yet |
 |---|---|
-| Session handshake against a retail client, signing in, a wrong password and a retry | Teleports, doors and moving between zones |
+| Session handshake against a retail client, signing in, a wrong password and a retry | Teleporting to friends and from the map |
 | The character list, creating a wizard through the client's own screens, deleting one, and the school badge on its Badges page | Quests and NPC dialog |
-| Picking a wizard and the handoff to the game server with the key it was issued, and quitting from the world back to character select without the password | Combat, the backpack and gear |
+| Picking a wizard and the handoff to the game server with the key it was issued, and quitting from the world back to character select without the password | Combat and wearing gear |
 | Entering the world: a wizard stands in its zone with every object and NPC the zone's data places there | Pets, housing, crafting and minigames |
-| Walking, with where the wizard stands kept and restored at the next login | Serving patches to a client |
+| Walking, with where the wizard stands kept and restored at the next login, and walking through a door into the next zone | Serving patches to a client |
 | The wizard's level, experience, health, mana and gold from the database, shown on the client's HUD and character page | The installer's first full run on a clean Windows machine; it already takes a clean Ubuntu from a checkout to running servers |
 | Other players in the same zone, say chat, quick chat and emotes | The panel's game data pages, hosting and backups, and two-factor sign-in |
-| GM commands typed in chat, checked against the account's security level | |
+| GM commands typed in chat, checked against the account's security level |
+| The backpack on the server: items added, stacked, locked and trashed, with an overflow when it is full | |
 | Logging out, link-dead and AFK handling, and a server shutdown that warns players and brings each wizard back where it stood | |
 | Ambrose's own launcher: a window with a Play button that starts your own client, and the console launcher beside it | |
 | The game layer's core: a world tick, scripts and modules that join the build by existing, command handling with security levels, and settings and data that reload live | |
@@ -57,7 +58,7 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 
 [doc/ROADMAP.md](doc/ROADMAP.md)'s **Where we are** says exactly which milestones are done, and the [work board](https://justchicoo.github.io/Project-Ambrose/) says what is being built right now and by whom. The plan runs in **17 phases**, each milestone ending in something visible in the real client or the panel.
 
-121 of the 469 milestones are finished. Phases 1 and 2 are complete, phases 3 to 5 are down to their last few milestones, and phase 6 is under way, with quests, a wizard's gear and combat starting alongside it. Outside contributors have landed work on seventeen milestones and have four more part built. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
+143 of the 469 milestones are finished. Phases 1, 2, 4 and 6 are complete, phase 3 waits only on the launcher as its own app and phase 5 only on the installer, and quests, a wizard's gear and combat have their groundwork in. Outside contributors have finished twenty-five milestones and landed part of eighteen more. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
 
 ## Building
 
@@ -70,12 +71,14 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 <summary><b>Windows</b></summary>
 
 ```bat
-cmake --preset windows-msvc-x64
-cmake --build --preset windows-debug
-cd build\windows-msvc-x64\bin\Debug
+cmake --preset windows-msvc-ninja
+cmake --build --preset windows-ninja-debug
+cd build\windows-msvc-ninja\bin\Debug
 copy gameserver.conf.dist gameserver.conf
 gameserver.exe
 ```
+
+Run these from the x64 Native Tools Command Prompt, with ccache installed so rebuilds take seconds. The `windows-msvc-x64` and `windows-debug` presets build the same thing through Visual Studio when Ninja is not an option.
 
 </details>
 
@@ -97,7 +100,7 @@ The build copies `gameserver.conf.dist` next to the executable. The server reads
 <details>
 <summary><b>Tests, sanitizers and release builds</b></summary>
 
-Run the unit tests with the test preset matching your build, for example `ctest --preset windows-debug` or `ctest --preset linux-gcc-debug`. Configure with `-DBUILD_TESTING=OFF` to skip the tests and their dependencies. Use `windows-release` or `linux-gcc-release` for optimized builds.
+Run the unit tests with the test preset matching your build, for example `ctest --preset windows-ninja-debug` or `ctest --preset linux-gcc-debug`. Configure with `-DBUILD_TESTING=OFF` to skip the tests and their dependencies. Use `windows-release` or `linux-gcc-release` for optimized builds.
 
 On Linux, `linux-gcc-asan` builds and tests with AddressSanitizer and UndefinedBehaviorSanitizer, `linux-clang-tsan` does the same with ThreadSanitizer, and `linux-clang-fuzz` builds the libFuzzer targets for decoders of untrusted data and runs each from its seed corpus. Each needs the matching compiler installed, and ThreadSanitizer may need `sudo sysctl vm.mmap_rnd_bits=28` on newer kernels.
 

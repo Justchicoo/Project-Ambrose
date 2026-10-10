@@ -52,7 +52,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 **Acceptance**
 
 - [x] Accepting an unsent request fails with CHATERROR (SocialMgrDatabaseTest.AcceptingAnUnsentRequestSendsOnlyTheSelectedChatError)
-- [ ] Real client: add/accept shows both online with zone; logout shows offline
+- [x] Real client: add/accept shows both online with zone; logout shows offline [real client run 20261009-213814 with apps/clientdriver/scenarios/friends-and-ignore.json: A clicked B, chose Add Friend on B's card and said Yes, the request was stored and B's client asked "Accept Adam AngleBane Level 1 as your friend?", B said Yes and both friendships were stored; each friends list showed the other under Online Friends, and each client's Teleport question from the friend's card read "Do you want to go to your friend in The Commons?", the client looking up the zone's display key the game server now sends as ZoneName; B quit from its menu and A's client logged the status update to offline, showed "Adrian AshBloom is offline." and emptied its online list; B returned and said "can you hear me", shown to A, then A ignored B from its card, the ignore was stored and B's "are you still there" was shown to 0 other wizards and no bubble appeared for A]
 - [x] Lowering Social.MaxFriends refuses the next request over the cap without a restart (SocialMgrDatabaseTest.LoweringTheLiveFriendCapRefusesARequestThroughTheHandler)
 
 ### Detailed spec from WIZ-17: Friends and ignore lists
@@ -79,7 +79,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 - [x] Unit test: accepting a request that was never sent fails with CHATERROR (SocialMgrDatabaseTest.AcceptingAnUnsentRequestSendsOnlyTheSelectedChatError)
 - [x] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner (SocialMgrDatabaseTest.IgnoringAFriendFiltersTheActualWorldRelay)
 - [x] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart (SocialMgrDatabaseTest.LoweringTheLiveFriendCapRefusesARequestThroughTheHandler)
-- [ ] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles.
+- [x] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles. [real client run 20261009-213814 with apps/clientdriver/scenarios/friends-and-ignore.json: A clicked B, chose Add Friend on B's card and said Yes, the request was stored and B's client asked "Accept Adam AngleBane Level 1 as your friend?", B said Yes and both friendships were stored; each friends list showed the other under Online Friends, and each client's Teleport question from the friend's card read "Do you want to go to your friend in The Commons?", the client looking up the zone's display key the game server now sends as ZoneName; B quit from its menu and A's client logged the status update to offline, showed "Adrian AshBloom is offline." and emptied its online list; B returned and said "can you hear me", shown to A, then A ignored B from its card, the ignore was stored and B's "are you still there" was shown to 0 other wizards and no bubble appeared for A]
 
 **Risks**
 
@@ -98,7 +98,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 **Acceptance**
 
 - [x] Ignoring removes friendship and suppresses radial chat (SocialMgrDatabaseTest.IgnoringAFriendFiltersTheActualWorldRelay)
-- [ ] Real client: A stops seeing B's bubbles
+- [x] Real client: A stops seeing B's bubbles [real client run 20261009-213814 with apps/clientdriver/scenarios/friends-and-ignore.json: A clicked B, chose Add Friend on B's card and said Yes, the request was stored and B's client asked "Accept Adam AngleBane Level 1 as your friend?", B said Yes and both friendships were stored; each friends list showed the other under Online Friends, and each client's Teleport question from the friend's card read "Do you want to go to your friend in The Commons?", the client looking up the zone's display key the game server now sends as ZoneName; B quit from its menu and A's client logged the status update to offline, showed "Adrian AshBloom is offline." and emptied its online list; B returned and said "can you hear me", shown to A, then A ignored B from its card, the ignore was stored and B's "are you still there" was shown to 0 other wizards and no bubble appeared for A]
 
 ### Detailed spec from WIZ-17: Friends and ignore lists
 
@@ -124,7 +124,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 - [x] Unit test: accepting a request that was never sent fails with CHATERROR (SocialMgrDatabaseTest.AcceptingAnUnsentRequestSendsOnlyTheSelectedChatError)
 - [x] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner (SocialMgrDatabaseTest.IgnoringAFriendFiltersTheActualWorldRelay)
 - [x] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart (SocialMgrDatabaseTest.LoweringTheLiveFriendCapRefusesARequestThroughTheHandler)
-- [ ] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles.
+- [x] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles. [real client run 20261009-213814 with apps/clientdriver/scenarios/friends-and-ignore.json: A clicked B, chose Add Friend on B's card and said Yes, the request was stored and B's client asked "Accept Adam AngleBane Level 1 as your friend?", B said Yes and both friendships were stored; each friends list showed the other under Online Friends, and each client's Teleport question from the friend's card read "Do you want to go to your friend in The Commons?", the client looking up the zone's display key the game server now sends as ZoneName; B quit from its menu and A's client logged the status update to offline, showed "Adrian AshBloom is offline." and emptied its online list; B returned and said "can you hear me", shown to A, then A ignored B from its card, the ignore was stored and B's "are you still there" was shown to 0 other wizards and no bubble appeared for A]
 
 **Risks**
 
@@ -295,7 +295,7 @@ Players can set privacy toggles (friend requests, teleports, trade, hatch, party
 
 - [x] Blacklisted word flagged; whitelisted phrase passes [ChatFilterTest.FindsBlacklistedWordsAndLetsWhitelistEntriesPass]
 - [x] Muted REQUESTRADIALCHAT dropped with notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
-- [ ] Real client: '.mute <name> 5m' works
+- [x] Real client: '.mute <name> 5m' works [real client run 20261009-200227 with apps/clientdriver/scenarios/chat-moderation.json on 92a5b29: the game master's `.mute Adam AngleBane 5m` in chat was stored and the muted wizard was shown "This account has been muted for 5 minutes."; its quick chat Yes reached nobody and the companion saw no bubble; after `.unmute` the filtered-chat wizard saw the companion's off-whitelist line as "a ... hums softly."; a 10s mute then expired with "You have been unmuted." and the next quick chat reached the companion]
 - [x] `.reload chatfilter` keeps the old lists on a failed load [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
 
 ### Detailed spec from WIZ-21: Chat moderation: filter, permissions and mute
@@ -326,7 +326,7 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 - [x] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
 - [x] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
 - [x] Successful reload additions reach connected clients in CHATFILTERBLACK/CHATFILTERWHITE carrying the recipient wizard's GlobalID [ChatFilterTest.SuccessfulReloadSendsAddedWordsToConnectedWizards]
-- [ ] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text.
+- [x] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text. [real client run 20261009-200227 with apps/clientdriver/scenarios/chat-moderation.json on 92a5b29: the game master's `.mute Adam AngleBane 5m` in chat was stored and the muted wizard was shown "This account has been muted for 5 minutes."; its quick chat Yes reached nobody and the companion saw no bubble; after `.unmute` the filtered-chat wizard saw the companion's off-whitelist line as "a ... hums softly."; a 10s mute then expired with "You have been unmuted." and the next quick chat reached the companion]
 
 **Risks**
 
@@ -1028,7 +1028,7 @@ A player can open the in-game realm picker, see every online realm with its popu
 **Acceptance**
 
 - [x] player_limit=1: second queued at 1 and released on logout [SelectCharacterTest.AFullRealmQueuesTheNextSelectionAndAdmitsItAfterTheOnlineRowIsRemoved]
-- [ ] Real client: queue position then auto-enter
+- [x] Real client: queue position then auto-enter [run 20261009-234753 of apps/clientdriver/scenarios/realm-queue.json: the second client showed "You are number 1 in line." and entered WizardCity/WC_Hub on its own 20 s later when the first wizard quit]
 - [x] Raised player_limit admits queued players without a restart [SelectCharacterTest.ARefreshedIncreaseInPlayerLimitAdmitsAQueuedSelection]
 
 ### Detailed spec from LOG-15: Admission queue for full realms
@@ -1050,12 +1050,12 @@ When the chosen realm is at player_limit, the client waits in a visible queue an
 **Acceptance**
 
 - [x] Unit: with player_limit=1 and one player online, a second select is queued at position 1 and receives the cached CHARACTERSELECTED when the first player's realm_online_character row is removed [SelectCharacterTest.AFullRealmQueuesTheNextSelectionAndAdmitsItAfterTheOnlineRowIsRemoved]
-- [ ] Real client: with the limit set to 1, the second client shows a queue position and enters the world automatically when the first client logs out
+- [x] Real client: with the limit set to 1, the second client shows a queue position and enters the world automatically when the first client logs out [run 20261009-234753 of apps/clientdriver/scenarios/realm-queue.json: the second client showed "You are number 1 in line." and entered WizardCity/WC_Hub on its own 20 s later when the first wizard quit]
 - [x] Raising the realm's player_limit while a player is queued admits them within one realmlist refresh without a restart [SelectCharacterTest.ARefreshedIncreaseInPlayerLimitAdmitsAQueuedSelection]
 
 **Risks**
 
-- The whole queue UI contract (PrepPhase and Slot semantics, whether ADMIT_IND Status=0 means queued or refused) is unverified; this is the reference's behavior only. Low priority.
+- Settled by the r806919 client: PrepPhase=1 only shows "verifying character" and Slot is never read. The queue window comes from MSG_USER_ADMIT_IND Status=2 with PositionInQueue, and Play stays held until Status=1.
 
 ## 12.22 Same-connection zone transfer spike (WLD-21)
 

@@ -66,10 +66,22 @@
     "option_item_lock_next": {"at": [882, 357], "presses": "the right arrow of Backpack Item Lock, the fourth row of the fourth gameplay page, which turns NO to YES"},
     "settings_ok": {"at": [825, 573], "presses": "OK at the right end of the settings' bottom bar, which closes them and sends what changed"},
     "backpack_lock": {"at": [707, 603], "presses": "the lock button under the backpack's right page, second from the left of its row while Backpack Item Lock is on, which locks or unlocks the chosen item"},
-    "backpack_trash_beside_lock": {"at": [907, 603], "presses": "the trash can at the right end of the backpack's row of buttons while the lock button shows, one place right of backpack_trash, greyed out for a locked item"}
+    "backpack_trash_beside_lock": {"at": [907, 603], "presses": "the trash can at the right end of the backpack's row of buttons while the lock button shows, one place right of backpack_trash, greyed out for a locked item"},
+    "wizard_ahead": {"at": [640, 240], "presses": "the other wizard standing straight ahead across the Commons fountain, where two-wizards.json leaves the two facing each other"},
+    "friends_open": {"at": [1250, 25], "presses": "the portrait button at the top right of the in-world HUD that opens the friends list"},
+    "friends_first": {"at": [1170, 57], "presses": "the first row of the friends list friends_open shows, under its Online Friends title"},
+    "friends_card_go_to": {"at": [870, 93], "presses": "the arrow over a face, second down the left edge of the card a friends list row opens, which asks whether to go to that friend in its zone"},
+    "friends_close": {"at": [1253, 398], "presses": "the red X at the bottom right of the friends list, which closes it"},
+    "card_add_friend": {"at": [1087, 93], "presses": "the smiling face with a plus, second down the left edge of the card clicking another wizard opens, which asks that wizard to be a friend"},
+    "friend_confirm_yes": {"at": [646, 452], "presses": "Yes on a three-line Friend dialog: adding the wizard the card shows, accepting a friend request, or ignoring a friend, which removes it as a friend"},
+    "friend_card_ignore": {"at": [1255, 105], "presses": "the speech bubble crossed out, second down the right edge of the card clicking a friend opens, below the button that removes the friend, which ignores that wizard"},
+    "teleport_zone_no": {"at": [772, 440], "presses": "No on the two-line Teleport question that names the zone a friend is in"},
+    "friends_card_close": {"at": [1038, 397], "presses": "the red X at the bottom right of the card a friends list row opens beside the list"},
+    "card_close": {"at": [1255, 397], "presses": "the red X at the bottom right of the card clicking another wizard opens, which closes it"}
   },
   "client_writes": [
     {"path": "^Data/GameData/CharacterRegistry/\\d+\\.xml$", "because": "the client keeps a registry file for each wizard that has entered the world, named by its character id, in its own data folder, and writes it itself on every entry"},
-    {"path": "^Data/GameData/QuickChat\\d+\\.fav$", "because": "the client keeps the quick chat phrases a wizard marks as favorites in a BINd file of its own in its data folder, named by the wizard's id, and writes it itself once the quick chat menu has been used"}
+    {"path": "^Data/GameData/QuickChat\\d+\\.fav$", "because": "the client keeps the quick chat phrases a wizard marks as favorites in a BINd file of its own in its data folder, named by the wizard's id, and writes it itself once the quick chat menu has been used"},
+    {"path": "^Data/GameData/CharacterRegistry/\\d+\\.(char|effect|elo|equip|wishlist)$", "because": "the client caches another wizard's character, effects, ratings, equipment and wish list in its own data folder, named by that wizard's id, and writes them itself when that wizard's card is opened"}
   ]
 }

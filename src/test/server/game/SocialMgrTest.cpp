@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests social list invariants, friend acceptance and the live friend cap through real game sessions and an isolated characters database, and verifies ignore filtering through the actual world chat relay.
+ * Tests social list invariants, a friend's zone named by its display key or else its path, a friend removal naming no owner taken as the current wizard's, friend acceptance and the live friend cap through real game sessions and an isolated characters database, and verifies ignore filtering through the actual world chat relay.
  */
 
 #include "CharacterDatabase.h"
@@ -15,6 +15,7 @@
 #include "Settings.h"
 #include "SocialMgr.h"
 #include "World.h"
+#include "ZoneMgr.h"
 
 #include <fmt/format.h>
 
@@ -24,6 +25,7 @@
 #include <chrono>
 #include <filesystem>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <optional>
 #include <random>
@@ -239,6 +241,23 @@ TEST(SocialMgrTest, SocialActionsCanOmitTheCurrentWizardAsOwner)
     EXPECT_FALSE(SocialMgr::IsRequestOwnerForCharacter(0, 0));
 }
 
+TEST(SocialMgrTest, AFriendsZoneIsNamedByTheKeyOfItsDisplayNameOrElseByItsPath)
+{
+    std::map<std::string, ZoneTemplate, std::less<>> zones;
+    ZoneTemplate hub;
+    hub.Path = "WizardCity/WC_Hub";
+    hub.DisplayNameKey = "WizardZone_TheCommons";
+    zones[hub.Path] = hub;
+    ZoneTemplate unnamed;
+    unnamed.Path = "WizardCity/WC_Unnamed";
+    zones[unnamed.Path] = unnamed;
+    ZoneTemplates const templates(std::move(zones));
+    EXPECT_EQ(SocialMgr::FriendZoneName("WizardCity/WC_Hub", &templates), "WizardZone_TheCommons");
+    EXPECT_EQ(SocialMgr::FriendZoneName("WizardCity/WC_Unnamed", &templates), "WizardCity/WC_Unnamed");
+    EXPECT_EQ(SocialMgr::FriendZoneName("WizardCity/WC_Missing", &templates), "WizardCity/WC_Missing");
+    EXPECT_EQ(SocialMgr::FriendZoneName("WizardCity/WC_Hub", nullptr), "WizardCity/WC_Hub");
+}
+
 TEST(SocialMgrTest, IncomingRequestsCanOmitTheCurrentWizardAsEntry)
 {
     EXPECT_TRUE(SocialMgr::IsIncomingRequestForCharacter(84, 0, 42));
@@ -364,4 +383,27 @@ TEST_F(SocialMgrDatabaseTest, LoweringTheLiveFriendCapRefusesARequestThroughTheH
     EXPECT_FALSE(*pending);
 
     EXPECT_TRUE(sSettings.Set("Social.MaxFriends", std::to_string(previousMaximum), author, "restore the live friend cap").Ok());
+}
+
+TEST_F(SocialMgrDatabaseTest, AFriendRemovalThatOmitsTheCurrentWizardAsOwnerDropsTheFriend)
+{
+    ASSERT_TRUE(AddFriendship(OwnerId, ExistingFriendId));
+    ASSERT_TRUE(AddFriendship(ExistingFriendId, OwnerId));
+
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, OwnerId);
+    ASSERT_TRUE(session);
+    SocialMgrTestAccess::PrepareWorld(*session, OwnerId, 0.0f);
+
+    GameMessages::BuddyRequestDrop drop;
+    drop.ListOwnerGid = 0;
+    drop.EntryGid = ExistingFriendId;
+    Send(*client, drop);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() != 0; })) << "the friend removal must reach the game-session handler queue";
+
+    std::string observed;
+    std::optional<GameMessages::BuddyDrop> const dropped = ReadWorldReply<GameMessages::BuddyDrop>(*client, observed);
+    ASSERT_TRUE(dropped) << "no BUDDYDROP decoded; other DML replies: " << observed;
+    EXPECT_EQ(dropped->ListOwnerGid, OwnerId);
+    EXPECT_EQ(dropped->EntryGid, ExistingFriendId);
 }

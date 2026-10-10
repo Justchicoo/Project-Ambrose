@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers MSG_SELECTCHARACTER by sending the client to a gameserver: loads the chosen wizard without blocking the network thread, refuses one that is not this account's, one that is deleted and one picked when no realm is online, and otherwise mints a single-use handoff key, writes it to login_key and waits for that write to commit before saying a word, so the gameserver can never be handed a key the login server has not finished writing down, then replies MSG_CHARACTERSELECTED with the realm's address and port, the wizard's zone and place, and Error=0; every refusal sends Error=1 and writes no key, so a failed pick leaves nothing behind that anybody could present later. A full realm queues the pick instead, answering with its queue position and no key, and the key is minted only once the queue admits it.
+ * Answers MSG_SELECTCHARACTER by sending the client to a gameserver: loads the chosen wizard without blocking the network thread, refuses one that is not this account's, one that is deleted and one picked when no realm is online, and otherwise mints a single-use handoff key, writes it to login_key and waits for that write to commit before saying a word, so the gameserver can never be handed a key the login server has not finished writing down, then replies MSG_CHARACTERSELECTED with the realm's address and port, the wizard's zone and place, and Error=0; every refusal sends Error=1 and writes no key, so a failed pick leaves nothing behind that anybody could present later. A full realm queues the pick instead, answering MSG_CHARACTERSELECTED PrepPhase=1 with no key and then MSG_USER_ADMIT_IND Status=2 with its place in line, and the key is minted only once the queue admits it.
  */
 
 #include "Base64.h"
@@ -117,6 +117,7 @@ void LoginSession::SelectCharacter(uint64 charId, std::string const& realmName, 
         reply.PrepPhase = 1;
         reply.Slot = static_cast<int32>(request.Position);
         SendDmlMessage(reply);
+        SendAdmission(AdmitStatus::Queued, request.Position);
         LOG_INFO(SelectLog, "Session {} queued account {} with wizard {} for realm {} at position {}", GetSessionId(), GetAccountId(), reply.CharId, realm->Name,
             request.Position);
         return;

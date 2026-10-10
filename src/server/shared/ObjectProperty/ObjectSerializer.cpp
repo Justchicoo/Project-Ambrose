@@ -366,25 +366,34 @@ namespace
             std::size_t objectEnd = 0;
             if (_versionable && !ReadObjectSize(objectEnd))
                 return false;
-            ClassInfo const* const type = _catalog->FindClass(hash);
+            ClassInfo const* type = _catalog->FindClass(hash);
             if (!type)
             {
                 std::string what = fmt::format("names class hash {}, which the type dump does not list", hash);
                 if (!_versionable)
                     return Fail(SerializerStatus::UnknownClass, what);
                 std::string const path = _path.Format(_root);
-                if (depth == 1)
+                std::size_t const bits = objectEnd - _reader.GetBitPosition();
+                if (depth > 1 && expected && expected == _options.ReadUnknownClassAs)
+                {
+                    if (!Report(DecodeIssueKind::UnknownClass, hash, bits, path, fmt::format("{}, so it is read as {}", what, expected->Name)))
+                        return false;
+                    type = expected;
+                }
+                else if (depth == 1)
                 {
                     if (!ReportUnknownProperties(hash, objectEnd, path))
                         return false;
                     return Fail(SerializerStatus::UnknownClass, what);
                 }
-                skipped = true;
-                std::size_t const bits = objectEnd - _reader.GetBitPosition();
-                if (!Report(DecodeIssueKind::UnknownClass, hash, bits, path, std::move(what)) || !ReportUnknownProperties(hash, objectEnd, path))
-                    return false;
-                _reader.SeekBit(objectEnd);
-                return true;
+                else
+                {
+                    skipped = true;
+                    if (!Report(DecodeIssueKind::UnknownClass, hash, bits, path, std::move(what)) || !ReportUnknownProperties(hash, objectEnd, path))
+                        return false;
+                    _reader.SeekBit(objectEnd);
+                    return true;
+                }
             }
             if (type->Kind != ClassKind::PropertyClass)
                 return Fail(SerializerStatus::NotAPropertyClass, fmt::format("names {}, which is not a property class", type->Name));

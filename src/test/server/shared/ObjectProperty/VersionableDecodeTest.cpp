@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the versionable ObjectProperty format on classes the test invents, against bytes the test assembles itself: a literal object byte for byte, unknown properties skipped and unknown nested classes skipped and reported with their paths, each with every property it holds by hash and size and, when asked, the bits each skipped value held, read from past the padding its header was aligned past, compact lengths in their 7-bit and 31-bit forms for strings, wide strings and lists, enums and flag integers carried as option names, values that do not fit their declared size, properties the mask does not select and objects of the wrong class resynchronized at their property's end and reported, impossible object and property sizes refused where they are the object's own and reported where a property holds them, the decode limits including the objects and depth of default inline objects, clean dirty-encoded properties left out, compact lengths in the compact format, and whole trees round-tripping in every mode.
+ * Tests the versionable ObjectProperty format on classes the test invents, against bytes the test assembles itself: a literal object byte for byte, unknown properties skipped and unknown nested classes skipped and reported with their paths, or read as the base class a caller names where that base is expected, each with every property it holds by hash and size and, when asked, the bits each skipped value held, read from past the padding its header was aligned past, compact lengths in their 7-bit and 31-bit forms for strings, wide strings and lists, enums and flag integers carried as option names, values that do not fit their declared size, properties the mask does not select and objects of the wrong class resynchronized at their property's end and reported, impossible object and property sizes refused where they are the object's own and reported where a property holds them, the decode limits including the objects and depth of default inline objects, clean dirty-encoded properties left out, compact lengths in the compact format, and whole trees round-tripping in every mode.
  */
 
 #include "BitWriter.h"
@@ -371,6 +371,68 @@ TEST_F(VersionableDecodeTest, UnknownPropertiesAndNestedClassesAreSkippedAndRepo
     EXPECT_EQ(decoded.Issues[3].Path, "class TestBox.m_main");
     EXPECT_EQ(ObjectSerializer::GetIssueName(decoded.Issues[1].Kind), "unknown class");
     EXPECT_EQ(ObjectSerializer::GetIssueName(decoded.Issues[2].Kind), "property of an unknown class");
+}
+
+TEST_F(VersionableDecodeTest, AnUnknownClassWhereTheNamedBaseIsExpectedIsReadAsThatBase)
+{
+    Stream stream;
+    Mark const box = stream.BeginObject(ClassHash("class TestBox"));
+    Mark const items = stream.BeginProperty(Hash("class SharedPointer<class TestItem>", "m_items"));
+    stream.Length(1);
+    {
+        Mark const stranger = stream.BeginObject(UnknownHash);
+        Mark const id = stream.BeginProperty(Hash("unsigned int", "m_id"));
+        stream.U32(42);
+        stream.End(id);
+        Mark const own = stream.BeginProperty(0x0BADF00Du);
+        stream.U32(5);
+        stream.End(own);
+        Mark const name = stream.BeginProperty(Hash("std::string", "m_name"));
+        stream.Text("sigil");
+        stream.End(name);
+        stream.End(stranger);
+    }
+    stream.End(items);
+    Mark const note = stream.BeginProperty(Hash("std::string", "m_note"));
+    stream.Text("box");
+    stream.End(note);
+    stream.End(box);
+    std::vector<uint8> const bytes = stream.Take();
+
+    SerializerOptions options = FileOptions();
+    options.ReadUnknownClassAs = _catalog->FindClass("class TestItem");
+    ASSERT_NE(options.ReadUnknownClassAs, nullptr);
+    DecodeResult const decoded = DecodeFile(bytes, options);
+    ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+    EXPECT_EQ(decoded.BytesRead, bytes.size());
+    PropertyValue::List const& list = *decoded.Object->Get("m_items")->GetList();
+    ASSERT_EQ(list.size(), 1u);
+    PropertyObject const* const item = list[0].AsObject();
+    ASSERT_NE(item, nullptr) << "the entry is kept, read as the base the list expects";
+    EXPECT_EQ(item->GetClass().Name, "class TestItem");
+    EXPECT_EQ(*item->Get("m_id")->GetIf<uint32>(), 42u);
+    EXPECT_EQ(*item->Get("m_name")->GetIf<std::string>(), "sigil");
+    EXPECT_EQ(*decoded.Object->Get("m_note")->GetIf<std::string>(), "box");
+
+    ASSERT_EQ(decoded.Issues.size(), 2u);
+    EXPECT_EQ(decoded.Issues[0].Kind, DecodeIssueKind::UnknownClass) << "the class is still reported, with its own hash";
+    EXPECT_EQ(decoded.Issues[0].Hash, UnknownHash);
+    EXPECT_EQ(decoded.Issues[0].Path, "class TestBox.m_items[0]");
+    EXPECT_EQ(decoded.Issues[0].Detail, "names class hash 305419896, which the type dump does not list, so it is read as class TestItem");
+    EXPECT_EQ(decoded.Issues[1].Kind, DecodeIssueKind::UnknownProperty) << "its own property is skipped and reported";
+    EXPECT_EQ(decoded.Issues[1].Hash, 0x0BADF00Du);
+    EXPECT_EQ(decoded.Issues[1].Bits, 32u);
+    EXPECT_EQ(decoded.Issues[1].Path, "class TestBox.m_items[0]");
+
+    DecodeResult const unnamed = DecodeFile(bytes);
+    ASSERT_TRUE(unnamed.Ok()) << unnamed.Detail;
+    EXPECT_EQ(unnamed.Object->Get("m_items")->GetList()->front().AsObject(), nullptr) << "without the option the entry is left out as before";
+
+    SerializerOptions other = FileOptions();
+    other.ReadUnknownClassAs = _catalog->FindClass("class TestSocket");
+    DecodeResult const elsewhere = DecodeFile(bytes, other);
+    ASSERT_TRUE(elsewhere.Ok()) << elsewhere.Detail;
+    EXPECT_EQ(elsewhere.Object->Get("m_items")->GetList()->front().AsObject(), nullptr) << "only where the named class is the one expected";
 }
 
 TEST_F(VersionableDecodeTest, LengthsOf128OrMoreTakeThe31BitForm)
