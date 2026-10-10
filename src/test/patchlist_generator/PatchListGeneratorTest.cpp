@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests synthetic install scanning, WAD header metrics, a played install's launcher banks, Src and Tar rules, type patterns under them, type 5 sidecars and skipped player files, the reference diff and the one field it takes, deterministic output, and the persistent checksum cache.
+ * Tests synthetic install scanning, WAD header metrics, a played install's launcher banks, Src and Tar rules, type patterns under them, type 5 sidecars and the WADs still streaming, skipped player files, the reference diff and the one field it takes, deterministic output, and the persistent checksum cache.
  */
 
 #include "Compression.h"
@@ -125,6 +125,7 @@ TEST_F(InstallFixture, PlayedInstallMapsBanksRulesTypePatternsSidecarsAndSkipsWh
         "ZoneA|Data/GameData/ZoneA.wad||3|" + wadHeader,
         "ZoneB|Data/GameData/ZoneB.wad||5|" + wadHeader }));
     EXPECT_EQ(result->FilesScanned, 8u);
+    EXPECT_EQ(result->StillStreaming, (std::vector<std::string>{ "Data/GameData/ZoneB.wad" }));
 }
 
 TEST_F(InstallFixture, ReferenceDiffSetsAsideWhatIsNotInstalledAndTakesOnlyCompressedHeaderSize)

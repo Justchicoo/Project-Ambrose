@@ -30,6 +30,7 @@ namespace PatchListGenerator
         std::filesystem::path OutputDirectory;
         std::size_t CacheHits = 0;
         std::size_t FilesScanned = 0;
+        std::vector<std::string> StillStreaming;
     };
 
     using OnDisk = std::function<bool(std::string const& package, LatestFileList::FileRecord const& record)>;

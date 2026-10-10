@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Walks an installation through Src and Tar rules, type patterns, launcher banks and skip patterns, derives packages, file types and header metrics, writes XML and binary manifests, and diffs them against a reference list, taking from it only the CompressedHeaderSize it cannot derive.
+ * Walks an installation through Src and Tar rules, type patterns, launcher banks and skip patterns, derives packages, file types and header metrics, notes the streamed WADs whose data is not all downloaded yet, writes XML and binary manifests, and diffs them against a reference list, taking from it only the CompressedHeaderSize it cannot derive.
  */
 
 #include "PatchListGenerator.h"
@@ -501,7 +501,11 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
         sidecar += ".utd";
         auto const typeRule = std::find_if(rules.Types.begin(), rules.Types.end(), [&](auto const& entry) { return GlobMatch(entry.first, *disk); });
         uint32 const typed = typeRule == rules.Types.end() ? 0 : typeRule->second;
-        packages[package].push_back(MakeRecord(*disk, package, *file, matched, typed, std::filesystem::exists(sidecar)));
+        std::error_code sidecarError;
+        bool const hasSidecar = std::filesystem::is_regular_file(sidecar, sidecarError);
+        if (hasSidecar && std::filesystem::file_size(sidecar, sidecarError) > 0 && !sidecarError)
+            result.StillStreaming.push_back(*disk);
+        packages[package].push_back(MakeRecord(*disk, package, *file, matched, typed, hasSidecar));
         ++result.FilesScanned;
     }
     if (iteratorError)
@@ -521,6 +525,9 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
         result.Manifest.TableOrder.push_back(package.Name);
     result.Manifest.TableOrder.push_back("About");
 
+    if (!result.StillStreaming.empty())
+        std::cout << fmt::format("{} type 5 WADs still have segments pending in their .utd sidecar, so their CRC is of the older bytes on disk, not of the finished file a list names\n",
+            result.StillStreaming.size());
     if (reference)
     {
         std::filesystem::path const client = options.Client;
