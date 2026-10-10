@@ -515,6 +515,7 @@ Defeated creatures roll authored drop tables and players receive items, reagents
 - [ ] Insufficient gold, item not listed, out of range rejected with no change; equipped/locked sell refused
 - [ ] Changing Shop.SellValuePercent applies to the next sale; a failed `.reload npc_vendor` keeps the old stock
 - [ ] Real client: shop lists DB items; buy deducts gold and adds item; closing frees movement
+- [ ] Real client: a vendor shows its shop icon over its head and its prompt before anyone talks to it; an NPC with neither a shop nor a quest shows neither
 
 ### Detailed spec from EXT-1: Service-option framework and gold equipment vendors
 
@@ -549,6 +550,7 @@ Talking to a vendor NPC opens the native shop window, and the player can buy and
 - [ ] Unit: setting Shop.SellValuePercent to a new value with `.settings set` changes the next sell price to match, without a restart
 - [ ] Client: clicking a vendor NPC in Wizard City shows the equipment shop window listing the DB items with correct prices
 - [ ] Client: buying an item plays the confirm, deducts gold in the HUD, and the item appears in the backpack; selling reverses it; closing the window lets the wizard move again
+- [ ] Client: a vendor NPC in Wizard City shows its shop icon (MSG_WIZBANG Shopping) over its head from the moment it is in view, before any interaction, and its interact prompt on walking up, as in the live game, where every shop NPC carries an icon so players know what it is for; an NPC whose providers offer no shop and no available quest shows no icon and no prompt
 
 **Risks**
 

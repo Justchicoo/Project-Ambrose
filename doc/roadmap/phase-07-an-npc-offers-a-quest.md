@@ -367,6 +367,7 @@ Walking near any NPC makes the client show its interaction prompt with the NPC's
 **Acceptance**
 
 - [ ] CompleteQuestGoal > StartQuest > None
+- [ ] NPC with no options from any provider: no wizbang, no prompt
 - [ ] Real client: '!' over the giver disappears within 1 s after accept
 
 ### Detailed spec from QST-9: Wizbang indicators
@@ -388,6 +389,7 @@ NPCs show the yellow '!' when they have a quest the player can take and the '?' 
 **Acceptance**
 
 - [ ] Unit test: StartQuest outranks None; CompleteQuestGoal outranks StartQuest when both apply.
+- [ ] Unit test: an NPC none of whose providers offers an option for the player gets None and no MSG_SENDNPCOPTIONS, as in the live game, where an NPC shows a marker and a prompt only when it has a quest to give or a service such as a shop.
 - [ ] Client: log in next to the QST-10 test quest giver. A '!' floats over its head. After accepting, it disappears within 1 s without re-zoning.
 
 **Risks**
