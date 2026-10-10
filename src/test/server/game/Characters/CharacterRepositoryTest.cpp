@@ -1,12 +1,15 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema with the updates still pending and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook; and backpack rows, read in the order they arrived with every field, an item trashed only by its owner, its backpack row going with it, and the highest item id kept after the item is gone; and worn items, which leave the backpack rows for equipment rows naming their slot, come back to the backpack when a slot gives them back or they are taken off, are never worn by a wizard that does not own them, and go with their item when it is trashed.
+ * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema with the updates still pending and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook; and backpack rows, read in the order they arrived with every field, an item trashed only by its owner, its backpack row going with it, and the highest item id kept after the item is gone; and worn items, which leave the backpack rows for equipment rows naming their slot, come back to the backpack when a slot gives them back or they are taken off, are never worn by a wizard that does not own them, and go with their item when it is trashed; and a quest log counted to 2 of 5 that reloads with the same quest and goal GIDs and count, completing it removing the active row and leaving its Complete entry, older saves landing late changing nothing, and a goal of no quest, a save with no revision and a missing wizard refused.
  */
 
+#include "CharacterQuestRepository.h"
 #include "CharacterRepository.h"
 #include "DBUpdater.h"
 #include "Environment.h"
 #include "GuidGenerator.h"
+#include "ObjectGuid.h"
+#include "QuestLog.h"
 
 #include <fmt/format.h>
 
@@ -553,4 +556,65 @@ TEST_F(CharacterRepositoryDatabaseTest, WornItemsMoveBetweenTheBackpackAndTheirS
     ASSERT_EQ(CharacterRepository::LoadEquipment(311).Items.size(), 1u);
     EXPECT_EQ(CharacterRepository::TrashItem(311, robe.Guid), CharacterOpResult::Ok);
     EXPECT_TRUE(CharacterRepository::LoadEquipment(311).Items.empty()) << "a trashed item takes its equipment row with it";
+}
+
+TEST_F(CharacterRepositoryDatabaseTest, AQuestLogCountedToTwoOfFiveReloadsWithTheSameGidsAndCountAndALateOlderSaveChangesNothing)
+{
+    std::mt19937 random(20261010);
+    ASSERT_EQ(CharacterRepository::Create(MakeCharacter(random, 601, 8, 1800000601)), CharacterOpResult::Ok);
+    CharacterQuestsLoad const none = CharacterQuestRepository::Load(601);
+    ASSERT_EQ(none.Result, CharacterOpResult::Ok);
+    ASSERT_TRUE(none.Quests);
+    EXPECT_EQ(*none.Quests, CharacterQuests{}) << "a wizard that has taken nothing has no rows and no revision";
+    EXPECT_EQ(CharacterQuestRepository::Load(999).Result, CharacterOpResult::NotFound);
+
+    GuidGenerator gids(ObjectGuid::QuestBase);
+    QuestLog log;
+    QuestLogQuest const* const quest = log.Add("KeptQuest", gids, 1791650000);
+    ASSERT_NE(quest, nullptr);
+    uint64 const questGid = quest->Gid;
+    QuestLogGoal const* const goal = log.StartGoal("KeptQuest", "DefeatUndead", gids);
+    ASSERT_NE(goal, nullptr);
+    uint64 const goalGid = goal->Gid;
+    ASSERT_EQ(log.IncrementGoal("KeptQuest", "DefeatUndead", 2), 2u);
+    log.SetQuestRegistry("KeptQuest", "Talked", 1.0);
+    log.SetRegistry("Visited", 4.5);
+    log.SetHidden("KeptQuest", true);
+    CharacterQuests const accepted = log.ToStored(1);
+    ASSERT_EQ(CharacterQuestRepository::Save(601, accepted), CharacterOpResult::Ok);
+
+    CharacterQuestsLoad const reloaded = CharacterQuestRepository::Load(601);
+    ASSERT_EQ(reloaded.Result, CharacterOpResult::Ok);
+    ASSERT_TRUE(reloaded.Quests);
+    EXPECT_EQ(*reloaded.Quests, accepted) << "every row and the revision come back as saved";
+    std::vector<std::string> warnings;
+    QuestLog const back = QuestLog::FromStored(*reloaded.Quests, nullptr, warnings);
+    ASSERT_NE(back.Find("KeptQuest"), nullptr);
+    EXPECT_EQ(back.Find("KeptQuest")->Gid, questGid);
+    ASSERT_NE(back.Find("KeptQuest")->FindGoal("DefeatUndead"), nullptr);
+    EXPECT_EQ(back.Find("KeptQuest")->FindGoal("DefeatUndead")->Gid, goalGid);
+    EXPECT_EQ(back.Find("KeptQuest")->FindGoal("DefeatUndead")->Count, 2u);
+    EXPECT_EQ(CharacterQuestRepository::GetMaxGuid(), goalGid);
+
+    ASSERT_TRUE(log.CompleteQuest("KeptQuest"));
+    ASSERT_EQ(CharacterQuestRepository::Save(601, log.ToStored(3)), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterQuestRepository::Save(601, log.ToStored(2)), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterQuestRepository::Save(601, accepted), CharacterOpResult::Ok);
+    CharacterQuestsLoad const completed = CharacterQuestRepository::Load(601);
+    ASSERT_TRUE(completed.Quests);
+    EXPECT_EQ(completed.Quests->Revision, 3u);
+    EXPECT_TRUE(completed.Quests->Quests.empty()) << "the active row is gone, and the older saves landing after did not bring it back";
+    EXPECT_TRUE(completed.Quests->Goals.empty());
+    QuestLog const done = QuestLog::FromStored(*completed.Quests, nullptr, warnings);
+    EXPECT_EQ(done.GetQuestRegistry("KeptQuest", QuestLog::CompleteEntry), 1.0);
+    EXPECT_TRUE(done.HasCompletedQuest("KeptQuest"));
+    EXPECT_EQ(CharacterQuestRepository::GetMaxGuid(), goalGid) << "a finished quest's GIDs are not handed out again";
+
+    CharacterQuests orphan = accepted;
+    orphan.Revision = 4;
+    orphan.Goals[0].QuestGid = questGid + 100;
+    EXPECT_EQ(CharacterQuestRepository::Save(601, orphan), CharacterOpResult::InvalidData) << "a goal of no quest in the save";
+    EXPECT_EQ(CharacterQuestRepository::Save(601, log.ToStored(0)), CharacterOpResult::InvalidData) << "a save needs a revision";
+    EXPECT_EQ(CharacterQuestRepository::Save(999, log.ToStored(5)), CharacterOpResult::DatabaseError) << "a quest log needs its wizard";
+    EXPECT_EQ(CharacterQuestRepository::Load(601).Quests->Revision, 3u);
 }
