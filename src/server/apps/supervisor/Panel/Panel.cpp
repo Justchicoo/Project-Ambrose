@@ -176,7 +176,7 @@ namespace
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
-    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
+    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _keyring(), _settings(_store, _keyring), _users(_store), _sessions(_store), _errors(_store), _grants(_store),
       _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
@@ -232,7 +232,6 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     });
     RegisterTwoFactor();
     RegisterCommandHistory();
-    RegisterMaintenance();
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
@@ -423,6 +422,7 @@ bool Panel::Start(ConfigMgr const& config, std::string& error)
     _eventSocket->Start();
     OfferTheOwnerLink();
     StartGathering();
+    SyncCaptchaContentPolicy();
     return true;
 }
 
@@ -1063,106 +1063,6 @@ void Panel::RegisterCommandHistory()
     });
 }
 
-void Panel::RegisterMaintenance()
-{
-    _listener.Routes().AddGuarded("GET", "/api/panel/maintenance", "status.read", [this](AdminRequest const& request)
-    {
-        return MaintenanceGet(request);
-    });
-    _listener.Routes().AddGuarded("POST", "/api/panel/maintenance/enter", "panel.maintenance", [this](AdminRequest const& request)
-    {
-        return MaintenanceEnter(request);
-    });
-    _listener.Routes().AddGuarded("POST", "/api/panel/maintenance/exit", "panel.maintenance", [this](AdminRequest const& request)
-    {
-        return MaintenanceExit(request);
-    });
-}
-
-AdminResponse Panel::MaintenanceGet(AdminRequest const& request)
-{
-    (void)request;
-    std::lock_guard const lock(_storeMutex);
-    if (!_store.IsOpen())
-        return AdminResponse::Problem(503, "maintenance_unavailable", "The panel store is not open");
-    MaintenanceState state;
-    std::string error;
-    if (!PanelMaintenance::Read(_store, state, error))
-        return AdminResponse::Problem(503, "maintenance_unavailable", error);
-    return AdminResponse::Json(200, PanelMaintenance::Answer(state).dump());
-}
-
-AdminResponse Panel::MaintenanceEnter(AdminRequest const& request)
-{
-    if (!_appCall)
-        return AdminResponse::Problem(503, "maintenance_unavailable", "The panel cannot reach the loginserver");
-    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
-    if (body.is_discarded() || !body.is_object())
-        return AdminResponse::Invalid("Entering maintenance takes a JSON object", { { "reason", "Say why the installation closes" } });
-    auto const reason = body.find("reason");
-    auto const windowStart = body.find("window_start_epoch_ms");
-    auto const windowEnd = body.find("window_end_epoch_ms");
-    if (reason == body.end() || !reason->is_string())
-        return AdminResponse::Invalid("Entering maintenance takes a reason", { { "reason", "Say why the installation closes" } });
-    std::optional<int64> start;
-    std::optional<int64> end;
-    if (windowStart != body.end() && !windowStart->is_null())
-    {
-        if (!windowStart->is_number_integer())
-            return AdminResponse::Invalid("The window start is not a time", { { "window_start_epoch_ms", "Give the window start in epoch milliseconds" } });
-        start = windowStart->get<int64>();
-    }
-    if (windowEnd != body.end() && !windowEnd->is_null())
-    {
-        if (!windowEnd->is_number_integer())
-            return AdminResponse::Invalid("The window end is not a time", { { "window_end_epoch_ms", "Give the window end in epoch milliseconds" } });
-        end = windowEnd->get<int64>();
-    }
-
-    AuditActor actor = AuditActor::Token;
-    std::string actorId = request.Principal;
-    std::string actorName = NameOf(request);
-    if (std::optional<PanelUser> const user = UserOf(request))
-    {
-        actor = AuditActor::User;
-        actorId = std::to_string(user->Id);
-        actorName = user->Username;
-    }
-    MaintenanceState state;
-    std::string error;
-    bool const entered = PanelMaintenance::Enter(_store, _storeMutex, _appCall, _auditForwarding, actor, actorId, actorName,
-        request.RemoteAddress, request.UserAgent, reason->get<std::string>(), start, end, state, error);
-    if (entered && _auditForwarding)
-        _auditForwarder.Wake();
-    if (!entered)
-        return AdminResponse::Problem(503, "maintenance_not_entered", error);
-    return AdminResponse::Json(200, PanelMaintenance::Answer(state).dump());
-}
-
-AdminResponse Panel::MaintenanceExit(AdminRequest const& request)
-{
-    if (!_appCall)
-        return AdminResponse::Problem(503, "maintenance_unavailable", "The panel cannot reach the loginserver");
-    AuditActor actor = AuditActor::Token;
-    std::string actorId = request.Principal;
-    std::string actorName = NameOf(request);
-    if (std::optional<PanelUser> const user = UserOf(request))
-    {
-        actor = AuditActor::User;
-        actorId = std::to_string(user->Id);
-        actorName = user->Username;
-    }
-    MaintenanceState state;
-    std::string error;
-    bool const left = PanelMaintenance::Exit(_store, _storeMutex, _appCall, _auditForwarding, actor, actorId, actorName,
-        request.RemoteAddress, request.UserAgent, state, error);
-    if (left && _auditForwarding)
-        _auditForwarder.Wake();
-    if (!left)
-        return AdminResponse::Problem(503, "maintenance_not_left", error);
-    return AdminResponse::Json(200, PanelMaintenance::Answer(state).dump());
-}
-
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
 {
     std::string error;
@@ -1196,6 +1096,7 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
         return AdminResponse::Problem(503, "audit_unavailable", error);
     if (event.Result == AuditResult::Refused)
         return AdminResponse::Problem(409, "settings_refused", event.Reason);
+    SyncCaptchaContentPolicy();
     return PanelSettingsGet(request);
 }
 
@@ -1258,6 +1159,11 @@ AdminResponse Panel::MailTest(AdminRequest const& request)
     return AdminResponse::Json(200, answer.dump());
 }
 
+void Panel::SyncCaptchaContentPolicy()
+{
+    _listener.Routes().SetCaptchaProvider(_settings.ValueOf("Security.CaptchaProvider"));
+}
+
 std::optional<AdminResponse> Panel::CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username)
 {
     std::string const provider = _settings.ValueOf("Security.CaptchaProvider");
@@ -1268,7 +1174,14 @@ std::optional<AdminResponse> Panel::CaptchaGate(AdminRequest const& request, nlo
 
     std::string const token = body.contains("captcha") && body["captcha"].is_string() ? body["captcha"].get<std::string>() : std::string();
     if (token.empty())
-        return AdminResponse::Problem(401, "captcha_required", "Too many failed sign-ins; answer the captcha to try again");
+    {
+        nlohmann::json answer;
+        answer["error"] = "captcha_required";
+        answer["message"] = "Too many failed sign-ins; answer the captcha to try again";
+        answer["captcha_provider"] = provider;
+        answer["captcha_site_key"] = _settings.ValueOf("Security.CaptchaSiteKey");
+        return AdminResponse::Json(401, answer.dump());
+    }
 
     PanelCaptchaResult const checked = PanelCaptcha::Verify(
         provider, _settings.ValueOf("Security.CaptchaSecret"), token, request.RemoteAddress, CaptchaVerifyUrl(provider));
