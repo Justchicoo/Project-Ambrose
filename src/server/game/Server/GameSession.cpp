@@ -1744,6 +1744,8 @@ void GameSession::LeaveWorld()
     _wizBangId = 0;
     _pendingWizBang.reset();
     _sight.Clear();
+    _npcRange.Clear();
+    _npcTemplates.clear();
     if (_player)
     {
         SaveStats();
