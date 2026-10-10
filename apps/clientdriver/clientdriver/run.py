@@ -44,8 +44,11 @@ class Run:
         self.scenario = scenario
         self.references = references
         self.environment = environment
-        self.run_id = stamp()
+        self.run_id = stamp() + (f"-s{options['slot']}" if options.get("slot") else "")
         self.folder = os.path.join(options["runs"], self.run_id)
+        while os.path.exists(self.folder):
+            self.run_id += "x"
+            self.folder = os.path.join(options["runs"], self.run_id)
         self.shots = os.path.join(self.folder, "shots")
         self.cleanups = []
         self.prepared = []
