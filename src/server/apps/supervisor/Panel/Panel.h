@@ -20,9 +20,12 @@
 #include "PanelEventTickets.h"
 #include "PanelKeyring.h"
 #include "PanelLinks.h"
+#include "PanelMaintenance.h"
+#include "PanelPublicStatus.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
 #include "PanelTwoFactor.h"
+#include "PanelUptimeHistory.h"
 #include "PanelUsers.h"
 #include "PanelStore.h"
 #include "PanelSettings.h"
@@ -117,6 +120,8 @@ public:
     PanelEventTickets& Tickets() { return _tickets; }
     PanelEventSocket& EventSocket() { return *_eventSocket; }
     void SetAppSource(PanelEventSocket::AppSource source);
+    void SetAppCall(MaintenanceAppCall call) { _appCall = std::move(call); }
+    void SetPublicSource(PublicStatusSource source) { _publicSource = std::move(source); }
     void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
@@ -160,6 +165,17 @@ private:
     void RegisterSignIn();
     void RegisterTwoFactor();
     void RegisterCommandHistory();
+    void RegisterMaintenance();
+    AdminResponse MaintenanceGet(AdminRequest const& request);
+    AdminResponse MaintenanceEnter(AdminRequest const& request);
+    AdminResponse MaintenanceExit(AdminRequest const& request);
+    void RegisterPublicStatus();
+    AdminResponse PublicStatusGet(AdminRequest const& request);
+    AdminResponse IncidentPost(AdminRequest const& request);
+    AdminResponse IncidentClear(AdminRequest const& request);
+    void RegisterUptimeHistory();
+    AdminResponse UptimeSummaryGet(AdminRequest const& request);
+    void SetUptimeSampleSource(ProbeSampleSource source);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
@@ -237,6 +253,11 @@ private:
     PanelEventStreams _events;
     PanelEventTickets _tickets;
     std::unique_ptr<PanelEventSocket> _eventSocket;
+    MaintenanceAppCall _appCall;
+    PublicStatusSource _publicSource;
+    PublicStatusCache _publicStatusCache;
+    ProbeSampleSource _uptimeSampleSource;
+    bool _publicStatusEnabled = false;
     AdminServer _listener;
     bool _secure = false;
 };
