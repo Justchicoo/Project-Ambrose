@@ -48,7 +48,12 @@ describe("the route table", () => {
         expect(keys.size).toBeGreaterThan(90);
         const unknown = routes
             .filter((route) => route.view.kind !== "denied" && route.permission !== "none")
-            .flatMap((route) => route.permission.split("&").filter((permission) => !keys.has(permission)).map((permission) => `${route.path}: ${permission}`));
+            .flatMap((route) =>
+                route.permission
+                    .split("&")
+                    .filter((permission) => !keys.has(permission))
+                    .map((permission) => `${route.path}: ${permission}`),
+            );
         expect(unknown).toEqual([]);
     });
 

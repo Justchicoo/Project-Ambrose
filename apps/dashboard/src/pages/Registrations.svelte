@@ -94,15 +94,41 @@
                         {#each registrations as registration (registration.account_id)}
                             <tr class="border-b last:border-0">
                                 <td class="p-2 font-medium">{registration.username}</td>
-                                <td class="p-2"><StatusBadge tone={registration.state === "verified" ? "healthy" : registration.state === "pending" ? "waiting" : "wrong"}>{registration.state}</StatusBadge></td>
+                                <td class="p-2">
+                                    <StatusBadge
+                                        tone={
+                                            registration.state === "verified"
+                                                ? "healthy"
+                                                : registration.state === "pending"
+                                                  ? "waiting"
+                                                  : "wrong"
+                                        }
+                                    >
+                                        {registration.state}
+                                    </StatusBadge>
+                                </td>
                                 <td class="p-2">{new Date(registration.created_epoch_ms).toLocaleString()}</td>
                                 <td class="p-2">
                                     <div class="flex flex-wrap gap-2">
                                         {#if registration.state === "pending"}
-                                            <Button size="sm" variant="outline" disabled={busyId !== null} onclick={() => void resend(registration)}>Resend</Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={busyId !== null}
+                                                onclick={() => void resend(registration)}
+                                            >
+                                                Resend
+                                            </Button>
                                         {/if}
                                         {#if registration.state !== "blocked"}
-                                            <Button size="sm" variant="destructive" disabled={busyId !== null} onclick={() => void block(registration)}>Block</Button>
+                                            <Button
+                                                size="sm"
+                                                variant="destructive"
+                                                disabled={busyId !== null}
+                                                onclick={() => void block(registration)}
+                                            >
+                                                Block
+                                            </Button>
                                         {/if}
                                     </div>
                                 </td>

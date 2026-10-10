@@ -130,7 +130,12 @@
         </Card.Header>
         <Card.Content>
             {#if failure}
-                <p class="mb-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{failure}</p>
+                <p
+                    class="mb-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                    role="alert"
+                >
+                    {failure}
+                </p>
             {/if}
             {#if notice}
                 <p class="mb-4 rounded-md border border-healthy/30 bg-healthy/5 p-3 text-sm text-healthy" role="status">{notice}</p>
@@ -148,7 +153,13 @@
                     </div>
                     <div class="space-y-2">
                         <Label for="player-email">Email address</Label>
-                        <Input id="player-email" type="email" autocomplete="email" bind:value={email} required={info?.email_verification ?? false} />
+                        <Input
+                            id="player-email"
+                            type="email"
+                            autocomplete="email"
+                            bind:value={email}
+                            required={info?.email_verification ?? false}
+                        />
                         {#if fields.email}<p class="text-sm text-destructive">{fields.email}</p>{/if}
                     </div>
                     <div class="space-y-2">
@@ -202,7 +213,7 @@
             {/if}
         </Card.Content>
         <Card.Footer class="flex justify-between text-sm">
-            <a class="text-primary underline underline-offset-4" href="#">Back to sign in</a>
+            <a class="text-primary underline underline-offset-4" href="#overview">Back to sign in</a>
             {#if mode === "register"}
                 <a class="text-primary underline underline-offset-4" href="#player/recover">Forgot password?</a>
             {:else if mode === "recover"}

@@ -365,13 +365,15 @@ export const PlayerActionAccepted = v.looseObject({
 
 export const PlayerRegistrationsAnswer = v.looseObject({
     schema: v.number(),
-    registrations: v.array(v.looseObject({
-        account_id: v.number(),
-        username: v.string(),
-        state: v.picklist(["pending", "verified", "blocked"]),
-        created_epoch_ms: v.number(),
-        updated_epoch_ms: v.number(),
-    })),
+    registrations: v.array(
+        v.looseObject({
+            account_id: v.number(),
+            username: v.string(),
+            state: v.picklist(["pending", "verified", "blocked"]),
+            created_epoch_ms: v.number(),
+            updated_epoch_ms: v.number(),
+        }),
+    ),
 });
 
 export const ErrorGroup = v.looseObject({

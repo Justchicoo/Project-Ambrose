@@ -84,9 +84,9 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Login.Maintenance` | bool | false | none | live | loginserver | normal | Whether the login server is closed for maintenance: accounts below Login.MaintenanceBypassLevel are refused at sign-in with the maintenance reason, and players already in the world stay connected. |
 | `Login.MaintenanceBypassLevel` | unsigned | 2 | from 0 to 4 | live | loginserver | normal | The lowest security level that still signs in during maintenance: 0 player, 1 moderator, 2 game master, 3 administrator, 4 console. |
 | `Login.MaintenanceReason` | string | empty | at most 255 bytes | live | loginserver | normal | The reason a player refused during maintenance is sent; empty sends Maintenance. |
-| `Login.RequireVerifiedEmail` | bool | false | none | live | loginserver | normal | Whether a player account must have a verified email address before it may sign in. |
 | `Login.MaxAuthAttempts` | unsigned | 5 | from 0 to 1000 | live | loginserver | normal | Wrong passwords from one address before it is locked out; 0 never locks it out. |
 | `Login.Name` | string | Ambrose | at most 64 bytes | live | loginserver | normal | The login server's name, sent in MSG_STARTCHARACTERLIST. |
+| `Login.RequireVerifiedEmail` | bool | false | none | live | loginserver | normal | Whether a player account must have a verified email address before it may sign in. |
 | `Login.SessionKeyLifetime` | unsigned | 108000 s | from 60 to 2592000 s | next connection or operation | loginserver | normal | How long the session key a successful login issues stays valid. |
 | `Login.ShutdownGrace` | unsigned | 5 s | from 0 to 60 s | live | loginserver | normal | How long a stopping login server waits for its shutdown notices to be written. |
 
