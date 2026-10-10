@@ -1335,7 +1335,7 @@ bool Panel::Required(PanelUser const& user)
 
 std::optional<AdminResponse> Panel::Admit(AdminRequest const& request)
 {
-    if (TwoFactorSettings().Required == PanelTwoFactorPolicy::None || request.Principal == "token")
+    if (TwoFactorSettings().Required == PanelTwoFactorPolicy::None)
         return std::nullopt;
     std::optional<PanelUser> const user = UserOf(request);
     if (user && (user->TwoFactor || !Required(*user)))
