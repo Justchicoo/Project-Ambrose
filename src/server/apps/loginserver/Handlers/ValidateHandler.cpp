@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Validates MSG_USER_VALIDATE, which a client sends to come back to character select without its password: reserves the attempt against the address's lockout, reads the account, its bans, lock and session key in one asynchronous query, refuses a key issued to another machine, one renewed longer ago than Login.SessionKeyLifetime as it stands now, and a PassKey3 not made from that key and this connection's offer, kicks any earlier session holding the account, renews the key and the last login in one transaction, then sends MSG_USER_VALIDATE_RSP with Error=0 and MSG_USER_ADMIT_IND; every refusal sends only MSG_USER_VALIDATE_RSP with the error and closes. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds, a permanent one as the latest end the client reads, and no Reason, since the client would show GUI_<Reason> beside its dated ban line.
+ * Validates MSG_USER_VALIDATE, which a client sends to come back to character select without its password: reserves the attempt against the address's lockout, reads the account, its bans, lock and session key in one asynchronous query, refuses a key issued to another machine, one renewed longer ago than Login.SessionKeyLifetime as it stands now, a PassKey3 not made from that key and this connection's offer, and an account below Login.MaintenanceBypassLevel with Maintenance and Login.MaintenanceReason while Login.Maintenance is on, kicks any earlier session holding the account, renews the key and the last login in one transaction, then sends MSG_USER_VALIDATE_RSP with Error=0 and MSG_USER_ADMIT_IND; every refusal sends only MSG_USER_VALIDATE_RSP with the error and closes. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds, a permanent one as the latest end the client reads, and no Reason, since the client would show GUI_<Reason> beside its dated ban line.
  */
 
 #include "AccountMgr.h"
@@ -175,6 +175,12 @@ void LoginSession::ContinueValidation(std::shared_ptr<ValidateAttempt> const& at
         FailValidation(attempt.get(), AuthResult::AccountBanned, accountBanned ? "the account is banned" : "the account is locked", false, accountBanned ? row[7].Get<uint64>() : 0);
         return;
     }
+    if (attempt->Settings->Maintenance && attempt->SecurityLevel < attempt->Settings->MaintenanceBypassLevel)
+    {
+        std::string_view reason = attempt->Settings->MaintenanceReason.empty() ? std::string_view("Maintenance") : std::string_view(attempt->Settings->MaintenanceReason);
+        FailValidation(attempt.get(), AuthResult::Maintenance, "the login server is in maintenance", false, 0, reason);
+        return;
+    }
 
     AccountClaim claim = sLoginMgr.ClaimAccount(attempt->AccountId, SharedSelf(), attempt->Settings->DuplicateLogins);
     if (!claim.Claimed)
@@ -254,13 +260,16 @@ void LoginSession::CompleteValidation(std::shared_ptr<ValidateAttempt> const& at
     response.PayingUser = 1;
     SendDmlMessage(response);
 
-    SendAdmission(AdmitStatus::Admitted, 0);
+    LoginMessages::UserAdmitInd admit;
+    admit.Status = 1;
+    admit.PositionInQueue = 0;
+    SendDmlMessage(admit);
 
     LOG_INFO(ValidateLog, "Session {} from {} validated as {} (id {}) on machine {:016X}: sent MSG_USER_VALIDATE_RSP Error=0 and MSG_USER_ADMIT_IND Status=1",
         GetSessionId(), attempt->AddressText, attempt->Username, attempt->AccountId, attempt->MachineId);
 }
 
-void LoginSession::FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate)
+void LoginSession::FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate, std::string_view reasonOverride)
 {
     _authenticating = false;
     if (attempt && !attempt->Finished)
@@ -284,6 +293,8 @@ void LoginSession::FailValidation(ValidateAttempt* attempt, AuthResult result, s
     response.Error = result;
     if (SystemMessages::CarriesBanEnd(static_cast<uint32>(result)))
         response.TimeStamp = SystemMessages::FormatBanEnd(unbanDate);
+    else if (!reasonOverride.empty())
+        response.Reason = std::string(reasonOverride);
     else
         response.Reason = std::string(AuthResults::GetName(result));
     SendDmlMessageDelayedClose(response);
