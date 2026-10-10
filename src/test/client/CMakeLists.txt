@@ -1,11 +1,12 @@
 # Project Ambrose by Imjustchico
-# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the game message table check and the login message table check when the login library is built, with the archive builder and temporary folder helpers the template store check writes its own Root.wad with, the MariaDB client plugins beside it for database checks, runs the whole-archive sweep on its own because it uses every hardware thread, and gives each client test thirty minutes rather than the presets' ten, because a Debug build reads the install about thirteen times slower so a slower machine can take one past ten minutes, and a cancelled test sends the run round again.
+# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the game message table check and the login message table check when the login library is built, with the archive builder and temporary folder helpers the template store check writes its own Root.wad with, the archive patcher the item check edits a copy of the install's Root.wad with, the MariaDB client plugins beside it for database checks, runs the whole-archive sweep on its own because it uses every hardware thread, and gives each client test thirty minutes rather than the presets' ten, because a Debug build reads the install about thirteen times slower so a slower machine can take one past ten minutes, and a cancelled test sends the run round again.
 file(GLOB client_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 if(NOT TARGET login)
     list(FILTER client_test_sources EXCLUDE REGEX "LoginMessageTableClientTest")
 endif()
 add_executable(client_tests ${client_test_sources} "${CMAKE_CURRENT_SOURCE_DIR}/../Main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/MessageRoundTrip.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/KiwadBuilder.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/LogTestDirectory.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/KiwadBuilder.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/KiwadPatcher.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/LogTestDirectory.cpp")
 
 target_include_directories(client_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../mocks")
 
