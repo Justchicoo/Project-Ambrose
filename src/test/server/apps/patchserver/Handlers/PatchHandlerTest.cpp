@@ -25,7 +25,7 @@ namespace
     }
 }
 
-TEST(PatchHandlerTest, HandshakeThenV2InEnglishGetsTheSizeAndCrcOfTheBinOnDisk)
+TEST(PatchFileListTest, HandshakeThenV2InEnglishGetsTheSizeAndCrcOfTheBinOnDisk)
 {
     PatchServerHarness server;
     std::unique_ptr<FakeSessionClient> const client = server.Connect();
@@ -46,7 +46,7 @@ TEST(PatchHandlerTest, HandshakeThenV2InEnglishGetsTheSizeAndCrcOfTheBinOnDisk)
     EXPECT_FALSE(client->IsClosed());
 }
 
-TEST(PatchHandlerTest, ProbeWithoutSessionAcceptStillGetsAReply)
+TEST(PatchFileListTest, ProbeWithoutSessionAcceptStillGetsAReply)
 {
     PatchServerHarness server;
     std::unique_ptr<FakeSessionClient> const client = server.Connect();
@@ -67,7 +67,7 @@ TEST(PatchHandlerTest, ProbeWithoutSessionAcceptStillGetsAReply)
     EXPECT_EQ(reply->Locale, "");
 }
 
-TEST(PatchHandlerTest, ListFileUrlNamesTheRevisionFolderUnderThePublicAddress)
+TEST(PatchFileListTest, ListFileUrlNamesTheRevisionFolderUnderThePublicAddress)
 {
     PatchServerHarness server;
     std::unique_ptr<FakeSessionClient> const client = server.Connect();
@@ -78,7 +78,7 @@ TEST(PatchHandlerTest, ListFileUrlNamesTheRevisionFolderUnderThePublicAddress)
     EXPECT_EQ(reply->UrlPrefix, std::string(BaseUrl) + "/V_r806919.Wizard_1_610");
 }
 
-TEST(PatchHandlerTest, VersionOneRequestGetsTheSameReplyWithoutALocale)
+TEST(PatchFileListTest, VersionOneRequestGetsTheSameReplyWithoutALocale)
 {
     PatchServerHarness server;
     std::unique_ptr<FakeSessionClient> const client = server.Connect();
@@ -94,7 +94,7 @@ TEST(PatchHandlerTest, VersionOneRequestGetsTheSameReplyWithoutALocale)
     EXPECT_EQ(reply->ListFileUrl, std::string(BaseUrl) + "/V_r806919.Wizard_1_610/Windows/LatestFileList.bin");
 }
 
-TEST(PatchHandlerTest, UnlistedLocaleIsStillAnsweredAndEchoed)
+TEST(PatchFileListTest, UnlistedLocaleIsStillAnsweredAndEchoed)
 {
     PatchServerHarness server;
     EXPECT_FALSE(sPatchMgr.GetSettings()->SupportsLocale("Klingon"));
@@ -105,7 +105,7 @@ TEST(PatchHandlerTest, UnlistedLocaleIsStillAnsweredAndEchoed)
     EXPECT_EQ(reply->Locale, "Klingon");
 }
 
-TEST(PatchHandlerTest, NoManifestLeavesTheRequestUnansweredAndTheSessionOpen)
+TEST(PatchFileListTest, NoManifestLeavesTheRequestUnansweredAndTheSessionOpen)
 {
     PatchServerHarness server;
     sPatchMgr.Reset();
