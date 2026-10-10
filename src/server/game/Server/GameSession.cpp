@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, chat, outbound instance updates with the moves and walking states of the objects that walk a path, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -8,6 +8,7 @@
 #include "CharacterNameMgr.h"
 #include "CharacterRepository.h"
 #include "CoreObjectSerializer.h"
+#include "DuelMgr.h"
 #include "Frame.h"
 #include "GameMessageTable.h"
 #include "ItemMgr.h"
@@ -999,6 +1000,80 @@ void GameSession::ShowStateOf(uint64 worldGuid, uint32 state)
     SendDmlMessage(message);
 }
 
+void GameSession::UpdateDuels()
+{
+    if (!_mapId)
+    {
+        _shownDuels.clear();
+        return;
+    }
+    std::erase_if(_shownDuels, [](uint64 id) { return sDuelMgr.Find(id) == nullptr; });
+    for (Duel const* duel : sDuelMgr.InMap(*_mapId))
+    {
+        uint64 const id = duel->GetId();
+        if (duel->IsEnded())
+        {
+            if (_shownDuels.erase(id) == 0)
+                continue;
+            GameMessages::CombatMatchResult result;
+            result.DuelId = id;
+            result.WinningTeam = duel->GetWinningTeam();
+            SendDmlMessage(result);
+            GameMessages::CombatPhase phase;
+            phase.DuelId = id;
+            phase.NewPhase = static_cast<uint8>(DuelPhase::Ended);
+            phase.PlayerId = _worldGuid;
+            SendDmlMessage(phase);
+            GameMessages::EndDuel end;
+            end.DuelId = id;
+            SendDmlMessage(end);
+            for (DuelParticipant const& participant : duel->GetParticipants())
+                ShowStateOf(participant.Combatant.OwnerId, DuelStates::Idle);
+            LOG_INFO("server.gamesession", "Session {}'s wizard {} was shown duel {} end", GetSessionId(), _worldGuid, id);
+            continue;
+        }
+        if (_shownDuels.contains(id) || !Sees(id))
+            continue;
+        std::vector<DuelParticipant> const& participants = duel->GetParticipants();
+        std::vector<std::string> const& encoded = duel->GetEncodedParticipants();
+        bool const ready = encoded.size() == participants.size() && std::all_of(participants.begin(), participants.end(), [this](DuelParticipant const& participant)
+        {
+            return participant.Combatant.OwnerId == _worldGuid || Sees(participant.Combatant.OwnerId);
+        });
+        if (!ready)
+            continue;
+        if (DuelParticipant const* const own = duel->FindParticipant(_worldGuid))
+        {
+            GameMessages::Aggro aggro;
+            aggro.GlobalId = _worldGuid;
+            aggro.LocX = own->Place.Position.X;
+            aggro.LocY = own->Place.Position.Y;
+            aggro.LocZ = own->Place.Position.Z;
+            aggro.Yaw = own->Place.Yaw;
+            aggro.SigilGlobalId = id;
+            aggro.SigilX = duel->GetPosition().X;
+            aggro.SigilY = duel->GetPosition().Y;
+            aggro.SigilZ = duel->GetPosition().Z;
+            aggro.SigilYaw = duel->GetYaw();
+            SendDmlMessage(aggro);
+        }
+        for (std::string const& data : encoded)
+        {
+            GameMessages::CombatAdd add;
+            add.DuelId = id;
+            add.ParticipantData = data;
+            SendDmlMessage(add);
+        }
+        for (DuelParticipant const& participant : participants)
+        {
+            ShowStateOf(participant.Combatant.OwnerId, DuelStates::Sigil);
+            ShowStateOf(participant.Combatant.OwnerId, DuelStates::Stationary);
+        }
+        _shownDuels.insert(id);
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} was shown duel {} with {} participant(s)", GetSessionId(), _worldGuid, id, participants.size());
+    }
+}
+
 bool GameSession::TakeArrival() noexcept
 {
     if (IsLinkDead() && !_linkDeadNotified)
@@ -1744,6 +1819,9 @@ void GameSession::LeaveWorld()
     _wizBangId = 0;
     _pendingWizBang.reset();
     _sight.Clear();
+    _shownDuels.clear();
+    if (_mapId && sDuelMgr.EndFor(_worldGuid, Duel::MonsterTeam))
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} left the world mid-duel, which ends it", GetSessionId(), _worldGuid);
     if (_player)
     {
         SaveStats();

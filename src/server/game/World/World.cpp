@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means, until Clear forgets it along with the sessions, since a later thread may be given the same id; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still seeing them, and each wizard's view is brought up to date from one grid of its instance's objects and wizards, so it is shown what came within the visibility distance and loses what went past it and the hysteresis band, an arrival meeting those already there, each wizard's friends are told when it comes online, goes link-dead, changes zone or leaves, and a wizard that jumped is shown entering its jumping state to the others in its instance who see it, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it that does not ignore it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance that sees it. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, the game effects a wizard gained or lost shown to it and to the wizards in its instance, and only while an operator has asked for a profile records a bounded Chrome trace of them; a wizard whose client drops without logging out stays in its instance as link-dead, shown to the others standing still with MSG_ZOMBIE_PLAYER, until its session's link-dead time passes or the same character attaches again and takes its place.
+ * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means, until Clear forgets it along with the sessions, since a later thread may be given the same id; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still seeing them, and each wizard's view is brought up to date from one grid of its instance's objects and wizards, so it is shown what came within the visibility distance and loses what went past it and the hysteresis band, an arrival meeting those already there, each wizard's friends are told when it comes online, goes link-dead, changes zone or leaves, and a wizard that jumped is shown entering its jumping state to the others in its instance who see it, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it that does not ignore it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance that sees it. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, the game effects a wizard gained or lost shown to it and to the wizards in its instance, and only while an operator has asked for a profile records a bounded Chrome trace of them; a wizard whose client drops without logging out stays in its instance as link-dead, shown to the others standing still with MSG_ZOMBIE_PLAYER, until its session's link-dead time passes or the same character attaches again and takes its place. Each tick shows every wizard the duels it can now see start and end, then takes each ended duel's circle and creatures out of its instance.
  */
 
 #include "World.h"
 #include "ChatMgr.h"
+#include "DuelMgr.h"
 #include "GameMessages.h"
 #include "GameSession.h"
 #include "InstanceSight.h"
@@ -15,6 +16,7 @@
 #include "PlayerStates.h"
 #include "Settings.h"
 #include "SocialMgr.h"
+#include "SpawnerMgr.h"
 #include "SpeechMessages.h"
 #include "SpeechRelay.h"
 #include "ScriptMgr.h"
@@ -156,6 +158,30 @@ namespace
 
             LOG_DEBUG("server.world", "Session {} changed wizard {}'s wizbang to {} for {} wizard(s) in zone instance {}", sender->GetSessionId(),
                 sender->GetWorldGuid(), *wizBangId, recipients, *mapId);
+        }
+    }
+
+    void RelayDuels(std::vector<std::shared_ptr<GameSession>> const& sessions)
+    {
+        for (std::shared_ptr<GameSession> const& session : sessions)
+            if (session->IsOpen())
+                session->UpdateDuels();
+        std::vector<Duel> const ended = sDuelMgr.TakeEnded();
+        if (ended.empty())
+            return;
+        SpawnerContext const context = sSpawnerMgr.WorldContext(std::chrono::steady_clock::now(), std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay")));
+        for (Duel const& duel : ended)
+        {
+            Map* const map = sMapMgr.Find(duel.GetMapId());
+            if (!map)
+                continue;
+            MapObjectChanges changes;
+            for (DuelParticipant const& participant : duel.GetParticipants())
+                if (!participant.Combatant.IsPlayer)
+                    SpawnerMgr::Despawn(*map, participant.Combatant.OwnerId, std::nullopt, 0, context, changes);
+            SpawnerMgr::Despawn(*map, duel.GetId(), std::nullopt, 0, context, changes);
+            LOG_INFO("server.world", "Duel {} in instance {} ended, team {} winning; its circle and creatures were taken away", duel.GetId(), duel.GetMapId(), duel.GetWinningTeam());
+            sMapMgr.QueueChanges(std::move(changes));
         }
     }
 
@@ -574,6 +600,7 @@ void World::Update(std::chrono::milliseconds diff)
     RelayJumps(sessions);
     RelayWizBangs(sessions);
     RelayGameEffects(sessions);
+    RelayDuels(sessions);
     auto const meetingEnded = std::chrono::steady_clock::now();
     measured[4] = std::chrono::duration_cast<std::chrono::nanoseconds>(meetingEnded - meetingStarted);
     RecordProfileEvent("movement", meetingStarted, meetingEnded);

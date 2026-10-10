@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens every GameData archive in name order and reads the gamedata.bin of each that holds one as a versionable object, the form the client keeps zone data in. The decoder names every part of a class the dump does not list by its path, so an object list entry that came back empty is matched to the part it was and reported as a skipped object, while an entry of one of the sigil classes the dump does not list is read as the CoreObjectInfo it derives from, its inherited fields filled by their hashes and its own left out, and written with its own class name, which its hash proves, a part deeper inside an entry is reported as a skipped part of a row that is still written, and any other problem the decoder names is an error, because it means the dump and the data disagree. A zone is known by its own m_zoneName, which is how the client is told where it is and how it finds the archive, so a name whose archive is not the one it was read from is an error rather than a second guess. Spawn requirements are kept as the versionable bytes the zone data holds them in, written again from the decoded object, so a stored client object stays in the client's own form. A zone's volumes.xml and triggers.xml are BINd files whose classes the dump does not list, so each field is read by its name, and by its hash where no name fits yet, and a field that is missing or of another type fails the file rather than giving a row a default, where a null pointer is a value and a list entry of a class nothing describes, or any issue other than an unknown class, fails it too; a result of a class nothing describes keeps its place with the hash the file gives it, and a part deeper inside a kept entry is reported as a skipped part as in gamedata.bin. A zone's spawnData.xml is a BINd of classes the dump does list, so it is read through the spawn views, each spawner's requirements and each item's spawn requirements kept as versionable bytes the same way, and an item that is not a SpawnItem placing a SpawnObjectInfo fails the file.
+ * Opens every GameData archive in name order and reads the gamedata.bin of each that holds one as a versionable object, the form the client keeps zone data in. The decoder names every part of a class the dump does not list by its path, so an object list entry that came back empty is matched to the part it was and reported as a skipped object, while an entry of one of the sigil classes the dump does not list is read as the CoreObjectInfo it derives from, its inherited fields filled by their hashes and its own left out, and written with its own class name, which its hash proves, a part deeper inside an entry is reported as a skipped part of a row that is still written, and any other problem the decoder names is an error, because it means the dump and the data disagree. A zone is known by its own m_zoneName, which is how the client is told where it is and how it finds the archive, so a name whose archive is not the one it was read from is an error rather than a second guess. Spawn requirements are kept as the versionable bytes the zone data holds them in, written again from the decoded object, so a stored client object stays in the client's own form. A zone's volumes.xml and triggers.xml are BINd files whose classes the dump does not list, so each field is read by its name, and by its hash where no name fits yet, and a field that is missing or of another type fails the file rather than giving a row a default, where a null pointer is a value and a list entry of a class nothing describes, or any issue other than an unknown class, fails it too; a result of a class nothing describes keeps its place with the hash the file gives it, and a part deeper inside a kept entry is reported as a skipped part as in gamedata.bin. A zone's spawnData.xml is a BINd of classes the dump does list, so it is read through the spawn views, each spawner's requirements and each item's spawn requirements kept as versionable bytes the same way, and an item that is not a SpawnItem placing a SpawnObjectInfo fails the file. A sigil entry's m_templateName, which the dump does not list, is kept as the text its skipped value holds, naming the sigil record the placement uses.
  */
 
 #include "ZoneExtractor.h"
@@ -8,6 +8,7 @@
 #include "ConfigMgr.h"
 #include "KiwadArchive.h"
 #include "ObjectSerializer.h"
+#include "SkippedValue.h"
 #include "StringHash.h"
 #include "ZoneViews.h"
 
@@ -424,6 +425,7 @@ void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view arc
 {
     SerializerOptions options = ZoneDataOptions();
     options.ReadUnknownClassAs = catalog ? catalog->FindClass("class CoreObjectInfo") : nullptr;
+    options.KeepSkippedValues = true;
     DecodeResult decoded = ObjectSerializer::Decode(catalog, data, options);
     if (!decoded.Ok() || !decoded.Object)
     {
@@ -449,7 +451,9 @@ void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view arc
         return;
     }
 
+    static uint32 const sigilTemplateName = StringHash::PropertyHash("std::string", "m_templateName");
     std::vector<std::optional<uint32>> skippedEntries(root->GetObjects().size());
+    std::vector<std::string> sigilTemplates(root->GetObjects().size());
     std::size_t const errorsBefore = extraction.ErrorCount;
     for (DecodeIssue const& issue : decoded.Issues)
     {
@@ -457,7 +461,12 @@ void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view arc
         bool const ownPropertyOfReadEntry = issue.Kind == DecodeIssueKind::UnknownProperty && part && part->WholeEntry && part->Index < skippedEntries.size()
             && skippedEntries[part->Index];
         if (ownPropertyOfReadEntry)
+        {
+            if (issue.Hash == sigilTemplateName)
+                if (std::optional<std::string> text = SkippedValue::Text(issue.Bits, issue.Value))
+                    sigilTemplates[part->Index] = std::move(*text);
             continue;
+        }
         if (!IsUnknownClassIssue(issue.Kind) || !part || part->Index >= skippedEntries.size())
         {
             extraction.AddError(fmt::format("{}: {} at {}: {}", path, ObjectSerializer::GetIssueName(issue.Kind), issue.Path, issue.Detail));
@@ -517,7 +526,10 @@ void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view arc
             continue;
         }
         if (sigil)
+        {
             row->ClassName = *sigil;
+            row->SigilTemplate = std::move(sigilTemplates[index]);
+        }
         zone.Objects.push_back(std::move(*row));
     }
     extraction.Zones.push_back(std::move(zone));
