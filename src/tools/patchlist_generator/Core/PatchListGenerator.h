@@ -9,6 +9,7 @@
 #include "LatestFileList.h"
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -31,8 +32,10 @@ namespace PatchListGenerator
         std::size_t FilesScanned = 0;
     };
 
+    using OnDisk = std::function<bool(std::string const& package, LatestFileList::FileRecord const& record)>;
+
     std::optional<Result> Generate(Options const& options, std::string& error);
-    std::string Diff(LatestFileList const& generated, LatestFileList const& reference);
+    std::string Diff(LatestFileList const& generated, LatestFileList const& reference, OnDisk const& onDisk = {});
 }
 
 #endif

@@ -26,8 +26,10 @@ namespace
 Options:
   --client <dir>       the Wizard101 installation (default: AMBROSE_CLIENT_DIR)
   --out <dir>          output directory (default: patch-output)
-  --rules <file>       optional Src|Tar|Package|FileType rules file
-  --reference <file>   compare generated fields with a supplied LatestFileList.xml
+  --rules <file>       Src|Tar|Package|FileType and skip|pattern rules (default: patchlist_generator.conf,
+                       else patchlist_generator.conf.dist, beside this program)
+  --reference <file>   compare with a LatestFileList.bin or .xml, such as the install's own
+                       PatchInfo/LatestFileList.bin, then copy its FileType and CompressedHeaderSize
   --help               print this text
 )";
 
@@ -100,6 +102,14 @@ int main(int argc, char** argv)
         std::cerr << "patchlist_generator: --client or AMBROSE_CLIENT_DIR is required\n";
         return BadUsage;
     }
+
+    if (!arguments->Rules)
+        for (char const* name : { "patchlist_generator.conf", "patchlist_generator.conf.dist" })
+            if (std::filesystem::path const candidate = Ambrose::GetExecutableDirectory() / name; std::filesystem::is_regular_file(candidate))
+            {
+                arguments->Rules = candidate;
+                break;
+            }
 
     PatchListGenerator::Options options{ *arguments->Client, arguments->Output, arguments->Rules, arguments->Reference };
     std::optional<PatchListGenerator::Result> result = PatchListGenerator::Generate(options, error);

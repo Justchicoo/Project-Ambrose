@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Walks installation files, derives patch packages and header metrics, and writes XML and binary manifests.
+ * Walks an installation through Src and Tar rules, launcher banks and skip patterns, derives packages, file types and header metrics, writes XML and binary manifests, and diffs them against a reference list.
  */
 
 #include "PatchListGenerator.h"
 
+#include "Compression.h"
 #include "Crc32.h"
 #include "KiwadHeader.h"
 #include "ConfigMgr.h"
@@ -15,6 +16,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -28,6 +30,8 @@ namespace
 {
     using json = nlohmann::json;
 
+    constexpr uint32 CompressedFrame = 12;
+
     struct Rule
     {
         std::string Src;
@@ -36,13 +40,26 @@ namespace
         uint32 Type = 0;
     };
 
+    struct Rules
+    {
+        std::map<std::string, Rule> ByDisk;
+        std::vector<std::string> Skip;
+    };
+
     struct CachedFile
     {
         uintmax_t Size = 0;
         intmax_t Time = 0;
         uint32 CRC = 0;
-        uint32 HeaderSize = 0;
-        uint32 HeaderCRC = 0;
+        uint32 WadHeaderSize = 0;
+        uint32 WadHeaderCRC = 0;
+        uint32 Compressed = 0;
+    };
+
+    struct Found
+    {
+        std::filesystem::path Path;
+        std::string Disk;
     };
 
     std::string RelativeName(std::filesystem::path const& path, std::filesystem::path const& root)
@@ -62,9 +79,69 @@ namespace
         return value.substr(first, last - first + 1);
     }
 
-    std::map<std::string, Rule> ReadRules(std::optional<std::filesystem::path> const& path, std::string& error)
+    std::string Lower(std::string value)
     {
-        std::map<std::string, Rule> rules;
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return value;
+    }
+
+    bool GlobMatch(std::string_view pattern, std::string_view name)
+    {
+        if (pattern.empty())
+            return name.empty();
+        if (pattern.starts_with("**"))
+        {
+            std::string_view const rest = pattern.substr(pattern.size() > 2 && pattern[2] == '/' ? 3 : 2);
+            if (rest.empty())
+                return true;
+            for (std::size_t index = 0; index <= name.size(); ++index)
+                if ((index == 0 || name[index - 1] == '/') && GlobMatch(rest, name.substr(index)))
+                    return true;
+            return false;
+        }
+        if (pattern[0] == '*')
+        {
+            for (std::size_t index = 0; index <= name.size(); ++index)
+            {
+                if (GlobMatch(pattern.substr(1), name.substr(index)))
+                    return true;
+                if (index < name.size() && name[index] == '/')
+                    return false;
+            }
+            return false;
+        }
+        if (name.empty() || (pattern[0] != '?' && std::tolower(static_cast<unsigned char>(pattern[0])) != std::tolower(static_cast<unsigned char>(name[0]))))
+            return false;
+        if (pattern[0] == '?' && name[0] == '/')
+            return false;
+        return GlobMatch(pattern.substr(1), name.substr(1));
+    }
+
+    std::string DiskName(std::string const& src, std::string const& tar, std::string const& package)
+    {
+        if (package == "PatchClient")
+            return "PatchClient/" + (tar.empty() ? std::filesystem::path(src).filename().generic_string() : tar);
+        return tar.empty() ? src : tar;
+    }
+
+    std::vector<std::string> SplitFields(std::string const& line)
+    {
+        std::vector<std::string> fields;
+        std::size_t start = 0;
+        while (start <= line.size())
+        {
+            std::size_t end = line.find('|', start);
+            fields.push_back(Trim(line.substr(start, end == std::string::npos ? std::string::npos : end - start)));
+            if (end == std::string::npos)
+                break;
+            start = end + 1;
+        }
+        return fields;
+    }
+
+    Rules ReadRules(std::optional<std::filesystem::path> const& path, std::string& error)
+    {
+        Rules rules;
         if (!path)
             return rules;
         std::ifstream input(*path);
@@ -81,25 +158,21 @@ namespace
             line = Trim(std::move(line));
             if (line.empty() || line.starts_with('#'))
                 continue;
-            std::vector<std::string> fields;
-            std::size_t start = 0;
-            while (start <= line.size())
+            std::vector<std::string> fields = SplitFields(line);
+            if (fields.size() == 2 && fields[0] == "skip" && !fields[1].empty())
             {
-                std::size_t end = line.find('|', start);
-                fields.push_back(Trim(line.substr(start, end == std::string::npos ? std::string::npos : end - start)));
-                if (end == std::string::npos)
-                    break;
-                start = end + 1;
+                rules.Skip.push_back(fields[1]);
+                continue;
             }
             if (fields.size() != 4)
             {
-                error = fmt::format("rules file {} line {} needs src|tar|package|type", ConfigMgr::PathToUtf8(*path), lineNumber);
+                error = fmt::format("rules file {} line {} needs src|tar|package|type or skip|pattern", ConfigMgr::PathToUtf8(*path), lineNumber);
                 return {};
             }
             try
             {
                 Rule rule{ fields[0], fields[1], fields[2], static_cast<uint32>(std::stoul(fields[3])) };
-                rules[rule.Src] = std::move(rule);
+                rules.ByDisk[DiskName(rule.Src, rule.Tar, rule.Package)] = std::move(rule);
             }
             catch (std::exception const&)
             {
@@ -124,8 +197,10 @@ namespace
         {
             return {};
         }
+        if (!document.is_object() || document.value("version", 0) != 2 || !document.contains("files") || !document["files"].is_object())
+            return {};
         std::map<std::string, CachedFile> result;
-        for (auto const& [name, value] : document.items())
+        for (auto const& [name, value] : document["files"].items())
         {
             if (!value.is_object())
                 continue;
@@ -133,8 +208,9 @@ namespace
                 value.value("size", uintmax_t{ 0 }),
                 value.value("time", intmax_t{ 0 }),
                 value.value("crc", uint32{ 0 }),
-                value.value("header_size", uint32{ 0 }),
-                value.value("header_crc", uint32{ 0 })
+                value.value("wad_header_size", uint32{ 0 }),
+                value.value("wad_header_crc", uint32{ 0 }),
+                value.value("compressed", uint32{ 0 })
             };
         }
         return result;
@@ -142,15 +218,17 @@ namespace
 
     bool WriteCache(std::filesystem::path const& path, std::map<std::string, CachedFile> const& cache, std::string& error)
     {
-        json document = json::object();
+        json files = json::object();
         for (auto const& [name, value] : cache)
-            document[name] = {
+            files[name] = {
                 { "size", value.Size },
                 { "time", value.Time },
                 { "crc", value.CRC },
-                { "header_size", value.HeaderSize },
-                { "header_crc", value.HeaderCRC }
+                { "wad_header_size", value.WadHeaderSize },
+                { "wad_header_crc", value.WadHeaderCRC },
+                { "compressed", value.Compressed }
             };
+        json const document = { { "version", 2 }, { "files", std::move(files) } };
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
         if (!output)
         {
@@ -164,6 +242,11 @@ namespace
             return false;
         }
         return true;
+    }
+
+    bool IsWad(std::string_view name)
+    {
+        return name.size() >= 4 && (name.ends_with(".wad") || name.ends_with(".WAD"));
     }
 
     std::optional<CachedFile> ScanFile(std::filesystem::path const& path, std::string const& name, std::map<std::string, CachedFile>& cache,
@@ -196,8 +279,8 @@ namespace
             error = fmt::format("cannot read {}", ConfigMgr::PathToUtf8(path));
             return std::nullopt;
         }
-        CachedFile result{ size, time, Crc32::ComputeClient(bytes), static_cast<uint32>(size), Crc32::ComputeClient(bytes) };
-        if (path.extension() == ".wad" || path.extension() == ".WAD")
+        CachedFile result{ size, time, Crc32::ComputeClient(bytes), 0, 0, 0 };
+        if (IsWad(name))
         {
             std::optional<uint64> toc = KiwadHeader::MeasureTocLength(bytes);
             if (!toc || *toc > bytes.size() || *toc > UINT32_MAX)
@@ -205,25 +288,22 @@ namespace
                 error = fmt::format("{} is not a valid KIWAD archive", ConfigMgr::PathToUtf8(path));
                 return std::nullopt;
             }
-            result.HeaderSize = static_cast<uint32>(*toc);
-            result.HeaderCRC = Crc32::ComputeClient(std::span<uint8 const>(bytes.data(), *toc));
+            result.WadHeaderSize = static_cast<uint32>(*toc);
+            result.WadHeaderCRC = Crc32::ComputeClient(std::span<uint8 const>(bytes.data(), *toc));
         }
+        else
+            result.Compressed = static_cast<uint32>(Ambrose::Compression::Deflate(bytes).size() + CompressedFrame);
         cache[name] = result;
         return result;
-    }
-
-    bool IsWad(std::string_view name)
-    {
-        return name.size() >= 4 && (name.ends_with(".wad") || name.ends_with(".WAD"));
     }
 
     std::string PackageName(std::string const& name)
     {
         if (name == "Data/GameData/Root.wad")
             return "Base";
-        if (name.starts_with("Data/GameData/") && IsWad(name))
+        if (name.starts_with("Data/GameData/") && IsWad(name) && name.find('/', 14) == std::string::npos)
             return std::filesystem::path(name).stem().string();
-        if (name.starts_with("PatchClient/") || name.starts_with("Windows/PatchClient/"))
+        if (name.starts_with("PatchClient/"))
             return "PatchClient";
         return "Base";
     }
@@ -246,17 +326,89 @@ namespace
         return true;
     }
 
-    LatestFileList::FileRecord MakeRecord(std::string const& name, CachedFile const& file, Rule const* rule)
+    std::optional<std::string> LauncherBank(std::filesystem::path const& client)
+    {
+        for (char const* bank : { "BankB", "BankA" })
+            if (std::filesystem::is_directory(client / "PatchClient" / bank))
+                return std::string(bank);
+        return std::nullopt;
+    }
+
+    std::optional<std::string> DiskNameOf(std::string const& relative, std::optional<std::string> const& bank)
+    {
+        if (!bank || !relative.starts_with("PatchClient/"))
+            return relative;
+        std::string const prefix = "PatchClient/" + *bank + "/";
+        if (!relative.starts_with(prefix))
+            return std::nullopt;
+        return "PatchClient/" + relative.substr(prefix.size());
+    }
+
+    std::filesystem::path PathOf(std::filesystem::path const& client, std::string const& disk, std::optional<std::string> const& bank)
+    {
+        if (bank && disk.starts_with("PatchClient/"))
+            return client / "PatchClient" / *bank / ConfigMgr::PathFromUtf8(disk.substr(12));
+        return client / ConfigMgr::PathFromUtf8(disk);
+    }
+
+    void FillMetrics(LatestFileList::FileRecord& record, CachedFile const& file)
+    {
+        record.Size = static_cast<uint32>(file.Size);
+        record.CRC = file.CRC;
+        record.HeaderSize = 0;
+        record.HeaderCRC = 0;
+        if (record.FileType == 3 || record.FileType == 5)
+        {
+            record.HeaderSize = file.WadHeaderSize;
+            record.HeaderCRC = file.WadHeaderCRC;
+        }
+        else if (record.FileType == 4)
+            record.HeaderSize = file.Compressed;
+    }
+
+    LatestFileList::FileRecord MakeRecord(std::string const& disk, std::string const& package, CachedFile const& file, Rule const* rule, bool sidecar)
     {
         LatestFileList::FileRecord record;
-        record.SrcFileName = name;
-        record.TarFileName = rule ? rule->Tar : name;
-        record.FileType = rule && rule->Type != 0 ? rule->Type : (IsWad(name) ? 3u : 1u);
-        record.Size = static_cast<uint32>(file.Size);
-        record.HeaderSize = file.HeaderSize;
-        record.HeaderCRC = file.HeaderCRC;
-        record.CRC = file.CRC;
+        if (rule)
+        {
+            record.SrcFileName = rule->Src;
+            record.TarFileName = rule->Tar;
+        }
+        else
+        {
+            record.SrcFileName = disk;
+            record.TarFileName = package == "PatchClient" ? disk.substr(12) : std::string();
+        }
+        if (rule && rule->Type != 0)
+            record.FileType = rule->Type;
+        else if (IsWad(disk))
+            record.FileType = sidecar ? 5u : 3u;
+        else
+            record.FileType = 1u;
+        FillMetrics(record, file);
         return record;
+    }
+
+    std::optional<LatestFileList> ReadReference(std::filesystem::path const& path, std::string& error)
+    {
+        std::ifstream input(path, std::ios::binary);
+        if (!input)
+        {
+            error = fmt::format("cannot open reference {}", ConfigMgr::PathToUtf8(path));
+            return std::nullopt;
+        }
+        std::vector<uint8> bytes((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        try
+        {
+            if (Lower(path.extension().string()) == ".bin")
+                return LatestFileList::ReadBinary(bytes);
+            return LatestFileListXml::Read(std::string_view(reinterpret_cast<char const*>(bytes.data()), bytes.size()));
+        }
+        catch (std::exception const& exception)
+        {
+            error = fmt::format("cannot read reference {}: {}", ConfigMgr::PathToUtf8(path), exception.what());
+            return std::nullopt;
+        }
     }
 }
 
@@ -281,9 +433,16 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
         return std::nullopt;
     }
 
-    std::map<std::string, Rule> const rules = ReadRules(options.Rules, error);
+    Rules const rules = ReadRules(options.Rules, error);
     if (!error.empty())
         return std::nullopt;
+    std::optional<LatestFileList> reference;
+    if (options.Reference)
+    {
+        reference = ReadReference(*options.Reference, error);
+        if (!reference)
+            return std::nullopt;
+    }
     std::filesystem::path const revisionDirectory = options.Output / ("V_" + revision);
     std::error_code directoryError;
     std::filesystem::create_directories(revisionDirectory, directoryError);
@@ -294,10 +453,12 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
     }
 
     std::map<std::string, CachedFile> cache = ReadCache(options.Output / ".patchlist-cache.json");
+    std::optional<std::string> const bank = LauncherBank(options.Client);
     Result result;
     result.Revision = revision;
     result.OutputDirectory = revisionDirectory;
     std::map<std::string, std::vector<LatestFileList::FileRecord>> packages;
+    std::map<std::string, CachedFile> scanned;
     std::error_code iteratorError;
     for (std::filesystem::recursive_directory_iterator it(options.Client, iteratorError), end; it != end && !iteratorError; it.increment(iteratorError))
     {
@@ -309,17 +470,22 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
         }
         if (!it->is_regular_file())
             continue;
-        std::string const name = RelativeName(it->path(), options.Client);
-        if (IsOwnManifest(name))
+        std::string const relative = RelativeName(it->path(), options.Client);
+        std::optional<std::string> const disk = DiskNameOf(relative, bank);
+        if (!disk || IsOwnManifest(*disk) || Lower(*disk).ends_with(".wad.utd"))
             continue;
-        std::string package = PackageName(name);
-        auto const rule = rules.find(name);
-        if (rule != rules.end() && !rule->second.Package.empty())
-            package = rule->second.Package;
-        std::optional<CachedFile> file = ScanFile(it->path(), name, cache, result.CacheHits, error);
+        if (std::any_of(rules.Skip.begin(), rules.Skip.end(), [&](std::string const& pattern) { return GlobMatch(pattern, *disk); }))
+            continue;
+        auto const rule = rules.ByDisk.find(*disk);
+        Rule const* const matched = rule == rules.ByDisk.end() ? nullptr : &rule->second;
+        std::string const package = matched && !matched->Package.empty() ? matched->Package : PackageName(*disk);
+        std::optional<CachedFile> file = ScanFile(it->path(), *disk, cache, result.CacheHits, error);
         if (!file)
             return std::nullopt;
-        packages[package].push_back(MakeRecord(name, *file, rule == rules.end() ? nullptr : &rule->second));
+        std::filesystem::path sidecar = it->path();
+        sidecar += ".utd";
+        packages[package].push_back(MakeRecord(*disk, package, *file, matched, std::filesystem::exists(sidecar)));
+        scanned[*disk] = *file;
         ++result.FilesScanned;
     }
     if (iteratorError)
@@ -333,13 +499,33 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
     {
         std::sort(records.begin(), records.end(), [](auto const& left, auto const& right) { return left.SrcFileName < right.SrcFileName; });
         result.Manifest.Packages.push_back({ name, std::move(records) });
-        result.Manifest.TableOrder.push_back(name);
     }
     std::sort(result.Manifest.Packages.begin(), result.Manifest.Packages.end(), [](auto const& left, auto const& right) { return left.Name < right.Name; });
-    result.Manifest.TableOrder.clear();
     for (auto const& package : result.Manifest.Packages)
         result.Manifest.TableOrder.push_back(package.Name);
     result.Manifest.TableOrder.push_back("About");
+
+    if (reference)
+    {
+        std::filesystem::path const client = options.Client;
+        std::cout << Diff(result.Manifest, *reference, [&](std::string const& package, LatestFileList::FileRecord const& record) {
+            return std::filesystem::is_regular_file(PathOf(client, DiskName(record.SrcFileName, record.TarFileName, package), bank));
+        });
+        std::map<std::string, LatestFileList::FileRecord const*> known;
+        for (auto const& package : reference->Packages)
+            for (auto const& record : package.Records)
+                known[package.Name + "\n" + record.SrcFileName] = &record;
+        for (auto& package : result.Manifest.Packages)
+            for (auto& record : package.Records)
+            {
+                auto const found = known.find(package.Name + "\n" + record.SrcFileName);
+                if (found == known.end())
+                    continue;
+                record.FileType = found->second->FileType;
+                record.CompressedHeaderSize = found->second->CompressedHeaderSize;
+                FillMetrics(record, scanned.at(DiskName(record.SrcFileName, record.TarFileName, package.Name)));
+            }
+    }
 
     std::ofstream xml(revisionDirectory / "LatestFileList.xml", std::ios::binary | std::ios::trunc);
     std::ofstream binary(revisionDirectory / "LatestFileList.bin", std::ios::binary | std::ios::trunc);
@@ -353,58 +539,88 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
     binary.write(reinterpret_cast<char const*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     if (!xml || !binary || !WriteCache(options.Output / ".patchlist-cache.json", cache, error))
         return std::nullopt;
-
-    if (options.Reference)
-    {
-        std::ifstream reference(*options.Reference);
-        if (!reference)
-        {
-            error = fmt::format("cannot open reference {}", ConfigMgr::PathToUtf8(*options.Reference));
-            return std::nullopt;
-        }
-        std::string const text((std::istreambuf_iterator<char>(reference)), std::istreambuf_iterator<char>());
-        LatestFileList const expected = LatestFileListXml::Read(text);
-        std::cout << Diff(result.Manifest, expected);
-    }
     return result;
 }
 
-std::string PatchListGenerator::Diff(LatestFileList const& generated, LatestFileList const& reference)
+std::string PatchListGenerator::Diff(LatestFileList const& generated, LatestFileList const& reference, OnDisk const& onDisk)
 {
     std::ostringstream output;
-    std::map<std::string, LatestFileList::FileRecord const*> actual;
-    std::map<std::string, LatestFileList::FileRecord const*> expected;
+    std::map<std::string, std::pair<std::string, LatestFileList::FileRecord const*>> actual;
+    std::map<std::string, std::pair<std::string, LatestFileList::FileRecord const*>> expected;
     for (auto const& package : generated.Packages)
         for (auto const& record : package.Records)
-            actual[package.Name + "\n" + record.SrcFileName] = &record;
+            actual[package.Name + "\n" + record.SrcFileName] = { package.Name, &record };
     for (auto const& package : reference.Packages)
         for (auto const& record : package.Records)
-            expected[package.Name + "\n" + record.SrcFileName] = &record;
+            expected[package.Name + "\n" + record.SrcFileName] = { package.Name, &record };
+
     std::size_t differences = 0;
-    for (auto const& [key, record] : expected)
+    std::size_t absent = 0;
+    std::size_t measured = 0;
+    std::size_t measuredMatch = 0;
+    std::map<std::string, bool> tables;
+    for (auto const& package : reference.Packages)
+        tables[package.Name] = true;
+    for (auto const& package : generated.Packages)
+        tables.try_emplace(package.Name, true);
+    for (auto const& [key, entry] : expected)
     {
+        auto const& [package, record] = entry;
         auto const found = actual.find(key);
         if (found == actual.end())
         {
-            output << "missing " << key << '\n';
+            if (onDisk && !onDisk(package, *record))
+            {
+                ++absent;
+                continue;
+            }
+            output << "missing " << package << ' ' << record->SrcFileName << '\n';
+            tables[package] = false;
             ++differences;
             continue;
         }
-        if (found->second->FileType != record->FileType || found->second->Size != record->Size || found->second->CRC != record->CRC ||
-            found->second->HeaderSize != record->HeaderSize || found->second->HeaderCRC != record->HeaderCRC)
+        LatestFileList::FileRecord const& made = *found->second.second;
+        std::vector<std::string> fields;
+        if (made.TarFileName != record->TarFileName)
+            fields.push_back(fmt::format("Tar '{}' vs '{}'", made.TarFileName, record->TarFileName));
+        if (made.FileType != record->FileType)
+            fields.push_back(fmt::format("FileType {} vs {}", made.FileType, record->FileType));
+        if (made.Size != record->Size)
+            fields.push_back(fmt::format("Size {} vs {}", made.Size, record->Size));
+        if (made.CRC != record->CRC)
+            fields.push_back(fmt::format("CRC {} vs {}", made.CRC, record->CRC));
+        if (made.HeaderSize != record->HeaderSize)
+            fields.push_back(fmt::format("HeaderSize {} vs {}", made.HeaderSize, record->HeaderSize));
+        if (made.HeaderCRC != record->HeaderCRC)
+            fields.push_back(fmt::format("HeaderCRC {} vs {}", made.HeaderCRC, record->HeaderCRC));
+        if (record->FileType == 3 || record->FileType == 5)
         {
-            output << "different " << key << '\n';
+            ++measured;
+            if (made.Size == record->Size && made.CRC == record->CRC && made.HeaderSize == record->HeaderSize && made.HeaderCRC == record->HeaderCRC)
+                ++measuredMatch;
+        }
+        if (!fields.empty())
+        {
+            output << "different " << package << ' ' << record->SrcFileName << ": ";
+            for (std::size_t index = 0; index < fields.size(); ++index)
+                output << (index ? ", " : "") << fields[index];
+            output << '\n';
             ++differences;
         }
     }
-    for (auto const& [key, record] : actual)
+    for (auto const& [key, entry] : actual)
     {
         if (!expected.contains(key))
         {
-            output << "unexpected " << key << '\n';
+            output << "unexpected " << entry.first << ' ' << entry.second->SrcFileName << '\n';
+            tables[entry.first] = false;
             ++differences;
         }
     }
+    std::size_t const matchedTables = static_cast<std::size_t>(std::count_if(tables.begin(), tables.end(), [](auto const& table) { return table.second; }));
+    output << fmt::format("{} reference records are not in the install and were not compared\n", absent);
+    output << fmt::format("type 3 and 5 records in both: {} of {} match Size, CRC, HeaderSize and HeaderCRC\n", measuredMatch, measured);
+    output << fmt::format("package membership: {} of {} tables match\n", matchedTables, tables.size());
     output << differences << " differences\n";
     return output.str();
 }

@@ -1,20 +1,15 @@
 <!-- Project Ambrose by Imjustchico: Configuration reference for the install scanner manifest generator. -->
 # Patchlist generator
 
-The optional `patchlist_generator.conf.dist` file documents the install scanner's
-rule format. Each non-empty, non-comment line is:
+`patchlist_generator` reads its rules from `--rules`, or else from `patchlist_generator.conf` beside the program, or else from the `patchlist_generator.conf.dist` the build copies there. Each non-empty line not starting with `#` is one of two forms.
 
 ```text
 SrcFileName|TarFileName|Package|FileType
+skip|pattern
 ```
 
-For example:
+A rule names a file by where the manifest says it is served from (`SrcFileName`) and where the client keeps it (`TarFileName`), which is how a file the install keeps at `Bin/PatchConfig.xml` is listed as `Windows/Bin/PatchConfig.xml`. For the `PatchClient` package, `TarFileName` is relative to the launcher's bank folder; for every other package it is relative to the install, and an empty one means the file sits at `SrcFileName`. A `skip` line leaves out every file whose install path matches the pattern, where `*` and `?` stay inside one folder and `**` crosses folders; the shipped rules leave out what a played install writes for itself, such as `PatchInfo/**`, `Data/GameData/CharacterRegistry/**` and the client's logs.
 
-```text
-Data/GameData/GUI-WorldData.wad|Data/GameData/GUI-WorldData.wad|GUI-WorldData|5
-```
+Without a rule, a file keeps its install path as `SrcFileName` and an empty `TarFileName`, and the launcher's files are read from `PatchClient/BankB`, or `PatchClient/BankA` when that is the only bank, with the bank left out of their names and `TarFileName` set to the path inside the bank. Every top-level `Data/GameData/<X>.wad` except `Root.wad` is package `X`, and everything else is `Base`. A WAD is type `5` when the install holds a `<X>.wad.utd` file beside it, which is how the client marks the archives it streams in pieces, and type `3` otherwise; any other file is type `1`, with `HeaderSize` and `HeaderCRC` 0. A rule's type `4` marks a file served compressed, whose `HeaderSize` is its zlib size at level 6 plus 12 bytes.
 
-The generator assigns file type `3` to WAD files and `1` to other files by
-default. A rule may override this with type `5` for a WAD or type `4` for a
-compressed-download variant. The package column may move a file between
-`Base`, `PatchClient`, and the named WAD package.
+`--reference` takes a `LatestFileList.bin` or `.xml`, such as the install's own `PatchInfo/LatestFileList.bin`, prints every record that is missing, unexpected or different, sets aside the reference records whose files the install does not hold, counts the type 3 and 5 records that match on Size, CRC, HeaderSize and HeaderCRC and the tables whose membership matches, and then copies each matching record's `FileType` and `CompressedHeaderSize` into the manifest it writes.

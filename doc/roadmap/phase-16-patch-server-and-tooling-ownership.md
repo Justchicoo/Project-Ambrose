@@ -126,7 +126,7 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 - CRC cache keyed by path+size+mtime so reruns skip rehashing Root.wad (295 MB)
 - FileType assignment: 3 = WAD (default), 5 = WAD listed in a rules override, 1 = plain file, 4 = rules override (see open questions)
 - Optional --reference <LatestFileList.xml> mode that copies FileType/CompressedHeaderSize/package membership from a list the user supplies and prints a diff report
-- conf/dist/patchlist_generator.conf.dist
+- src/tools/patchlist_generator/patchlist_generator.conf.dist
 
 **Data sources**
 
