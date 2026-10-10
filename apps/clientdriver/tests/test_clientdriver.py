@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, and Enter sent as a key only once Alt is up, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, and Enter sent as a key only once Alt is up, the order in which a run starts and stops what it owns, the slot a run takes so several share the machine and the one input turn they share, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
+import contextlib
 import json
 import os
 import re
@@ -13,7 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clientdriver import capture, cli, client, database, engine, install, listeners, netguard, paths, play, preflight, references, refscapture, report, run, scenario, screens, server, zones
+from clientdriver import capture, cli, client, database, engine, install, listeners, netguard, paths, play, preflight, references, refscapture, report, run, scenario, screens, server, slots, zones
 from clientdriver.errors import Refused, StepFailed
 from clientdriver.logtail import LogTail, read_lines
 
@@ -554,11 +555,25 @@ class WorldEntryTests(TemporaryFolder):
         self.assertIn("could not reload names", str(raised.exception))
 
     def test_the_zone_rows_are_cached_by_revision_and_layout_outside_the_repository(self):
-        path = zones.cache_path("r806919.Wizard_1_610")
+        path = zones.cache_path("r806919.Wizard_1_610", self.folder)
         self.assertTrue(path.endswith(os.path.join("clientdriver", "zones", f"r806919.Wizard_1_610.v{zones.LAYOUT}.sql")))
         self.assertFalse(os.path.abspath(path).startswith(os.path.abspath(paths.REPOSITORY)))
         with self.assertRaises(StepFailed):
             zones.ensure(self.folder, self.folder, "")
+
+    def test_a_checkout_whose_world_tables_differ_reads_its_own_zone_rows(self):
+        world = os.path.join(self.folder, "data", "sql", "base", "db_world")
+        os.makedirs(world)
+        with open(os.path.join(world, "world.sql"), "w", encoding="utf-8") as handle:
+            handle.write("CREATE TABLE `zone_object` (`id` INT);\n")
+        main = zones.cache_path("r806919.Wizard_1_610", self.folder)
+        self.assertRegex(os.path.basename(main), rf"^r806919\.Wizard_1_610\.v{zones.LAYOUT}\.[0-9a-f]{{10}}\.sql$")
+        self.assertEqual(main, zones.cache_path("r806919.Wizard_1_610", self.folder))
+        pending = os.path.join(self.folder, "data", "sql", "updates", "pending_db_world")
+        os.makedirs(pending)
+        with open(os.path.join(pending, "zone_path.sql"), "w", encoding="utf-8") as handle:
+            handle.write("CREATE TABLE `zone_path` (`id` INT);\n")
+        self.assertNotEqual(main, zones.cache_path("r806919.Wizard_1_610", self.folder))
 
     def test_the_extractor_s_script_is_applied_statement_by_statement_without_its_header_comment(self):
         script = os.path.join(self.folder, "zones.sql")
@@ -1718,6 +1733,93 @@ class ScreenSpotTests(unittest.TestCase):
         self.assertEqual(client.screen_spot(work, (1296, 759), "top left"), (-1920, 0))
         self.assertEqual(client.screen_spot(work, (1296, 759), "bottom right"), (-1296, 273))
         self.assertEqual(client.screen_spot((0, 0, 800, 600), (1296, 759), "bottom right"), (0, 0), "a window larger than the screen starts at its corner")
+
+
+class SlotTests(TemporaryFolder):
+    def tearDown(self):
+        slots.release()
+
+    def test_runs_take_the_first_free_slot_and_a_named_slot_that_is_taken_is_refused(self):
+        self.assertEqual(slots.take(self.folder), 0)
+        self.assertEqual(slots.take(self.folder), 1)
+        with self.assertRaises(Refused):
+            slots.take(self.folder, wanted=1)
+        self.assertEqual(slots.take(self.folder, wanted=3), 3)
+        self.assertEqual(slots.take(self.folder), 2)
+        with self.assertRaises(Refused) as raised:
+            slots.take(self.folder)
+        self.assertIn("all 4 driver slots", str(raised.exception))
+        slots.release()
+        self.assertEqual(slots.take(self.folder), 0)
+
+    def test_a_slot_moves_only_what_was_left_at_its_default(self):
+        defaults = {"port": 12100, "game_port": 12433, "db_prefix": "ambrose_driver_run"}
+        self.assertEqual(slots.shifted(defaults, 0, 12100, 12433, "ambrose_driver_run"), defaults)
+        self.assertEqual(slots.shifted(defaults, 2, 12100, 12433, "ambrose_driver_run"),
+                         {"port": 12120, "game_port": 12453, "db_prefix": "ambrose_driver_run2"})
+        chosen = dict(defaults, port=15000)
+        self.assertEqual(slots.shifted(chosen, 1, 12100, 12433, "ambrose_driver_run")["port"], 15000)
+
+    def test_the_cli_takes_a_slot_before_the_run_and_the_run_folder_names_it(self):
+        with mock.patch.object(slots, "take", return_value=2) as take:
+            args = cli.build_parser().parse_args(["run", "--runs", self.folder])
+            self.assertEqual(cli.take_slot(args), 2)
+        take.assert_called_once_with(wanted=None)
+        self.assertEqual((args.port, args.game_port, args.db_prefix), (12120, 12453, "ambrose_driver_run2"))
+        loaded = scenario.Scenario("test.json", {"title": "x", "steps": []})
+        first = run.Run({"runs": self.folder, "slot": 2}, loaded, None, {})
+        os.makedirs(first.folder)
+        second = run.Run({"runs": self.folder, "slot": 2}, loaded, None, {})
+        self.assertTrue(first.run_id.endswith("-s2"))
+        self.assertNotEqual(first.folder, second.folder)
+
+    def test_the_input_turn_is_one_at_a_time_across_handles_and_reentrant_within_a_run(self):
+        with slots.input_turn(self.folder):
+            with slots.input_turn(self.folder):
+                other = slots.open_lock(os.path.join(self.folder, "input.lock"))
+                try:
+                    self.assertFalse(slots.lock(other))
+                finally:
+                    other.close()
+        other = slots.open_lock(os.path.join(self.folder, "input.lock"))
+        try:
+            self.assertTrue(slots.lock(other))
+            with self.assertRaises(StepFailed):
+                with slots.input_turn(self.folder, wait=0.1, poll=0.02):
+                    pass
+            slots.unlock(other)
+        finally:
+            other.close()
+
+    def test_the_run_counts_how_long_it_waited_for_the_input_turn(self):
+        before = slots.input_waits()
+        with slots.input_turn(self.folder):
+            with slots.input_turn(self.folder):
+                pass
+        after = slots.input_waits()
+        self.assertEqual(after["turns"], before["turns"] + 1)
+        self.assertGreaterEqual(after["waited_seconds"], before["waited_seconds"])
+        self.assertGreaterEqual(after["longest_wait_seconds"], 0.0)
+
+    def test_a_press_waits_for_the_input_turn(self):
+        window = client.Client.__new__(client.Client)
+        turns = []
+
+        @contextlib.contextmanager
+        def turn():
+            turns.append("taken")
+            yield
+            turns.append("given back")
+
+        @contextlib.contextmanager
+        def activated(self):
+            turns.append("activated")
+            yield True
+
+        with mock.patch.object(slots, "input_turn", turn), mock.patch.object(client.Client, "_activated", activated):
+            with window.activated() as got:
+                self.assertTrue(got)
+        self.assertEqual(turns, ["taken", "activated", "given back"])
 
 
 class RunOrderTests(TemporaryFolder):

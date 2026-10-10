@@ -8,7 +8,7 @@ import subprocess
 import threading
 import time
 
-from . import screens
+from . import screens, slots
 from .errors import StepFailed
 from .logtail import LogTail
 
@@ -522,6 +522,12 @@ class Client:
 
     @contextlib.contextmanager
     def activated(self):
+        with slots.input_turn():
+            with self._activated() as got:
+                yield got
+
+    @contextlib.contextmanager
+    def _activated(self):
         import win32con
         import win32gui
 
