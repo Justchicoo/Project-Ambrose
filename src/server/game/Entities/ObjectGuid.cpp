@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A permID is FNV-1a over the zone path, a separator, and the template and object ids in little-endian order, so it is the same number on every machine and every run for the same placed object, and it is never zero, because zero is what an object with no permID carries. Runtime GIDs come from one generator that starts at RuntimeBase, and item GIDs from another that starts at ItemBase.
+ * A permID is FNV-1a over the zone path, a separator, and the template and object ids in little-endian order, so it is the same number on every machine and every run for the same placed object, and it is never zero, because zero is what an object with no permID carries. Runtime GIDs come from one generator that starts at RuntimeBase, item GIDs from another that starts at ItemBase, and quest and goal GIDs from a third that starts at QuestBase.
  */
 
 #include "ObjectGuid.h"
@@ -53,5 +53,16 @@ GuidGenerator& ObjectGuid::ItemGuids() noexcept
 
 bool ObjectGuid::IsItem(uint64 guid) noexcept
 {
-    return guid >= ItemBase && guid < RuntimeBase;
+    return guid >= ItemBase && guid < QuestBase;
+}
+
+GuidGenerator& ObjectGuid::QuestGuids() noexcept
+{
+    static GuidGenerator guids(QuestBase);
+    return guids;
+}
+
+bool ObjectGuid::IsQuest(uint64 guid) noexcept
+{
+    return guid >= QuestBase && guid < RuntimeBase;
 }
