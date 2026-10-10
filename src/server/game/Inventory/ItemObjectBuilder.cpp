@@ -136,6 +136,29 @@ bool ItemObjectBuilder::SetItemsAllowed(PropertyObject& player, uint32 capacity,
     return problem.empty();
 }
 
+bool ItemObjectBuilder::SetEmotesAllowed(PropertyObject& player, uint32 emotes, uint32 teleportEffects, std::string& problem)
+{
+    problem.clear();
+    PropertyValue const* const held = player.Get("m_inactiveBehaviors");
+    PropertyValue::List const* const current = held ? held->GetList() : nullptr;
+    if (!current)
+    {
+        problem = fmt::format("{} has no behavior list", player.GetClass().Name);
+        return false;
+    }
+    PropertyValue::List behaviors = *current;
+    PropertyObject* const inventory = FindBackpack(behaviors);
+    if (!inventory || !inventory->GetClass().FindProperty(EmotesAllowedProperty) || !inventory->GetClass().FindProperty(TeleportEffectsAllowedProperty))
+    {
+        problem = fmt::format("no behavior of the player object carries {} and {}", EmotesAllowedProperty, TeleportEffectsAllowedProperty);
+        return false;
+    }
+    auto const clamp = [](uint32 count) { return static_cast<int32>(std::min<uint32>(count, std::numeric_limits<int32>::max())); };
+    PropertyFiller(*inventory, problem).Set(EmotesAllowedProperty, clamp(emotes)).Set(TeleportEffectsAllowedProperty, clamp(teleportEffects));
+    PropertyFiller(player, problem).Set("m_inactiveBehaviors", std::move(behaviors));
+    return problem.empty();
+}
+
 std::optional<std::string> ItemObjectBuilder::Encode(std::string_view message, PropertyObject const& object, CoreObjectTypeTable const& types, std::string& problem)
 {
     ObjectField const* const field = ObjectFields::Find(message, SerializedItemField);

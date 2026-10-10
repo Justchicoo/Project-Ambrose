@@ -75,6 +75,10 @@ namespace
 
             Unsigned("Inventory.Slots", "100", "0", "10000", "items", "Inventory", Game, NextUse,
                 "How many items every wizard's backpack holds, read when the wizard enters the world and sent to its client as the m_numItemsAllowed of its inventory behavior, since neither the player template nor any other file of the install gives one."),
+            Unsigned("Inventory.EmoteSlots", "100", "0", "10000", "emotes", "Inventory", Game, NextUse,
+                "How many custom emote items every wizard holds beside its backpack, read when the wizard enters the world and sent to its client as the m_numCEEmotesAllowed of its inventory behavior; at 0 the client keeps no emote item a wizard is given, so its emote wheel stays shut."),
+            Unsigned("Inventory.TeleportEffectSlots", "100", "0", "10000", "effects", "Inventory", Game, NextUse,
+                "How many custom teleport-effect items every wizard holds beside its backpack, read when the wizard enters the world and sent to its client as the m_numCETeleportsAllowed of its inventory behavior."),
             Unsigned("Inventory.ExtraSlots", "0", "0", "10000", "items", "Inventory", Game, Live,
                 "How many items every wizard's backpack holds beyond Inventory.Slots, read at each add, so raising it lets the next add to a full backpack succeed; the client is told the new total when the wizard next enters the world."),
 

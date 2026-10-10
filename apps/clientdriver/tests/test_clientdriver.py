@@ -294,6 +294,18 @@ class ScenarioTests(TemporaryFolder):
         self.assertEqual(loaded.dropped_allowed, ["MSG_TWO"])
         self.assertEqual(loaded.client_log_allowed, ["a known client line"])
 
+    def test_a_chord_of_one_key_is_refused(self):
+        self.scenario_file("one.json", {"title": "x", "steps": [{"action": "chord", "vk": ["0x45"]}]})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertIn("2 to 4 keys together", str(raised.exception))
+
+    def test_a_click_on_a_button_the_mouse_lacks_is_refused(self):
+        self.scenario_file("one.json", {"title": "x", "steps": [{"action": "click", "target": "press", "button": "fourth"}]})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertIn("left, middle, right", str(raised.exception))
+
     def test_two_steps_with_the_same_name_are_refused(self):
         self.scenario_file("one.json", {"title": "x", "steps": [
             {"action": "shot", "name": "the login window"}, {"action": "shot", "name": "the login window"}]})
@@ -937,11 +949,15 @@ class FakeClient:
     def enter(self, hold=0.05):
         self.typed.append("enter")
 
-    def click(self, x, y, dwell=0.35, clicks=1):
-        self.presses.append((x, y, round(dwell, 2)) if clicks == 1 else (x, y, round(dwell, 2), clicks))
+    def click(self, x, y, dwell=0.35, clicks=1, button="left"):
+        self.presses.append(((x, y, round(dwell, 2)) if clicks == 1 else (x, y, round(dwell, 2), clicks)) + (() if button == "left" else (button,)))
         if self.on_click:
             self.on_click(len(self.presses))
         return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if self.active else "NOT active"), self.active
+
+    def chord(self, virtual_keys, hold=0.1):
+        self.typed.append(("chord",) + tuple(virtual_keys))
+        return "pressed together", self.active
 
     def drag(self, start, end, dwell=0.35, steps=8):
         self.presses.append((start, end, steps))
@@ -1346,6 +1362,19 @@ class EngineTests(TemporaryFolder):
         with self.assertRaises(StepFailed) as raised:
             running.run()
         self.assertIn("twice for a double click", str(raised.exception))
+
+    def test_a_chord_presses_its_keys_together_and_fails_when_the_window_was_not_active(self):
+        running = self.build([{"action": "chord", "name": "open the emote wheel", "vk": ["0x10", "0x45"]}])
+        running.run()
+        self.assertEqual(self.client.typed, [("chord", 0x10, 0x45)])
+        self.client.active = False
+        with self.assertRaises(StepFailed):
+            running.execute(running.scenario.steps[0])
+
+    def test_a_click_may_press_the_middle_button(self):
+        running = self.build([{"action": "click", "name": "open the emote wheel", "target": "press", "button": "middle"}])
+        running.run()
+        self.assertEqual(self.client.presses, [(5, 5, 0.35, "middle")])
 
     def test_a_drag_presses_on_one_target_and_lets_go_on_another(self):
         running = self.build([{"action": "drag", "name": "put the hat on", "target": "press", "to": "press", "steps": 4, "dwell": 0.0}])

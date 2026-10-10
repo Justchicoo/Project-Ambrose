@@ -21,6 +21,8 @@ public:
     static constexpr std::string_view SerializedItemField = "SerializedItem";
     static constexpr std::string_view ItemListProperty = "m_itemList";
     static constexpr std::string_view ItemsAllowedProperty = "m_numItemsAllowed";
+    static constexpr std::string_view EmotesAllowedProperty = "m_numCEEmotesAllowed";
+    static constexpr std::string_view TeleportEffectsAllowedProperty = "m_numCETeleportsAllowed";
     static constexpr std::string_view PatternProperty = "m_pattern";
     static constexpr std::string_view SlotListProperty = "m_slotList";
     static constexpr std::string_view PublicItemListProperty = "m_publicItemList";
@@ -35,6 +37,7 @@ public:
     static bool FillBackpack(PropertyObject& player, CoreObjectTypeTable const& types, ItemTemplateStore const& templates, std::vector<CharacterItem> const& items,
         std::vector<uint64>& missing, std::string& problem);
     static bool SetItemsAllowed(PropertyObject& player, uint32 capacity, std::string& problem);
+    static bool SetEmotesAllowed(PropertyObject& player, uint32 emotes, uint32 teleportEffects, std::string& problem);
     static PropertyObject* FindBackpack(PropertyValue::List& behaviors);
     static bool FillEquipment(PropertyObject& player, CoreObjectTypeTable const& types, ItemTemplateStore const& templates, std::vector<CharacterEquippedItem> const& items,
         std::vector<uint64>& missing, std::string& problem);

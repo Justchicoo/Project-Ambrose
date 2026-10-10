@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests where a wizard's stored items go when it enters, that the public entry other wizards are sent of a worn item travels in CoreObject form behind a zero core header as the client reads it and is the WizardEquippedItemInfo the client keeps, with the item's own colors and pattern and no lock bit, the player object lists the equipment behavior before the backpack and both carry an m_itemList, so the items and the backpack's size land in the behavior that also carries m_numItemsAllowed, and a player with no such behavior is refused with the reason.
+ * Tests where a wizard's stored items go when it enters, that the public entry other wizards are sent of a worn item travels in CoreObject form behind a zero core header as the client reads it and is the WizardEquippedItemInfo the client keeps, with the item's own colors and pattern and no lock bit, the player object lists the equipment behavior before the backpack and both carry an m_itemList, so the items and the backpack's size land in the behavior that also carries m_numItemsAllowed, the emote and teleport-effect counts beside its size, and a player with no such behavior is refused with the reason.
  */
 
 #include "CharacterTypeFixtures.h"
@@ -46,7 +46,9 @@ namespace
         AddClass(classes, "class ClientWizInventoryBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), {
             { "m_behaviorTemplateNameID", Property("unsigned int", "m_behaviorTemplateNameID", 0, Local) },
             { "m_itemList", Property("class SharedPointer<class CoreObject>", "m_itemList", 1, Wire, "List") },
-            { "m_numItemsAllowed", Property("int", "m_numItemsAllowed", 2, Wire) } });
+            { "m_numItemsAllowed", Property("int", "m_numItemsAllowed", 2, Wire) },
+            { "m_numCEEmotesAllowed", Property("int", "m_numCEEmotesAllowed", 3, Wire) },
+            { "m_numCETeleportsAllowed", Property("int", "m_numCETeleportsAllowed", 4, Wire) } });
         TypeRegistry registry;
         EXPECT_TRUE(registry.LoadFromText(dump.dump(), "items.json")) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
         return registry.GetCatalog();
@@ -88,6 +90,19 @@ TEST(ItemObjectBuilderTest, TheBackpackIsTheBehaviorWithASizeNotTheEquipmentList
     std::string problem;
     ASSERT_TRUE(ItemObjectBuilder::SetItemsAllowed(*player, 100, problem)) << problem;
     EXPECT_EQ(*Behavior(*player, 1)->Get("m_numItemsAllowed")->GetIf<int32>(), 100);
+}
+
+TEST(ItemObjectBuilderTest, TheEmoteAndTeleportEffectCountsGoToTheBackpacksBehaviorBesideItsSize)
+{
+    TypeCatalogPtr const catalog = LoadCatalog();
+    ASSERT_TRUE(catalog);
+    PropertyObjectPtr const player = Player(catalog, { "class ClientWizEquipmentBehavior", "class ClientWizInventoryBehavior" });
+    ASSERT_TRUE(player);
+
+    std::string problem;
+    ASSERT_TRUE(ItemObjectBuilder::SetEmotesAllowed(*player, 100, 50, problem)) << problem;
+    EXPECT_EQ(*Behavior(*player, 1)->Get("m_numCEEmotesAllowed")->GetIf<int32>(), 100) << "at 0 the client keeps no emote item it is given";
+    EXPECT_EQ(*Behavior(*player, 1)->Get("m_numCETeleportsAllowed")->GetIf<int32>(), 50);
 }
 
 TEST(ItemObjectBuilderTest, APlayerWithoutABackpackIsRefusedWithTheReason)

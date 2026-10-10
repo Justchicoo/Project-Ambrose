@@ -1,0 +1,210 @@
+{
+  "title": "probe: emote item and radial menu",
+  "notes": [
+    "12.14 probe, not a check. Run 20261010-194549: Shift+E as a chord opens the emote wheel (Custom 1/2/3, eight slots, 1/5);",
+    "a right-click on a slot offers Emote and Menu Chat, and Emote opens Cosmetic Items, which lists the Fresh emote item given by additem (1/100).",
+    "Next: choose Fresh there and press the assign button, so the client sends MSG_PIIUPDATEEMOTESRADIALMENU, then play it for a companion and relog."
+  ],
+  "requires": {
+    "client": true,
+    "capture": false,
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added",
+    "MSG_PHYSICS_GRAB\\.Force spells TYPE as TPYE",
+    "MSG_MINIGAMEREWARDS\\.GlobalID has no TYPE",
+    "MSG_BATTLEGROUNDQUEUEUPDATE\\.Kicked spells TYPE as TYP",
+    "the class file for revision .* needs building, but schemaprobe .* was not found",
+    "MSG_FISHESCAPED .* never accepts"
+  ],
+  "dropped_allowed": [
+    "MSG_FISHESCAPED"
+  ],
+  "pending_allowed": [
+    "MSG_CANSEETIEREDSPELLGROUPS",
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    },
+    "stats": {
+      "purchased_custom_emotes_1": 1
+    }
+  },
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client renderer starts",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window appears",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the account",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character-selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character-selection screen appears",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server attaches the wizard",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client loads the Commons",
+      "pattern": "Zone WizardCity/WC_Hub loaded",
+      "timeout": 300,
+      "record": true
+    },
+    {
+      "action": "server_command",
+      "name": "make the account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "game_command",
+      "name": "give the wizard the Fresh emote",
+      "command": "additem 1457184 1 {wizard_guid}",
+      "pattern": "was given 1",
+      "timeout": 30
+    },
+    {
+      "action": "chord",
+      "name": "shift and E open the emote wheel",
+      "vk": [
+        "0x10",
+        "0x45"
+      ]
+    },
+    {
+      "action": "shot",
+      "name": "the emote wheel",
+      "file": "p-wheel",
+      "settle": 3
+    },
+    {
+      "action": "click",
+      "name": "right-click the top slot",
+      "target": "emote_wheel_top",
+      "button": "right"
+    },
+    {
+      "action": "shot",
+      "name": "after right-clicking the top slot",
+      "file": "p-slot-right",
+      "settle": 3
+    },
+    {
+      "action": "click",
+      "name": "choose Emote",
+      "target": "emote_slot_menu_emote"
+    },
+    {
+      "action": "shot",
+      "name": "after choosing Emote",
+      "file": "p-emote-list",
+      "settle": 3
+    }
+  ]
+}

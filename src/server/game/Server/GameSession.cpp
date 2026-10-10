@@ -738,6 +738,11 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         uint32 const capacity = PlayerBackpack::CapacityFor(itemsAllowed, sSettings.Get<uint32>("Inventory.ExtraSlots"));
         if (!ItemObjectBuilder::SetItemsAllowed(*player, capacity, allowedProblem))
             LOG_WARN("server.gamesession", "Session {} cannot tell wizard {}'s client its backpack holds {} item(s), since {}", GetSessionId(), character.Guid, capacity, allowedProblem);
+        uint32 const emotes = sSettings.Get<uint32>("Inventory.EmoteSlots");
+        uint32 const teleportEffects = sSettings.Get<uint32>("Inventory.TeleportEffectSlots");
+        if (!ItemObjectBuilder::SetEmotesAllowed(*player, emotes, teleportEffects, allowedProblem))
+            LOG_WARN("server.gamesession", "Session {} cannot tell wizard {}'s client it holds {} emote(s) and {} teleport effect(s), since {}", GetSessionId(), character.Guid, emotes,
+                teleportEffects, allowedProblem);
     }
     std::shared_ptr<ItemTemplateStore const> const itemTemplates = sItemMgr.GetItems();
     if (player && types && backpack.Size() > 0)

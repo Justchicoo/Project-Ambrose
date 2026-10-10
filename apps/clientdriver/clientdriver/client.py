@@ -25,6 +25,7 @@ PW_RENDERFULLCONTENT = 2
 SMTO_ABORTIFHUNG = 0x0002
 SEND_MESSAGE_TIMEOUT_MS = 10000
 MK_LBUTTON = 0x0001
+BUTTONS = {"left": (0x0201, 0x0202, 0x0001), "middle": (0x0207, 0x0208, 0x0010), "right": (0x0204, 0x0205, 0x0002)}
 DOUBLE_CLICK_GAP = 0.06
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 MODIFIER_KEYS = (0x10, 0x11, 0x12, 0x5B, 0x5C)
@@ -509,6 +510,23 @@ class Client:
             for virtual_key in reversed(virtual_keys):
                 win32gui.PostMessage(self.handle, win32con.WM_KEYUP, virtual_key, parameter(virtual_key) | (3 << 30))
 
+    def chord(self, virtual_keys, hold=0.1):
+        import win32api
+        import win32con
+        import win32gui
+
+        wait_until_released(modifiers_held, "a modifier key")
+        with self.activated() as active:
+            if not active or win32gui.GetForegroundWindow() != self.handle:
+                return "the client window could not be made the active one, so nothing was pressed", False
+            for virtual_key in virtual_keys:
+                win32api.keybd_event(virtual_key, win32api.MapVirtualKey(virtual_key, 0), 0, 0)
+            time.sleep(hold)
+            for virtual_key in reversed(virtual_keys):
+                win32api.keybd_event(virtual_key, win32api.MapVirtualKey(virtual_key, 0), win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.2)
+        return "pressed " + " and ".join(f"{key:#x}" for key in virtual_keys) + " together on the keyboard with the window active", True
+
     @contextlib.contextmanager
     def cursor_at(self, x, y):
         import win32api
@@ -543,13 +561,14 @@ class Client:
             win32gui.SetWindowPos(self.handle, win32con.HWND_BOTTOM, 0, 0, 0, 0,
                                   win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
 
-    def click(self, x, y, dwell=0.35, clicks=1):
+    def click(self, x, y, dwell=0.35, clicks=1, button="left"):
         import win32con
         import win32gui
 
         wait_until_released(modifiers_held, "a modifier key")
         wait_until_released(buttons_held, "a mouse button")
         position = (y << 16) | (x & 0xFFFF)
+        down, up, held = BUTTONS[button]
 
         def send(message, wparam):
             win32gui.SendMessageTimeout(self.handle, message, wparam, position, SMTO_ABORTIFHUNG, SEND_MESSAGE_TIMEOUT_MS)
@@ -557,16 +576,18 @@ class Client:
         with self.activated() as active, self.cursor_at(x, y):
             send(win32con.WM_MOUSEMOVE, 0)
             time.sleep(dwell)
-            send(win32con.WM_LBUTTONDOWN, MK_LBUTTON)
+            send(down, held)
             time.sleep(dwell if clicks == 1 else DOUBLE_CLICK_GAP)
-            send(win32con.WM_LBUTTONUP, 0)
+            send(up, 0)
             for _ in range(clicks - 1):
                 time.sleep(DOUBLE_CLICK_GAP)
-                send(win32con.WM_LBUTTONDOWN, MK_LBUTTON)
+                send(down, held)
                 time.sleep(DOUBLE_CLICK_GAP)
-                send(win32con.WM_LBUTTONUP, 0)
+                send(up, 0)
             time.sleep(0.2)
         twice = "" if clicks == 1 else f" {clicks} times"
+        if button != "left":
+            twice = f" with the {button} button" + twice
         return f"{x},{y}{twice} after {dwell:.2f}s with the window " + ("active" if active else "NOT active"), active
 
     def drag(self, start, end, dwell=0.35, steps=8):

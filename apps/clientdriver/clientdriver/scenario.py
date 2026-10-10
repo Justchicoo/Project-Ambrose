@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, the install the driver found taken literally inside a pattern, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a launch other than the launcher's console or its window, a launcher window opened beside the patching default or a companion, a step that reads or presses the launcher window in a scenario that does not open it or a restart in one that does, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, a wait on a listener the scenario does not name, or a comparison of shots no earlier step took, of a region that is not four edges in order, of an outcome other than differ or match or of colors read from anything but two shots on each side, before anything is started; it accepts the three purchased-emote masks for radial-page scenarios.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, the install the driver found taken literally inside a pattern, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a launch other than the launcher's console or its window, a launcher window opened beside the patching default or a companion, a step that reads or presses the launcher window in a scenario that does not open it or a restart in one that does, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, a wait on a listener the scenario does not name, or a comparison of shots no earlier step took, of a region that is not four edges in order, of an outcome other than differ or match of colors read from anything but two shots on each side, a click on a button other than left, middle or right, or a chord of fewer than two or more than four keys, before anything is started; it accepts the three purchased-emote masks for radial-page scenarios.
 import json
 import os
 import re
@@ -19,8 +19,9 @@ ACTIONS = {
     "type": (("text",), ()),
     "char": (("code",), ()),
     "key": (("vk",), ()),
+    "chord": (("vk",), ("hold",)),
     "hold_key": (("vk", "seconds"), ("moves", "watch", "watch_every", "watch_after")),
-    "click": (("target",), ("attempts", "clicks", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
+    "click": (("target",), ("attempts", "button", "clicks", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
     "shot": ((), ("file", "settle")),
     "hover": (("target",), ("file", "settle")),
     "drag": (("target", "to"), ("dwell", "steps")),
@@ -41,7 +42,7 @@ ACTIONS = {
 }
 COMMON_KEYS = ("action", "name", "client")
 CLIENTS = ("main", "companion")
-CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "hold_key", "click", "shot",
+CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "chord", "hold_key", "click", "shot",
                   "kill_client", "restart_client", "wait_listener", "play", "hover")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
 TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "more_wizards", "companion", "variables", "expect", "steps",
@@ -66,6 +67,7 @@ WATCH_EVERY = (0.1, 5)
 MAX_WATCH_AFTER = 10
 MAX_HELD_KEYS = 4
 COMPARISONS = ("differ", "match")
+BUTTONS = ("left", "middle", "right")
 MAX_HUE_DEGREES = 90
 RUN_VARIABLES = ("user", "password", "wizard", "wizard_guid", "companion_user", "companion_password", "companion_wizard", "companion_wizard_guid",
                  "install", "window")
@@ -236,6 +238,12 @@ def _check_step(path, index, step):
                 not isinstance(region, list) or len(region) != 4 or any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in region)
                 or not region[0] < region[2] or not region[1] < region[3]):
             raise Refused(f"{where} ({name}) needs a {key.replace('_', ' ')} of four pixel edges, [left, top, right, bottom], with left before right and top above bottom")
+    if action == "chord" and (not isinstance(step["vk"], list) or not 1 < len(step["vk"]) <= MAX_HELD_KEYS):
+        raise Refused(f"{where} ({name}) presses a list of 2 to {MAX_HELD_KEYS} keys together, such as Shift and E")
+    if action == "chord" and "hold" in step and (isinstance(step["hold"], bool) or not isinstance(step["hold"], (int, float)) or not 0 < step["hold"] <= 2):
+        raise Refused(f"{where} ({name}) holds its keys more than 0 and at most 2 seconds")
+    if action == "click" and step.get("button", "left") not in BUTTONS:
+        raise Refused(f"{where} ({name}) presses the {step['button']!r} button; a click presses the {', '.join(BUTTONS)} button")
     if action == "compare_colors":
         for key in ("first", "second"):
             if not isinstance(step[key], list) or len(step[key]) != 2 or not all(isinstance(shot, str) for shot in step[key]):

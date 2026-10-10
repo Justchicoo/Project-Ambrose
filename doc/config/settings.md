@@ -61,8 +61,10 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
+| `Inventory.EmoteSlots` | unsigned | 100 emotes | from 0 to 10000 emotes | next connection or operation | gameserver | normal | How many custom emote items every wizard holds beside its backpack, read when the wizard enters the world and sent to its client as the m_numCEEmotesAllowed of its inventory behavior; at 0 the client keeps no emote item a wizard is given, so its emote wheel stays shut. |
 | `Inventory.ExtraSlots` | unsigned | 0 items | from 0 to 10000 items | live | gameserver | normal | How many items every wizard's backpack holds beyond Inventory.Slots, read at each add, so raising it lets the next add to a full backpack succeed; the client is told the new total when the wizard next enters the world. |
 | `Inventory.Slots` | unsigned | 100 items | from 0 to 10000 items | next connection or operation | gameserver | normal | How many items every wizard's backpack holds, read when the wizard enters the world and sent to its client as the m_numItemsAllowed of its inventory behavior, since neither the player template nor any other file of the install gives one. |
+| `Inventory.TeleportEffectSlots` | unsigned | 100 effects | from 0 to 10000 effects | next connection or operation | gameserver | normal | How many custom teleport-effect items every wizard holds beside its backpack, read when the wizard enters the world and sent to its client as the m_numCETeleportsAllowed of its inventory behavior. |
 
 ## Locale
 
