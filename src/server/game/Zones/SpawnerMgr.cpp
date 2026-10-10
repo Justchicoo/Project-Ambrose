@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the spawners and their entries zone by zone and refuses a spawner whose zone no template holds, whose count or respawn time is past what a zone can mean, or whose entry names no template, a loading type the client does not have or a chance above a hundred, and an entry of a spawner that is not there; a spawner or entry with requirements fails closed until the requirement engine exists, so it places nothing. In an instance, a new set of spawners is met by keeping each spawner's live objects that its entries still place, up to its count, and taking away the rest; then every spawner tops itself up to its count, less the respawns still waiting, at once, which is how an instance first fills and how a raised count spawns only the difference. A placement that fails waits a minute before it is tried again rather than every tick. Entries are chosen by their chances, and when none of a spawner's entries has one, as in the shipped zones, by equal shares. An entry that stands on a path and names no place of its own, as every shipped entry does, places nothing until the zones' paths are read, so nothing piles up at the zone's origin, and a scale of 0 reads as full size. A trigger's ResSpawn result starts its spawner in that instance and fills it at once; a ResDespawn stops it and takes its objects, or only those of the template it names, away with the effect it names, the KiStringHash of that name with the wizard who fired the trigger as killer, or plainly when it names none. Spawn results whose bytes the zones were extracted without are counted and skipped, and one that does not decode fails the load.
+ * Reads the spawners and their entries zone by zone and refuses a spawner whose zone no template holds, whose count or respawn time is past what a zone can mean, or whose entry names no template, a loading type the client does not have or a chance above a hundred, and an entry of a spawner that is not there; a spawner or entry with requirements fails closed until the requirement engine exists, so it places nothing. In an instance, a new set of spawners is met by keeping each spawner's live objects that its entries still place, up to its count, and taking away the rest; then every spawner tops itself up to its count, less the respawns still waiting, at once, which is how an instance first fills and how a raised count spawns only the difference. A placement that fails waits a minute before it is tried again rather than every tick. Entries are chosen by their chances, and when none of a spawner's entries has one, as in the shipped zones, by equal shares. An entry that stands on a path and names no place of its own, as every shipped entry does, is placed on a node of that path: any node for SNT_RANDOM, one no live object of its spawner holds for SNT_RANDOM_UNIQUE while one is free, the first or last for SNT_FIRST and SNT_LAST, and the node its start_node names for SNT_SPECIFIC, else the first, facing the node's direction when it has one; when its path is not loaded it waits a minute and tries again, so nothing piles up at the zone's origin. An object placed on a path whose template walks one starts walking it from that node. A scale of 0 reads as full size. A trigger's ResSpawn result starts its spawner in that instance and fills it at once; a ResDespawn stops it and takes its objects, or only those of the template it names, away with the effect it names, the KiStringHash of that name with the wizard who fired the trigger as killer, or plainly when it names none. Spawn results whose bytes the zones were extracted without are counted and skipped, and one that does not decode fails the load.
  */
 
 #include "SpawnerMgr.h"
@@ -10,6 +10,7 @@
 #include "PropertyObject.h"
 #include "ReloadMgr.h"
 #include "StringHash.h"
+#include "ZonePathMgr.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -25,7 +26,7 @@ namespace
 
     bool Eligible(ZoneSpawnEntry const& entry) noexcept
     {
-        return !entry.Object.HasSpawnRequirements && entry.HasPlace();
+        return !entry.Object.HasSpawnRequirements;
     }
 
     std::optional<bool> SwitchOf(MapSpawnerState const& state, uint32 index)
@@ -40,6 +41,11 @@ namespace
         {
             ZoneObjectSpawn placed = entry.Object;
             placed.Id = row.Id;
+            if (!entry.HasPlace())
+            {
+                placed.Position = row.Position;
+                placed.Orientation = row.Orientation;
+            }
             return Eligible(entry) && placed == row;
         });
     }
@@ -263,7 +269,7 @@ bool SpawnerMgr::Load(std::vector<std::string>& errors)
     std::vector<std::pair<std::string, std::pair<uint32, ZoneSpawnEntry>>> entries;
     if (!WorldDatabase.TryQuery("SELECT `zone_path`, `spawner_index`, `position`, `percent_chance`, `class_name`, `template_id`, `object_id`, `position_x`, `position_y`, `position_z`, "
         "`orientation_x`, `orientation_y`, `orientation_z`, `scale`, `zone_tag`, `start_state`, `override_name`, `global_dynamic`, `undetectable`, `loading_type`, "
-        "`spawn_requirements` IS NOT NULL AND LENGTH(`spawn_requirements`) > 0, `start_node_type`, `path_id` FROM `zone_spawner_entry`", rows))
+        "`spawn_requirements` IS NOT NULL AND LENGTH(`spawn_requirements`) > 0, `start_node_type`, `path_id`, `start_node`, `unique_loc` FROM `zone_spawner_entry`", rows))
     {
         errors.push_back("zone_spawner_entry could not be read");
         return false;
@@ -292,6 +298,8 @@ bool SpawnerMgr::Load(std::vector<std::string>& errors)
             object.HasSpawnRequirements = row[20].Get<int64>() != 0;
             entry.StartNodeType = row[21].Get<int32>();
             entry.PathId = row[22].Get<uint64>();
+            entry.StartNode = row[23].Get<uint32>();
+            entry.UniqueLoc = row[24].Get<int32>();
             std::string zone = row[0].Get<std::string>();
             uint32 const index = row[1].Get<uint32>();
             if (loading > static_cast<uint32>(ZoneObjectLoading::DynamicServer))
@@ -344,7 +352,7 @@ bool SpawnerMgr::Load(std::vector<std::string>& errors)
         return false;
     built->SetResults(std::move(results));
     if (unplaced > 0)
-        LOG_INFO("server.world", "{} zone spawner entries stand on a path and name no place of their own, and place nothing until the zones' paths are read", unplaced);
+        LOG_INFO("server.world", "{} zone spawner entries stand on a path and are placed on one of its nodes", unplaced);
     if (unread > 0)
         LOG_WARN("server.world", "{} spawn result(s) of the zone triggers hold no bytes, since the zones were extracted before their classes were known; run `extractor zones` again "
             "to read them", unread);
@@ -380,6 +388,42 @@ float SpawnerMgr::GetRespawnRate() const
     return std::isfinite(rate) && rate > 0.0f ? rate : 1.0f;
 }
 
+std::size_t SpawnerMgr::PickNode(ZoneSpawnEntry const& entry, ZonePath const& path, std::set<uint64> const& taken, std::function<uint32(uint32)> const& roll)
+{
+    std::size_t const count = path.Nodes.size();
+    auto const any = [&roll](std::size_t total) { return roll ? static_cast<std::size_t>(roll(static_cast<uint32>(total)) % total) : std::size_t{ 0 }; };
+    switch (static_cast<SpawnStartNode>(entry.StartNodeType))
+    {
+        case SpawnStartNode::Random:
+            return any(count);
+        case SpawnStartNode::RandomUnique:
+        {
+            std::vector<std::size_t> free;
+            for (std::size_t index = 0; index < count; ++index)
+                if (!taken.contains(path.Nodes[index].Id))
+                    free.push_back(index);
+            return free.empty() ? any(count) : free[any(free.size())];
+        }
+        case SpawnStartNode::Last:
+            return count - 1;
+        case SpawnStartNode::Specific:
+            for (std::size_t index = 0; index < count; ++index)
+                if (path.Nodes[index].Id == entry.StartNode)
+                    return index;
+            return 0;
+        case SpawnStartNode::First:
+            break;
+    }
+    return 0;
+}
+
+void SpawnerMgr::UseWorldPaths(SpawnerContext& context, Map const& map)
+{
+    std::shared_ptr<ZonePaths const> paths = sZonePathMgr.Get();
+    context.Paths = [paths = std::move(paths), zone = map.GetZonePath()](uint64 id) { return paths ? paths->Find(zone, id) : nullptr; };
+    context.PathGeneration = sZonePathMgr.GetGeneration();
+}
+
 std::chrono::milliseconds SpawnerMgr::RespawnDelay(ZoneSpawner const& spawner, float rate)
 {
     return std::chrono::milliseconds(static_cast<int64>(std::llround(static_cast<double>(spawner.RespawnSeconds) * 1000.0 * rate)));
@@ -402,6 +446,7 @@ MapObjectChanges SpawnerMgr::Update(Map& map, std::vector<ZoneSpawner> const& sp
         MapSpawnerLive& live = state.Spawners[spawner.Index];
         live.RespawnSeconds = spawner.RespawnSeconds;
         std::erase_if(live.Alive, [&map](uint64 id) { return map.FindObject(id) == nullptr; });
+        std::erase_if(live.Nodes, [&map](auto const& held) { return map.FindObject(held.first) == nullptr; });
         std::erase_if(live.Respawns, [&context](Map::Clock::time_point due) { return due <= context.Now; });
         std::size_t const held = live.Alive.size() + live.Respawns.size();
         for (std::size_t count = held; count < spawner.MaxSpawns; ++count)
@@ -411,11 +456,42 @@ MapObjectChanges SpawnerMgr::Update(Map& map, std::vector<ZoneSpawner> const& sp
                 break;
             ZoneObjectSpawn row = entry->Object;
             row.Id = state.NextSpawnId++;
+            ZonePath const* path = nullptr;
+            std::size_t node = 0;
+            if (!entry->HasPlace())
+            {
+                path = context.Paths ? context.Paths(entry->PathId) : nullptr;
+                if (!path || path->Nodes.empty())
+                {
+                    changes.Problems.push_back({ row.Id, row.TemplateId, false, fmt::format("zone_spawner {} entry {} stands on path {}, which zone_path does not hold for {}", spawner.Index,
+                        entry->Position, entry->PathId, map.GetZonePath()) });
+                    live.Respawns.push_back(context.Now + std::max<std::chrono::milliseconds>(RespawnDelay(spawner, context.RespawnRate), FailedPlacementRetry));
+                    continue;
+                }
+                std::set<uint64> taken;
+                for (auto const& [id, nodeId] : live.Nodes)
+                    taken.insert(nodeId);
+                node = PickNode(*entry, *path, taken, context.Roll);
+                row.Position = path->Nodes[node].Position;
+                if (path->Nodes[node].Direction != 0.0f)
+                    row.Orientation.Z = path->Nodes[node].Direction;
+            }
             std::optional<uint64> const placed = MapObjectSpawner::Place(map, row, MapObjectOrigin::Spawner, spawner.Index, context.Sources, context.Now, context.ReleaseDelay, changes);
-            if (placed)
-                live.Alive.push_back(*placed);
-            else
+            if (!placed)
+            {
                 live.Respawns.push_back(context.Now + std::max<std::chrono::milliseconds>(RespawnDelay(spawner, context.RespawnRate), FailedPlacementRetry));
+                continue;
+            }
+            live.Alive.push_back(*placed);
+            if (!path)
+                continue;
+            live.Nodes[*placed] = path->Nodes[node].Id;
+            TemplateLookup const found = context.Sources.Templates ? context.Sources.Templates(static_cast<uint32>(row.TemplateId)) : TemplateLookup{};
+            std::optional<PathWalkBehavior> const behavior = found.Template ? PathWalkers::BehaviorOf(*found.Template) : std::nullopt;
+            std::string error;
+            if (behavior && !PathWalkers::Start(map, *placed, *path, node, context.PathGeneration, *behavior, error) && !error.empty())
+                changes.Problems.push_back({ row.Id, row.TemplateId, false, fmt::format("zone_spawner {} entry {} cannot walk path {}: {}", spawner.Index, entry->Position,
+                    entry->PathId, error) });
         }
     }
     return changes;
@@ -594,7 +670,9 @@ MapObjectChanges SpawnerMgr::UpdateFromWorld(Map& map, Map::Clock::time_point no
     std::vector<ZoneSpawner> const* const list = spawners ? spawners->In(map.GetZonePath()) : nullptr;
     static std::vector<ZoneSpawner> const none;
     bool const first = !map.GetSpawnerState().Generation.has_value();
-    MapObjectChanges changes = Update(map, list ? *list : none, GetGeneration(), WorldContext(now, releaseDelay));
+    SpawnerContext context = WorldContext(now, releaseDelay);
+    UseWorldPaths(context, map);
+    MapObjectChanges changes = Update(map, list ? *list : none, GetGeneration(), context);
     if (first && !changes.Added.empty())
         LOG_INFO("server.zones", "{} spawner(s) placed {} object(s) in instance {} of {}", list ? list->size() : 0, changes.Added.size(), map.GetDynamicZoneId(), map.GetZonePath());
     return changes;
@@ -608,7 +686,8 @@ MapObjectChanges SpawnerMgr::TriggerFromWorld(Map& map, std::vector<std::string>
     std::vector<ZoneSpawnResult> const* const results = spawners ? spawners->ResultsIn(map.GetZonePath()) : nullptr;
     if (!list || !results || fired.empty())
         return changes;
-    SpawnerContext const context = WorldContext(now, releaseDelay);
+    SpawnerContext context = WorldContext(now, releaseDelay);
+    UseWorldPaths(context, map);
     for (std::string const& trigger : fired)
         RunResults(map, *list, *results, trigger, wizard, context, changes);
     changes.Absorb(Update(map, *list, GetGeneration(), context));
@@ -622,5 +701,6 @@ MapObjectChanges SpawnerMgr::PopulateFromWorld(Map& map, Map::Clock::time_point 
 {
     MapObjectChanges changes = MapObjectSpawner::PopulateFromWorld(map, now, releaseDelay);
     changes.Absorb(sSpawnerMgr.UpdateFromWorld(map, now, releaseDelay));
+    changes.Absorb(PathWalkers::AdvanceFromWorld(map, now));
     return changes;
 }

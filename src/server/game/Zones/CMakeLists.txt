@@ -6,5 +6,6 @@ target_link_libraries(zones
     PUBLIC
         database
         entities
+        movement
     PRIVATE
         nlohmann_json::nlohmann_json)
