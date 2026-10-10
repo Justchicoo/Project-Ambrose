@@ -555,11 +555,25 @@ class WorldEntryTests(TemporaryFolder):
         self.assertIn("could not reload names", str(raised.exception))
 
     def test_the_zone_rows_are_cached_by_revision_and_layout_outside_the_repository(self):
-        path = zones.cache_path("r806919.Wizard_1_610")
+        path = zones.cache_path("r806919.Wizard_1_610", self.folder)
         self.assertTrue(path.endswith(os.path.join("clientdriver", "zones", f"r806919.Wizard_1_610.v{zones.LAYOUT}.sql")))
         self.assertFalse(os.path.abspath(path).startswith(os.path.abspath(paths.REPOSITORY)))
         with self.assertRaises(StepFailed):
             zones.ensure(self.folder, self.folder, "")
+
+    def test_a_checkout_whose_world_tables_differ_reads_its_own_zone_rows(self):
+        world = os.path.join(self.folder, "data", "sql", "base", "db_world")
+        os.makedirs(world)
+        with open(os.path.join(world, "world.sql"), "w", encoding="utf-8") as handle:
+            handle.write("CREATE TABLE `zone_object` (`id` INT);\n")
+        main = zones.cache_path("r806919.Wizard_1_610", self.folder)
+        self.assertRegex(os.path.basename(main), rf"^r806919\.Wizard_1_610\.v{zones.LAYOUT}\.[0-9a-f]{{10}}\.sql$")
+        self.assertEqual(main, zones.cache_path("r806919.Wizard_1_610", self.folder))
+        pending = os.path.join(self.folder, "data", "sql", "updates", "pending_db_world")
+        os.makedirs(pending)
+        with open(os.path.join(pending, "zone_path.sql"), "w", encoding="utf-8") as handle:
+            handle.write("CREATE TABLE `zone_path` (`id` INT);\n")
+        self.assertNotEqual(main, zones.cache_path("r806919.Wizard_1_610", self.folder))
 
     def test_the_extractor_s_script_is_applied_statement_by_statement_without_its_header_comment(self):
         script = os.path.join(self.folder, "zones.sql")
