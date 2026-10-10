@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
 import json
 import os
 import re
@@ -1213,6 +1213,42 @@ class EngineTests(TemporaryFolder):
             running.run()
         self.assertIn("did not appear", str(raised.exception))
         self.assertIn("fraction", str(raised.exception))
+
+    def test_enter_skips_what_comes_before_the_login_window_and_stops_once_it_shows(self):
+        running = self.build([{"action": "wait_screen", "name": "the login window", "screens": ["login"], "timeout": 2}],
+                             picture=frame_of(GREEN, GREEN))
+        self.client.arriving = [frame_of(GREEN, GREEN), frame_of(RED, BLUE)]
+        running.run()
+        self.assertEqual(self.client.typed, ["\r"])
+        self.assertIn("after 1 Enter press(es)", running.steps[0]["result"])
+        quiet = self.build([{"action": "wait_screen", "name": "the selection", "screens": ["charselect"], "timeout": 2}],
+                           picture=frame_of(RED, BLUE))
+        self.client.arriving = [frame_of(RED, BLUE), frame_of(GREEN, GREEN)]
+        quiet.run()
+        self.assertEqual(self.client.typed, [])
+
+    def test_play_is_pressed_with_enter_and_clicked_only_when_enter_does_not_take(self):
+        steps = [{"action": "click", "name": "press play", "target": "press", "attempts": 3, "dwell": 0.0, "dwell_step": 0.0,
+                  "until": {"action": "wait_client_log", "pattern": "entered the world", "timeout": 0.05}}]
+        enter_presses = mock.patch.object(engine, "PRESSED_BY_ENTER", ("press",))
+        enter_presses.start()
+        self.addCleanup(enter_presses.stop)
+        running = self.build(steps)
+        self.write(os.path.join("client", "WizardClient.log"), ["09/17/26 [STAT] entered the world"], encoding="latin-1")
+        running.run()
+        self.assertEqual(self.client.typed, ["\r"])
+        self.assertEqual(self.client.presses, [])
+        self.assertIn("pressed Enter for press", running.steps[0]["result"])
+        clicked = self.build([dict(steps[0], until=dict(steps[0]["until"], pattern="stands in the world"))])
+
+        def after_one(taken):
+            self.write(os.path.join("client", "WizardClient.log"), ["09/17/26 [STAT] stands in the world"], encoding="latin-1")
+
+        self.client.on_click = after_one
+        clicked.run()
+        self.assertEqual(self.client.typed, ["\r"])
+        self.assertEqual(len(self.client.presses), 1)
+        self.assertIn("Enter did not press press", str(clicked.notes))
 
     def test_a_press_is_repeated_until_the_check_that_it_took_passes(self):
         running = self.build([{"action": "click", "name": "press the button that reconnects", "target": "press",
