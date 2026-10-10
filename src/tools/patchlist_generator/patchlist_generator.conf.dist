@@ -1,18 +1,20 @@
 # Project Ambrose by Imjustchico
-# The install scanner's default rules: the launcher and bug reporter files whose Src names a Windows folder the install does not have, and the files a played install writes for itself that no manifest lists.
+# The install scanner's default rules: the programs and launcher pages served compressed, the launcher and bug reporter files whose Src names a Windows folder the install does not have, and the files a played install writes for itself or a bank keeps that no manifest lists.
+type|Bin/*.dll|4
+type|Bin/*.exe|4
+type|PatchClient/*.dll|4
+type|PatchClient/*.exe|4
+type|PatchClient/web/**|4
 Windows/Bin/BugReporter.exe|Bin/BugReporter.exe|Base|4
 Windows/Bin/KIBugReportBuilderCSR.dll|Bin/KIBugReportBuilderCSR.dll|Base|4
-Windows/Bin/PatchConfig.xml|Bin/PatchConfig.xml|Base|4
+Windows/Bin/PatchConfig.xml|Bin/PatchConfig.xml|Base|1
 Windows/PatchClient/Configurator.exe|Configurator.exe|PatchClient|4
-Windows/PatchClient/PatchConfig.xml|PatchConfig.xml|PatchClient|4
+Windows/PatchClient/PatchConfig.xml|PatchConfig.xml|PatchClient|1
 Windows/PatchClient/WizardLauncher.exe|WizardLauncher.exe|PatchClient|4
 Windows/PatchClient/WizardLauncherUI.dll|WizardLauncherUI.dll|PatchClient|4
-Windows/PatchClient/wizard101.skf|wizard101.skf|PatchClient|4
+Windows/PatchClient/wizard101.skf|wizard101.skf|PatchClient|1
 skip|PatchInfo/**
 skip|Data/GameData/CharacterRegistry/**
-skip|Data/GameData/ActionList.xml
-skip|Data/GameData/InputBindings.xml
-skip|Data/GameData/defaultconfig.xml
 skip|Bin/*.log
 skip|Bin/*.dmp
 skip|Bin/*.bak
@@ -46,5 +48,7 @@ skip|NoLangChange.txt
 skip|Wiz.ico
 skip|Wizard101.exe
 skip|PatchClient/**/*.patch
+skip|PatchClient/English/**
+skip|PatchClient/web/English/**
 skip|PatchClient/WizardLauncher.Log*.txt
 skip|PatchClient/PatchConfig.xml*.bak

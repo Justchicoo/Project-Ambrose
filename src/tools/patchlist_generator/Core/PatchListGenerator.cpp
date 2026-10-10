@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Walks an installation through Src and Tar rules, launcher banks and skip patterns, derives packages, file types and header metrics, writes XML and binary manifests, and diffs them against a reference list.
+ * Walks an installation through Src and Tar rules, type patterns, launcher banks and skip patterns, derives packages, file types and header metrics, writes XML and binary manifests, and diffs them against a reference list, taking from it only the CompressedHeaderSize it cannot derive.
  */
 
 #include "PatchListGenerator.h"
@@ -44,6 +44,7 @@ namespace
     {
         std::map<std::string, Rule> ByDisk;
         std::vector<std::string> Skip;
+        std::vector<std::pair<std::string, uint32>> Types;
     };
 
     struct CachedFile
@@ -164,9 +165,22 @@ namespace
                 rules.Skip.push_back(fields[1]);
                 continue;
             }
+            if (fields.size() == 3 && fields[0] == "type" && !fields[1].empty())
+            {
+                try
+                {
+                    rules.Types.emplace_back(fields[1], static_cast<uint32>(std::stoul(fields[2])));
+                }
+                catch (std::exception const&)
+                {
+                    error = fmt::format("rules file {} line {} has an invalid type", ConfigMgr::PathToUtf8(*path), lineNumber);
+                    return {};
+                }
+                continue;
+            }
             if (fields.size() != 4)
             {
-                error = fmt::format("rules file {} line {} needs src|tar|package|type or skip|pattern", ConfigMgr::PathToUtf8(*path), lineNumber);
+                error = fmt::format("rules file {} line {} needs src|tar|package|type, skip|pattern or type|pattern|type", ConfigMgr::PathToUtf8(*path), lineNumber);
                 return {};
             }
             try
@@ -366,7 +380,7 @@ namespace
             record.HeaderSize = file.Compressed;
     }
 
-    LatestFileList::FileRecord MakeRecord(std::string const& disk, std::string const& package, CachedFile const& file, Rule const* rule, bool sidecar)
+    LatestFileList::FileRecord MakeRecord(std::string const& disk, std::string const& package, CachedFile const& file, Rule const* rule, uint32 typed, bool sidecar)
     {
         LatestFileList::FileRecord record;
         if (rule)
@@ -381,6 +395,8 @@ namespace
         }
         if (rule && rule->Type != 0)
             record.FileType = rule->Type;
+        else if (typed != 0)
+            record.FileType = typed;
         else if (IsWad(disk))
             record.FileType = sidecar ? 5u : 3u;
         else
@@ -458,7 +474,6 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
     result.Revision = revision;
     result.OutputDirectory = revisionDirectory;
     std::map<std::string, std::vector<LatestFileList::FileRecord>> packages;
-    std::map<std::string, CachedFile> scanned;
     std::error_code iteratorError;
     for (std::filesystem::recursive_directory_iterator it(options.Client, iteratorError), end; it != end && !iteratorError; it.increment(iteratorError))
     {
@@ -484,8 +499,9 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
             return std::nullopt;
         std::filesystem::path sidecar = it->path();
         sidecar += ".utd";
-        packages[package].push_back(MakeRecord(*disk, package, *file, matched, std::filesystem::exists(sidecar)));
-        scanned[*disk] = *file;
+        auto const typeRule = std::find_if(rules.Types.begin(), rules.Types.end(), [&](auto const& entry) { return GlobMatch(entry.first, *disk); });
+        uint32 const typed = typeRule == rules.Types.end() ? 0 : typeRule->second;
+        packages[package].push_back(MakeRecord(*disk, package, *file, matched, typed, std::filesystem::exists(sidecar)));
         ++result.FilesScanned;
     }
     if (iteratorError)
@@ -521,9 +537,7 @@ std::optional<PatchListGenerator::Result> PatchListGenerator::Generate(Options c
                 auto const found = known.find(package.Name + "\n" + record.SrcFileName);
                 if (found == known.end())
                     continue;
-                record.FileType = found->second->FileType;
                 record.CompressedHeaderSize = found->second->CompressedHeaderSize;
-                FillMetrics(record, scanned.at(DiskName(record.SrcFileName, record.TarFileName, package.Name)));
             }
     }
 
@@ -601,7 +615,7 @@ std::string PatchListGenerator::Diff(LatestFileList const& generated, LatestFile
         }
         if (!fields.empty())
         {
-            output << "different " << package << ' ' << record->SrcFileName << ": ";
+            output << "different " << package << ' ' << record->SrcFileName << " (ours vs reference): ";
             for (std::size_t index = 0; index < fields.size(); ++index)
                 output << (index ? ", " : "") << fields[index];
             output << '\n';

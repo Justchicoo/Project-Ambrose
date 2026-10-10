@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests synthetic install scanning, WAD header metrics, a played install's launcher banks, Src and Tar rules, type 5 sidecars and skipped player files, the reference diff and the fields it copies, deterministic output, and the persistent checksum cache.
+ * Tests synthetic install scanning, WAD header metrics, a played install's launcher banks, Src and Tar rules, type patterns under them, type 5 sidecars and skipped player files, the reference diff and the one field it takes, deterministic output, and the persistent checksum cache.
  */
 
 #include "Compression.h"
@@ -77,7 +77,7 @@ TEST_F(InstallFixture, SyntheticInstallProducesExpectedPackagesAndMetrics)
     EXPECT_EQ(root->HeaderCRC, Crc32::ComputeClient(std::span<uint8 const>(bytes.data(), 13)));
 }
 
-TEST_F(InstallFixture, PlayedInstallMapsBanksRulesSidecarsAndSkipsWhatThePlayerWrote)
+TEST_F(InstallFixture, PlayedInstallMapsBanksRulesTypePatternsSidecarsAndSkipsWhatThePlayerWrote)
 {
     std::filesystem::create_directories(Root / "PatchClient" / "BankA" / "de");
     std::filesystem::create_directories(Root / "PatchClient" / "BankB" / "de");
@@ -97,6 +97,7 @@ TEST_F(InstallFixture, PlayedInstallMapsBanksRulesSidecarsAndSkipsWhatThePlayerW
     std::ofstream(Root / "Data" / "GameData" / "ZoneB.wad.utd", std::ios::binary) << "sidecar";
     std::ofstream(Root / "rules.conf") << "Windows/Bin/Reporter.exe|Bin/Reporter.exe|Base|4\n"
                                           "Windows/PatchClient/Launcher.exe|Launcher.exe|PatchClient|4\n"
+                                          "type|Bin/*.dll|4\ntype|Bin/*.exe|1\n"
                                           "skip|PatchInfo/**\nskip|Data/GameData/CharacterRegistry/**\nskip|Bin/*.log\n"
                                           "skip|PatchClient/**/*.patch\nskip|rules.conf\n";
     std::string error;
@@ -110,11 +111,12 @@ TEST_F(InstallFixture, PlayedInstallMapsBanksRulesSidecarsAndSkipsWhatThePlayerW
             seen.push_back(fmt::format("{}|{}|{}|{}|{}|{}", package.Name, record.SrcFileName, record.TarFileName, record.FileType,
                 record.HeaderSize, record.HeaderCRC));
     std::string const reporterSize = std::to_string(Ambrose::Compression::Deflate(std::vector<uint8>{ 'r', 'e', 'p', 'o', 'r', 't', 'e', 'r' }).size() + 12);
+    std::string const plainSize = std::to_string(Ambrose::Compression::Deflate(std::vector<uint8>{ 'p', 'l', 'a', 'i', 'n' }).size() + 12);
     std::string const launcherSize = std::to_string(Ambrose::Compression::Deflate(std::vector<uint8>{ 'l', 'a', 'u', 'n', 'c', 'h', 'e', 'r' }).size() + 12);
     std::vector<uint8> const wad = { 'K', 'I', 'W', 'A', 'D', 1, 0, 0, 0, 0, 0, 0, 0 };
     std::string const wadHeader = fmt::format("13|{}", Crc32::ComputeClient(wad));
     EXPECT_EQ(seen, (std::vector<std::string>{
-        "Base|Bin/a.dll||1|0|0",
+        "Base|Bin/a.dll||4|" + plainSize + "|0",
         "Base|Bin/revision.dat||1|0|0",
         "Base|Root.wad||3|" + wadHeader,
         "Base|Windows/Bin/Reporter.exe|Bin/Reporter.exe|4|" + reporterSize + "|0",
@@ -125,7 +127,7 @@ TEST_F(InstallFixture, PlayedInstallMapsBanksRulesSidecarsAndSkipsWhatThePlayerW
     EXPECT_EQ(result->FilesScanned, 8u);
 }
 
-TEST_F(InstallFixture, ReferenceDiffSetsAsideWhatIsNotInstalledAndCopiesFileType)
+TEST_F(InstallFixture, ReferenceDiffSetsAsideWhatIsNotInstalledAndTakesOnlyCompressedHeaderSize)
 {
     std::string error;
     PatchListGenerator::Options plain{ Root, Root / "first", std::nullopt, std::nullopt };
@@ -152,7 +154,7 @@ TEST_F(InstallFixture, ReferenceDiffSetsAsideWhatIsNotInstalledAndCopiesFileType
     });
     EXPECT_NE(report.find("missing ZoneD Data/GameData/ZoneD.wad"), std::string::npos) << report;
     EXPECT_EQ(report.find("missing ZoneC"), std::string::npos) << report;
-    EXPECT_NE(report.find("different Base Bin/a.dll: FileType 1 vs 4"), std::string::npos) << report;
+    EXPECT_NE(report.find("different Base Bin/a.dll (ours vs reference): FileType 1 vs 4"), std::string::npos) << report;
     EXPECT_NE(report.find("1 reference records are not in the install"), std::string::npos) << report;
     EXPECT_NE(report.find("type 3 and 5 records in both: 3 of 3 match"), std::string::npos) << report;
     EXPECT_NE(report.find("package membership: 4 of 5 tables match"), std::string::npos) << report;
@@ -165,9 +167,9 @@ TEST_F(InstallFixture, ReferenceDiffSetsAsideWhatIsNotInstalledAndCopiesFileType
     ASSERT_NE(base, second->Manifest.Packages.end());
     auto const dll = std::find_if(base->Records.begin(), base->Records.end(), [](auto const& record) { return record.SrcFileName == "Bin/a.dll"; });
     ASSERT_NE(dll, base->Records.end());
-    EXPECT_EQ(dll->FileType, 4u);
+    EXPECT_EQ(dll->FileType, 1u);
     EXPECT_EQ(dll->CompressedHeaderSize, 7u);
-    EXPECT_EQ(dll->HeaderSize, Ambrose::Compression::Deflate(std::vector<uint8>{ 'p', 'l', 'a', 'i', 'n' }).size() + 12);
+    EXPECT_EQ(dll->HeaderSize, 0u);
 }
 
 TEST_F(InstallFixture, SecondRunUsesCacheAndKeepsBinaryIdentical)
