@@ -163,6 +163,15 @@ export const routes: Route[] = [
         view: { kind: "arrives", milestone: "17.21", preview: list },
     },
     {
+        path: "registrations",
+        title: "Player registrations",
+        icon: UsersIcon,
+        permission: "accounts.read&accounts.registration",
+        nav: true,
+        group: "Game",
+        view: { kind: "page", load: () => import("./pages/Registrations.svelte") },
+    },
+    {
         path: "client",
         title: "Client data",
         icon: HardDriveIcon,
@@ -252,7 +261,7 @@ export function checkRoutes(table: readonly Partial<Route>[]): string[] {
 }
 
 export function canUse(route: Route, granted: ReadonlySet<string>): boolean {
-    return route.permission === "none" || granted.has("*") || granted.has(route.permission);
+    return route.permission === "none" || granted.has("*") || route.permission.split("&").every((permission) => granted.has(permission));
 }
 
 export type Resolved = { kind: "missing"; path: string } | { kind: "refused"; route: Route } | { kind: "shown"; route: Route };

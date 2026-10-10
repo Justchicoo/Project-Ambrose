@@ -174,18 +174,6 @@ AccountOpResult AccountMgr::SetEmailVerified(uint64 accountId, bool verified)
     return LoginDatabase.DirectExecute(*statement) ? AccountOpResult::Ok : AccountOpResult::DatabaseError;
 }
 
-AccountOpResult AccountMgr::StoreVerifier(uint64 accountId, std::string_view username, std::string_view password)
-{
-    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_UPD_VERIFIER);
-    if (!statement)
-        return AccountOpResult::DatabaseError;
-    VerifierKeyRing::SealedVerifier const sealed = GetSettings()->Keys.Seal(ClientKey::HashPassword(password), username);
-    statement->SetData(0, sealed.Stored);
-    statement->SetData(1, sealed.KeyId);
-    statement->SetData(2, accountId);
-    return LoginDatabase.DirectExecute(*statement) ? AccountOpResult::Ok : AccountOpResult::DatabaseError;
-}
-
 AccountOpResult AccountMgr::ChangePassword(uint64 accountId, std::string_view password)
 {
     if (AccountOpResult const result = ValidatePassword(password); result != AccountOpResult::Ok)
@@ -195,15 +183,22 @@ AccountOpResult AccountMgr::ChangePassword(uint64 accountId, std::string_view pa
         return lookup.Result;
     if (!lookup.Account)
         return AccountOpResult::NameNotExist;
-    AccountOpResult const result = StoreVerifier(accountId, lookup.Account->Username, password);
-    if (result != AccountOpResult::Ok)
-        return result;
-    LOG_INFO("accounts", "Changed the password of account {} (id {})", lookup.Account->Username, accountId);
+    LoginStatement verifier = LoginDatabase.GetPreparedStatement(LOGIN_UPD_VERIFIER);
     LoginStatement revoke = LoginDatabase.GetPreparedStatement(LOGIN_DEL_ACCOUNT_SESSION);
-    if (!revoke)
+    if (!verifier || !revoke)
         return AccountOpResult::DatabaseError;
+    VerifierKeyRing::SealedVerifier const sealed = GetSettings()->Keys.Seal(ClientKey::HashPassword(password), lookup.Account->Username);
+    verifier->SetData(0, sealed.Stored);
+    verifier->SetData(1, sealed.KeyId);
+    verifier->SetData(2, accountId);
     revoke->SetData(0, accountId);
-    return LoginDatabase.DirectExecute(*revoke) ? AccountOpResult::Ok : AccountOpResult::DatabaseError;
+    std::shared_ptr<Transaction<LoginDatabaseConnection>> const transaction = LoginDatabase.BeginTransaction();
+    transaction->Append(std::move(verifier));
+    transaction->Append(std::move(revoke));
+    if (!LoginDatabase.DirectCommitTransaction(transaction))
+        return AccountOpResult::DatabaseError;
+    LOG_INFO("accounts", "Changed the password of account {} (id {})", lookup.Account->Username, accountId);
+    return AccountOpResult::Ok;
 }
 
 AccountOpResult AccountMgr::SetPermissions(uint64 accountId, std::optional<uint32> permissions)
@@ -466,6 +461,28 @@ AccountLookup AccountMgr::GetAccountByName(std::string_view username) const
     if (!result)
         return { AccountOpResult::Ok, std::nullopt };
     return { AccountOpResult::Ok, ReadAccount(*result) };
+}
+
+AccountLookup AccountMgr::GetAccountByEmail(std::string_view email) const
+{
+    AccountLookup lookup;
+    if (!LoginDatabase.IsOpen())
+        return lookup;
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_BY_EMAIL);
+    if (!statement)
+        return lookup;
+    statement->SetData(0, email);
+    PreparedQueryResult result;
+    if (!LoginDatabase.TryQuery(*statement, result))
+        return lookup;
+    if (!result)
+    {
+        lookup.Result = AccountOpResult::Ok;
+        return lookup;
+    }
+    lookup.Account = ReadAccount(*result);
+    lookup.Result = AccountOpResult::Ok;
+    return lookup;
 }
 
 AccountLookup AccountMgr::GetAccountById(uint64 accountId) const

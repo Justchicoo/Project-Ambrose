@@ -13,6 +13,7 @@ void LoginDatabaseConnection::DoPrepareStatements()
     std::string const accountColumns = "SELECT `id`, `username`, `verifier`, `verifier_key_id`, `email`, `security_level`, `chat_mode`, `locked`, `purchased_slots`, `online`, `joindate`, `last_login`, `last_ip`, `last_machine_id`, `permissions`, `email_verified` FROM `account`";
     PrepareStatement(LOGIN_SEL_ACCOUNT_BY_NAME, "LOGIN_SEL_ACCOUNT_BY_NAME", accountColumns + " WHERE `username` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_ACCOUNT_BY_ID, "LOGIN_SEL_ACCOUNT_BY_ID", accountColumns + " WHERE `id` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_ACCOUNT_BY_EMAIL, "LOGIN_SEL_ACCOUNT_BY_EMAIL", accountColumns + " WHERE LOWER(`email`) = LOWER(?) LIMIT 1", ConnectionFlags::Both);
     PrepareStatement(LOGIN_INS_ACCOUNT, "LOGIN_INS_ACCOUNT", "INSERT INTO `account` (`username`, `verifier`, `verifier_key_id`, `email`, `joindate`, `email_verified`) VALUES (?, ?, ?, ?, ?, ?)", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_VERIFIER, "LOGIN_UPD_VERIFIER", "UPDATE `account` SET `verifier` = ?, `verifier_key_id` = ? WHERE `id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_ACCOUNT_EMAIL_VERIFIED, "LOGIN_UPD_ACCOUNT_EMAIL_VERIFIED", "UPDATE `account` SET `email_verified` = ? WHERE `id` = ?", ConnectionFlags::Both);

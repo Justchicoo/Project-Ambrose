@@ -1735,7 +1735,7 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] With the setting off, the registration and reset routes answer 404
+- [x] With the setting off, the registration and reset routes answer 404 (`PanelTest.PublicPlayerAccountRoutesAreOffByDefault`)
 - [ ] A reset request for an unknown email answers exactly as one for a known email, and neither reveals whether it exists
 - [ ] A reset token works once, is refused after its expiry, and the reset deletes `account_session` and kicks the live session
 - [ ] Ten registrations from one address in a minute are throttled, and with a captcha configured the next attempt is asked for one

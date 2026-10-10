@@ -6,6 +6,8 @@
 #include "Panel.h"
 #include "AdminClient.h"
 #include "AdminConfigView.h"
+#include "AccountMgr.h"
+#include "AccountSettings.h"
 #include "PanelCaptcha.h"
 #include "PanelErrorReport.h"
 #include "PanelMail.h"
@@ -71,6 +73,17 @@ namespace
         text.clear();
     }
 
+    struct PlayerPasswordJsonWiper
+    {
+        nlohmann::json& Body;
+
+        ~PlayerPasswordJsonWiper()
+        {
+            if (Body.is_object() && Body.contains("password") && Body["password"].is_string())
+                WipeText(Body["password"].get_ref<std::string&>());
+        }
+    };
+
     nlohmann::json MethodsFor(bool twoFactor)
     {
         return twoFactor ? nlohmann::json::array({ "totp", "recovery_code" }) : nlohmann::json::array({ "password" });
@@ -107,6 +120,44 @@ namespace
             return false;
         return std::all_of(host.begin(), host.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-'; });
     }
+
+    bool IsPlayerEmail(std::string_view email)
+    {
+        if (email.empty() || email.size() > AccountSettings::MaxEmailLength)
+            return false;
+        std::size_t const at = email.find('@');
+        if (at == 0 || at == std::string_view::npos || at + 1 >= email.size() || email.find('@', at + 1) != std::string_view::npos)
+            return false;
+        std::string_view const local = email.substr(0, at);
+        std::string_view const domain = email.substr(at + 1);
+        if (local.size() > 64 || domain.size() > 253 || domain.find('.') == std::string_view::npos)
+            return false;
+        if (email.front() == '.' || email.back() == '.' || email.find("..") != std::string_view::npos)
+            return false;
+        return std::all_of(email.begin(), email.end(), [](unsigned char c)
+        {
+            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                c == '.' || c == '_' || c == '+' || c == '-' || c == '@';
+        });
+    }
+
+    std::string PlayerDomain(std::string_view email)
+    {
+        std::size_t const at = email.rfind('@');
+        return at == std::string_view::npos ? std::string() : Ambrose::ToLower(email.substr(at + 1));
+    }
+
+    std::string PlayerLink(std::string const& publicUrl, std::string_view fallback, std::string_view page, std::string_view token)
+    {
+        std::string base(Ambrose::Trim(publicUrl));
+        if (base.empty())
+            return std::string(fallback);
+        while (!base.empty() && base.back() == '/')
+            base.pop_back();
+        return fmt::format("{}#/player/{}?token={}", base, page, token);
+    }
+
+    constexpr char const* PlayerAccepted = R"({"accepted":true})";
 
     bool ReadAddress(std::string_view text, uint16 defaultPort, std::string& host, uint16& port, std::string& problem)
     {
@@ -177,7 +228,7 @@ namespace
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
     : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
-      _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
+      _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _playerAccounts(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
     _listener.SetSessionSource(&_sessions);
@@ -222,8 +273,11 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     _listener.Routes().SetAdmission([this](AdminRequest const& request) { return Admit(request); });
     _listener.Routes().SetStepUp([this](AdminRequest const& request, std::string_view permission, StepUpWhen when) { return StepUpCheck(request, permission, when); });
     _secondFactor.SetLimits(PanelTwoFactorSettings::DefaultFailureLimit, std::chrono::minutes(PanelTwoFactorSettings::DefaultFailureWindowMinutes));
+    _playerAttempts.SetLimits(10, std::chrono::minutes(1));
+    _playerRateLimit.SetLimits(10, 10.0 / 60.0);
     _settingStore = std::make_shared<PanelSettingStore>(_store, _storeMutex);
     RegisterSignIn();
+    RegisterPlayerAccountRoutes();
     _eventSocket = std::make_unique<PanelEventSocket>(_log, _events, _tickets, _sessions, _users, _grants, _listener.Routes());
     _listener.AddSocket(_eventSocket->MakeRoute());
     _listener.Routes().AddOpenCosting("POST", std::string(PanelEventSocket::TicketPath), PanelEventSocket::TicketCost, [this](AdminRequest const& request)
@@ -907,6 +961,19 @@ void Panel::RegisterSignIn()
     });
 }
 
+void Panel::RegisterPlayerAccountRoutes()
+{
+    AdminRouter& routes = _listener.Routes();
+    routes.AddPublic("GET", "/api/player/registration-info", [this](AdminRequest const& request) { return PlayerRegistrationInfo(request); });
+    routes.AddPublicCosting("POST", "/api/player/register", 10, [this](AdminRequest const& request) { return PlayerRegistrationCreate(request); });
+    routes.AddPublicCosting("POST", "/api/player/verify-email", 5, [this](AdminRequest const& request) { return PlayerEmailVerification(request); });
+    routes.AddPublicCosting("POST", "/api/player/password-reset/request", 5, [this](AdminRequest const& request) { return PlayerPasswordResetRequest(request); });
+    routes.AddPublicCosting("POST", "/api/player/password-reset", 10, [this](AdminRequest const& request) { return PlayerPasswordReset(request); });
+    routes.AddGuarded("GET", "/api/panel/accounts/registrations", "accounts.read", [this](AdminRequest const& request) { return PlayerRegistrationsGet(request); });
+    routes.AddGuarded("POST", "/api/panel/accounts/registrations/resend", "accounts.read", [this](AdminRequest const& request) { return PlayerRegistrationResend(request); });
+    routes.AddGuarded("POST", "/api/panel/accounts/registrations/block", "accounts.read", [this](AdminRequest const& request) { return PlayerRegistrationBlock(request); });
+}
+
 AdminResponse Panel::ClearError(AdminRequest const& request)
 {
     nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
@@ -1075,6 +1142,14 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
     nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
     if (!user || !body.is_object() || !body.contains("values"))
         return AdminResponse::Invalid("Updating panel settings takes a values object", { { "values", "Give the settings to change" } });
+    if (body["values"].is_object())
+    {
+        auto const registration = body["values"].find("Panel.Registration.Enable");
+        if (registration != body["values"].end() && registration->is_string() &&
+            registration->get_ref<std::string const&>() != _settings.ValueOf("Panel.Registration.Enable") &&
+            _authorization->Decide(request, "accounts.registration") != PermissionVerdict::Allowed)
+            return AdminResponse::Problem(403, "forbidden", "Changing player registration requires accounts.registration");
+    }
     std::string error;
     AuditEvent event;
     event.Name = "panel:settings.changed";
@@ -1155,6 +1230,681 @@ AdminResponse Panel::MailTest(AdminRequest const& request)
     answer["sent"] = true;
     answer["to"] = user->Email;
     return AdminResponse::Json(200, answer.dump());
+}
+
+PanelMailSettings Panel::PlayerMailSettings() const
+{
+    PanelMailSettings mail;
+    mail.SmtpHost = _settings.ValueOf("Mail.SmtpHost");
+    mail.TlsMode = _settings.ValueOf("Mail.TlsMode");
+    mail.Username = _settings.ValueOf("Mail.Username");
+    mail.Password = _settings.ValueOf("Mail.Password");
+    mail.FromAddress = _settings.ValueOf("Mail.FromAddress");
+    mail.FromName = _settings.ValueOf("Mail.FromName");
+    try
+    {
+        mail.SmtpPort = static_cast<uint16>(std::stoi(_settings.ValueOf("Mail.SmtpPort")));
+    }
+    catch (std::exception const&)
+    {
+        mail.SmtpPort = 587;
+    }
+    return mail;
+}
+
+std::optional<AdminResponse> Panel::PlayerAttemptGate(AdminRequest const& request, nlohmann::json const& body)
+{
+    PanelSignInVerdict const held = _playerAttempts.Check(request.RemoteAddress, request.RemoteAddress);
+    if (held.Allowed)
+        return std::nullopt;
+
+    std::string const provider = _settings.ValueOf("Security.CaptchaProvider");
+    if (provider.empty() || provider == "off")
+    {
+        AdminResponse answer = AdminResponse::Problem(429, "too_many_requests", "Too many player-account requests from this address");
+        answer.Headers.emplace_back("Retry-After", std::to_string(held.RetryAfterSeconds));
+        return answer;
+    }
+
+    std::string const token = TextOf(body, "captcha");
+    if (token.empty())
+        return AdminResponse::Problem(401, "captcha_required", "Too many player-account requests; answer the captcha to try again");
+
+    PanelCaptchaResult const checked = PanelCaptcha::Verify(provider, _settings.ValueOf("Security.CaptchaSecret"), token,
+        request.RemoteAddress, CaptchaVerifyUrl(provider));
+    if (checked.Result != PanelCaptchaResult::Outcome::Verified)
+    {
+        if (checked.Result == PanelCaptchaResult::Outcome::Unreachable || checked.Result == PanelCaptchaResult::Outcome::Misconfigured)
+            return AdminResponse::Problem(503, "captcha_unreachable", "The captcha could not be checked, so the request is refused");
+        return AdminResponse::Problem(403, "captcha_invalid", "The captcha answer was refused");
+    }
+    _playerAttempts.Succeeded(request.RemoteAddress, request.RemoteAddress);
+    return std::nullopt;
+}
+
+AdminResponse Panel::PlayerRegistrationCreate(AdminRequest const& request)
+{
+    if (_settings.ValueOf("Panel.Registration.Enable") != "1")
+        return AdminResponse::Problem(404, "not_found", "The requested route was not found");
+    if (!_accountsReady.load(std::memory_order_acquire))
+        return AdminResponse::Problem(503, "accounts_unavailable", "The login database is not available to register player accounts");
+
+    nlohmann::json body = ParseBody(request);
+    PlayerPasswordJsonWiper const bodyWiper{ body };
+    if (!body.is_object() || !HasText(body, "username") || !HasText(body, "password") ||
+        (body.contains("email") && !body["email"].is_string()))
+        return AdminResponse::Invalid("Registration takes a username, password and email address", {
+            { "username", "Give a username" }, { "password", "Give a password" }, { "email", "Give an email address" }
+        });
+    std::string const username = TextOf(body, "username");
+    std::string password = TextOf(body, "password");
+    struct PasswordWiper
+    {
+        std::string& Value;
+        ~PasswordWiper() { WipeText(Value); }
+    } passwordWiper{ password };
+    std::string const email = TextOf(body, "email");
+    PanelMailSettings const mail = PlayerMailSettings();
+    bool const mailConfigured = !mail.SmtpHost.empty() && !mail.FromAddress.empty();
+    if ((mailConfigured && !IsPlayerEmail(email)) || (!email.empty() && !IsPlayerEmail(email)))
+        return AdminResponse::Invalid("Give a valid email address", { { "email", "Give a valid email address" } });
+
+    if (std::optional<AdminResponse> const attempt = PlayerAttemptGate(request, body))
+        return *attempt;
+    std::string const addressHash = PanelPlayerAccounts::HashOf(request.RemoteAddress);
+    std::string error;
+    for (auto const& [scope, value] : std::array<std::pair<std::string_view, std::string>, 3>{
+        std::pair<std::string_view, std::string>{ "address", request.RemoteAddress },
+        { "email", Ambrose::ToLower(email) },
+        { "domain", PlayerDomain(email) } })
+    {
+        if (value.empty())
+            continue;
+        PanelRateVerdict const verdict = _playerRateLimit.Take(
+            "player:" + std::string(scope) + ":" + PanelPlayerAccounts::HashOf(value), {}, 1);
+        if (!verdict.Allowed)
+        {
+            _playerAttempts.Failed(request.RemoteAddress, request.RemoteAddress);
+            AdminResponse held = AdminResponse::Problem(429, "too_many_requests", "Too many player-account requests; try again later");
+            held.Headers.emplace_back("Retry-After", std::to_string(verdict.RetryAfterSeconds));
+            return held;
+        }
+    }
+
+    AccountMgr& accounts = AccountMgr::Instance();
+    AccountOpResult const nameResult = accounts.ValidateUsername(username);
+    if (nameResult != AccountOpResult::Ok)
+        return AdminResponse::Invalid(std::string(AccountMgr::Describe(nameResult)), { { "username", std::string(AccountMgr::Describe(nameResult)) } });
+    AccountOpResult const passwordResult = accounts.ValidatePassword(password);
+    if (passwordResult != AccountOpResult::Ok)
+        return AdminResponse::Invalid(std::string(AccountMgr::Describe(passwordResult)), { { "password", std::string(AccountMgr::Describe(passwordResult)) } });
+
+    if (!email.empty())
+    {
+        AccountLookup const emailLookup = accounts.GetAccountByEmail(email);
+        if (emailLookup.Result != AccountOpResult::Ok)
+            return AdminResponse::Problem(503, "accounts_unavailable", "The account database could not check this registration");
+        if (emailLookup.Account)
+        {
+            _playerAttempts.Failed(request.RemoteAddress, request.RemoteAddress);
+            AuditEvent duplicate;
+            duplicate.Name = "player:registration.requested";
+            duplicate.Address = request.RemoteAddress;
+            duplicate.UserAgent = request.UserAgent;
+            duplicate.Result = AuditResult::Refused;
+            duplicate.Reason = "a registration could not be created";
+            std::string failure;
+            if (!Record(duplicate, {}, failure))
+                return AdminResponse::Problem(503, "audit_unavailable", failure);
+            return AdminResponse::Json(202, PlayerAccepted);
+        }
+    }
+
+    if (mailConfigured)
+    {
+        if (request.RemoteAddress.empty())
+            return AdminResponse::Problem(400, "address_unavailable", "The request address is required for mail limits");
+        bool allowed = false;
+        AuditEvent budget;
+        budget.Name = "player:registration.mail_budget";
+        budget.Address = request.RemoteAddress;
+        if (!Record(budget, [&](AuditEvent& recorded, std::string& failure)
+        {
+            allowed = _playerAccounts.TakeDailyMail(addressHash, PanelStore::NowEpochMs(), failure);
+            if (!allowed && failure.find("daily mail limit") != std::string::npos)
+            {
+                failure.clear();
+                recorded.Result = AuditResult::Throttled;
+                recorded.Reason = "the per-address daily mail limit was reached";
+                return true;
+            }
+            return allowed;
+        }, error))
+            return AdminResponse::Problem(503, "mail_budget_unavailable", error);
+        if (!allowed)
+        {
+            _playerAttempts.Failed(request.RemoteAddress, request.RemoteAddress);
+            return AdminResponse::Json(202, PlayerAccepted);
+        }
+    }
+
+    uint64 accountId = 0;
+    bool const verified = !mailConfigured;
+    AccountOpResult const created = accounts.CreateAccount(username, password, email, &accountId, verified);
+    _playerAttempts.Failed(request.RemoteAddress, request.RemoteAddress);
+    if (created != AccountOpResult::Ok)
+    {
+        AuditEvent refused;
+        refused.Name = "player:registration.requested";
+        refused.Address = request.RemoteAddress;
+        refused.UserAgent = request.UserAgent;
+        refused.Result = AuditResult::Refused;
+        refused.Reason = "a registration could not be created";
+        std::string failure;
+        if (!Record(refused, {}, failure))
+            return AdminResponse::Problem(503, "audit_unavailable", failure);
+        if (created == AccountOpResult::NameAlreadyExists)
+            return AdminResponse::Json(202, PlayerAccepted);
+        return AdminResponse::Invalid(std::string(AccountMgr::Describe(created)), { { "username", std::string(AccountMgr::Describe(created)) } });
+    }
+
+    PlayerTokenMinted minted;
+    std::string const state = verified ? "verified" : "pending";
+    int64 const now = PanelStore::NowEpochMs();
+    if (mailConfigured)
+        minted = PanelPlayerAccounts::Mint();
+    AuditEvent event;
+    event.Name = "player:registration.created";
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    event.Actor = AuditActor::Token;
+    event.ActorId = "public";
+    event.On("player_account", std::to_string(accountId));
+    if (!Record(event, [&](std::string& failure)
+    {
+        if (!_playerAccounts.Register(accountId, username, state, now, failure))
+            return false;
+        if (mailConfigured && !_playerAccounts.KeepToken(PlayerTokenKind::Verification, accountId, minted, addressHash, now,
+                now + std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::hours(24)).count(), failure))
+            return false;
+        return true;
+    }, error))
+    {
+        accounts.SetLocked(accountId, true);
+        return AdminResponse::Problem(503, "registration_unavailable", error);
+    }
+
+    if (mailConfigured)
+    {
+        std::string const link = PlayerLink(_settings.ValueOf("Panel.PublicUrl"),
+            LinkFor("player/verify", minted.Token), "verify", minted.Token);
+        PanelMailResult const sent = PanelMail::Send(mail, email, "Verify your Ambrose account",
+            "Open this link to verify your player account. It expires in 24 hours:\r\n" + link + "\r\n");
+        AuditEvent delivery;
+        delivery.Name = "player:verification_mail.sent";
+        delivery.Address = request.RemoteAddress;
+        delivery.Result = sent.Sent ? AuditResult::Succeeded : AuditResult::Refused;
+        delivery.Reason = sent.Sent ? "verification mail sent" : "verification mail could not be delivered";
+        delivery.On("player_account", std::to_string(accountId));
+        std::string auditError;
+        if (!Record(delivery, {}, auditError))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "Player verification mail result could not be recorded: {}", auditError);
+    }
+    return AdminResponse::Json(202, PlayerAccepted);
+}
+
+AdminResponse Panel::PlayerRegistrationInfo(AdminRequest const& request)
+{
+    if (_settings.ValueOf("Panel.Registration.Enable") != "1")
+        return AdminResponse::Problem(404, "not_found", "The requested route was not found");
+    if (!_accountsReady.load(std::memory_order_acquire))
+        return AdminResponse::Problem(503, "accounts_unavailable", "Player account registration is temporarily unavailable");
+    std::string const provider = _settings.ValueOf("Security.CaptchaProvider");
+    PanelMailSettings const mail = PlayerMailSettings();
+    nlohmann::json answer{
+        { "schema", 1 },
+        { "enabled", true },
+        { "email_verification", !mail.SmtpHost.empty() && !mail.FromAddress.empty() },
+        { "captcha_provider", provider },
+        { "captcha_site_key", _settings.ValueOf("Security.CaptchaSiteKey") },
+        { "captcha_required", !provider.empty() && provider != "off" &&
+            _playerAttempts.RecentFailures(request.RemoteAddress) >= _playerAttempts.GetFailures() }
+    };
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::PlayerEmailVerification(AdminRequest const& request)
+{
+    if (!_accountsReady.load(std::memory_order_acquire))
+        return AdminResponse::Problem(503, "accounts_unavailable", "The login database is not available to verify player accounts");
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object() || !HasText(body, "token"))
+        return AdminResponse::Invalid("Email verification takes a token", { { "token", "Open the verification link again" } });
+
+    std::string error;
+    PlayerToken token;
+    PlayerTokenState state;
+    {
+        std::lock_guard const lock(_storeMutex);
+        state = _playerAccounts.Peek(PlayerTokenKind::Verification, TextOf(body, "token"), PanelStore::NowEpochMs(), token, error);
+    }
+    if (state == PlayerTokenState::StoreFailed)
+        return AdminResponse::Problem(503, "verification_unavailable", error);
+    if (state != PlayerTokenState::Valid)
+    {
+        AuditEvent refused;
+        refused.Name = "player:email_verification.refused";
+        refused.Address = request.RemoteAddress;
+        refused.UserAgent = request.UserAgent;
+        refused.Result = AuditResult::Refused;
+        refused.Reason = "the verification link was expired, used or unknown";
+        if (!Record(refused, {}, error))
+            return AdminResponse::Problem(503, "audit_unavailable", error);
+        return AdminResponse::Problem(400, "verification_refused", "That verification link is invalid or has expired");
+    }
+
+    AccountMgr& accounts = AccountMgr::Instance();
+    AccountLookup const lookup = accounts.GetAccountById(token.AccountId);
+    if (lookup.Result != AccountOpResult::Ok || !lookup.Account)
+        return AdminResponse::Problem(503, "accounts_unavailable", "The player account could not be read");
+    if (lookup.Account->EmailVerified)
+        return AdminResponse::Json(200, R"({"verified":true})");
+
+    AccountOpResult const verified = accounts.SetEmailVerified(token.AccountId, true);
+    if (verified != AccountOpResult::Ok)
+        return AdminResponse::Problem(503, "verification_unavailable", "The account database could not save email verification");
+
+    AuditEvent event;
+    event.Name = "player:email_verified";
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    event.Actor = AuditActor::Token;
+    event.ActorId = "public";
+    event.On("player_account", std::to_string(token.AccountId));
+    if (!Record(event, [&](std::string& failure)
+    {
+        return _playerAccounts.Spend(PlayerTokenKind::Verification, TextOf(body, "token"),
+                   PanelPlayerAccounts::HashOf(request.RemoteAddress), PanelStore::NowEpochMs(), failure) &&
+            _playerAccounts.SetState(token.AccountId, "verified", PanelStore::NowEpochMs(), failure);
+    }, error))
+    {
+        accounts.SetEmailVerified(token.AccountId, false);
+        return AdminResponse::Problem(503, "verification_unavailable", error);
+    }
+    return AdminResponse::Json(200, R"({"verified":true})");
+}
+
+AdminResponse Panel::PlayerPasswordResetRequest(AdminRequest const& request)
+{
+    if (_settings.ValueOf("Panel.Registration.Enable") != "1")
+        return AdminResponse::Problem(404, "not_found", "The requested route was not found");
+    if (!_accountsReady.load(std::memory_order_acquire))
+        return AdminResponse::Problem(503, "accounts_unavailable", "The login database is not available for password recovery");
+    nlohmann::json const body = ParseBody(request);
+    std::string const email = TextOf(body, "email");
+    if (!body.is_object() || !IsPlayerEmail(email))
+        return AdminResponse::Invalid("Give the email address for the player account", { { "email", "Give a valid email address" } });
+    if (std::optional<AdminResponse> const attempt = PlayerAttemptGate(request, body))
+        return *attempt;
+
+    std::string const addressHash = PanelPlayerAccounts::HashOf(request.RemoteAddress);
+    std::string const emailHash = PanelPlayerAccounts::HashOf(Ambrose::ToLower(email));
+    std::string const domain = PlayerDomain(email);
+    for (auto const& [scope, value] : std::array<std::pair<std::string_view, std::string>, 3>{
+        std::pair<std::string_view, std::string>{ "address", request.RemoteAddress },
+        { "account", emailHash },
+        { "domain", domain } })
+    {
+        if (value.empty())
+            continue;
+        PanelRateVerdict const verdict = _playerRateLimit.Take(
+            "player-reset:" + std::string(scope) + ":" + PanelPlayerAccounts::HashOf(value), {}, 1);
+        if (!verdict.Allowed)
+        {
+            _playerAttempts.Failed(request.RemoteAddress, request.RemoteAddress);
+            AdminResponse held = AdminResponse::Problem(429, "too_many_requests", "Too many password recovery requests; try again later");
+            held.Headers.emplace_back("Retry-After", std::to_string(verdict.RetryAfterSeconds));
+            return held;
+        }
+    }
+
+    AccountLookup const lookup = AccountMgr::Instance().GetAccountByEmail(email);
+    if (lookup.Result != AccountOpResult::Ok)
+        return AdminResponse::Problem(503, "accounts_unavailable", "The account database could not accept the recovery request");
+    PanelMailSettings const mail = PlayerMailSettings();
+    bool const mailConfigured = !mail.SmtpHost.empty() && !mail.FromAddress.empty();
+    PlayerTokenMinted minted;
+    if (lookup.Account && !lookup.Account->Locked && !lookup.Account->Email.empty() && mailConfigured)
+        minted = PanelPlayerAccounts::Mint();
+
+    AuditEvent event;
+    event.Name = "player:password_reset.requested";
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    event.Actor = AuditActor::Token;
+    event.ActorId = "public";
+    if (minted.Token.empty())
+        event.Reason = "a password recovery request was received";
+    else
+        event.On("player_account", std::to_string(lookup.Account->Id));
+    bool shouldSend = false;
+    std::string error;
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        if (minted.Token.empty())
+            return true;
+        int64 const now = PanelStore::NowEpochMs();
+        if (!_playerAccounts.TakeDailyMail(addressHash, now, failure))
+        {
+            if (failure.find("daily mail limit") != std::string::npos)
+            {
+                failure.clear();
+                recorded.Result = AuditResult::Throttled;
+                recorded.Reason = "the per-address daily mail limit was reached";
+                return true;
+            }
+            return false;
+        }
+        shouldSend = _playerAccounts.KeepToken(PlayerTokenKind::PasswordReset, lookup.Account->Id, minted, addressHash,
+            now, now + std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::minutes(30)).count(), failure);
+        return shouldSend;
+    }, error))
+        return AdminResponse::Problem(503, "recovery_unavailable", error);
+
+    if (shouldSend)
+    {
+        std::string const link = PlayerLink(_settings.ValueOf("Panel.PublicUrl"),
+            LinkFor("player/reset", minted.Token), "reset", minted.Token);
+        PanelMailResult const sent = PanelMail::Send(mail, email, "Reset your Ambrose account password",
+            "Open this link to choose a new player-account password. It expires in 30 minutes:\r\n" + link + "\r\n");
+        AuditEvent delivery;
+        delivery.Name = "player:password_reset_mail.sent";
+        delivery.Address = request.RemoteAddress;
+        delivery.Result = sent.Sent ? AuditResult::Succeeded : AuditResult::Refused;
+        delivery.Reason = sent.Sent ? "password recovery mail sent" : "password recovery mail could not be delivered";
+        delivery.On("player_account", std::to_string(lookup.Account->Id));
+        std::string auditError;
+        if (!Record(delivery, {}, auditError))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "Player password recovery mail result could not be recorded: {}", auditError);
+    }
+    _playerAttempts.Failed(request.RemoteAddress, request.RemoteAddress);
+    return AdminResponse::Json(202, PlayerAccepted);
+}
+
+AdminResponse Panel::PlayerPasswordReset(AdminRequest const& request)
+{
+    if (_settings.ValueOf("Panel.Registration.Enable") != "1")
+        return AdminResponse::Problem(404, "not_found", "The requested route was not found");
+    if (!_accountsReady.load(std::memory_order_acquire))
+        return AdminResponse::Problem(503, "accounts_unavailable", "The login database is not available for password recovery");
+    nlohmann::json body = ParseBody(request);
+    PlayerPasswordJsonWiper const bodyWiper{ body };
+    if (!body.is_object() || !HasText(body, "token") || !HasText(body, "password"))
+        return AdminResponse::Invalid("Password recovery takes the token and a new password", {
+            { "token", "Open the recovery link again" }, { "password", "Choose a new password" }
+        });
+    std::string password = TextOf(body, "password");
+    struct PasswordWiper
+    {
+        std::string& Value;
+        ~PasswordWiper() { WipeText(Value); }
+    } passwordWiper{ password };
+    AccountMgr& accounts = AccountMgr::Instance();
+    AccountOpResult const passwordResult = accounts.ValidatePassword(password);
+    if (passwordResult != AccountOpResult::Ok)
+        return AdminResponse::Invalid(std::string(AccountMgr::Describe(passwordResult)), { { "password", std::string(AccountMgr::Describe(passwordResult)) } });
+
+    std::string error;
+    PlayerToken token;
+    PlayerTokenState state;
+    {
+        std::lock_guard const lock(_storeMutex);
+        state = _playerAccounts.Peek(PlayerTokenKind::PasswordReset, TextOf(body, "token"), PanelStore::NowEpochMs(), token, error);
+    }
+    if (state == PlayerTokenState::StoreFailed)
+        return AdminResponse::Problem(503, "recovery_unavailable", error);
+    if (state != PlayerTokenState::Valid)
+    {
+        AuditEvent refused;
+        refused.Name = "player:password_reset.refused";
+        refused.Address = request.RemoteAddress;
+        refused.UserAgent = request.UserAgent;
+        refused.Result = AuditResult::Refused;
+        refused.Reason = "the password recovery link was expired, used or unknown";
+        if (!Record(refused, {}, error))
+            return AdminResponse::Problem(503, "audit_unavailable", error);
+        return AdminResponse::Problem(400, "recovery_refused", "That recovery link is invalid or has expired");
+    }
+
+    AuditEvent event;
+    event.Name = "player:password_reset.link_spent";
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    event.Actor = AuditActor::Token;
+    event.ActorId = "public";
+    event.On("player_account", std::to_string(token.AccountId));
+    if (!Record(event, [&](std::string& failure)
+    {
+        return _playerAccounts.Spend(PlayerTokenKind::PasswordReset, TextOf(body, "token"),
+            PanelPlayerAccounts::HashOf(request.RemoteAddress), PanelStore::NowEpochMs(), failure);
+    }, error))
+        return AdminResponse::Problem(400, "recovery_refused", "That recovery link is invalid or has expired");
+
+    AccountOpResult const changed = accounts.ChangePassword(token.AccountId, password);
+    if (changed != AccountOpResult::Ok)
+    {
+        AuditEvent refused;
+        refused.Name = "player:password_reset.refused";
+        refused.Address = request.RemoteAddress;
+        refused.Result = AuditResult::Refused;
+        refused.Reason = "the account database could not change the password";
+        refused.On("player_account", std::to_string(token.AccountId));
+        std::string auditError;
+        bool recorded = Record(refused, [&](std::string& failure)
+        {
+            return _playerAccounts.Restore(PlayerTokenKind::PasswordReset, TextOf(body, "token"), PanelStore::NowEpochMs(), failure);
+        }, auditError);
+        if (!recorded)
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A failed player password reset could not restore its link and record the refusal: {}", auditError);
+        return AdminResponse::Problem(503, "recovery_unavailable", recorded
+            ? "The account database could not change the password; try the recovery link again"
+            : "The account database could not change the password; request another recovery link");
+    }
+    AuditEvent completed;
+    completed.Name = "player:password_reset.completed";
+    completed.Address = request.RemoteAddress;
+    completed.UserAgent = request.UserAgent;
+    completed.Actor = AuditActor::Token;
+    completed.ActorId = "public";
+    completed.On("player_account", std::to_string(token.AccountId));
+    std::string auditError;
+    if (!Record(completed, {}, auditError))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The completed player password reset could not be recorded: {}", auditError);
+    return AdminResponse::Json(200, R"({"changed":true})");
+}
+
+AdminResponse Panel::PlayerRegistrationsGet(AdminRequest const& request)
+{
+    if (_authorization->Decide(request, "accounts.registration") != PermissionVerdict::Allowed)
+        return AdminResponse::Problem(403, "forbidden", "Reading player registrations requires accounts.registration");
+    std::vector<PlayerRegistration> registrations;
+    std::string error;
+    {
+        std::lock_guard const lock(_storeMutex);
+        registrations = _playerAccounts.List(200, error);
+    }
+    if (!error.empty())
+        return AdminResponse::Problem(503, "registrations_unavailable", error);
+    nlohmann::json answer;
+    answer["schema"] = 1;
+    answer["registrations"] = nlohmann::json::array();
+    for (PlayerRegistration const& registration : registrations)
+        answer["registrations"].push_back({
+            { "account_id", registration.AccountId },
+            { "username", registration.Username },
+            { "state", registration.State },
+            { "created_epoch_ms", registration.CreatedEpochMs },
+            { "updated_epoch_ms", registration.UpdatedEpochMs }
+        });
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::PlayerRegistrationResend(AdminRequest const& request)
+{
+    if (_authorization->Decide(request, "accounts.registration") != PermissionVerdict::Allowed)
+        return AdminResponse::Problem(403, "forbidden", "Resending player verification requires accounts.registration");
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object() || !body.contains("account_id") ||
+        (!body["account_id"].is_number_unsigned() && !body["account_id"].is_number_integer()))
+        return AdminResponse::Invalid("Resending verification takes an account id", { { "account_id", "Choose a player account" } });
+    uint64 accountId = 0;
+    if (body["account_id"].is_number_unsigned())
+        accountId = body["account_id"].get<uint64>();
+    else
+    {
+        int64 const value = body["account_id"].get<int64>();
+        if (value <= 0)
+            return AdminResponse::Invalid("The account id must be positive", { { "account_id", "Choose a player account" } });
+        accountId = static_cast<uint64>(value);
+    }
+    if (accountId == 0 || accountId > static_cast<uint64>(std::numeric_limits<int64>::max()))
+        return AdminResponse::Invalid("The account id must be positive", { { "account_id", "Choose a player account" } });
+
+    std::string error;
+    std::optional<PlayerRegistration> registration;
+    {
+        std::lock_guard const lock(_storeMutex);
+        registration = _playerAccounts.Find(accountId, error);
+    }
+    if (!error.empty())
+        return AdminResponse::Problem(503, "registrations_unavailable", error);
+    if (!registration)
+        return AdminResponse::Problem(404, "registration_missing", "That registration was not found");
+    if (registration->State != "pending")
+        return AdminResponse::Problem(409, "registration_not_pending", "Only an unverified registration can receive another verification link");
+
+    AccountLookup const lookup = AccountMgr::Instance().GetAccountById(accountId);
+    if (lookup.Result != AccountOpResult::Ok || !lookup.Account)
+        return AdminResponse::Problem(503, "accounts_unavailable", "The player account could not be read");
+    if (lookup.Account->Email.empty() || lookup.Account->EmailVerified)
+        return AdminResponse::Problem(409, "registration_not_pending", "This account has no pending email verification");
+
+    PanelMailSettings const mail = PlayerMailSettings();
+    if (mail.SmtpHost.empty() || mail.FromAddress.empty())
+        return AdminResponse::Problem(409, "mail_not_configured", "Set Mail.SmtpHost and Mail.FromAddress before resending verification");
+
+    PlayerTokenMinted const minted = PanelPlayerAccounts::Mint();
+    std::string const addressHash = PanelPlayerAccounts::HashOf(request.RemoteAddress);
+    bool allowed = false;
+    AuditEvent event;
+    std::optional<PanelUser> const actor = UserOf(request);
+    event.Name = "player:verification_mail.resent";
+    event.Actor = AuditActor::User;
+    event.ActorId = actor ? std::to_string(actor->Id) : request.Principal;
+    event.ActorName = actor ? actor->Username : request.Principal;
+    event.Address = request.RemoteAddress;
+    event.On("player_account", std::to_string(accountId), registration->Username);
+    int64 const now = PanelStore::NowEpochMs();
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        if (!_playerAccounts.TakeDailyMail(addressHash, now, failure))
+        {
+            if (failure.find("daily mail limit") != std::string::npos)
+            {
+                failure.clear();
+                recorded.Result = AuditResult::Throttled;
+                recorded.Reason = "the per-address daily mail limit was reached";
+                return true;
+            }
+            return false;
+        }
+        allowed = true;
+        return _playerAccounts.KeepToken(PlayerTokenKind::Verification, accountId, minted, addressHash, now,
+            now + std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::hours(24)).count(), failure);
+    }, error))
+        return AdminResponse::Problem(503, "verification_unavailable", error);
+    if (!allowed)
+        return AdminResponse::Problem(429, "daily_mail_limit", "The per-address daily mail limit has been reached");
+
+    std::string const link = PlayerLink(_settings.ValueOf("Panel.PublicUrl"),
+        LinkFor("player/verify", minted.Token), "verify", minted.Token);
+    PanelMailResult const sent = PanelMail::Send(mail, lookup.Account->Email, "Verify your Ambrose account",
+        "Open this link to verify your player account. It expires in 24 hours:\r\n" + link + "\r\n");
+    AuditEvent delivery;
+    delivery.Name = "player:verification_mail.delivery";
+    delivery.Actor = AuditActor::User;
+    delivery.ActorId = actor ? std::to_string(actor->Id) : request.Principal;
+    delivery.ActorName = actor ? actor->Username : request.Principal;
+    delivery.Address = request.RemoteAddress;
+    delivery.Result = sent.Sent ? AuditResult::Succeeded : AuditResult::Refused;
+    delivery.Reason = sent.Sent ? "verification mail sent" : "verification mail could not be delivered";
+    delivery.On("player_account", std::to_string(accountId), registration->Username);
+    std::string auditError;
+    if (!Record(delivery, {}, auditError))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "Resent player verification mail result could not be recorded: {}", auditError);
+    if (!sent.Sent)
+        return AdminResponse::Problem(502, "verification_mail_failed", "The verification mail could not be delivered");
+    return AdminResponse::Json(200, R"({"sent":true})");
+}
+
+AdminResponse Panel::PlayerRegistrationBlock(AdminRequest const& request)
+{
+    if (_authorization->Decide(request, "accounts.registration") != PermissionVerdict::Allowed)
+        return AdminResponse::Problem(403, "forbidden", "Blocking player registrations requires accounts.registration");
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object() || !body.contains("account_id") ||
+        (!body["account_id"].is_number_unsigned() && !body["account_id"].is_number_integer()))
+        return AdminResponse::Invalid("Blocking a registration takes an account id", { { "account_id", "Choose a player account" } });
+    uint64 accountId = 0;
+    if (body["account_id"].is_number_unsigned())
+        accountId = body["account_id"].get<uint64>();
+    else
+    {
+        int64 const value = body["account_id"].get<int64>();
+        if (value <= 0)
+            return AdminResponse::Invalid("The account id must be positive", { { "account_id", "Choose a player account" } });
+        accountId = static_cast<uint64>(value);
+    }
+    if (accountId == 0 || accountId > static_cast<uint64>(std::numeric_limits<int64>::max()))
+        return AdminResponse::Invalid("The account id must be positive", { { "account_id", "Choose a player account" } });
+
+    std::string error;
+    std::optional<PlayerRegistration> registration;
+    {
+        std::lock_guard const lock(_storeMutex);
+        registration = _playerAccounts.Find(accountId, error);
+    }
+    if (!error.empty())
+        return AdminResponse::Problem(503, "registrations_unavailable", error);
+    if (!registration)
+        return AdminResponse::Problem(404, "registration_missing", "That registration was not found");
+
+    AccountMgr& accounts = AccountMgr::Instance();
+    AccountLookup const lookup = accounts.GetAccountById(accountId);
+    if (lookup.Result != AccountOpResult::Ok || !lookup.Account)
+        return AdminResponse::Problem(503, "accounts_unavailable", "The player account could not be read");
+    if (!lookup.Account->Locked && accounts.SetLocked(accountId, true) != AccountOpResult::Ok)
+        return AdminResponse::Problem(503, "accounts_unavailable", "The account database could not block this player");
+
+    std::optional<PanelUser> const actor = UserOf(request);
+    AuditEvent event;
+    event.Name = "player:registration.blocked";
+    event.Actor = AuditActor::User;
+    event.ActorId = actor ? std::to_string(actor->Id) : request.Principal;
+    event.ActorName = actor ? actor->Username : request.Principal;
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    event.On("player_account", std::to_string(accountId), registration->Username);
+    if (!Record(event, [&](std::string& failure)
+    {
+        return _playerAccounts.SetState(accountId, "blocked", PanelStore::NowEpochMs(), failure);
+    }, error))
+    {
+        if (!lookup.Account->Locked)
+            accounts.SetLocked(accountId, false);
+        return AdminResponse::Problem(503, "registration_unavailable", error);
+    }
+    return AdminResponse::Json(200, R"({"blocked":true})");
 }
 
 std::optional<AdminResponse> Panel::CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username)

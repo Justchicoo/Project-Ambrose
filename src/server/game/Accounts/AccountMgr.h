@@ -126,6 +126,7 @@ public:
 
     AccountLookup GetAccountByName(std::string_view username) const;
     AccountLookup GetAccountById(uint64 accountId) const;
+    AccountLookup GetAccountByEmail(std::string_view email) const;
     static std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> PrepareGetAccountById(uint64 accountId);
     static std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> PrepareGetAccountByIdWithMute(uint64 accountId, uint64 now);
     static AccountInfo ReadAccountRow(PreparedResultSet const& row);
@@ -140,7 +141,6 @@ public:
 private:
     AccountMgr();
 
-    AccountOpResult StoreVerifier(uint64 accountId, std::string_view username, std::string_view password);
     template<class Key>
     AccountOpResult AddBan(LoginDatabaseStatements index, Key const& key, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason);
     template<class Key>

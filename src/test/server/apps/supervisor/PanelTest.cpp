@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it serves the dashboard compiled into the program with the same headers a folder gets until Panel.DashboardDir names a folder, which then wins, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, reset, batch, reload or reveal is recorded with who, where, why and how it ended, a dry run not at all and a reveal naming a key with only the keys it showed, a refused change too, but never a value; and the audit verify route counts the events waiting for the collector and names the first row a changed record breaks the chain at.
+ * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, public player-account routes are absent until registration is enabled, it serves the dashboard compiled into the program with the same headers a folder gets until Panel.DashboardDir names a folder, which then wins, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, reset, batch, reload or reveal is recorded with who, where, why and how it ended, a dry run not at all and a reveal naming a key with only the keys it showed, a refused change too, but never a value; and the audit verify route counts the events waiting for the collector and names the first row a changed record breaks the chain at.
  */
 
 #include "AdminClient.h"
@@ -11,6 +11,7 @@
 #include "Panel.h"
 #include "PanelErrors.h"
 #include "PanelAudit.h"
+#include "PanelPlayerAccounts.h"
 #include "PanelStore.h"
 #include "TestEmbeddedPage.h"
 #include "TlsCertificate.h"
@@ -142,6 +143,67 @@ TEST_F(PanelTest, OpensItsStoreAndAnswersItsOwnRoutesOnLoopback)
     panel.Stop();
     EXPECT_FALSE(panel.IsRunning());
     EXPECT_FALSE(panel.Store().IsOpen());
+}
+
+TEST_F(PanelTest, PublicPlayerAccountRoutesAreOffByDefault)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+
+    AdminClient const anonymous("127.0.0.1", panel.GetPort(), "");
+    EXPECT_EQ(anonymous.Send({ "GET", "/api/player/registration-info", "", "application/json", "" }, std::chrono::seconds(10)).Status, 404);
+    EXPECT_EQ(anonymous.Send({ "POST", "/api/player/register", "{}", "application/json", "" }, std::chrono::seconds(10)).Status, 404);
+    EXPECT_EQ(anonymous.Send({ "POST", "/api/player/password-reset/request", "{}", "application/json", "" }, std::chrono::seconds(10)).Status, 404);
+    EXPECT_EQ(anonymous.Send({ "POST", "/api/player/password-reset", "{}", "application/json", "" }, std::chrono::seconds(10)).Status, 404);
+}
+
+TEST_F(PanelTest, PlayerAccountTokensAreHashedSingleUseAndExpire)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+
+    PanelPlayerAccounts accounts(panel.Store());
+    int64 const now = PanelStore::NowEpochMs();
+    ASSERT_TRUE(accounts.Register(17, "player-seventeen", "pending", now, error)) << error;
+
+    PlayerTokenMinted const minted = PanelPlayerAccounts::Mint();
+    ASSERT_TRUE(accounts.KeepToken(PlayerTokenKind::Verification, 17, minted, "address-hash", now, now + 1000, error)) << error;
+    EXPECT_NE(minted.Token, minted.Hash);
+
+    PlayerToken found;
+    EXPECT_EQ(accounts.Peek(PlayerTokenKind::Verification, minted.Token, now + 999, found, error), PlayerTokenState::Valid);
+    EXPECT_EQ(found.AccountId, 17u);
+    EXPECT_TRUE(accounts.Spend(PlayerTokenKind::Verification, minted.Token, "address-hash", now + 999, error)) << error;
+    EXPECT_EQ(accounts.Peek(PlayerTokenKind::Verification, minted.Token, now + 999, found, error), PlayerTokenState::Spent);
+    EXPECT_TRUE(accounts.Restore(PlayerTokenKind::Verification, minted.Token, now + 999, error)) << error;
+    EXPECT_EQ(accounts.Peek(PlayerTokenKind::Verification, minted.Token, now + 999, found, error), PlayerTokenState::Valid);
+
+    PlayerTokenMinted const expired = PanelPlayerAccounts::Mint();
+    ASSERT_TRUE(accounts.KeepToken(PlayerTokenKind::PasswordReset, 17, expired, "address-hash", now, now + 1000, error)) << error;
+    EXPECT_EQ(accounts.Peek(PlayerTokenKind::PasswordReset, expired.Token, now + 1000, found, error), PlayerTokenState::Expired);
+
+    std::optional<PanelStore::Statement> rawToken = panel.Store().Prepare(
+        "SELECT COUNT(*) FROM player_account_token WHERE token_hash = ?", error);
+    ASSERT_TRUE(rawToken.has_value()) << error;
+    rawToken->Bind(1, minted.Token);
+    ASSERT_TRUE(rawToken->Step(error)) << error;
+    EXPECT_EQ(rawToken->Int64(0), 0);
+}
+
+TEST_F(PanelTest, PlayerAccountMailBudgetStopsAtItsDailyLimit)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+
+    PanelPlayerAccounts accounts(panel.Store());
+    int64 const now = PanelStore::NowEpochMs();
+    for (uint32 sent = 0; sent < PanelPlayerAccounts::DailyMailLimit; ++sent)
+        ASSERT_TRUE(accounts.TakeDailyMail("address-hash", now, error)) << error;
+    EXPECT_FALSE(accounts.TakeDailyMail("address-hash", now, error));
+    EXPECT_NE(error.find("daily mail limit"), std::string::npos) << error;
 }
 
 TEST_F(PanelTest, RefusesABindBeyondThisMachineInThePanelsOwnOptionNames)
