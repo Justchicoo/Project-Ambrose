@@ -158,7 +158,7 @@ MapObjectChanges PathWalkers::Advance(Map& map, Map::Clock::time_point now, std:
         double const dx = step->Position.X - before.X;
         double const dy = step->Position.Y - before.Y;
         if (dx != 0.0 || dy != 0.0)
-            yaw = static_cast<float>(std::atan2(dy, dx));
+            yaw = static_cast<float>(std::atan2(-dx, -dy));
         map.MoveObject(id, PointOf(step->Position), yaw);
         std::optional<int8> state;
         if (step->Moving != walker.Moving || !walker.Shown)
