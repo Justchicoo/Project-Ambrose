@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What character_stats keeps for a wizard beyond the level, experience and school its character row holds: experience past the level cap, its secondary school, unspent training points, gold, its current health and mana, each empty when full, potion charge and capacity, arena points, whether its level is locked and whether its backpack shows the lock button, with the revision of the write that last set them.
+ * What character_stats keeps for a wizard beyond the level, experience and school its character row holds: experience past the level cap, its secondary school, unspent training points, gold, its current health and mana, each empty when full, potion charge and capacity, arena points, whether its level is locked, whether its backpack shows the lock button and the three radial menus of emote and chat-phrase slots as the client's blobs, with the revision of the write that last set them.
  */
 
 #ifndef AMBROSE_CHARACTERSTATS_H
@@ -10,6 +10,7 @@
 
 #include <array>
 #include <optional>
+#include <string>
 
 struct CharacterStats
 {
@@ -26,6 +27,7 @@ struct CharacterStats
     std::array<uint32, 3> PurchasedCustomEmotes{};
     std::array<uint32, 3> PurchasedCustomTeleportEffects{};
     bool ShowItemLock = false;
+    std::array<std::string, 3> RadialMenus{};
     uint64 Revision = 0;
 
     bool operator==(CharacterStats const&) const = default;

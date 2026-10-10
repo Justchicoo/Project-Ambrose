@@ -144,6 +144,14 @@ bool PlayerStats::SetShadowPipRating(float value) noexcept
     return true;
 }
 
+bool PlayerStats::SetRadialMenus(std::array<std::string, 3> menus)
+{
+    if (_stored.RadialMenus == menus)
+        return false;
+    _stored.RadialMenus = std::move(menus);
+    return true;
+}
+
 bool PlayerStats::SetShowItemLock(bool value) noexcept
 {
     if (_stored.ShowItemLock == value)

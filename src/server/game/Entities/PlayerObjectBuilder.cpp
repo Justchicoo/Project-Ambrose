@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the name behavior's m_chatPermissions is the account's permissions, the same the session hands the client in MSG_LOGINCOMPLETE, because the client draws no chat mark beside a name whose low four bits are all set, the filtered balloon beside one that holds menu chat and its display without all four, and the word balloon beside any other, so leaving it at 0 drew the word balloon beside every wizard; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, the spellbook holds a SpellIDTracker for each spell the wizard knows, which the client's spellbook reads when the object arrives, any behavior deriving from BaseGameEffectBehavior carries an empty GameEffectContainer, so the client starts from the same empty list the server holds and each effect the wizard carries follows the object as its own MSG_ADDEFFECT, and every other field keeps the class's default.
+ * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the name behavior's m_chatPermissions is the account's permissions, the same the session hands the client in MSG_LOGINCOMPLETE, because the client draws no chat mark beside a name whose low four bits are all set, the filtered balloon beside one that holds menu chat and its display without all four, and the word balloon beside any other, so leaving it at 0 drew the word balloon beside every wizard; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, the spellbook holds a SpellIDTracker for each spell the wizard knows, which the client's spellbook reads when the object arrives, the radial menu behavior holds the three slot blobs the wizard's stats keep, any behavior deriving from BaseGameEffectBehavior carries an empty GameEffectContainer, so the client starts from the same empty list the server holds and each effect the wizard carries follows the object as its own MSG_ADDEFFECT, and every other field keeps the class's default.
  */
 
 #include "PlayerObjectBuilder.h"
@@ -76,6 +76,15 @@ namespace
             return stats.WriteSchool(behavior, problem);
         if (name == "class ClientSpellbookBehavior")
             return FillSpellbook(behavior, spells, problem);
+        if (name == "class EmotesRadialMenuBehavior")
+        {
+            std::array<std::string, 3> const& menus = stats.GetRadialMenus();
+            PropertyFiller(behavior, problem)
+                .Set("m_radialMenuData", std::string(menus[0]))
+                .Set("m_radialMenu2Data", std::string(menus[1]))
+                .Set("m_radialMenu3Data", std::string(menus[2]));
+            return problem.empty();
+        }
         return true;
     }
 }

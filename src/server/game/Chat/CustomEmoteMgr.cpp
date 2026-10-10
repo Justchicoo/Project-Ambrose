@@ -97,7 +97,10 @@ std::optional<CustomEmoteStore> CustomEmoteStore::Build(std::vector<CustomEmoteA
         CustomEmoteStore::Ownership const ownership{ animation.BitFieldNumber, animation.IsDefault };
         store._animations[animation.Animation].push_back(ownership);
         if (animation.TemplateId != 0)
+        {
             store._templates[animation.TemplateId].push_back(ownership);
+            store._templateAnimations[animation.TemplateId].push_back(animation.Animation);
+        }
     }
     if (store._animations.empty())
     {
@@ -172,6 +175,22 @@ bool CustomEmoteStore::OwnsAnimation(std::string_view animation, std::array<uint
         uint32 const bit = static_cast<uint32>(requirement.BitFieldNumber);
         if ((ownership[bit / 32] & (uint32{ 1 } << (bit % 32))) != 0)
             return true;
+    }
+    return false;
+}
+
+bool CustomEmoteStore::OwnsAnimation(std::string_view animation, std::array<uint32, RankCount> const& ownership, std::span<uint32 const> heldTemplates) const noexcept
+{
+    if (OwnsAnimation(animation, ownership))
+        return true;
+    for (uint32 const templateId : heldTemplates)
+    {
+        auto const found = _templateAnimations.find(templateId);
+        if (found == _templateAnimations.end())
+            continue;
+        for (std::string const& held : found->second)
+            if (held == animation)
+                return true;
     }
     return false;
 }

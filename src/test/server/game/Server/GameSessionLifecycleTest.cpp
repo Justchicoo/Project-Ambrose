@@ -80,6 +80,11 @@ struct GameSessionLifecycleTestAccess
         session._player = std::move(player);
     }
 
+    static void SetBackpack(GameSession& session, std::vector<CharacterItem> items)
+    {
+        session._backpack = PlayerBackpack::FromStored(std::move(items));
+    }
+
     static void TransferWorldState(GameSession& current, GameSession& replacement)
     {
         current.TransferWorldStateTo(replacement);
@@ -430,4 +435,59 @@ TEST_F(GameSessionStatsSaveTest, TheBackpackItemLockOptionIsStoredAndComesBackOn
     }
     ASSERT_TRUE(persisted.Stats);
     EXPECT_FALSE(persisted.Stats->ShowItemLock);
+}
+
+TEST_F(GameSessionStatsSaveTest, TheRadialMenusAreKeptOnlyWhenEverySlotIsTheWizardsOwnAndComeBackOnTheNextEntry)
+{
+    constexpr uint64 Guid = 1800080104;
+    CharacterSummary character;
+    character.Guid = Guid;
+    character.Account = Guid;
+    character.SchoolId = PlayerStatsFixtures::Fire;
+    character.Level = 5;
+    character.Zone = "WizardCity/WC_Ravenwood";
+    character.ZoneDisplay = "Ravenwood";
+    character.Created = 1;
+    ASSERT_EQ(CharacterRepository::Create(character), CharacterOpResult::Ok);
+    std::optional<PlayerStats> stats = MakeLifecyclePlayerStats(Guid, CharacterStats{});
+    ASSERT_TRUE(stats);
+
+    std::shared_ptr<GameSession> const session = MakeSession();
+    GameSessionLifecycleTestAccess::PrepareAttachedInWorld(*session, Guid);
+    GameSessionLifecycleTestAccess::SetPlacement(*session, 1, Guid, 1);
+    GameSessionLifecycleTestAccess::SetPlayer(*session, Player(std::move(*stats)));
+    GameSessionLifecycleTestAccess::SetBackpack(*session, {});
+
+    auto const menu = [](uint64 emoteId, uint32 phraseId)
+    {
+        std::string blob("\xE8\xCE\xCE\xFA\x03\x00\x00\x00\x01\x00\x00\x00\x01\x00\x02\x00", 16);
+        blob.append(reinterpret_cast<char const*>(&emoteId), sizeof(emoteId));
+        blob.append(4, '\0');
+        blob.append(reinterpret_cast<char const*>(&phraseId), sizeof(phraseId));
+        return blob;
+    };
+    GameMessages::PiiUpdateEmotesRadialMenu phrases;
+    phrases.RadialMenuData = menu(0, 267);
+    std::string const kept = phrases.RadialMenuData;
+    session->HandlePiiUpdateEmotesRadialMenu(phrases);
+    EXPECT_EQ(session->GetStats()->GetRadialMenus()[0], kept) << "a slot that holds a chat phrase names no item, so the menu is kept";
+
+    GameMessages::PiiUpdateEmotesRadialMenu stolen;
+    stolen.RadialMenuData = menu(281474976710657u, 0);
+    session->HandlePiiUpdateEmotesRadialMenu(stolen);
+    EXPECT_EQ(session->GetStats()->GetRadialMenus()[0], kept) << "an emote the wizard holds no item of is refused, and the menu stays as it was";
+
+    CharacterStatsLoad persisted;
+    for (int attempt = 0; attempt < 100; ++attempt)
+    {
+        persisted = CharacterRepository::LoadStats(Guid);
+        if (persisted.Stats && persisted.Stats->RadialMenus[0] == kept)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(persisted.Stats);
+    EXPECT_EQ(persisted.Stats->RadialMenus[0], kept);
+    std::optional<PlayerStats> const entering = MakeLifecyclePlayerStats(Guid, *persisted.Stats);
+    ASSERT_TRUE(entering);
+    EXPECT_EQ(entering->GetRadialMenus()[0], kept) << "the menu is back when the wizard enters again";
 }

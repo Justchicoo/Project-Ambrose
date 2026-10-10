@@ -45,6 +45,7 @@ public:
     std::array<uint32, 3> const& GetPurchasedCustomEmotes() const noexcept { return _stored.PurchasedCustomEmotes; }
     std::array<uint32, 3> const& GetPurchasedCustomTeleportEffects() const noexcept { return _stored.PurchasedCustomTeleportEffects; }
     bool GetShowItemLock() const noexcept { return _stored.ShowItemLock; }
+    std::array<std::string, 3> const& GetRadialMenus() const noexcept { return _stored.RadialMenus; }
 
     bool SetHealth(int32 value) noexcept;
     bool SetMana(int32 value) noexcept;
@@ -56,6 +57,7 @@ public:
     bool SetPowerPip(float value) noexcept;
     bool SetShadowPipRating(float value) noexcept;
     bool SetShowItemLock(bool value) noexcept;
+    bool SetRadialMenus(std::array<std::string, 3> menus);
     CharacterStats ToStored() const;
     bool WriteGameStats(PropertyObject& gameStats, std::string& problem) const;
     bool WriteSchool(PropertyObject& behavior, std::string& problem) const;

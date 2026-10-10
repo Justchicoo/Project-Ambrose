@@ -139,6 +139,9 @@ public:
     void HandleCoreEmote(GameMessages::CoreEmote& message);
     void HandleCorePiiRadialMenuEmote(GameMessages::CorePiiRadialMenuEmote& message);
     void HandleRequestPiiRadialMenuPlayEmote(GameMessages::RequestPiiRadialMenuPlayEmote& message);
+    void HandlePiiUpdateEmotesRadialMenu(GameMessages::PiiUpdateEmotesRadialMenu& message);
+    void SendRadialMenus();
+    std::vector<uint32> HeldEmoteTemplates() const;
     void HandleQueryLogout(GameMessages::QueryLogout& message);
     void HandleClientDisconnect(GameMessages::ClientDisconnect& message);
     void HandleNotAfk(GameMessages::NotAfk& message);

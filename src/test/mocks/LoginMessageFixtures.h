@@ -168,6 +168,7 @@ namespace LoginMessageFixtures
 <MSG_UPDATEARCHMASTERY><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">193</_MsgOrder><Stat TYPE="FLT"></Stat></RECORD></MSG_UPDATEARCHMASTERY>
 <MSG_CORE_PIIRADIALMENUEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">23</_MsgOrder><EmoteAnimationName TYPE="STR"></EmoteAnimationName><ExcludeOriginator TYPE="UBYT"></ExcludeOriginator></RECORD></MSG_CORE_PIIRADIALMENUEMOTE>
 <MSG_PIIRADIALMENUPLAYEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">73</_MsgOrder><SourceName TYPE="STR"></SourceName><SourceID TYPE="GID"></SourceID><EmoteAnimationName TYPE="STR"></EmoteAnimationName><EmoteText TYPE="WSTR"></EmoteText></RECORD></MSG_PIIRADIALMENUPLAYEMOTE>
+<MSG_PIIUPDATEEMOTESRADIALMENU><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">74</_MsgOrder><RadialMenuData TYPE="STR"></RadialMenuData><RadialMenu2Data TYPE="STR"></RadialMenu2Data><RadialMenu3Data TYPE="STR"></RadialMenu3Data></RECORD></MSG_PIIUPDATEEMOTESRADIALMENU>
 <MSG_REQUESTPIIRADIALMENUPLAYEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">148</_MsgOrder><EmoteAnimationName TYPE="STR"></EmoteAnimationName><EmoteText TYPE="WSTR"></EmoteText></RECORD></MSG_REQUESTPIIRADIALMENUPLAYEMOTE>
 </FixtureWizard3Messages>
 )";

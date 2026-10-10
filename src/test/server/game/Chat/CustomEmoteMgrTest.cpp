@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks that the custom-emote catalog maps animation names to defaults and all three purchased ownership ranks, and rejects malformed ownership data.
+ * Checks that the custom-emote catalog maps animation names to defaults and all three purchased ownership ranks, unlocks an animation for an emote item the wizard holds and no other, and rejects malformed ownership data.
  */
 
 #include "CustomEmoteMgr.h"
@@ -118,4 +118,22 @@ TEST(CustomEmoteStoreTest, RejectsMalformedAnimationData)
     ASSERT_FALSE(errors.empty());
     EXPECT_FALSE(CustomEmoteStore::Build({}, errors).has_value());
     ASSERT_FALSE(errors.empty());
+}
+
+TEST(CustomEmoteStoreTest, AnEmoteItemTheWizardHoldsUnlocksItsAnimationWithoutAPurchasedBit)
+{
+    std::vector<std::string> errors;
+    std::optional<CustomEmoteStore> const store = CustomEmoteStore::Build({
+        { "Fresh", 0, false, 1457184 },
+        { "Funky", 1, false, 1457185 },
+    }, errors);
+    ASSERT_TRUE(store.has_value()) << (errors.empty() ? "" : errors.front());
+    std::array<uint32, CustomEmoteStore::RankCount> const none{};
+    std::vector<uint32> const held{ 4740, 1457184 };
+
+    EXPECT_TRUE(store->OwnsAnimation("Fresh", none, held));
+    EXPECT_FALSE(store->OwnsAnimation("Funky", none, held)) << "holding one emote does not unlock another";
+    EXPECT_FALSE(store->OwnsAnimation("Fresh", none, std::vector<uint32>{ 4740 })) << "an item that is not the emote unlocks nothing";
+    EXPECT_TRUE(store->IsEmoteTemplate(1457185));
+    EXPECT_FALSE(store->IsEmoteTemplate(4740));
 }

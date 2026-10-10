@@ -1720,6 +1720,22 @@ namespace GameMessages
         }
     };
 
+    struct PiiUpdateEmotesRadialMenu
+    {
+        static constexpr uint8 ServiceId = Wizard3Service;
+        static constexpr std::string_view Tag = "MSG_PIIUPDATEEMOTESRADIALMENU";
+
+        std::string RadialMenuData;
+        std::string RadialMenu2Data;
+        std::string RadialMenu3Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("RadialMenuData", &PiiUpdateEmotesRadialMenu::RadialMenuData), DmlField("RadialMenu2Data", &PiiUpdateEmotesRadialMenu::RadialMenu2Data),
+                DmlField("RadialMenu3Data", &PiiUpdateEmotesRadialMenu::RadialMenu3Data) };
+        }
+    };
+
     struct InteractNpc
     {
         static constexpr uint8 ServiceId = QuestService;

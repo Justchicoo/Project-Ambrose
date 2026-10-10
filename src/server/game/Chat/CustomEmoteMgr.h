@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads custom-emote animations and template ids from the user's own ObjectData/Emotes templates, keeps the bitfield each requires, and answers what a wizard's saved ownership masks unlock.
+ * Reads custom-emote animations and template ids from the user's own ObjectData/Emotes templates, keeps the bitfield each requires, and answers what a wizard's saved ownership masks unlock, or the emote items it holds, since the client's radial menu plays an emote by the item it names.
  */
 
 #ifndef AMBROSE_CUSTOMEMOTEMGR_H
@@ -17,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -42,6 +43,8 @@ public:
 
     std::vector<std::string> AnimationNames() const;
     bool OwnsAnimation(std::string_view animation, std::array<uint32, RankCount> const& ownership) const noexcept;
+    bool OwnsAnimation(std::string_view animation, std::array<uint32, RankCount> const& ownership, std::span<uint32 const> heldTemplates) const noexcept;
+    bool IsEmoteTemplate(uint32 templateId) const noexcept { return _templateAnimations.contains(templateId); }
     std::vector<uint32> OwnedTemplateIds(std::array<uint32, RankCount> const& ownership) const;
     std::size_t Size() const noexcept { return _animations.size(); }
 
@@ -54,6 +57,7 @@ private:
 
     std::map<std::string, std::vector<Ownership>, std::less<>> _animations;
     std::map<uint32, std::vector<Ownership>> _templates;
+    std::map<uint32, std::vector<std::string>> _templateAnimations;
 };
 
 class CustomEmoteMgr

@@ -8,6 +8,7 @@
 #include "Utf.h"
 
 #include <cmath>
+#include <span>
 
 #include <string_view>
 
@@ -544,7 +545,15 @@ CharacterRepository::Statement CharacterRepository::PrepareSaveStats(uint64 guid
     statement->SetData(15, stats.PurchasedCustomTeleportEffects[1]);
     statement->SetData(16, stats.PurchasedCustomTeleportEffects[2]);
     statement->SetData(17, static_cast<uint8>(stats.ShowItemLock ? 1 : 0));
-    statement->SetData(18, stats.Revision);
+    for (std::size_t menu = 0; menu < stats.RadialMenus.size(); ++menu)
+    {
+        std::string const& blob = stats.RadialMenus[menu];
+        if (blob.empty())
+            statement->SetData(static_cast<uint8>(18 + menu), nullptr);
+        else
+            statement->SetData(static_cast<uint8>(18 + menu), std::vector<uint8>(blob.begin(), blob.end()));
+    }
+    statement->SetData(21, stats.Revision);
     return statement;
 }
 
@@ -569,7 +578,13 @@ std::optional<CharacterStats> CharacterRepository::ReadStats(PreparedResultSet& 
     stats.PurchasedCustomEmotes = { row[11].Get<uint32>(), row[12].Get<uint32>(), row[13].Get<uint32>() };
     stats.PurchasedCustomTeleportEffects = { row[14].Get<uint32>(), row[15].Get<uint32>(), row[16].Get<uint32>() };
     stats.ShowItemLock = row[17].Get<uint32>() != 0;
-    stats.Revision = row[18].Get<uint64>();
+    for (std::size_t menu = 0; menu < stats.RadialMenus.size(); ++menu)
+        if (Field const& field = row[18 + menu]; !field.IsNull())
+        {
+            std::span<uint8 const> const bytes = field.GetBinaryView();
+            stats.RadialMenus[menu].assign(reinterpret_cast<char const*>(bytes.data()), bytes.size());
+        }
+    stats.Revision = row[21].Get<uint64>();
     return stats;
 }
 

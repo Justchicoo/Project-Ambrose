@@ -91,6 +91,13 @@ bool Player::SetShadowPipRating(float value) noexcept
     return changed;
 }
 
+bool Player::SetRadialMenus(std::array<std::string, 3> menus)
+{
+    bool const changed = _stats.SetRadialMenus(std::move(menus));
+    _dirtyStats = _dirtyStats || changed;
+    return changed;
+}
+
 bool Player::SetShowItemLock(bool value) noexcept
 {
     bool const changed = _stats.SetShowItemLock(value);

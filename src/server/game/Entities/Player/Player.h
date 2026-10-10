@@ -34,6 +34,7 @@ public:
     bool SetPowerPip(float value) noexcept;
     bool SetShadowPipRating(float value) noexcept;
     bool SetShowItemLock(bool value) noexcept;
+    bool SetRadialMenus(std::array<std::string, 3> menus);
 
 private:
     PlayerStats _stats;
