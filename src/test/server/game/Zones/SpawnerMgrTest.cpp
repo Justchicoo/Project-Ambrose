@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone spawners on the zone object classes the fixtures lay out: an instance fills each spawner to its count, a despawned object comes back after its respawn time and not before, and no number of passes ever holds more than the count; Rate.Respawn changed as a live setting scales the delay of the next despawn with nothing restarted; a new set with a raised count spawns only the difference and a lowered one takes the extra away; a spawner with requirements places nothing; an entry on a path with no place of its own places nothing and leaves the spawns to entries that have one; a game master's spawn is placed and deleted with its despawn effect while a zone's own object cannot be; a set with a broken row fails its build and names the row; ResSpawn and ResDespawn decode from the bytes a trigger holds, a ResSpawn starts an inactive spawner and a ResDespawn takes its objects away with its effect and keeps it stopped; entries that all have no chance share the spawns equally; and with AMBROSE_TEST_DB set, `.reload zone_spawner` with a raised count spawns the difference a reload over a broken row keeps the old spawners serving, an entry with a scale of 0 loads at full size and one on a path with no place loads but places nothing.
+ * Tests the zone spawners on the zone object classes the fixtures lay out: an instance fills each spawner to its count, a despawned object comes back after its respawn time and not before, and no number of passes ever holds more than the count; Rate.Respawn changed as a live setting scales the delay of the next despawn with nothing restarted; a new set with a raised count spawns only the difference and a lowered one takes the extra away; a spawner with requirements places nothing; an entry on a path with no place of its own waits while its path is not loaded and then stands each spawn on one of its nodes, each start node type picking its node; a game master's spawn is placed and deleted with its despawn effect while a zone's own object cannot be; a set with a broken row fails its build and names the row; ResSpawn and ResDespawn decode from the bytes a trigger holds, a ResSpawn starts an inactive spawner and a ResDespawn takes its objects away with its effect and keeps it stopped; entries that all have no chance share the spawns equally; and with AMBROSE_TEST_DB set, `.reload zone_spawner` with a raised count spawns the difference a reload over a broken row keeps the old spawners serving, an entry with a scale of 0 loads at full size and one on a path with no place loads but places nothing.
  */
 
 #include "ConfigMgr.h"
@@ -16,6 +16,7 @@
 #include "Settings.h"
 #include "SpawnerMgr.h"
 #include "StringHash.h"
+#include "ZonePathMgr.h"
 #include "ZoneObjectFixtures.h"
 
 #include <fmt/format.h>
@@ -277,21 +278,59 @@ TEST_F(SpawnerMgrTest, ASpawnerWithRequirementsOrAnInactiveOnePlacesNothing)
     EXPECT_TRUE(map.GetObjects().empty());
 }
 
-TEST_F(SpawnerMgrTest, AnEntryOnAPathWithNoPlaceOfItsOwnPlacesNothingAndLeavesTheSpawnsToEntriesThatHaveOne)
+TEST_F(SpawnerMgrTest, AnEntryOnAPathStandsOnItsNodesAndWaitsWhileItsPathIsNotLoaded)
 {
     Map map(1, Hub, true);
     ZoneSpawner wisps = Spawner(0, 3, 30);
     wisps.Entries.front().PathId = 7690151;
-    EXPECT_FALSE(SpawnerMgr::Update(map, { wisps }, 1, Context(_start)).Changed()) << "nothing piles up at the zone's origin";
+    wisps.Entries.front().StartNodeType = static_cast<int32>(SpawnStartNode::RandomUnique);
+    MapObjectChanges const waiting = SpawnerMgr::Update(map, { wisps }, 1, Context(_start));
+    EXPECT_FALSE(waiting.Changed()) << "nothing piles up at the zone's origin";
     EXPECT_TRUE(map.GetObjects().empty());
+    ASSERT_FALSE(waiting.Problems.empty());
+    EXPECT_NE(waiting.Problems.front().Text.find("7690151"), std::string::npos) << waiting.Problems.front().Text;
 
-    ZoneSpawnEntry placed = Spawner(1, 1, 30).Entries.front();
-    placed.PathId = 7690151;
-    wisps.Entries.push_back(placed);
-    MapObjectChanges const changes = SpawnerMgr::Update(map, { wisps }, 2, Context(_start + 1s));
-    ASSERT_EQ(changes.Added.size(), 3u) << "an entry on a path that names its own place still spawns";
+    ZonePath path;
+    path.Id = 7690151;
+    path.Name = "Path_Flax_01";
+    for (uint64 node = 1; node <= 4; ++node)
+        path.Nodes.push_back({ node, { 100.0f * static_cast<float>(node), 50.0f, 0.0f } });
+    SpawnerContext context = Context(_start + 61s);
+    context.Paths = [&path](uint64 id) { return id == path.Id ? &path : nullptr; };
+    MapObjectChanges const changes = SpawnerMgr::Update(map, { wisps }, 1, context);
+    ASSERT_EQ(changes.Added.size(), 3u) << "once its path is loaded every spawn stands on it";
+    std::set<float> places;
     for (MapObject const& object : map.GetObjects())
-        EXPECT_EQ(object.Spawn.Position, placed.Object.Position);
+    {
+        EXPECT_EQ(object.Spawn.Position.Y, 50.0f);
+        places.insert(object.Spawn.Position.X);
+    }
+    EXPECT_EQ(places, (std::set<float>{ 100.0f, 200.0f, 300.0f })) << "SNT_RANDOM_UNIQUE puts each on a node no other holds";
+    EXPECT_FALSE(SpawnerMgr::Update(map, { wisps }, 2, context).Changed()) << "a new set keeps the objects standing on their path";
+}
+
+TEST_F(SpawnerMgrTest, EachStartNodeTypePicksItsNode)
+{
+    ZonePath path;
+    path.Id = 323280;
+    for (uint64 node : { 2, 1, 3 })
+        path.Nodes.push_back({ node, { static_cast<float>(node), 0.0f, 0.0f } });
+    ZoneSpawnEntry entry;
+    auto const third = [](uint32 total) { return 2u % total; };
+    entry.StartNodeType = static_cast<int32>(SpawnStartNode::First);
+    EXPECT_EQ(SpawnerMgr::PickNode(entry, path, {}, third), 0u);
+    entry.StartNodeType = static_cast<int32>(SpawnStartNode::Last);
+    EXPECT_EQ(SpawnerMgr::PickNode(entry, path, {}, third), 2u);
+    entry.StartNodeType = static_cast<int32>(SpawnStartNode::Random);
+    EXPECT_EQ(SpawnerMgr::PickNode(entry, path, { 3 }, third), 2u) << "SNT_RANDOM takes any node, held or not";
+    entry.StartNodeType = static_cast<int32>(SpawnStartNode::RandomUnique);
+    EXPECT_EQ(SpawnerMgr::PickNode(entry, path, { 2, 3 }, third), 1u) << "the one free node";
+    EXPECT_EQ(SpawnerMgr::PickNode(entry, path, { 1, 2, 3 }, third), 2u) << "any node once all are held";
+    entry.StartNodeType = static_cast<int32>(SpawnStartNode::Specific);
+    entry.StartNode = 1;
+    EXPECT_EQ(SpawnerMgr::PickNode(entry, path, {}, third), 1u);
+    entry.StartNode = 911075;
+    EXPECT_EQ(SpawnerMgr::PickNode(entry, path, {}, third), 0u) << "a start node that is not on the path falls back to the first";
 }
 
 TEST_F(SpawnerMgrTest, AGameMastersSpawnIsDeletedWithItsDespawnEffectAndAZoneObjectIsNot)

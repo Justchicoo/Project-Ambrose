@@ -1,20 +1,20 @@
 <!-- Project Ambrose by Imjustchico: Configuration reference for the install scanner manifest generator. -->
 # Patchlist generator
 
-The optional `patchlist_generator.conf.dist` file documents the install scanner's
-rule format. Each non-empty, non-comment line is:
+`patchlist_generator` reads its rules from `--rules`, or else from `patchlist_generator.conf` beside the program, or else from the `patchlist_generator.conf.dist` the build copies there. Each non-empty line not starting with `#` is one of three forms.
 
 ```text
 SrcFileName|TarFileName|Package|FileType
+type|pattern|FileType
+skip|pattern
 ```
 
-For example:
+Any of the three may start with `steam|` or `windows|`, and then applies only to that edition of the game: an install holding `steam_api.dll` at its top is the Steam edition, and any other is the Windows one. The two editions' lists name the same launcher, bug reporter and browser files from different folders, `Steam/Bin/libcef.dll` in one where the other leaves the file out, and `Windows/Bin/PatchConfig.xml` in one where the other has `Steam/Bin/PatchConfig.xml`, so the shipped rules give each edition its own lines for them. A full rule whose `FileType` is `0` leaves the type to the `type` lines and the defaults.
 
-```text
-Data/GameData/GUI-WorldData.wad|Data/GameData/GUI-WorldData.wad|GUI-WorldData|5
-```
+A rule names a file by where the manifest says it is served from (`SrcFileName`) and where the client keeps it (`TarFileName`), which is how a file the install keeps at `Bin/PatchConfig.xml` is listed as `Windows/Bin/PatchConfig.xml`. For the `PatchClient` package, `TarFileName` is relative to the launcher's bank folder; for every other package it is relative to the install, and an empty one means the file sits at `SrcFileName`. A `skip` line leaves out every file whose install path matches the pattern, where `*` and `?` stay inside one folder and `**` crosses folders; the shipped rules leave out what a played install writes for itself, such as `PatchInfo/**`, `Data/GameData/CharacterRegistry/**` and the client's logs.
 
-The generator assigns file type `3` to WAD files and `1` to other files by
-default. A rule may override this with type `5` for a WAD or type `4` for a
-compressed-download variant. The package column may move a file between
-`Base`, `PatchClient`, and the named WAD package.
+Without a rule, a file keeps its install path as `SrcFileName` and an empty `TarFileName`, and the launcher's files are read from `PatchClient/BankB`, or `PatchClient/BankA` when that is the only bank, with the bank left out of their names and `TarFileName` set to the path inside the bank. Every top-level `Data/GameData/<X>.wad` except `Root.wad` is package `X`, and everything else is `Base`. A WAD is type `5` when the install holds a `<X>.wad.utd` file beside it, which is how the client marks the archives it streams in pieces, and type `3` otherwise. A non-empty `.utd` lists the segments still to fetch, and the bytes on disk there are older data, so the scanner names how many such WADs it found: their CRC is of what is on disk, while a list gives the CRC of the finished file, which the client checks after downloading a whole WAD. An install that has streamed its WADs is therefore no source for their CRCs; any other file is type `1`, with `HeaderSize` and `HeaderCRC` 0. A `type` line gives every file whose install path matches its pattern that type, unless a full rule names the file, and it decides a WAD's type before any `.utd`; the first matching line wins. A list names a streamed WAD type `5` even when it is fully downloaded and its `.utd` is gone, so the shipped rules name those WADs type `5`. Type `4` marks a file served compressed, whose `HeaderSize` is its zlib size at level 6 plus 12 bytes, and the shipped rules give it to the programs in `Bin` and the launcher bank and to every launcher page under `PatchClient/web`, after first giving type `1` to the libraries a list ships plain: the mini-game `MG_*` libraries, the Windows runtime `api-ms-win-*`, `msvcp140_*` other than `msvcp140_2`, and `vcruntime140*` libraries, and the zlib and `mfcm80` libraries. They also leave out the bank's `English` folders, which no manifest lists beside the per-language ones.
+
+`--reference` takes a `LatestFileList.bin` or `.xml`, such as the install's own `PatchInfo/LatestFileList.bin`, prints every record that is missing, unexpected or different, with its own value before the reference's, sets aside the reference records whose files the install does not hold, counts the type 3 and 5 records that match on Size, CRC, HeaderSize and HeaderCRC and the tables whose membership matches, and then copies each matching record's `CompressedHeaderSize`, which the scanner cannot derive yet, into the manifest it writes. Everything else in that manifest is the scanner's own, so the diff and the manifest say the same thing.
+
+`--crc <file> [offset length]` prints the client's CRC of a whole file, or of `length` bytes from `offset`, and exits without scanning. It is how a list's CRC, HeaderCRC or a `.utd` segment's CRC is checked against the bytes on disk.

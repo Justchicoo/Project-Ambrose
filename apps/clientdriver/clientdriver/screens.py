@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# Frames of the client's window as plain RGB pixels, and the match that decides which screen is on it: the fraction of pixels within a tolerance of a reference crop, because the mean difference alone calls the same dialog over a loaded scene a stranger.
+# Frames of the client's window as plain RGB pixels, and the match that decides which screen is on it: the fraction of pixels within a tolerance of a reference crop, because the mean difference alone calls the same dialog over a loaded scene a stranger; and the hue of what changed between two frames, which says what color two clients drew the same thing in.
+import colorsys
 import os
 
 DEFAULT_TOLERANCE = 32
@@ -8,6 +9,9 @@ CHANGE_FRACTION = 0.95
 CHANGE_STEP = 4
 BLANK_LOW = 16
 BLANK_HIGH = 239
+HUE_BINS = 24
+HUE_SATURATION = 0.35
+HUE_VALUE = 0.2
 
 
 class Bitmap:
@@ -97,6 +101,38 @@ def changed(first, second, tolerance=DEFAULT_TOLERANCE, fraction=CHANGE_FRACTION
         return True, None
     scored = compare(first, second, tolerance=tolerance, step=CHANGE_STEP)
     return scored["fraction"] < fraction, scored
+
+
+def changed_hue(before, after, tolerance=DEFAULT_TOLERANCE, bins=HUE_BINS):
+    if before.size != after.size:
+        raise ValueError(f"a {before.width}x{before.height} frame cannot be compared with a {after.width}x{after.height} one")
+    counts = [0] * bins
+    present = [0] * bins
+    for at in range(0, len(after.data), 3):
+        was = colored_bin(before.data[at], before.data[at + 1], before.data[at + 2], bins)
+        if was is not None:
+            present[was] += 1
+        red, green, blue = after.data[at], after.data[at + 1], after.data[at + 2]
+        if max(abs(red - before.data[at]), abs(green - before.data[at + 1]), abs(blue - before.data[at + 2])) <= tolerance:
+            continue
+        now = colored_bin(red, green, blue, bins)
+        if now is not None:
+            counts[now] += 1
+    colored = sum(counts)
+    if not colored:
+        return None, 0
+    top = max(range(bins), key=lambda index: counts[index] * counts[index] / (counts[index] + present[index]) if counts[index] else 0)
+    return round((top + 0.5) * 360 / bins), colored
+
+
+def colored_bin(red, green, blue, bins):
+    hue, saturation, value = colorsys.rgb_to_hsv(red / 255, green / 255, blue / 255)
+    return int(hue * bins) % bins if saturation >= HUE_SATURATION and value >= HUE_VALUE else None
+
+
+def hue_distance(first, second):
+    apart = abs(first - second) % 360
+    return min(apart, 360 - apart)
 
 
 def is_blank(bitmap, step=CHANGE_STEP):

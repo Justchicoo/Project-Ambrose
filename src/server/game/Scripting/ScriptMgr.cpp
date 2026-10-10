@@ -30,6 +30,11 @@ ConditionScript::ConditionScript(std::string name) : ScriptObject(std::move(name
     sScriptMgr.Register(this);
 }
 
+NpcScript::NpcScript(std::string name, uint32 templateId) : ScriptObject(std::move(name)), _templateId(templateId)
+{
+    sScriptMgr.Register(this);
+}
+
 CommandScript::CommandScript(std::string name) : ScriptObject(std::move(name))
 {
     sScriptMgr.Register(this);
@@ -69,6 +74,11 @@ void ScriptMgr::Register(PlayerScript* script)
 void ScriptMgr::Register(ConditionScript* script)
 {
     _conditionScripts.push_back(script);
+}
+
+void ScriptMgr::Register(NpcScript* script)
+{
+    _npcScripts.push_back(script);
 }
 
 void ScriptMgr::Register(CommandScript* script)
@@ -126,6 +136,9 @@ void ScriptMgr::Unload()
     for (ConditionScript* script : _conditionScripts)
         delete script;
     _conditionScripts.clear();
+    for (NpcScript* script : _npcScripts)
+        delete script;
+    _npcScripts.clear();
     for (CommandScript* script : _commandScripts)
         delete script;
     _commandScripts.clear();
@@ -134,7 +147,7 @@ void ScriptMgr::Unload()
 
 std::size_t ScriptMgr::GetScriptCount() const
 {
-    return _worldScripts.size() + _zoneScripts.size() + _playerScripts.size() + _conditionScripts.size() + _commandScripts.size() + _serverScripts.size();
+    return _worldScripts.size() + _zoneScripts.size() + _playerScripts.size() + _conditionScripts.size() + _npcScripts.size() + _commandScripts.size() + _serverScripts.size();
 }
 
 std::vector<std::string> ScriptMgr::GetScriptNames() const
@@ -148,6 +161,8 @@ std::vector<std::string> ScriptMgr::GetScriptNames() const
     for (PlayerScript const* script : _playerScripts)
         names.push_back(script->GetName());
     for (ConditionScript const* script : _conditionScripts)
+        names.push_back(script->GetName());
+    for (NpcScript const* script : _npcScripts)
         names.push_back(script->GetName());
     for (CommandScript const* script : _commandScripts)
         names.push_back(script->GetName());
@@ -226,6 +241,16 @@ void ScriptMgr::OnHealthChanged(Player& player, int32 oldValue, int32 newValue)
     ForEachPlayer("OnHealthChanged", [&player, oldValue, newValue](PlayerScript* script) { script->OnHealthChanged(player, oldValue, newValue); });
 }
 
+void ScriptMgr::OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot)
+{
+    ForEachPlayer("OnEquip", [&player, itemGuid, templateId, slot](PlayerScript* script) { script->OnEquip(player, itemGuid, templateId, slot); });
+}
+
+void ScriptMgr::OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot)
+{
+    ForEachPlayer("OnUnequip", [&player, itemGuid, templateId, slot](PlayerScript* script) { script->OnUnequip(player, itemGuid, templateId, slot); });
+}
+
 std::optional<bool> ScriptMgr::EvaluateCondition(RequirementRow const& requirement, RequirementContext const& context) const
 {
     for (ConditionScript* script : _conditionScripts)
@@ -246,6 +271,15 @@ std::optional<bool> ScriptMgr::EvaluateCondition(RequirementRow const& requireme
         }
     }
     return std::nullopt;
+}
+
+std::vector<NpcScript*> ScriptMgr::GetNpcScripts(uint32 templateId) const
+{
+    std::vector<NpcScript*> scripts;
+    for (NpcScript* script : _npcScripts)
+        if (script->Serves(templateId))
+            scripts.push_back(script);
+    return scripts;
 }
 
 template<typename Hook>

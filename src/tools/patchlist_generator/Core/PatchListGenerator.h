@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Scans a user's Wizard101 installation into a deterministic LatestFileList manifest with cached file checksums.
+ * Scans a user's Wizard101 installation into a deterministic LatestFileList manifest with cached file checksums, and gives the client's CRC of a file or a byte range of one.
  */
 
 #ifndef AMBROSE_PATCHLISTGENERATOR_H
@@ -9,6 +9,7 @@
 #include "LatestFileList.h"
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -29,10 +30,14 @@ namespace PatchListGenerator
         std::filesystem::path OutputDirectory;
         std::size_t CacheHits = 0;
         std::size_t FilesScanned = 0;
+        std::vector<std::string> StillStreaming;
     };
 
+    using OnDisk = std::function<bool(std::string const& package, LatestFileList::FileRecord const& record)>;
+
     std::optional<Result> Generate(Options const& options, std::string& error);
-    std::string Diff(LatestFileList const& generated, LatestFileList const& reference);
+    std::string Diff(LatestFileList const& generated, LatestFileList const& reference, OnDisk const& onDisk = {});
+    std::optional<uint32> FileCrc(std::filesystem::path const& path, uint64 offset, std::optional<uint64> length, std::string& error);
 }
 
 #endif

@@ -262,6 +262,7 @@ database fails, 2 on bad usage.
             for (ExtractedSpawner const& spawner : zone.Spawners)
                 spawnEntries += spawner.Items.size();
         std::cout << fmt::format("zone_spawner: {} rows\n", extraction.GetSpawnerCount());
+        std::cout << fmt::format("zone_path: {} rows\n", extraction.GetPathCount());
         std::cout << fmt::format("zone_spawner_entry: {} rows\n", spawnEntries);
         std::cout << fmt::format("zones whose volume, trigger or spawn files do not decode: {}\n", extraction.GetTriggerFailureZoneCount());
         for (std::size_t index = 0; index < extraction.TriggerFailures.size() && index < 10; ++index)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The hooks every content script hangs off: a script names itself and registers as it is constructed, the manager keeps each kind in its own list and calls them in registration order, and a hook that throws is reported with the script's name and does not stop the others; WorldScript and CommandScript are the first kinds, ZoneScript hears a wizard enter or leave a volume and a trigger fire in its own zone, or in every zone when it names none, carrying the server's startup, shutdown, configuration reload and update tick, PlayerScript hears a wizard's live gold and health changes, and later milestones add the npc, quest and zone kinds beside them. It knows nothing of the scripts themselves: the caller hands it the loader CMake wrote, so the hooks do not depend on the content that uses them. ServerScript sees the network: when it starts, each socket as it opens and closes, and each DML message a session receives or sends, which any server script may hold back, so a module can stop a message without the core being edited. ConditionScript answers a requirement type the requirement engine does not know itself, the first that gives a definite answer deciding it.
+ * The hooks every content script hangs off: a script names itself and registers as it is constructed, the manager keeps each kind in its own list and calls them in registration order, and a hook that throws is reported with the script's name and does not stop the others; WorldScript and CommandScript are the first kinds, ZoneScript hears a wizard enter or leave a volume and a trigger fire in its own zone, or in every zone when it names none, carrying the server's startup, shutdown, configuration reload and update tick, PlayerScript hears a wizard's live gold and health changes and each item it puts on or takes off, and later milestones add the quest kind beside them. It knows nothing of the scripts themselves: the caller hands it the loader CMake wrote, so the hooks do not depend on the content that uses them. ServerScript sees the network: when it starts, each socket as it opens and closes, and each DML message a session receives or sends, which any server script may hold back, so a module can stop a message without the core being edited. ConditionScript answers a requirement type the requirement engine does not know itself, the first that gives a definite answer deciding it. NpcScript offers the services of the NPCs of one template, or of every NPC when it names none, and hears which of its own options a wizard picks.
  */
 
 #ifndef AMBROSE_SCRIPTMGR_H
@@ -70,6 +70,8 @@ class PlayerScript : public ScriptObject
 public:
     virtual void OnGoldChanged(Player& player, int32 oldValue, int32 newValue) { (void)player; (void)oldValue; (void)newValue; }
     virtual void OnHealthChanged(Player& player, int32 oldValue, int32 newValue) { (void)player; (void)oldValue; (void)newValue; }
+    virtual void OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot) { (void)player; (void)itemGuid; (void)templateId; (void)slot; }
+    virtual void OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot) { (void)player; (void)itemGuid; (void)templateId; (void)slot; }
 
 protected:
     explicit PlayerScript(std::string name);
@@ -87,6 +89,29 @@ public:
 
 protected:
     explicit ConditionScript(std::string name);
+};
+
+struct NpcServiceChoice
+{
+    std::string ServiceName;
+    std::string IconKey;
+    std::string DisplayKey;
+};
+
+class NpcScript : public ScriptObject
+{
+public:
+    uint32 GetTemplateId() const { return _templateId; }
+    bool Serves(uint32 templateId) const { return _templateId == 0 || _templateId == templateId; }
+
+    virtual std::vector<NpcServiceChoice> GetServiceOptions(uint64 wizard, uint64 npc) const { (void)wizard; (void)npc; return {}; }
+    virtual void OnServiceSelect(uint64 wizard, uint64 npc, uint32 index) { (void)wizard; (void)npc; (void)index; }
+
+protected:
+    NpcScript(std::string name, uint32 templateId);
+
+private:
+    uint32 _templateId;
 };
 
 class CommandScript : public ScriptObject
@@ -125,6 +150,7 @@ public:
     void Register(ZoneScript* script);
     void Register(PlayerScript* script);
     void Register(ConditionScript* script);
+    void Register(NpcScript* script);
     void Register(CommandScript* script);
     void Register(ServerScript* script);
     void LoadScripts(ScriptLoader loader);
@@ -142,7 +168,10 @@ public:
     void OnTriggerFired(std::string_view zone, uint32 mapId, std::string_view trigger, uint64 wizard);
     void OnGoldChanged(Player& player, int32 oldValue, int32 newValue);
     void OnHealthChanged(Player& player, int32 oldValue, int32 newValue);
+    void OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot);
+    void OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot);
     std::optional<bool> EvaluateCondition(RequirementRow const& requirement, RequirementContext const& context) const;
+    std::vector<NpcScript*> GetNpcScripts(uint32 templateId) const;
 
     std::vector<ChatCommand> GetCommands() const;
 
@@ -172,6 +201,7 @@ private:
     std::vector<ZoneScript*> _zoneScripts;
     std::vector<PlayerScript*> _playerScripts;
     std::vector<ConditionScript*> _conditionScripts;
+    std::vector<NpcScript*> _npcScripts;
     std::vector<CommandScript*> _commandScripts;
     std::vector<ServerScript*> _serverScripts;
 };

@@ -22,4 +22,5 @@ target_link_libraries(scripts
         combat
         items
         quests
+        npc
         globals)

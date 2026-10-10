@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lists the messages the game server knows about: MSG_ATTACH handled the moment a client connects, because it is the only thing a client that has not attached yet may say, MSG_ATTACHFAILED refused inbound and declared as one the server sends, MSG_LOGINCOMPLETE declared as one the server sends and refused inbound, as are MSG_NEWOBJECT and MSG_REMOVEOBJECT, which bring an object into a wizard's view and take it away, and MSG_DELETEOBJECT, which takes away an object that leaves the world with its despawn effect, and MSG_SERVERMOVE and MSG_MOVESTATE, which show other wizards moving, and MSG_ENTERSTATE, which puts another wizard's object in a state such as a jump, and MSG_ADDSPELLTOBOOK and MSG_REMOVESPELLFROMBOOK, which change a wizard's spellbook, MSG_CLIENTZONED from the WIZARD2 service handled once the wizard has been handed its object, the GAME moves, movement states and jumps a client sends from then on run on the world thread, where the wizard's place is kept, the WIZARD messages a client sends as it enters, taken from the moment it has its object because it sends them before it says it has loaded the zone, with the crown balance run on the world thread because the balance will be game state and the rest answered or logged where they arrive, the patch notices logged in place, and patch downloads declared as server-sent and gated by Patch.Enabled, the first in-world WizCombat handlers, the typed lines, quick chat phrases and emotes a wizard's client sends for the others around it, queued for the world thread, with the replies that show them declared as ones the server sends and refused from clients, MSG_PLAYERWIZBANG, the wizbang state a wizard's client names, and MSG_POSTZONEEVENTFROMCLIENT, an event it posts into its zone's triggers, run on the world thread, with MSG_WIZBANG, which shows it to the wizards around it, declared as one the server sends and refused from clients, the friend, best-friend, friend-cap and ignore messages a wizard's client sends once it has its object, queued for the world thread, with MSG_BUDDYENTRY, MSG_BUDDYLISTCOMPLETE, MSG_BUDDYDROP, MSG_BUDDYSTATUSUPDATE, MSG_IGNORELIST and MSG_CHATERROR declared as ones the server sends and refused from clients, MSG_ADDEFFECT and MSG_REMOVEEFFECT, which add a game effect to an object the wizards around it see and take it away, declared as ones the server sends and refused from clients, and the SYSTEM and EXTENDEDBASE rules every app shares. Every other GAME, WIZARD, DOODLEDOUG_MESSAGES, WIZARD2 and WIZARD3 message is named once by PendingRest, because the world's services are the game server's own and hold hundreds of messages and the milestone that answers each will claim it by name then; until then one arrives as a message this server does not handle yet, which is reported, rather than as one it has never heard of. MSG_QUERY_LOGOUT and MSG_CLIENT_DISCONNECT are handled where they arrive, so a wizard that quits leaves at once, MSG_NOT_AFK runs on the world thread, where the AFK timer is kept, and MSG_QUERY_LOGOUT's reply, MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN are declared as ones the server sends; MSG_USEPOTION is queued for the world thread, and the WIZARD health, mana, gold, potion, pip, shadow pip, archmastery and elixir updates are declared as server messages and refused inbound; MSG_CLIENTNOTIFYTEXT, the text a fired trigger's result shows, is declared as one the server sends and refused inbound. MSG_TRASHINVENTORYITEM runs on the world thread, where the backpack is kept, and the item a backpack gains or loses, MSG_ITEMDROP and MSG_LOOT are declared as ones the server sends and refused inbound.
+ * Lists the messages the game server knows about: MSG_ATTACH handled the moment a client connects, because it is the only thing a client that has not attached yet may say, MSG_ATTACHFAILED refused inbound and declared as one the server sends, MSG_LOGINCOMPLETE declared as one the server sends and refused inbound, as are MSG_NEWOBJECT and MSG_REMOVEOBJECT, which bring an object into a wizard's view and take it away, and MSG_DELETEOBJECT, which takes away an object that leaves the world with its despawn effect, and MSG_SERVERMOVE and MSG_MOVESTATE, which show other wizards moving, and MSG_ENTERSTATE, which puts another wizard's object in a state such as a jump, and MSG_ADDSPELLTOBOOK and MSG_REMOVESPELLFROMBOOK, which change a wizard's spellbook, MSG_CLIENTZONED from the WIZARD2 service handled once the wizard has been handed its object, the GAME moves, movement states and jumps a client sends from then on run on the world thread, where the wizard's place is kept, the WIZARD messages a client sends as it enters, taken from the moment it has its object because it sends them before it says it has loaded the zone, with the crown balance run on the world thread because the balance will be game state and the rest answered or logged where they arrive, the patch notices logged in place, and patch downloads declared as server-sent and gated by Patch.Enabled, the first in-world WizCombat handlers, the typed lines, quick chat phrases and emotes a wizard's client sends for the others around it, queued for the world thread, with the replies that show them declared as ones the server sends and refused from clients, MSG_PLAYERWIZBANG, the wizbang state a wizard's client names, and MSG_POSTZONEEVENTFROMCLIENT, an event it posts into its zone's triggers, run on the world thread, with MSG_WIZBANG, which shows it to the wizards around it, declared as one the server sends and refused from clients, the friend, best-friend, friend-cap and ignore messages a wizard's client sends once it has its object, queued for the world thread, with MSG_BUDDYENTRY, MSG_BUDDYLISTCOMPLETE, MSG_BUDDYDROP, MSG_BUDDYSTATUSUPDATE, MSG_IGNORELIST and MSG_CHATERROR declared as ones the server sends and refused from clients, MSG_ADDEFFECT and MSG_REMOVEEFFECT, which add a game effect to an object the wizards around it see and take it away, declared as ones the server sends and refused from clients, and the SYSTEM and EXTENDEDBASE rules every app shares. Every other GAME, WIZARD, DOODLEDOUG_MESSAGES, QUEST_MESSAGES, WIZARD2 and WIZARD3 message is named once by PendingRest, because the world's services are the game server's own and hold hundreds of messages and the milestone that answers each will claim it by name then; until then one arrives as a message this server does not handle yet, which is reported, rather than as one it has never heard of. MSG_QUERY_LOGOUT and MSG_CLIENT_DISCONNECT are handled where they arrive, so a wizard that quits leaves at once, MSG_NOT_AFK runs on the world thread, where the AFK timer is kept, and MSG_QUERY_LOGOUT's reply, MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN are declared as ones the server sends; MSG_USEPOTION is queued for the world thread, and the WIZARD health, mana, gold, potion, pip, shadow pip, archmastery and elixir updates are declared as server messages and refused inbound; MSG_CLIENTNOTIFYTEXT, the text a fired trigger's result shows, is declared as one the server sends and refused inbound. MSG_TRASHINVENTORYITEM runs on the world thread, where the backpack is kept, and the item a backpack gains or loses, MSG_ITEMDROP and MSG_LOOT are declared as ones the server sends and refused inbound. MSG_EQUIPITEM runs on the world thread too and is declared as one the server sends, and the equipment behavior's equip, unequip and public equip and unequip messages are declared as ones the server sends and refused inbound. The QUEST service joins the game server's own: MSG_INTERACTNPC, a click on an NPC's prompt, and GAME's MSG_INTERACTOBJECT and MSG_INTERACTOPTION run on the world thread once a wizard is in the world, MSG_SENDNPCOPTIONS, MSG_LEAVESERVICERANGE and MSG_SENDINTERACTOPTIONS are declared as ones the server sends and refused inbound, and every other QUEST message is named by PendingRest.
  */
 
 #include "GameMessageTable.h"
@@ -15,7 +15,7 @@ namespace
     class GameRules : public MessageHandlerTable<GameSession>
     {
     public:
-        GameRules() : MessageHandlerTable<GameSession>("gameserver", { SystemService, ExtendedBaseService, GameService, WizardService, CombatService, Wizard2Service, Wizard3Service },
+        GameRules() : MessageHandlerTable<GameSession>("gameserver", { SystemService, ExtendedBaseService, GameService, WizardService, CombatService, QuestService, Wizard2Service, Wizard3Service },
             QueuedMessageDrain::DrainedByOwner)
         {
             Accept<&GameSession::HandleAttach>(SessionStatuses::Connected, MessageProcessing::InPlace, "GameSession::HandleAttach");
@@ -48,6 +48,7 @@ namespace
             Accept<&GameSession::HandleTrashInventoryItem>(entered, MessageProcessing::Queued, "GameSession::HandleTrashInventoryItem");
             Accept<&GameSession::HandleRequestToggleLockItem>(entered, MessageProcessing::Queued, "GameSession::HandleRequestToggleLockItem");
             Accept<&GameSession::HandleItemLock>(entered, MessageProcessing::Queued, "GameSession::HandleItemLock");
+            Accept<&GameSession::HandleEquipItem>(entered, MessageProcessing::Queued, "GameSession::HandleEquipItem");
 
             SessionStatusMask const inWorld = SessionStatuses::InWorld;
             Accept<&GameSession::HandlePostZoneEventFromClient>(inWorld, MessageProcessing::Queued, "GameSession::HandlePostZoneEventFromClient");
@@ -63,6 +64,9 @@ namespace
             Accept<&GameSession::HandleUsePotion>(inWorld, MessageProcessing::Queued, "GameSession::HandleUsePotion");
 
             Accept<&GameSession::HandlePlayerWizBang>(inWorld, MessageProcessing::Queued, "GameSession::HandlePlayerWizBang");
+            Accept<&GameSession::HandleInteractNpc>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractNpc");
+            Accept<&GameSession::HandleInteractObject>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractObject");
+            Accept<&GameSession::HandleInteractOption>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractOption");
             Accept<&GameSession::HandleCombatMove>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatMove");
             Accept<&GameSession::HandleCombatDraw>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatDraw");
             Accept<&GameSession::HandleCombatAFK>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatAFK");
@@ -100,6 +104,10 @@ namespace
             Refuse(WizardService, "MSG_REMOVESPELLFROMBOOK");
             Refuse(GameService, "MSG_INVENTORYBEHAVIOR_ADDITEM");
             Refuse(GameService, "MSG_INVENTORYBEHAVIOR_REMOVEITEM");
+            Refuse(GameService, "MSG_EQUIPMENTBEHAVIOR_EQUIPITEM");
+            Refuse(GameService, "MSG_EQUIPMENTBEHAVIOR_UNEQUIPITEM");
+            Refuse(GameService, "MSG_EQUIPMENTBEHAVIOR_PUBLICEQUIPITEM");
+            Refuse(GameService, "MSG_EQUIPMENTBEHAVIOR_PUBLICUNEQUIPITEM");
             Refuse(WizardService, "MSG_ITEMDROP");
             Refuse(WizardService, "MSG_LOOT");
             Refuse(WizardService, "MSG_UPDATEHEALTH");
@@ -112,10 +120,14 @@ namespace
             Refuse(Wizard2Service, "MSG_UPDATEMAXSHADOWPIPS");
             Refuse(Wizard2Service, "MSG_UPDATEPIPCONVERSION");
             Refuse(Wizard3Service, "MSG_UPDATEARCHMASTERY");
+            Refuse(QuestService, "MSG_SENDNPCOPTIONS");
+            Refuse(GameService, "MSG_LEAVESERVICERANGE");
+            Refuse(GameService, "MSG_SENDINTERACTOPTIONS");
 
             SessionStatusMask const any = SessionStatuses::Connected | SessionStatuses::Authenticated | SessionStatuses::CharacterSelected | SessionStatuses::LoggedIn | SessionStatuses::InWorld;
             PendingRest(GameService, any);
             PendingRest(CombatService, any);
+            PendingRest(QuestService, any);
             PendingRest(WizardService, any);
             PendingRest(Wizard2Service, any);
             PendingRest(Wizard3Service, any);
@@ -154,6 +166,11 @@ namespace
             Sends<InventoryBehaviorRemoveItem>();
             Sends<ItemDrop>();
             Sends<RequestToggleLockItem>();
+            Sends<EquipItem>();
+            Sends<EquipmentBehaviorEquipItem>();
+            Sends<EquipmentBehaviorUnequipItem>();
+            Sends<EquipmentBehaviorPublicEquipItem>();
+            Sends<EquipmentBehaviorPublicUnequipItem>();
             Sends<Loot>();
             Sends<QueryLogout>();
             Sends<ClientDisconnect>();
@@ -185,6 +202,9 @@ namespace
             Sends<UpdateMaxShadowPips>();
             Sends<UpdatePipConversion>();
             Sends<UpdateArchmastery>();
+            Sends<SendNpcOptions>();
+            Sends<LeaveServiceRange>();
+            Sends<SendInteractOptions>();
 
             SystemMessages::AddRules(*this);
         }

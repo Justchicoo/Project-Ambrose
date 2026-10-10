@@ -274,9 +274,9 @@ A contributor can write a new quest as a dated SQL update that uses only keys an
 
 **Acceptance**
 
-- [ ] accept, 2/5, save, reload keeps quest_gid, goal_gid, count
-- [ ] CompleteQuest sets registry (Q,'Complete')=1
-- [ ] Orphan goals pruned with warning
+- [x] accept, 2/5, save, reload keeps quest_gid, goal_gid, count (`CharacterRepositoryDatabaseTest.AQuestLogCountedToTwoOfFiveReloadsWithTheSameGidsAndCountAndALateOlderSaveChangesNothing`, against MariaDB 10.11 with AMBROSE_TEST_DB set: a quest taken and its goal counted to 2 is saved and read back with the same quest and goal GIDs, from the quest GID line at 1<<50, and count 2, and older saves landing after a newer one change nothing; `QuestLogTest.AQuestCountedToTwoOfFiveKeepsItsGidsAndCountThroughItsRows`)
+- [x] CompleteQuest sets registry (Q,'Complete')=1 (`QuestLogTest.CompletingAQuestRemovesItAndSetsItsCompleteEntry`; the database test above completes the quest, and the reload holds no active row or goal and registry (KeptQuest, Complete) = 1)
+- [x] Orphan goals pruned with warning (`QuestLogTest.AnOrphanQuestAndAnOrphanGoalArePrunedOnLoadWithAWarningEach`: a quest whose template is gone, with its goals, and a goal its quest no longer has are dropped with a warning each, which the game server logs as it loads the wizard, and the pruned log is saved again; with no quest store loaded nothing is dropped)
 
 ### Detailed spec from QST-7: Character quest persistence and quest registry
 
@@ -298,9 +298,9 @@ Active quests, goal progress, completion history, registry entries and hidden-qu
 
 **Acceptance**
 
-- [ ] Unit test: accept -> progress 2/5 -> save -> reload gives the same quest_gid, goal_gid and count.
-- [ ] Unit test: CompleteQuest removes the active row and sets registry (Q, 'Complete') = 1, and HasCompletedQuest(Q) is true.
-- [ ] Unit test: an orphan goal row whose quest template was removed is pruned on load with a warning.
+- [x] Unit test: accept -> progress 2/5 -> save -> reload gives the same quest_gid, goal_gid and count. (`CharacterRepositoryDatabaseTest.AQuestLogCountedToTwoOfFiveReloadsWithTheSameGidsAndCountAndALateOlderSaveChangesNothing`)
+- [x] Unit test: CompleteQuest removes the active row and sets registry (Q, 'Complete') = 1, and HasCompletedQuest(Q) is true. (`QuestLogTest.CompletingAQuestRemovesItAndSetsItsCompleteEntry`)
+- [x] Unit test: an orphan goal row whose quest template was removed is pruned on load with a warning. (`QuestLogTest.AnOrphanQuestAndAnOrphanGoalArePrunedOnLoadWithAWarningEach`)
 
 **Risks**
 
@@ -316,10 +316,10 @@ Active quests, goal progress, completion history, registry entries and hidden-qu
 
 **Acceptance**
 
-- [ ] Providers with 1 and 2 options give flat indices 0..2 routed correctly
-- [ ] One SENDNPCOPTIONS/LEAVESERVICERANGE per crossing
-- [ ] Changing Npc.InteractRadiusDefault applies from the next move without a restart
-- [ ] Real client: WC-RAV-NPC06 prompt shows localized name and portrait; click logs the right index
+- [x] Providers with 1 and 2 options give flat indices 0..2 routed correctly (`NpcServiceMenuTest.ProvidersWithOneAndTwoOptionsGiveFlatIndicesAndIndexTwoRoutesToTheSecond`: indices 0, 1 and 2, index 2 reaching the second provider's own option 1 and an index past the menu reaching nothing; `NpcServiceMenuTest.AProviderOfHigherPriorityComesFirstAndSetsTheKeysItNames`)
+- [x] One SENDNPCOPTIONS/LEAVESERVICERANGE per crossing (`NpcServiceRangeTest.ARangeIsEnteredAndLeftOncePerCrossingNotOncePerMove`, and `NpcServiceRangeTest.AnNpcThatOffersNothingIsNeverEnteredOrLeftAndOneThatStopsOfferingIsLeftOnce`: an NPC no provider gives an option gets neither; real client, `apps/clientdriver/scenarios/npc-service-menu.json` run 20261010-112334: the game server logged one entry into WC-RAV-NPC06's range on stepping in, none while the wizard walked about inside it, and one leave on the step out, while WC-GTW-Registrar, which no script serves, logged no service range line at all and the client began no NPC interaction)
+- [x] Changing Npc.InteractRadiusDefault applies from the next move without a restart (`NpcServiceRadiusTest.ChangingTheDefaultRadiusAppliesFromTheNextMoveWithoutARestart`: a live change to 500 enters a wizard 400 away at its next move, and one to 100 takes it out at the next, with a provider's own radius standing)
+- [x] Real client: WC-RAV-NPC06 prompt shows localized name and portrait; click logs the right index (`npc-service-menu.json` run 20261010-112334 with `Npc.TestGreeter` on: the prompt shows SIMEON with his fire portrait and Press X or click to Talk, after `NpcServiceMementoClientTest.TheMenuIsSentAsTheBareObjectWithItsClassHashFirst` made the memento the bare ServiceMementoBase the client reads; pressing X and clicking the NPC each send MSG_INTERACTOPTION, which the game server logged as option 0 (Greeting) routed to npc_test_greeter option 0, and the script logged the greeting. The prompt comes from the spec's sample script, off in play; real quest giver and shop prompts come from 7.08, 7.09 and phase 8)
 
 ### Detailed spec from QST-8: NPC service menu: range, options and interaction routing
 
@@ -346,10 +346,10 @@ Walking near any NPC makes the client show its interaction prompt with the NPC's
 
 **Acceptance**
 
-- [ ] Unit test: two providers with 1 and 2 options produce flat indices 0..2, and index 2 routes to the second provider.
-- [ ] Unit test: range enter and exit send exactly one SENDNPCOPTIONS and one LEAVESERVICERANGE per crossing, not one per move packet.
-- [ ] Unit test: changing Npc.InteractRadiusDefault applies from the next movement update without a restart.
-- [ ] Client: walk up to WC-RAV-NPC06 in Ravenwood (spawned from zone_object) with the sample NpcScript attached. The interaction prompt appears with the NPC's localized name and portrait, and disappears on walking away. Clicking it logs HandleInteractNPC with the right service index.
+- [x] Unit test: two providers with 1 and 2 options produce flat indices 0..2, and index 2 routes to the second provider. (`NpcServiceMenuTest.ProvidersWithOneAndTwoOptionsGiveFlatIndicesAndIndexTwoRoutesToTheSecond`)
+- [x] Unit test: range enter and exit send exactly one SENDNPCOPTIONS and one LEAVESERVICERANGE per crossing, not one per move packet. (`NpcServiceRangeTest.ARangeIsEnteredAndLeftOncePerCrossingNotOncePerMove`, `NpcServiceRangeTest.AnNpcThatOffersNothingIsNeverEnteredOrLeftAndOneThatStopsOfferingIsLeftOnce`)
+- [x] Unit test: changing Npc.InteractRadiusDefault applies from the next movement update without a restart. (`NpcServiceRadiusTest.ChangingTheDefaultRadiusAppliesFromTheNextMoveWithoutARestart`)
+- [x] Client: walk up to WC-RAV-NPC06 in Ravenwood (spawned from zone_object) with the sample NpcScript attached. The interaction prompt appears with the NPC's localized name and portrait, and disappears on walking away. Clicking it logs HandleInteractNPC with the right service index. (`npc-service-menu.json` run 20261010-112334: the prompt shows SIMEON with his portrait and is gone after the wizard walks away. The client answers the prompt, by X or by a click on the NPC, with MSG_INTERACTOPTION rather than MSG_INTERACTNPC, its options being InteractableOptions, so the line is HandleInteractOption's: option 0 (Greeting) routed to npc_test_greeter option 0)
 
 **Risks**
 
@@ -367,6 +367,7 @@ Walking near any NPC makes the client show its interaction prompt with the NPC's
 **Acceptance**
 
 - [ ] CompleteQuestGoal > StartQuest > None
+- [ ] NPC with no options from any provider: no wizbang, no prompt
 - [ ] Real client: '!' over the giver disappears within 1 s after accept
 
 ### Detailed spec from QST-9: Wizbang indicators
@@ -388,6 +389,7 @@ NPCs show the yellow '!' when they have a quest the player can take and the '?' 
 **Acceptance**
 
 - [ ] Unit test: StartQuest outranks None; CompleteQuestGoal outranks StartQuest when both apply.
+- [ ] Unit test: an NPC none of whose providers offers an option for the player gets None and no MSG_SENDNPCOPTIONS, as in the live game, where an NPC shows a marker and a prompt only when it has a quest to give or a service such as a shop.
 - [ ] Client: log in next to the QST-10 test quest giver. A '!' floats over its head. After accepting, it disappears within 1 s without re-zoning.
 
 **Risks**

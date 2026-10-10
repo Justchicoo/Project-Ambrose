@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the hook framework every later domain hangs off: a script registers itself by being constructed, the loader CMake wrote brings in the scripts that are merely present in the source tree, every hook reaches every script in the order they registered, player hooks hear gold and health changes, ConditionScript answers custom requirement types, a module under modules/ arrives by the same loader with no edit to anything in the core, a script that throws from a hook is reported and the scripts after it still run, and unloading frees them and leaves the manager empty.
+ * Tests the hook framework every later domain hangs off: a script registers itself by being constructed, the loader CMake wrote brings in the scripts that are merely present in the source tree, every hook reaches every script in the order they registered, player hooks hear gold and health changes and each item put on or taken off, ConditionScript answers custom requirement types, the sample NpcScript serves only the template it names, a module under modules/ arrives by the same loader with no edit to anything in the core, a script that throws from a hook is reported and the scripts after it still run, and unloading frees them and leaves the manager empty.
  */
 
 #include "Player.h"
@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -51,6 +52,16 @@ namespace
         void OnHealthChanged(Player&, int32 oldValue, int32 newValue) override
         {
             Calls.push_back("health:" + std::to_string(oldValue) + ":" + std::to_string(newValue));
+        }
+
+        void OnEquip(Player&, uint64 itemGuid, uint32 templateId, std::string_view slot) override
+        {
+            Calls.push_back("equip:" + std::to_string(itemGuid) + ":" + std::to_string(templateId) + ":" + std::string(slot));
+        }
+
+        void OnUnequip(Player&, uint64 itemGuid, uint32 templateId, std::string_view slot) override
+        {
+            Calls.push_back("unequip:" + std::to_string(itemGuid) + ":" + std::to_string(templateId) + ":" + std::string(slot));
         }
     };
 
@@ -142,6 +153,17 @@ TEST_F(ScriptMgrTest, PlayerChangesReachEveryPlayerScript)
     }));
 }
 
+TEST_F(ScriptMgrTest, EquipChangesReachEveryPlayerScript)
+{
+    new CountingPlayerScript();
+    Player player(PlayerStats{});
+
+    sScriptMgr.OnEquip(player, 7, 1652259, "Hat");
+    sScriptMgr.OnUnequip(player, 7, 1652259, "Hat");
+
+    EXPECT_EQ(Calls, (std::vector<std::string>{ "equip:7:1652259:Hat", "unequip:7:1652259:Hat" }));
+}
+
 TEST_F(ScriptMgrTest, ConditionScriptsCanAnswerCustomRequirementTypes)
 {
     new CustomConditionScript();
@@ -177,6 +199,13 @@ TEST_F(ScriptMgrTest, TheGeneratedLoaderBringsInTheScriptsThatAreMerelyPresent)
     EXPECT_FALSE(names.empty()) << "CMake found no AddSC function in src/server/scripts";
     EXPECT_NE(std::find(names.begin(), names.end(), "world_heartbeat"), names.end())
         << "the loader CMake wrote did not call AddSC_world_heartbeat";
+    EXPECT_NE(std::find(names.begin(), names.end(), "npc_test_greeter"), names.end()) << "the sample NpcScript in scripts/Custom was not loaded";
+    std::vector<NpcScript*> const greeters = sScriptMgr.GetNpcScripts(38232);
+    EXPECT_TRUE(std::any_of(greeters.begin(), greeters.end(), [](NpcScript const* script) { return script->GetName() == "npc_test_greeter"; }))
+        << "the sample serves WC-RAV-NPC06, template 38232";
+    std::vector<NpcScript*> const others = sScriptMgr.GetNpcScripts(1);
+    EXPECT_TRUE(std::none_of(others.begin(), others.end(), [](NpcScript const* script) { return script->GetName() == "npc_test_greeter"; }))
+        << "an NpcScript that names a template serves only that template";
 
     std::size_t const loaded = sScriptMgr.GetScriptCount();
     sScriptMgr.LoadScripts(&AddScripts);

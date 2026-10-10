@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Teleports within a zone. '.tele <place> [wizard]' moves the caller's wizard, or a wizard named by character id or name, to one of its zone's own locations, such as Start, or to a game_tele point in that zone, and the wizard and everyone who sees it are sent MSG_SERVERTELEPORT, so it snaps there with no loading screen; '.go xyz <x> <y> <z> [yaw]' moves the caller's wizard to coordinates, keeping its facing unless a yaw is given, and refuses ones a position cannot be sent as; '.gps' says the caller's zone, place, facing and zone instance; '.tele add <name>' keeps the caller's place as a game_tele point that works at once, unless the name is already a location of the caller's zone, and '.tele del <name>' removes one. '.tele zone <zone path> [location] [wizard]' sends a wizard to another zone the way the client changes zones, through MSG_ZONETRANSFERREQUEST, its acknowledgement and MSG_SERVERTRANSFER, and refuses a zone path or location the server does not hold before anything is sent, so the wizard stays. The move runs on the world thread, where positions are kept, and is answered once it has.
+ * Teleports within a zone. '.tele <place> [wizard]' moves the caller's wizard, or a wizard named by character id or name, to one of its zone's own locations, such as Start, or to a game_tele point in that zone, and the wizard and everyone who sees it are sent MSG_SERVERTELEPORT, so it snaps there with no loading screen; '.go xyz <x> <y> <z> [yaw]' moves the caller's wizard to coordinates, keeping its facing unless a yaw is given, and refuses ones a position cannot be sent as; '.gps' says the caller's zone, place, facing and zone instance; '.tele add <name>' keeps the caller's place as a game_tele point that works at once, unless the name is already a location of the caller's zone, and '.tele del <name>' removes one. '.tele npc <name or id> [wizard] [distance]' stands a wizard 120 units, or the distance given, from the nearest thing placed in its zone that answers to that override name, zone tag, template name, template id or global id, on the side the wizard stood, facing it, so a test can open an NPC's menu without walking there; '.tele zone <zone path> [location] [wizard]' sends a wizard to another zone the way the client changes zones, through MSG_ZONETRANSFERREQUEST, its acknowledgement and MSG_SERVERTRANSFER, and refuses a zone path or location the server does not hold before anything is sent, so the wizard stays. The move runs on the world thread, where positions are kept, and is answered once it has.
  */
 
 #include "AccountMgr.h"
@@ -8,6 +8,8 @@
 #include "CommandCaller.h"
 #include "GameSession.h"
 #include "GameTeleMgr.h"
+#include "NpcApproach.h"
+#include "ObjectTemplateMgr.h"
 #include "ScriptMgr.h"
 #include "StringUtil.h"
 #include "World.h"
@@ -103,6 +105,8 @@ namespace
         return true;
     }
 
+    constexpr float NpcStandDistance = 120.0f;
+
     std::optional<float> ReadNumber(CommandCaller& caller, std::string const& text)
     {
         std::optional<float> const value = Ambrose::StringTo<float>(text);
@@ -123,6 +127,7 @@ namespace
                     { .Name = "add", .SecurityLevel = SEC_GAMEMASTER, .AvailableOnConsole = false, .Help = "keep where you stand as a teleport point: <name>", .Run = TeleAdd },
                     { .Name = "del", .SecurityLevel = SEC_GAMEMASTER, .Help = "remove a teleport point: <name>", .Run = TeleDel },
                     { .Name = "zone", .SecurityLevel = SEC_GAMEMASTER, .Help = "travel to another zone, through its loading screen: <zone path> [location] [wizard]", .Run = TeleZone },
+                    { .Name = "npc", .SecurityLevel = SEC_GAMEMASTER, .Help = "stand a little way from something placed in your zone, facing it: <name or id> [wizard] [distance]", .Run = TeleNpc },
                 } },
                 { .Name = "go", .SecurityLevel = SEC_GAMEMASTER, .AvailableOnConsole = false, .Help = "go somewhere in your zone", .Children = {
                     { .Name = "xyz", .SecurityLevel = SEC_GAMEMASTER, .AvailableOnConsole = false, .Help = "go to coordinates in your zone: <x> <y> <z> [yaw]", .Run = GoXyz },
@@ -141,6 +146,57 @@ namespace
             }
             std::shared_ptr<GameSession> const wizard = arguments.size() == 2 ? NamedWizard(caller, arguments[1]) : CallerWizard(caller);
             return wizard && Move(caller, wizard, std::nullopt, arguments[0]);
+        }
+
+        static bool TeleNpc(CommandCaller& caller, std::vector<std::string> const& arguments)
+        {
+            if (arguments.empty() || arguments.size() > 3)
+            {
+                caller.Reply("Give the name, template id or global id of something placed in the zone, in quotes when it holds spaces, the wizard to move if not your own, and how far "
+                             "from it to stand if not 120");
+                return false;
+            }
+            float distance = NpcStandDistance;
+            if (arguments.size() == 3)
+            {
+                std::optional<float> const given = ReadNumber(caller, arguments[2]);
+                if (!given || *given < 0.0f)
+                    return false;
+                distance = *given;
+            }
+            std::shared_ptr<GameSession> const wizard = arguments.size() >= 2 ? NamedWizard(caller, arguments[1]) : CallerWizard(caller);
+            if (!wizard)
+                return false;
+            auto const where = std::make_shared<std::pair<std::string, PlayerPosition>>();
+            bool const ran = sWorld.RunFor(wizard, [where](GameSession& session)
+            {
+                *where = { session.GetZonePath(), session.GetMovement().GetPosition() };
+            }, World::CommandTimeout);
+            if (!ran)
+            {
+                caller.Reply(fmt::format("The world did not answer within {} s, so nobody was moved", World::CommandTimeout.count()));
+                return false;
+            }
+            std::shared_ptr<ZoneObjects const> const objects = sZoneMgr.GetObjects();
+            std::vector<ZoneObjectSpawn> const* placed = objects ? objects->In(where->first) : nullptr;
+            if (!placed)
+            {
+                caller.Reply(fmt::format("Nothing is placed in {}, so nobody was moved", where->first));
+                return false;
+            }
+            NpcStand const stand = NpcApproach::StandBeside(*placed, arguments[0], [](ZoneObjectSpawn const& object)
+            {
+                std::shared_ptr<ObjectTemplate const> const found = object.TemplateId ? sObjectTemplateMgr.GetTemplate(static_cast<uint32>(object.TemplateId)) : nullptr;
+                return found ? found->ObjectName : std::string();
+            }, where->second, distance);
+            if (!stand.Place)
+            {
+                caller.Reply(fmt::format("Not moved: in {}, {}", where->first, stand.Problem));
+                return false;
+            }
+            if (stand.Matches > 1)
+                caller.Reply(fmt::format("{} things in {} answer to {}; going to the nearest", stand.Matches, where->first, arguments[0]));
+            return Move(caller, wizard, stand.Place, fmt::format("beside {}", stand.Name));
         }
 
         static bool GoXyz(CommandCaller& caller, std::vector<std::string> const& arguments)

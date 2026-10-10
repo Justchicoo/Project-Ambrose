@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Every zone's spawners from zone_spawner and zone_spawner_entry (sSpawnerMgr), read at start and again by `.reload zone_spawner`, which builds the new set off to the side, validates it and swaps it in only when every row is good, keeping the old set and reporting each error otherwise; and what each spawner does in each running zone instance: it keeps as many of its objects alive as its count allows, choosing each by its entries' chances, brings one back its respawn time after one is taken away, that time scaled by Rate.Respawn as it stands at the moment of the despawn, and never holds more than its count. A game master's own spawns are placed and taken away here too, and so is any object a despawn effect takes away; and the ResSpawn and ResDespawn results zone_trigger_result holds for the zone's triggers, read with the spawners, which start a spawner in the instance whose trigger fired or stop it and take its objects away with the effect they name.
+ * Every zone's spawners from zone_spawner and zone_spawner_entry (sSpawnerMgr), with the start node rules of a spawn that stands on a path, read at start and again by `.reload zone_spawner`, which builds the new set off to the side, validates it and swaps it in only when every row is good, keeping the old set and reporting each error otherwise; and what each spawner does in each running zone instance: it keeps as many of its objects alive as its count allows, choosing each by its entries' chances, brings one back its respawn time after one is taken away, that time scaled by Rate.Respawn as it stands at the moment of the despawn, and never holds more than its count. A game master's own spawns are placed and taken away here too, and so is any object a despawn effect takes away; and the ResSpawn and ResDespawn results zone_trigger_result holds for the zone's triggers, read with the spawners, which start a spawner in the instance whose trigger fired or stop it and take its objects away with the effect they name.
  */
 
 #ifndef AMBROSE_SPAWNERMGR_H
@@ -8,6 +8,7 @@
 
 #include "Map.h"
 #include "MapObjectSpawner.h"
+#include "PathWalkers.h"
 #include "ReloadableStore.h"
 #include "TypeRegistry.h"
 #include "Types.h"
@@ -32,7 +33,9 @@ struct ZoneSpawnEntry
     uint32 PercentChance = 0;
     ZoneObjectSpawn Object;
     int32 StartNodeType = 0;
+    uint32 StartNode = 0;
     uint64 PathId = 0;
+    int32 UniqueLoc = 0;
 
     bool operator==(ZoneSpawnEntry const&) const = default;
     bool HasPlace() const noexcept;
@@ -93,6 +96,17 @@ struct SpawnerContext
     float RespawnRate = 1.0f;
     MapObjectSources Sources;
     std::function<uint32(uint32)> Roll;
+    PathLookup Paths;
+    uint64 PathGeneration = 0;
+};
+
+enum class SpawnStartNode : int32
+{
+    Random = 0,
+    RandomUnique = 1,
+    First = 2,
+    Last = 3,
+    Specific = 4
 };
 
 class SpawnerMgr
@@ -133,8 +147,10 @@ public:
     static void RunResults(Map& map, std::vector<ZoneSpawner> const& spawners, std::vector<ZoneSpawnResult> const& results, std::string_view trigger, uint64 wizard,
         SpawnerContext const& context, MapObjectChanges& changes);
     static std::chrono::milliseconds RespawnDelay(ZoneSpawner const& spawner, float rate);
+    static std::size_t PickNode(ZoneSpawnEntry const& entry, ZonePath const& path, std::set<uint64> const& taken, std::function<uint32(uint32)> const& roll);
 
     SpawnerContext WorldContext(Map::Clock::time_point now, std::chrono::milliseconds releaseDelay) const;
+    static void UseWorldPaths(SpawnerContext& context, Map const& map);
     MapObjectChanges UpdateFromWorld(Map& map, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay);
     static MapObjectChanges PopulateFromWorld(Map& map, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay);
     MapObjectChanges TriggerFromWorld(Map& map, std::vector<std::string> const& fired, uint64 wizard, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay);

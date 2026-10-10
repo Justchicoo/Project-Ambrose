@@ -174,6 +174,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
+| `Npc.InteractRadiusDefault` | float | 300 world units | from 0 to 100000 world units | live | gameserver | normal | How near a wizard must come to an NPC to be offered its services, unless one of the NPC's providers sets its own radius, read at each move; a wizard is taken out of range 25 world units past it. |
+| `Npc.TestGreeter` | bool | false | none | live | gameserver | normal | Whether the sample npc_test_greeter script offers WC-RAV-NPC06 in Ravenwood a greeting, read at each move; off in play, where an NPC shows a prompt only for a real quest or shop, and on for the client driver's npc-service-menu.json. |
 | `Visibility.Distance` | float | 0 world units | from 0 to 100000 world units | live | gameserver | normal | How near an object must come to a wizard to be shown to it, read at each visibility update; 0 takes the zone's own far clip, and a zone with none shows everything. |
 | `Visibility.Hysteresis` | float | 20 world units | from 0 to 10000 world units | live | gameserver | normal | How far past the visibility distance an object already shown may go before it is taken away, read at each visibility update, so one standing at the edge is not shown and taken away over and over. |
 | `Zone.DoorsIgnoreRequirements` | bool | false | none | live | gameserver | normal | Whether a door, a trigger holding a ResTeleport, fires for a wizard who does not meet its requirements, which otherwise fail closed until requirements are checked; for exploring a test server. |

@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * A row of item_instance with its place in character_inventory: the item's own global id, the template it was made from, how many it holds, its color layers, whether it is locked, its flags, when it was made and the backpack slot it arrived in.
+ * A row of item_instance with its place in character_inventory: the item's own global id, the template it was made from, how many it holds, its color layers, whether it is locked, its flags, when it was made and the backpack slot it arrived in; and an item a wizard wears, the same row with the name of the equipment slot character_equipment puts it in.
  */
 
 #ifndef AMBROSE_CHARACTERITEM_H
 #define AMBROSE_CHARACTERITEM_H
 
 #include "Types.h"
+
+#include <string>
 
 struct CharacterItem
 {
@@ -22,6 +24,14 @@ struct CharacterItem
     uint32 Slot = 0;
 
     bool operator==(CharacterItem const&) const = default;
+};
+
+struct CharacterEquippedItem
+{
+    CharacterItem Item;
+    std::string Slot;
+
+    bool operator==(CharacterEquippedItem const&) const = default;
 };
 
 #endif

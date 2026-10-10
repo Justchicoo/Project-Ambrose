@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A wizard joining an instance takes a mobile id from the player range and cancels any take-down that was waiting, and one leaving gives the id back to cool; a wizard already in the instance keeps the id it has rather than being given a second. An object is found by its global id or by the zone row it was spawned from, and one removed gives its mobile id back to cool the way a wizard's does. An instance with nobody in it is due for take-down once the moment it recorded has passed, never before, and an instance that has never had anybody in it is not due at all, because it was made for somebody who is about to arrive.
+ * A wizard joining an instance takes a mobile id from the player range and cancels any take-down that was waiting, and one leaving gives the id back to cool; a wizard already in the instance keeps the id it has rather than being given a second. An object is found by its global id or by the zone row it was spawned from, and one removed gives its mobile id back to cool the way a wizard's does and stops walking its path, and one moved along its path takes its new place and facing. An instance with nobody in it is due for take-down once the moment it recorded has passed, never before, and an instance that has never had anybody in it is not due at all, because it was made for somebody who is about to arrive.
  */
 
 #include "Map.h"
@@ -94,6 +94,16 @@ void Map::AddObject(MapObject object)
     _objects.push_back(std::move(object));
 }
 
+bool Map::MoveObject(uint64 globalId, PropertyTypes::Vector3D const& position, float yaw)
+{
+    auto const found = std::find_if(_objects.begin(), _objects.end(), [globalId](MapObject const& object) { return object.GlobalId == globalId; });
+    if (found == _objects.end())
+        return false;
+    found->Spawn.Position = position;
+    found->Spawn.Orientation.Z = yaw;
+    return true;
+}
+
 std::optional<MapObject> Map::RemoveSpawn(uint64 spawnId, Clock::time_point now, std::chrono::milliseconds releaseDelay)
 {
     auto const found = std::find_if(_objects.begin(), _objects.end(), [spawnId](MapObject const& object) { return object.Spawn.Id == spawnId; });
@@ -107,6 +117,7 @@ std::optional<MapObject> Map::RemoveObject(uint64 globalId, Clock::time_point no
         return std::nullopt;
     MapObject removed = std::move(*found);
     _objects.erase(found);
+    _walkers.erase(globalId);
     if (removed.MobileId != 0)
         _mobileIds.Release(removed.MobileId, now, releaseDelay);
     return removed;

@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 150,
+    "done": 157,
     "total": 469,
-    "percent": 32.0
+    "percent": 33.5
   },
   "checks": {
-    "done": 1164,
-    "total": 2870,
-    "percent": 40.6
+    "done": 1195,
+    "total": 2874,
+    "percent": 41.6
   },
   "contributor_track": {
     "merged": 94,
@@ -66,17 +66,17 @@
     {
       "phase": 7,
       "title": "An npc offers a quest",
-      "milestones_done": 4,
+      "milestones_done": 6,
       "milestones_total": 13,
-      "checks_done": 31,
-      "checks_total": 86
+      "checks_done": 45,
+      "checks_total": 88
     },
     {
       "phase": 8,
       "title": "The wizard grows vitals xp spells backpack and gear",
-      "milestones_done": 6,
+      "milestones_done": 9,
       "milestones_total": 14,
-      "checks_done": 57,
+      "checks_done": 66,
       "checks_total": 101
     },
     {
@@ -90,10 +90,10 @@
     {
       "phase": 10,
       "title": "Play the wizard city opening quests",
-      "milestones_done": 0,
+      "milestones_done": 1,
       "milestones_total": 18,
-      "checks_done": 2,
-      "checks_total": 113
+      "checks_done": 8,
+      "checks_total": 115
     },
     {
       "phase": 11,
@@ -138,9 +138,9 @@
     {
       "phase": 16,
       "title": "Patch server and tooling ownership",
-      "milestones_done": 4,
+      "milestones_done": 5,
       "milestones_total": 13,
-      "checks_done": 26,
+      "checks_done": 28,
       "checks_total": 80
     },
     {
