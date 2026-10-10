@@ -132,7 +132,9 @@ namespace
             PropertyObjectPtr stats = PropertyObject::Create(_catalog, "class WizGameStats");
             EXPECT_TRUE(stats);
             if (stats)
+            {
                 EXPECT_EQ(stats->Set("m_maxHitPoints", int32{ 500 }), PropertySetResult::Ok);
+            }
             wizard.GameStats = std::move(stats);
             EXPECT_TRUE(duel.Seat(wizard, problem)) << problem;
             EXPECT_TRUE(duel.Seat(Creature(), problem)) << problem;
