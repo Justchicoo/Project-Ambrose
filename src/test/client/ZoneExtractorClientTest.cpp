@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every zone of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the counts recorded for the installed revision, r806919's below: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set every zone's spawnData.xml decodes through the authored classes that database holds, as its spawn items place a WizSpawnObjectInfo the dump does not list, Ravenwood's five spawners include SpawnPoint_Wood_01 placing with SNT_RANDOM_UNIQUE, and the Commons' HalloweenSpawner1 waits on a ReqGlobalRegistryValue; and the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
+ * Extracts every zone of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the counts recorded for the installed revision, r806919's below: every zone archive reads without an error and no two zones share a path; no object list entry is left out anywhere, a sigil, whose class the dump does not describe, read as the CoreObjectInfo it derives from and kept under its own class name; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists, its six sigils among the 183, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its 97 objects, four of them sigils and 40 the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set every zone's spawnData.xml decodes through the authored classes that database holds, as its spawn items place a WizSpawnObjectInfo the dump does not list, Ravenwood's five spawners include SpawnPoint_Wood_01 placing with SNT_RANDOM_UNIQUE, and the Commons' HalloweenSpawner1 waits on a ReqGlobalRegistryValue; and the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
  */
 
 #include "ConfigMgr.h"
@@ -151,7 +151,18 @@ namespace
 
         static std::size_t SentByTheServer(ExtractedZone const& zone)
         {
-            return static_cast<std::size_t>(std::count_if(zone.Objects.begin(), zone.Objects.end(), [](ExtractedObject const& object) { return object.LoadingType == SentByServer; }));
+            return static_cast<std::size_t>(std::count_if(zone.Objects.begin(), zone.Objects.end(), [](ExtractedObject const& object)
+            {
+                return object.LoadingType == SentByServer && !object.ClassName.ends_with("SigilInfo");
+            }));
+        }
+
+        static std::size_t Sigils(ExtractedZone const& zone)
+        {
+            return static_cast<std::size_t>(std::count_if(zone.Objects.begin(), zone.Objects.end(), [](ExtractedObject const& object)
+            {
+                return IsSigil(StringHash::KiStringHash(object.ClassName));
+            }));
         }
 
         static bool HasPlace(ExtractedZone const& zone, std::string_view name)
@@ -180,25 +191,24 @@ TEST_F(ZoneExtractorClientTest, EveryZoneArchiveReadsAndNoTwoZonesSharePath)
     }
 }
 
-TEST_F(ZoneExtractorClientTest, OnlySigilEntriesAreLeftOutOfTheObjectLists)
+TEST_F(ZoneExtractorClientTest, NoObjectListEntryIsLeftOutAndSigilsKeepTheirClass)
 {
-    std::size_t whole = 0;
     for (SkippedZonePart const& part : s_extraction->Skipped)
-        if (part.WholeObject)
-        {
-            ++whole;
-            EXPECT_TRUE(IsSigil(part.ClassHash)) << part.Zone << " " << part.Path << " is class hash " << part.ClassHash;
-        }
-    EXPECT_EQ(whole, s_extraction->GetSkippedObjectCount());
-    EXPECT_GT(whole, 0u) << "the sigil classes are not in the client's type dump, so their entries wait for the classes the server describes";
+        EXPECT_FALSE(part.WholeObject) << part.Zone << " " << part.Path << " is class hash " << part.ClassHash << ", left out";
+    EXPECT_EQ(s_extraction->GetSkippedObjectCount(), 0u);
+    std::size_t sigils = 0;
+    for (ExtractedZone const& zone : s_extraction->Zones)
+        sigils += Sigils(zone);
+    EXPECT_GT(sigils, 0u) << "a sigil entry is read as the CoreObjectInfo it derives from and keeps its own class name";
 }
 
 TEST_F(ZoneExtractorClientTest, TheCommonsHoldsItsObjectsAndPlaces)
 {
     ExtractedZone const& hub = Zone(Commons);
     EXPECT_EQ(hub.DisplayNameKey, "WizardZone_TheCommons");
-    InstalledRevision::Expect(hub.Objects.size(), { { "r806919", 177u } }, "Commons objects");
-    InstalledRevision::Expect(SkippedWhole(Commons), { { "r806919", 6u } }, "Commons sigils");
+    InstalledRevision::Expect(hub.Objects.size(), { { "r806919", 183u } }, "Commons objects, one per object list entry");
+    InstalledRevision::Expect(SkippedWhole(Commons), { { "r806919", 0u } }, "Commons entries left out");
+    InstalledRevision::Expect(Sigils(hub), { { "r806919", 6u } }, "Commons sigils");
     InstalledRevision::Expect(hub.Locations.size(), { { "r806919", 31u } }, "Commons places");
     EXPECT_TRUE(HasPlace(hub, "Start"));
     EXPECT_TRUE(HasPlace(hub, "Target location (WC_Hub Street1 Exit)"));
@@ -209,8 +219,9 @@ TEST_F(ZoneExtractorClientTest, TheCommonsHoldsItsObjectsAndPlaces)
 TEST_F(ZoneExtractorClientTest, RavenwoodHoldsItsObjectsPlacesAndTeachers)
 {
     ExtractedZone const& ravenwood = Zone(Ravenwood);
-    InstalledRevision::Expect(ravenwood.Objects.size(), { { "r806919", 93u } }, "Ravenwood objects");
-    InstalledRevision::Expect(SkippedWhole(Ravenwood), { { "r806919", 4u } }, "Ravenwood sigils");
+    InstalledRevision::Expect(ravenwood.Objects.size(), { { "r806919", 97u } }, "Ravenwood objects, one per object list entry");
+    InstalledRevision::Expect(SkippedWhole(Ravenwood), { { "r806919", 0u } }, "Ravenwood entries left out");
+    InstalledRevision::Expect(Sigils(ravenwood), { { "r806919", 4u } }, "Ravenwood sigils");
     InstalledRevision::Expect(ravenwood.Locations.size(), { { "r806919", 24u } }, "Ravenwood places");
     std::set<uint64> templates;
     for (ExtractedObject const& object : ravenwood.Objects)

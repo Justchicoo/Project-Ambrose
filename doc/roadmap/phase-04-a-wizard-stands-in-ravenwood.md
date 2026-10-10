@@ -374,7 +374,7 @@ The gameserver accepts a client only with a valid, unexpired, single-use key iss
 
 - [x] 3356 zone WADs with gamedata.bin, 0 decode failures targeted (a full run over the pinned install: 3589 zone WADs scanned, 3356 with gamedata.bin, 3356 decoded, 0 failed, in 33 seconds)
 - [x] WC_Hub display key 'WizardZone_TheCommons'; locations include 'Start', 'Target location (WC_Hub Street1 Exit)' (the written zone_template row carries that key, and the 31 zone_location rows include all three named ones with positions)
-- [ ] WC_Ravenwood yields 97 CoreObjectInfo incl. templates 38232, 38230, 81102, 1451035, 39088 (2026-09-26, 5.02: `extractor zones` reads all 97 entries and writes 93 rows holding all five templates; the other 4 are sigils, whose classes the client's type dump does not describe, so they are left out and counted by class: 6.10's extraction names their class, MinigameSigilInfo, from the client program, but no source in the install names its own properties, so it refuses the class and they stay left out and counted by class until a source that holds those names describes it, `ZoneExtractorClientTest.RavenwoodHoldsItsObjectsPlacesAndTeachers`)
+- [x] WC_Ravenwood yields 97 CoreObjectInfo incl. templates 38232, 38230, 81102, 1451035, 39088 (the world session, 2026-10-09: `extractor zones` writes a row for every one of the 97 entries, all five templates among them, its four MinigameSigilInfo entries read as the CoreObjectInfo they derive from, since the first twelve property hashes they hold are CoreObjectInfo's, and kept under their own class name; ZoneExtractorClientTest.RavenwoodHoldsItsObjectsPlacesAndTeachers on r806919, and the client driver's enter-world.json run 20261009-205545 entered Ravenwood with the 40 objects the server sends and no sigil among them)
 - [x] Idempotent rerun; git status clean (two runs produce byte-identical SQL, and git status shows nothing extracted into the tree)
 
 ### Detailed spec from WLD-2: Zone extractor part 1: WizZoneData to world DB
@@ -402,7 +402,7 @@ Every zone's metadata, named locations and static object placements exist as wor
 - [x] Running the extractor over r806919 reports 3356 zone WADs with gamedata.bin and lists each decode failure by name, target 0 (3356 of 3589 carry gamedata.bin, all 3356 decode, none fails)
 - [x] zone_template row for WizardCity/WC_Hub has display name key 'WizardZone_TheCommons' plus farClip, healingPerMinute, soft/hard limit and noMounts filled (display_name_key WizardZone_TheCommons, far_clip 24500, healing_per_minute 20, soft_limit 50, hard_limit 100, no_mounts 0)
 - [x] zone_location for WC_Hub contains 'Start', 'Target location (WC_Hub Street1 Exit)' and 'Target location(WC_Hub Ravenwood)' with position and direction (all three present among 31 rows, none with a null location or direction)
-- [ ] zone_object for WC_Hub has one row per m_objectList entry with templateID, location, orientation, scale, zoneTag, startState, loadingType and a nullable serialized spawnRequirements column (2026-09-26, 5.02: every column is there and typed, and 177 of the 183 entries have their row; the other 6 are MinigameSigilInfo entries, which wait like Ravenwood's for a source that names that class's properties, `ZoneExtractorClientTest.TheCommonsHoldsItsObjectsAndPlaces`)
+- [x] zone_object for WC_Hub has one row per m_objectList entry with templateID, location, orientation, scale, zoneTag, startState, loadingType and a nullable serialized spawnRequirements column (the world session, 2026-10-09: all 183 entries have their row, its six MinigameSigilInfo entries read as CoreObjectInfo under their own class name, ZoneExtractorClientTest.TheCommonsHoldsItsObjectsAndPlaces and TheRowsFillAWorldDatabaseTheZoneManagerLoads on r806919; over every zone `extractor zones` writes 74513 rows and leaves no entry out, and the zone manager never sends a sigil, ZoneExtractorTest.TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtracted; the client driver's enter-the-commons.json run 20261009-210058 entered the Commons with the 123 objects the server sends)
 - [x] Re-running is idempotent (same row counts), and git status shows no extracted files (two runs hash identically and the tree stays clean)
 
 **Risks**
@@ -434,8 +434,8 @@ world.zone_object and world.spawn_* hold every NPC and interactable placement an
 
 **Acceptance**
 
-- [ ] Integration test: WizardCity/WC_Ravenwood yields 97 CoreObjectInfo templateIDs, including NPC templates 38232, 38230, 81102, 1451035 (WC-Bartleby) and 39088. Its spawnData yields 5 SpawnObjects, including SpawnPoint_Wood_01 with SNT_RANDOM_UNIQUE.
-- [ ] Integration test: WizardCity/WC_Hub spawnData contains HalloweenSpawner1 with a ReqGlobalRegistryValue requirement.
+- [x] Integration test: WizardCity/WC_Ravenwood yields 97 CoreObjectInfo templateIDs, including NPC templates 38232, 38230, 81102, 1451035 (WC-Bartleby) and 39088. Its spawnData yields 5 SpawnObjects, including SpawnPoint_Wood_01 with SNT_RANDOM_UNIQUE. (the world session, 2026-10-09: ZoneExtractorClientTest.RavenwoodHoldsItsObjectsPlacesAndTeachers counts all 97 entries with the five templates, and ZoneExtractorClientSpawnTest finds Ravenwood's five spawners with SpawnPoint_Wood_01 placing with SNT_RANDOM_UNIQUE, both on r806919)
+- [x] Integration test: WizardCity/WC_Hub spawnData contains HalloweenSpawner1 with a ReqGlobalRegistryValue requirement. (the world session, 2026-10-09: ZoneExtractorClientSpawnTest.EverySpawnDataReadsThroughTheAuthoredClassesWithRavenwoodsSpawnersAndTheCommonsHalloweenSpawner on r806919 with AMBROSE_TEST_DB set)
 - [x] Full run over ~3356 zone WADs finishes, with a per-zone error count of 0 or a listed set of unknown classes. (3356 zones, 0 errors, 33 seconds)
 
 **Risks**
