@@ -233,6 +233,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     RegisterTwoFactor();
     RegisterCommandHistory();
     RegisterMaintenance();
+    RegisterPublicStatus();
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
@@ -413,6 +414,9 @@ bool Panel::Start(ConfigMgr const& config, std::string& error)
         }, error))
         return false;
     _auditForwarding = !auditCollectorUrl.empty();
+    _publicStatusEnabled = config.GetOption<bool>("Panel.PublicStatus.Enable", false);
+    if (_publicStatusEnabled)
+        AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "The public status page is on (Panel.PublicStatus.Enable = 1)");
     if (!_listener.Start(settings, error))
     {
         _auditForwarder.Stop();
@@ -468,6 +472,8 @@ bool Panel::Reload(ConfigMgr const& config)
     if (twoFactor)
         ApplyTwoFactorSettings(config, *twoFactor);
     _secure = settings.Enable && settings.HasTls();
+    _publicStatusEnabled = settings.Enable && config.GetOption<bool>("Panel.PublicStatus.Enable", false);
+    _publicStatusCache.Clear();
     return true;
 }
 
@@ -1136,6 +1142,7 @@ AdminResponse Panel::MaintenanceEnter(AdminRequest const& request)
         _auditForwarder.Wake();
     if (!entered)
         return AdminResponse::Problem(503, "maintenance_not_entered", error);
+    _publicStatusCache.Clear();
     return AdminResponse::Json(200, PanelMaintenance::Answer(state).dump());
 }
 
@@ -1160,7 +1167,107 @@ AdminResponse Panel::MaintenanceExit(AdminRequest const& request)
         _auditForwarder.Wake();
     if (!left)
         return AdminResponse::Problem(503, "maintenance_not_left", error);
+    _publicStatusCache.Clear();
     return AdminResponse::Json(200, PanelMaintenance::Answer(state).dump());
+}
+
+void Panel::RegisterPublicStatus()
+{
+    _listener.Routes().AddPublic("GET", "/api/panel/public/status", [this](AdminRequest const& request)
+    {
+        return PublicStatusGet(request);
+    });
+    _listener.Routes().AddGuarded("POST", "/api/panel/public/incident", "panel.status", [this](AdminRequest const& request)
+    {
+        return IncidentPost(request);
+    });
+    _listener.Routes().AddGuarded("POST", "/api/panel/public/incident/clear", "panel.status", [this](AdminRequest const& request)
+    {
+        return IncidentClear(request);
+    });
+}
+
+AdminResponse Panel::PublicStatusGet(AdminRequest const& request)
+{
+    if (!_publicStatusEnabled)
+        return AdminResponse::Problem(404, "not_found", "The public status page is off");
+    PanelRateVerdict const verdict = _rateLimit.Take("", request.RemoteAddress, PanelPublicStatus::StatusCost);
+    if (!verdict.Allowed)
+    {
+        AdminResponse held = AdminResponse::Problem(429, "too_many_requests",
+            fmt::format("The public status page is holding this request back; try again in {} second{}",
+                verdict.RetryAfterSeconds, verdict.RetryAfterSeconds == 1 ? "" : "s"));
+        held.Headers.emplace_back("Retry-After", std::to_string(verdict.RetryAfterSeconds));
+        return held;
+    }
+    if (std::optional<std::string> const cached = _publicStatusCache.Get())
+        return AdminResponse::Json(200, *cached);
+    PublicSourceState const source = _publicSource ? _publicSource() : PublicSourceState{};
+    std::lock_guard const lock(_storeMutex);
+    if (!_store.IsOpen())
+        return AdminResponse::Problem(503, "status_unavailable", "The panel store is not open");
+    MaintenanceState maintenance;
+    std::string error;
+    if (!PanelMaintenance::Read(_store, maintenance, error))
+        return AdminResponse::Problem(503, "status_unavailable", error);
+    PublicIncident incident;
+    if (!PanelPublicStatus::ReadIncident(_store, incident, error))
+        return AdminResponse::Problem(503, "status_unavailable", error);
+    std::string const body = PanelPublicStatus::Answer(source, maintenance, incident, PanelStore::NowEpochMs()).dump();
+    _publicStatusCache.Put(body);
+    return AdminResponse::Json(200, body);
+}
+
+AdminResponse Panel::IncidentPost(AdminRequest const& request)
+{
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (body.is_discarded() || !body.is_object())
+        return AdminResponse::Invalid("Posting an incident note takes a JSON object", { { "note", "Say what players should see" } });
+    auto const note = body.find("note");
+    if (note == body.end() || !note->is_string() || note->get<std::string>().empty())
+        return AdminResponse::Invalid("Posting an incident note takes a note", { { "note", "Say what players should see" } });
+    AuditActor actor = AuditActor::Token;
+    std::string actorId = request.Principal;
+    std::string actorName = NameOf(request);
+    if (std::optional<PanelUser> const user = UserOf(request))
+    {
+        actor = AuditActor::User;
+        actorId = std::to_string(user->Id);
+        actorName = user->Username;
+    }
+    PublicIncident incident;
+    std::string error;
+    bool const posted = PanelPublicStatus::PostIncident(_store, _storeMutex, _auditForwarding, actor, actorId, actorName,
+        request.RemoteAddress, request.UserAgent, note->get<std::string>(), incident, error);
+    if (posted && _auditForwarding)
+        _auditForwarder.Wake();
+    if (!posted)
+        return AdminResponse::Problem(503, "incident_not_posted", error);
+    _publicStatusCache.Clear();
+    return AdminResponse::Json(200, nlohmann::json({ { "active", true }, { "note", incident.Note } }).dump());
+}
+
+AdminResponse Panel::IncidentClear(AdminRequest const& request)
+{
+    AuditActor actor = AuditActor::Token;
+    std::string actorId = request.Principal;
+    std::string actorName = NameOf(request);
+    if (std::optional<PanelUser> const user = UserOf(request))
+    {
+        actor = AuditActor::User;
+        actorId = std::to_string(user->Id);
+        actorName = user->Username;
+    }
+    PublicIncident incident;
+    std::string error;
+    bool const cleared = PanelPublicStatus::ClearIncident(_store, _storeMutex, _auditForwarding, actor, actorId, actorName,
+        request.RemoteAddress, request.UserAgent, incident, error);
+    if (cleared && _auditForwarding)
+        _auditForwarder.Wake();
+    if (!cleared)
+        return AdminResponse::Problem(503, "incident_not_cleared", error);
+    _publicStatusCache.Clear();
+    return AdminResponse::Json(200, nlohmann::json({ { "active", false } }).dump());
 }
 
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
