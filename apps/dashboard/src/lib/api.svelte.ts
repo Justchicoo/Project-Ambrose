@@ -8,6 +8,9 @@ import {
     PanelSessionAnswer,
     PanelSignedIn,
     PanelSignInAnswer,
+    PlayerActionAccepted,
+    PlayerRegistrationInfoAnswer,
+    PlayerRegistrationsAnswer,
     RecoveryCodesIssued,
     SessionAnswer,
     StepUpAnswer,
@@ -281,6 +284,38 @@ export async function setPassword(token: string, password: string): Promise<Sign
     if (!signedIn.success) return "second-factor";
     adoptSignedIn(signedIn.output);
     return "signed-in";
+}
+
+export function playerRegistrationInfo(signal?: AbortSignal) {
+    return request("GET", "api/player/registration-info", PlayerRegistrationInfoAnswer, undefined, signal);
+}
+
+export function registerPlayer(username: string, email: string, password: string, captcha = "") {
+    return request("POST", "api/player/register", PlayerActionAccepted, { username, email, password, captcha });
+}
+
+export function verifyPlayerEmail(token: string) {
+    return request("POST", "api/player/verify-email", PlayerActionAccepted, { token });
+}
+
+export function requestPlayerPasswordReset(email: string, captcha = "") {
+    return request("POST", "api/player/password-reset/request", PlayerActionAccepted, { email, captcha });
+}
+
+export function resetPlayerPassword(token: string, password: string) {
+    return request("POST", "api/player/password-reset", PlayerActionAccepted, { token, password });
+}
+
+export function playerRegistrations(signal?: AbortSignal) {
+    return request("GET", "api/panel/accounts/registrations", PlayerRegistrationsAnswer, undefined, signal);
+}
+
+export function resendPlayerVerification(accountId: number) {
+    return request("POST", "api/panel/accounts/registrations/resend", PlayerActionAccepted, { account_id: accountId });
+}
+
+export function blockPlayerRegistration(accountId: number) {
+    return request("POST", "api/panel/accounts/registrations/block", PlayerActionAccepted, { account_id: accountId });
 }
 
 export async function signOut() {

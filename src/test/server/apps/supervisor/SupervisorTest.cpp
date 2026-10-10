@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, kills an app stuck stopping without calling the requested exit a crash, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, shows a crash restart as backoff, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports, or the app prints with its admin API off, until the app is ready, grants a printed step six hours at most, and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
+ * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, kills an app stuck stopping without calling the requested exit a crash, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, shows a crash restart as backoff, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports, or the app prints with its admin API off, until the app is ready, grants a printed step six hours at most, and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant; account-session revocation succeeds when no game app is running.
  */
 
 #include "AdminAuth.h"
@@ -259,6 +259,16 @@ TEST(SupervisorTest, StartsAnAppOnItsReadyLineAndStopsItThroughItsInput)
     EXPECT_EQ(stopped.Crashes, 0u);
     EXPECT_TRUE(rig.Said("Stopping helper with a shutdown line on its input"));
     EXPECT_TRUE(rig.Said("stopped by shutdown"));
+}
+
+TEST(SupervisorTest, AccountSessionRevocationNeedsNoGameRequestWhenNoGameAppRuns)
+{
+    Rig rig(ServerScript());
+    ASSERT_TRUE(rig.Open());
+    uint64 kicked = 99;
+    std::string error;
+    EXPECT_TRUE(rig.Instance().KickAccountSessions(42, kicked, error)) << error;
+    EXPECT_EQ(kicked, 0u);
 }
 
 TEST(SupervisorTest, EveryStateTheAppPassesThroughReachesTheStatusObserverOnceAndInOrder)

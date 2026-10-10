@@ -169,6 +169,7 @@ namespace
             Flag("Login.Maintenance", "false", "Login", Login, Live, "Whether the login server is closed for maintenance: accounts below Login.MaintenanceBypassLevel are refused at sign-in with the maintenance reason, and players already in the world stay connected."),
             Text("Login.MaintenanceReason", "", "255", "Login", Login, Live, "The reason a player refused during maintenance is sent; empty sends Maintenance."),
             Unsigned("Login.MaintenanceBypassLevel", "2", "0", "4", "", "Login", Login, Live, "The lowest security level that still signs in during maintenance: 0 player, 1 moderator, 2 game master, 3 administrator, 4 console."),
+            Flag("Login.RequireVerifiedEmail", "false", "Login", Login, Live, "Whether a player account must have a verified email address before it may sign in."),
             Unsigned("Login.ShutdownGrace", "5", "0", "60", "s", "Login", Login, Live, "How long a stopping login server waits for its shutdown notices to be written."),
 
             Unsigned("Character.MaxPerAccount", "6", "0", "250", "", "Characters", Login, Live, "How many wizards an account may hold."),

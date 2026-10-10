@@ -7,6 +7,7 @@
 #include "AdminConfigView.h"
 #include "AdminRouter.h"
 #include "AdminSettingsView.h"
+#include "AdminClient.h"
 #include "ConfigMgr.h"
 #include "Log.h"
 #include "SettingDeclarations.h"
@@ -650,6 +651,51 @@ std::vector<std::pair<std::string, std::string>> Supervisor::CollectErrorReports
         reports.emplace_back(app->GetDefinition().Name, answer.Body);
     }
     return reports;
+}
+
+bool Supervisor::KickAccountSessions(uint64 accountId, uint64& kicked, std::string& error) const
+{
+    kicked = 0;
+    std::vector<std::pair<std::string, AdminClient>> gameApps;
+    {
+        std::shared_lock<std::shared_mutex> const lock(_mutex);
+        for (std::unique_ptr<ManagedApp> const& app : _apps)
+        {
+            AppSnapshot const snapshot = app->Snapshot();
+            std::string const& role = snapshot.Identity.Role.empty() ? snapshot.ProgramName : snapshot.Identity.Role;
+            if (!snapshot.ProcessId || snapshot.State != AppState::Running || role != "gameserver")
+                continue;
+            std::optional<AdminClient> const admin = app->GetAdminClient();
+            if (!admin)
+            {
+                error = fmt::format("the running game app {} has no admin API for session revocation", app->GetDefinition().Name);
+                return false;
+            }
+            gameApps.emplace_back(app->GetDefinition().Name, *admin);
+        }
+    }
+    for (auto const& [name, admin] : gameApps)
+    {
+        AdminClientRequest request;
+        request.Method = "POST";
+        request.Path = "/api/accounts/kick";
+        request.Body = nlohmann::json{ { "account_id", accountId } }.dump();
+        AdminClientResponse const answer = admin.Send(request, RelayTimeout);
+        if (!answer.Answered || answer.Status != 200)
+        {
+            error = fmt::format("the running game app {} did not confirm session revocation: {}", name,
+                answer.Answered ? fmt::format("HTTP {}", answer.Status) : answer.Error);
+            return false;
+        }
+        nlohmann::json const body = nlohmann::json::parse(answer.Body, nullptr, false);
+        if (!body.is_object() || !body.contains("kicked") || !body["kicked"].is_number_unsigned())
+        {
+            error = fmt::format("the running game app {} returned an invalid session revocation answer", name);
+            return false;
+        }
+        kicked += body["kicked"].get<uint64>();
+    }
+    return true;
 }
 
 std::optional<std::string> Supervisor::AskApp(std::string_view name, std::string_view path, std::chrono::milliseconds timeout) const

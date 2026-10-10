@@ -373,6 +373,12 @@
                     it generates one.
                 {/if}
             </p>
+            {#if session.panel && asUser && !secondStep}
+                <p class="mt-3 flex gap-4 text-sm">
+                    <a class="text-primary underline underline-offset-4" href="#player/register">Create a player account</a>
+                    <a class="text-primary underline underline-offset-4" href="#player/recover">Forgot player password?</a>
+                </p>
+            {/if}
         </Card.Footer>
     </Card.Root>
 </main>

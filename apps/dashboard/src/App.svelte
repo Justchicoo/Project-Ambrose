@@ -29,6 +29,7 @@
     import Denied from "./pages/Denied.svelte";
     import Enroll from "./pages/Enroll.svelte";
     import SignIn from "./pages/SignIn.svelte";
+    import PlayerAccounts from "./pages/PlayerAccounts.svelte";
     import Unavailable from "./pages/Unavailable.svelte";
 
     const granted = $derived(session.panel ? new Set(session.user?.permissions ?? []) : everything);
@@ -114,7 +115,11 @@
         <Button variant="outline" onclick={() => void probeSession()}><RotateCcwIcon />Try again</Button>
     </main>
 {:else if session.state === "signed-out"}
-    <SignIn />
+    {#if session.panel && path.startsWith("player/")}
+        <PlayerAccounts page={path} />
+    {:else}
+        <SignIn />
+    {/if}
 {:else if session.mustEnroll}
     <Enroll />
 {:else}

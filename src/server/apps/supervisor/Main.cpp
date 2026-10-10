@@ -13,6 +13,8 @@
 #include "ConfigMgr.h"
 #include "DashboardPage.h"
 #include "Duration.h"
+#include "DatabaseLoader.h"
+#include "AccountMgr.h"
 #include "Environment.h"
 #include "FileRoots.h"
 #include "FilesService.h"
@@ -149,8 +151,9 @@ namespace
     class SupervisorApp : public ServerApp
     {
     public:
-        SupervisorApp() : ServerApp({ "supervisor", "supervisor.conf", DefaultAdminPort }, sConfigMgr, sLog, std::cout, std::cerr), _supervisor(sLog, BreakThroughThisProgram()), _panel(sLog, ClientLocator::GetDataFolder(LocalClientSystem()), sConfigMgr.GetFilename().parent_path()), _files(_roots, _space, FileHooks())
+        SupervisorApp() : ServerApp({ "supervisor", "supervisor.conf", DefaultAdminPort }, sConfigMgr, sLog, std::cout, std::cerr), _databases(Config()), _supervisor(sLog, BreakThroughThisProgram()), _panel(sLog, ClientLocator::GetDataFolder(LocalClientSystem()), sConfigMgr.GetFilename().parent_path()), _files(_roots, _space, FileHooks())
         {
+            _databases.AddDatabase(LoginDatabase, "Login");
             RegisterCommands();
         }
 
@@ -181,6 +184,11 @@ namespace
             _supervisor.SetRelayHooks({ [this](AdminRequest const& request) { return _panel.NameOf(request); },
                 [this](AdminRequest const& request, RelayedAnswer const& answer) { _panel.RecordRelayed(request, answer.App, answer.Method, answer.Path, answer.Status, answer.Body); } });
             _supervisor.Register(admin.Routes(), [this] { return BuildStatus(); });
+            _panel.SetPlayerSessionKicker([this](uint64 accountId, std::string& error)
+            {
+                uint64 kicked = 0;
+                return _supervisor.KickAccountSessions(accountId, kicked, error);
+            });
             AdminGraphsView::Register(admin.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
             _files.Register(admin.Routes());
             _panel.RegisterAdminRoutes(admin.Routes());
@@ -188,6 +196,20 @@ namespace
 
         bool OnStart() override
         {
+            if (!_databases.Load())
+            {
+                LOG_ERROR("server.supervisor", "The login database is unavailable to player-account panel routes; the supervisor and panel will continue");
+                _databases.Close();
+            }
+            _accountsReady = LoginDatabase.IsOpen() && sAccountMgr.LoadSettings(Config());
+            if (LoginDatabase.IsOpen() && !_accountsReady)
+                LOG_ERROR("server.supervisor", "The account settings cannot be loaded for player-account panel routes; the supervisor and panel will continue");
+            _panel.SetAccountsReady(_accountsReady);
+            if (!_accountsReady)
+            {
+                _databases.Close();
+            }
+
             std::vector<std::string> problems;
             LocalClientSystem const system;
             std::error_code code;
@@ -315,6 +337,7 @@ namespace
             SaveHistory();
             _panel.Stop();
             _supervisor.Shutdown();
+            _databases.Close();
             LOG_INFO("server.supervisor", "The supervisor stopped watching; the apps it runs keep running and are taken back when it starts again");
         }
 
@@ -323,13 +346,25 @@ namespace
             constexpr std::string_view AtStart = "The supervisor reads it when it starts watching, so a change takes effect at its next start";
             constexpr std::string_view PanelStore = "The panel opens its store when it starts, so a change takes effect at its next start";
             constexpr std::string_view PanelKeyring = "The panel opens its keyring when it starts, so a change takes effect at its next start";
-            return { { "Supervisor.Apps", AtStart }, { "Supervisor.StateFile", AtStart }, { "Supervisor.OutputDir", AtStart }, { "Supervisor.OutputMaxBytes", AtStart },
-                { "App.*", AtStart }, { "Panel.StoreFile", PanelStore }, { "Panel.KeyringFile", PanelKeyring } };
+            std::vector<RestartRequiredOption> options(DatabaseLoader::RestartRequiredOptions.begin(), DatabaseLoader::RestartRequiredOptions.end());
+            options.insert(options.end(), { { "Supervisor.Apps", AtStart }, { "Supervisor.StateFile", AtStart }, { "Supervisor.OutputDir", AtStart }, { "Supervisor.OutputMaxBytes", AtStart },
+                { "App.*", AtStart }, { "Panel.StoreFile", PanelStore }, { "Panel.KeyringFile", PanelKeyring } });
+            return options;
         }
 
         void OnConfigChanged(std::vector<std::string> const& changed) override
         {
             ServerApp::OnConfigChanged(changed);
+            bool const databaseApplied = _databases.ApplyConfig();
+            if (!databaseApplied)
+                LOG_ERROR("server.supervisor", "The changed login database settings could not be applied; current connections keep serving");
+            if (databaseApplied && LoginDatabase.IsOpen() && std::any_of(changed.begin(), changed.end(), [](std::string const& key) { return key.starts_with("Account."); }))
+            {
+                _accountsReady = sAccountMgr.LoadSettings(Config());
+                if (!_accountsReady)
+                    LOG_ERROR("server.supervisor", "The changed account settings cannot be used; player-account panel routes are unavailable");
+                _panel.SetAccountsReady(_accountsReady);
+            }
             if (std::any_of(changed.begin(), changed.end(), [](std::string const& key) { return key.starts_with("Panel."); }) && !_panel.Reload(Config()))
                 LOG_WARN("server.panel", "The panel kept its earlier settings; the reason is logged above");
             if (std::all_of(changed.begin(), changed.end(), [](std::string const& key) { return key.starts_with("Files."); }))
@@ -445,6 +480,8 @@ namespace
 
         static constexpr std::chrono::milliseconds PublishedTimeout{ 1500 };
 
+        DatabaseLoader _databases;
+        bool _accountsReady = false;
         Supervisor _supervisor;
         Panel _panel;
         Ambrose::SeriesStore _history;

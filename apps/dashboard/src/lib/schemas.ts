@@ -347,6 +347,35 @@ export const PanelMailTestAnswer = v.looseObject({
     to: v.string(),
 });
 
+export const PlayerRegistrationInfoAnswer = v.looseObject({
+    schema: v.number(),
+    enabled: v.boolean(),
+    email_verification: v.boolean(),
+    captcha_provider: v.string(),
+    captcha_site_key: v.string(),
+    captcha_required: v.boolean(),
+});
+
+export const PlayerActionAccepted = v.looseObject({
+    accepted: v.optional(v.boolean()),
+    verified: v.optional(v.boolean()),
+    changed: v.optional(v.boolean()),
+    sent: v.optional(v.boolean()),
+});
+
+export const PlayerRegistrationsAnswer = v.looseObject({
+    schema: v.number(),
+    registrations: v.array(
+        v.looseObject({
+            account_id: v.number(),
+            username: v.string(),
+            state: v.picklist(["pending", "verified", "blocked"]),
+            created_epoch_ms: v.number(),
+            updated_epoch_ms: v.number(),
+        }),
+    ),
+});
+
 export const ErrorGroup = v.looseObject({
     id: v.number(),
     app: v.string(),

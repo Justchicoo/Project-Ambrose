@@ -61,6 +61,7 @@ Login.ShutdownGrace = 5
 Login.Maintenance = 0
 Login.MaintenanceReason =
 Login.MaintenanceBypassLevel = 2
+Login.RequireVerifiedEmail = 0
 Network.Threads = 1
 Network.MaxFrameSize = 4194304
 Network.MaxDmlMessages = 1024

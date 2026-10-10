@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds, a permanent one the latest end the client reads, and no Reason, and nothing else any TimeStamp, account bans stay hidden behind a wrong password, revision enforcement is checked on each login and can be changed live, the attempt limit is read live and locks the address out, maintenance refuses a player with its reason and no session while a game master signs in and a player signs in once it ends, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
+ * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account, unverified email and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds, a permanent one the latest end the client reads, and no Reason, and nothing else any TimeStamp, account bans stay hidden behind a wrong password, revision enforcement is checked on each login and can be changed live, the attempt limit is read live and locks the address out, maintenance refuses a player with its reason and no session while a game master signs in and a player signs in once it ends, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
  */
 
 #include "AccountMgr.h"
@@ -187,6 +187,18 @@ TEST_F(AuthHandlerDatabaseTest, ValidCredentialsAreAdmittedWithAStoredSessionKey
     SendAuthen(client, Credentials(client, "wizard", "hunter22"));
     EXPECT_FALSE(ReadDml(*client.Socket, std::chrono::milliseconds(300)));
     EXPECT_EQ(session->GetStrikes(), 0u);
+}
+
+TEST_F(AuthHandlerDatabaseTest, RequireVerifiedEmailRefusesUnverifiedAccountsWithoutStoringASession)
+{
+    ASSERT_EQ(sAccountMgr.SetEmailVerified(_accountId, false), AccountOpResult::Ok);
+    LoginSettings settings;
+    settings.RequireVerifiedEmail = true;
+    sLoginMgr.SetSettings(settings);
+
+    LoginClient client = _server->Connect();
+    SendAuthen(client, Credentials(client, "Wizard", "hunter22"));
+    ExpectFailure(client, AuthResult::AuthenFailed, "an unverified account while Login.RequireVerifiedEmail is on");
 }
 
 TEST_F(AuthHandlerDatabaseTest, RevisionEnforcementCanBeChangedForTheNextLogin)

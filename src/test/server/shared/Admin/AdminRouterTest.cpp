@@ -267,6 +267,43 @@ TEST(AdminRouterTest, ServesFilesAndPublicRoutesWithoutTheToken)
     EXPECT_EQ(router.Dispatch(Get("/api/session")).Status, 200);
 }
 
+TEST(AdminRouterTest, ACostlyPublicRouteRunsWithoutATokenAndPaysTheThrottle)
+{
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter router(auth);
+    uint32 charged = 0;
+    bool ran = false;
+    router.SetThrottle([&](AdminRequest const&, uint32 cost)
+    {
+        charged = cost;
+        return std::optional<AdminResponse>();
+    });
+    router.AddPublicCosting("POST", "/api/public", 7, [&](AdminRequest const&)
+    {
+        ran = true;
+        return AdminResponse::Json(200, "{}");
+    });
+
+    AdminRequest request;
+    request.Method = "POST";
+    request.Path = "/api/public";
+    request.RemoteAddress = "127.0.0.1";
+    EXPECT_EQ(router.Dispatch(request).Status, 200);
+    EXPECT_EQ(charged, 7u);
+    EXPECT_TRUE(ran);
+
+    charged = 0;
+    ran = false;
+    router.SetThrottle([](AdminRequest const&, uint32)
+    {
+        return std::optional<AdminResponse>(AdminResponse::Problem(429, "too_many_requests", "slow down"));
+    });
+    EXPECT_EQ(router.Dispatch(request).Status, 429);
+    EXPECT_EQ(charged, 0u);
+    EXPECT_FALSE(ran);
+}
+
 TEST(AdminRouterTest, ASessionCookieAuthenticatesWithItsOriginAndCsrfToken)
 {
     AdminAuth auth(10, 0.0);

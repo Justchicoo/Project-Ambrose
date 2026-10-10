@@ -37,6 +37,7 @@ namespace
         Definition{ "general", "Panel.SessionIdleMinutes", "720", false, false, "default", 5, 10080 },
         Definition{ "general", "Panel.SessionLifetimeHours", "168", false, false, "default", 1, 8760 },
         Definition{ "general", "Panel.RetentionDays", "30", false, false, "default", 1, 3650 },
+        Definition{ "general", "Panel.Registration.Enable", "0", false, false, "default", 0, 1 },
         Definition{ "mail", "Mail.SmtpHost", "", false, false, "default", 0, 0 },
         Definition{ "mail", "Mail.SmtpPort", "587", false, false, "default", 1, 65535 },
         Definition{ "mail", "Mail.TlsMode", "starttls", false, false, "default", 0, 0 },
@@ -88,8 +89,9 @@ namespace
             return true;
         try
         {
-            int64 const number = std::stoll(std::string(value));
-            return number >= definition.Minimum && number <= definition.Maximum;
+            std::size_t consumed = 0;
+            int64 const number = std::stoll(std::string(value), &consumed);
+            return consumed == value.size() && number >= definition.Minimum && number <= definition.Maximum;
         }
         catch (std::invalid_argument const&)
         {
