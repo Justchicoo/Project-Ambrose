@@ -855,3 +855,33 @@ export type FileEntry = v.InferOutput<typeof FileEntry>;
 export type FileListing = v.InferOutput<typeof FileListing>;
 export type FileContent = v.InferOutput<typeof FileContent>;
 export type FileRulesAnswer = v.InferOutput<typeof FileRulesAnswer>;
+
+export const PanelUserEntry = v.looseObject({
+    id: v.number(),
+    username: v.string(),
+    displayName: v.string(),
+    email: v.string(),
+    disabled: v.boolean(),
+    mustChange: v.boolean(),
+    isOwner: v.boolean(),
+    role: v.string(),
+    generation: v.number(),
+    createdEpochMs: v.number(),
+    passwordSetEpochMs: v.number(),
+    signedInEpochMs: v.optional(v.number()),
+    twoFactor: v.boolean(),
+    roles: v.array(v.string()),
+    grants: v.array(v.looseObject({ app: v.string(), permission: v.string() })),
+});
+export const PanelUsersAnswer = v.array(PanelUserEntry);
+
+export const PanelRoleEntry = v.looseObject({
+    id: v.number(),
+    name: v.string(),
+    description: v.string(),
+    ownerOnly: v.boolean(),
+    shipped: v.boolean(),
+    keys: v.array(v.string()),
+    holders: v.number(),
+});
+export const PanelRolesAnswer = v.array(PanelRoleEntry);

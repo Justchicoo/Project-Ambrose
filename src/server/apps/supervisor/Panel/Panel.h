@@ -14,6 +14,7 @@
 #include "PanelErrors.h"
 #include "PanelFileRules.h"
 #include "PanelGrants.h"
+#include "PanelRoles.h"
 #include "PanelAuthorization.h"
 #include "PanelEventSocket.h"
 #include "PanelEventStreams.h"
@@ -95,6 +96,7 @@ public:
     PanelSessions& Sessions() { return _sessions; }
     PanelErrors& Errors() { return _errors; }
     PanelGrants& Grants() { return _grants; }
+    PanelRoles& Roles() { return _roles; }
     PanelKeyring& Keyring() { return _keyring; }
     PanelTwoFactor& TwoFactor() { return _twoFactor; }
     PanelTwoFactorSettings TwoFactorSettings() const;
@@ -159,6 +161,7 @@ private:
     void ApplyTwoFactorSettings(ConfigMgr const& config, PanelTwoFactorSettings const& loaded);
     void RegisterSignIn();
     void RegisterTwoFactor();
+    void RegisterUserManagement();
     void RegisterCommandHistory();
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
@@ -187,6 +190,19 @@ private:
     AdminResponse PanelSettingsGet(AdminRequest const& request);
     AdminResponse PanelSettingsUpdate(AdminRequest const& request);
     AdminResponse MailTest(AdminRequest const& request);
+    AdminResponse UsersList(AdminRequest const& request);
+    AdminResponse UsersCreate(AdminRequest const& request);
+    AdminResponse UsersDetail(AdminRequest const& request);
+    AdminResponse UsersUpdate(AdminRequest const& request);
+    AdminResponse UsersRemove(AdminRequest const& request);
+    AdminResponse UsersTwoFactorReset(AdminRequest const& request);
+    AdminResponse UsersPasswordLink(AdminRequest const& request);
+    AdminResponse UsersAudit(AdminRequest const& request);
+    AdminResponse UsersSessions(AdminRequest const& request);
+    AdminResponse RolesList(AdminRequest const& request);
+    AdminResponse RolesCreate(AdminRequest const& request);
+    AdminResponse RolesUpdate(AdminRequest const& request);
+    AdminResponse RolesRemove(AdminRequest const& request);
     std::optional<AdminResponse> CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username);
     AdminResponse ClearError(AdminRequest const& request);
     AdminResponse ErrorReport(AdminRequest const& request, bool create);
@@ -207,6 +223,7 @@ private:
     PanelSessions _sessions;
     PanelErrors _errors;
     PanelGrants _grants;
+    PanelRoles _roles;
     PanelKeyring _keyring;
     PanelTwoFactor _twoFactor;
     PanelFileRules _fileRules;

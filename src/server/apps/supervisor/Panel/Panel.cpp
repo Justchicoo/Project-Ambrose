@@ -23,6 +23,7 @@
 #include "SourceFolder.h"
 #include "StringUtil.h"
 #include "Totp.h"
+#include <charconv>
 
 #include <fmt/format.h>
 
@@ -176,7 +177,7 @@ namespace
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
-    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
+    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _roles(_store), _keyring(),
       _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
@@ -213,7 +214,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
             std::string error;
             if (!Record(event, {}, error))
                 AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A refused permission {} could not be recorded: {}", permission, error);
-        });
+        }, &_roles);
     _listener.Routes().SetPermissionCheck([this](AdminRequest const& request, std::string_view permission)
     {
         return _authorization->Decide(request, permission);
@@ -232,6 +233,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     });
     RegisterTwoFactor();
     RegisterCommandHistory();
+    RegisterUserManagement();
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
@@ -312,6 +314,9 @@ bool Panel::OpenStore(ConfigMgr const& config, std::string& error)
         AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "{}", warning);
     for (std::string const& applied : _store.GetApplied())
         AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "The panel store applied {}", applied);
+    std::string seedError;
+    if (!_roles.SeedShipped(seedError))
+        AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "The shipped roles could not be seeded: {}", seedError);
     AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "The panel store is open in {}", ConfigMgr::PathToUtf8(file));
     return true;
 }
@@ -2896,4 +2901,631 @@ AdminResponse Panel::Reset(AdminRequest const& request)
         return Challenged(*user, request, "a one-time password link");
     _signIn.Succeeded(user->Username, request.RemoteAddress);
     return OpenFor(*user, request, "a one-time password link");
+}
+
+namespace
+{
+    nlohmann::json UserJson(PanelUser const& user, PanelRoles& roles, PanelGrants& grants, std::string& error)
+    {
+        nlohmann::json item;
+        item["id"] = user.Id;
+        item["username"] = user.Username;
+        item["displayName"] = user.DisplayName;
+        item["email"] = user.Email;
+        item["disabled"] = user.Disabled;
+        item["mustChange"] = user.MustChange;
+        item["isOwner"] = user.IsOwner;
+        item["role"] = std::string(PanelPermissions::NameOf(user.Role));
+        item["generation"] = user.Generation;
+        item["createdEpochMs"] = user.CreatedEpochMs;
+        item["passwordSetEpochMs"] = user.PasswordSetEpochMs;
+        if (user.SignedInEpochMs)
+            item["signedInEpochMs"] = *user.SignedInEpochMs;
+        item["twoFactor"] = user.TwoFactor;
+        nlohmann::json roleNames = nlohmann::json::array();
+        for (PanelRoleRow const& role : roles.RolesOf(user.Id, error))
+            roleNames.push_back(role.Name);
+        item["roles"] = roleNames;
+        nlohmann::json grantList = nlohmann::json::array();
+        for (PanelGrant const& grant : grants.Of(user.Id, error))
+        {
+            nlohmann::json g;
+            g["app"] = grant.App;
+            g["permission"] = grant.Permission;
+            grantList.push_back(g);
+        }
+        item["grants"] = grantList;
+        return item;
+    }
+
+    std::optional<int64> QueryId(AdminRequest const& request)
+    {
+        std::string_view const raw = request.Query("id");
+        if (raw.empty())
+            return std::nullopt;
+        int64 id = 0;
+        auto const [end, code] = std::from_chars(raw.data(), raw.data() + raw.size(), id);
+        if (code != std::errc() || end != raw.data() + raw.size() || id <= 0)
+            return std::nullopt;
+        return id;
+    }
+}
+
+void Panel::RegisterUserManagement()
+{
+    _listener.Routes().AddGuarded("GET", "/api/panel/users", "users.read", [this](AdminRequest const& request) { return UsersList(request); });
+    _listener.Routes().AddGuarded("POST", "/api/panel/users", "users.invite", [this](AdminRequest const& request) { return UsersCreate(request); });
+    _listener.Routes().AddGuarded("GET", "/api/panel/users/detail", "users.read", [this](AdminRequest const& request) { return UsersDetail(request); });
+    _listener.Routes().AddGuarded("PATCH", "/api/panel/users", "users.update", [this](AdminRequest const& request) { return UsersUpdate(request); });
+    _listener.Routes().AddGuarded("DELETE", "/api/panel/users", "users.delete", [this](AdminRequest const& request) { return UsersRemove(request); });
+    _listener.Routes().AddGuarded("POST", "/api/panel/users/two-factor-reset", "users.update", [this](AdminRequest const& request) { return UsersTwoFactorReset(request); });
+    _listener.Routes().AddGuarded("POST", "/api/panel/users/password-link", "users.update", [this](AdminRequest const& request) { return UsersPasswordLink(request); });
+    _listener.Routes().AddGuarded("GET", "/api/panel/users/audit", "users.read", [this](AdminRequest const& request) { return UsersAudit(request); });
+    _listener.Routes().AddGuarded("GET", "/api/panel/users/sessions", "users.read", [this](AdminRequest const& request) { return UsersSessions(request); });
+    _listener.Routes().AddGuarded("GET", "/api/panel/roles", "users.read", [this](AdminRequest const& request) { return RolesList(request); });
+    _listener.Routes().AddGuarded("POST", "/api/panel/roles", "users.update", [this](AdminRequest const& request) { return RolesCreate(request); });
+    _listener.Routes().AddGuarded("PATCH", "/api/panel/roles", "users.update", [this](AdminRequest const& request) { return RolesUpdate(request); });
+    _listener.Routes().AddGuarded("DELETE", "/api/panel/roles", "users.update", [this](AdminRequest const& request) { return RolesRemove(request); });
+}
+
+AdminResponse Panel::UsersList(AdminRequest const& request)
+{
+    (void)request;
+    std::string error;
+    nlohmann::json answer = nlohmann::json::array();
+    for (PanelUser const& user : _users.List(error))
+        answer.push_back(UserJson(user, _roles, _grants, error));
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::UsersCreate(AdminRequest const& request)
+{
+    std::optional<PanelUser> const actor = UserOf(request);
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (!actor || !body.is_object() || !body.contains("username") || !body.contains("password"))
+        return AdminResponse::Invalid("Creating a user takes a username and a password", { { "username", "The operator's sign-in name" }, { "password", "The operator's first password" } });
+    std::string const username = body["username"].get<std::string>();
+    std::string const password = body["password"].get<std::string>();
+    bool const owner = body.value("owner", false);
+    if (owner && !actor->IsOwner)
+        return AdminResponse::Problem(403, "owner_only", "Only an owner makes another owner");
+    std::string error;
+    AuditEvent event;
+    event.Name = "panel:users.created";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(actor->Id);
+    event.ActorName = actor->Username;
+    event.Address = request.RemoteAddress;
+    event.On("panel_user", std::to_string(actor->Id), actor->Username);
+    int64 id = 0;
+    PanelUserResult result = PanelUserResult::StoreFailed;
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        PanelUserDraft draft;
+        result = _users.PrepareUser(username, password, owner, true, draft, failure);
+        if (result != PanelUserResult::Ok)
+        {
+            recorded.Result = AuditResult::Refused;
+            recorded.Reason = std::string(PanelUsers::Explain(result));
+            return true;
+        }
+        result = _users.InsertUser(draft, &id, failure);
+        if (result != PanelUserResult::Ok)
+        {
+            recorded.Result = AuditResult::Refused;
+            recorded.Reason = std::string(PanelUsers::Explain(result));
+            return true;
+        }
+        recorded.On("panel_user", std::to_string(id), username);
+        return true;
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (result != PanelUserResult::Ok)
+        return AdminResponse::Problem(409, "user_refused", std::string(PanelUsers::Explain(result)));
+    if (body.contains("roles") && body["roles"].is_array())
+    {
+        for (auto const& name : body["roles"])
+        {
+            std::optional<PanelRoleRow> const role = _roles.FindByName(name.get<std::string>(), error);
+            if (!role || !error.empty())
+                continue;
+            _roles.Assign(id, role->Id, PanelStore::NowEpochMs(), error);
+        }
+    }
+    std::optional<PanelUser> const created = _users.FindById(id, error);
+    if (!created)
+        return AdminResponse::Problem(503, "store_unavailable", "The user was created but could not be read back");
+    return AdminResponse::Json(201, UserJson(*created, _roles, _grants, error).dump());
+}
+
+AdminResponse Panel::UsersDetail(AdminRequest const& request)
+{
+    std::optional<int64> const id = QueryId(request);
+    if (!id)
+        return AdminResponse::Invalid("Reading a user takes their id", { { "id", "The user's id" } });
+    std::string error;
+    std::optional<PanelUser> const user = _users.FindById(*id, error);
+    if (!user)
+        return AdminResponse::Problem(404, "unknown_user", "There is no such user");
+    nlohmann::json answer = UserJson(*user, _roles, _grants, error);
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    nlohmann::json sessions = nlohmann::json::array();
+    for (PanelSessionInfo const& session : _sessions.List(*id, error))
+    {
+        nlohmann::json s;
+        s["id"] = session.Id;
+        s["createdEpochMs"] = session.CreatedEpochMs;
+        s["seenEpochMs"] = session.SeenEpochMs;
+        s["address"] = session.Address;
+        s["userAgent"] = session.UserAgent;
+        sessions.push_back(s);
+    }
+    answer["sessions"] = sessions;
+    nlohmann::json keys = nlohmann::json::array();
+    for (std::string const& key : _roles.KeysOfUser(*id, error))
+        keys.push_back(key);
+    answer["roleKeys"] = keys;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::UsersUpdate(AdminRequest const& request)
+{
+    std::optional<PanelUser> const actor = UserOf(request);
+    std::optional<int64> const id = QueryId(request);
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (!actor || !id || !body.is_object())
+        return AdminResponse::Invalid("Updating a user takes their id and a changes object", { { "id", "The user's id" } });
+    std::string error;
+    std::optional<PanelUser> target = _users.FindById(*id, error);
+    if (!target)
+        return AdminResponse::Problem(404, "unknown_user", "There is no such user");
+    if (target->Id == actor->Id)
+        return AdminResponse::Problem(409, "not_themselves", "An operator does not change their own standing through this route");
+    AuditEvent event;
+    event.Name = "panel:users.updated";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(actor->Id);
+    event.ActorName = actor->Username;
+    event.Address = request.RemoteAddress;
+    event.On("panel_user", std::to_string(actor->Id), actor->Username);
+    event.On("panel_user", std::to_string(target->Id), target->Username);
+    bool changed = false;
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        if (body.contains("disabled"))
+        {
+            bool const disabled = body["disabled"].get<bool>();
+            if (disabled && target->IsOwner)
+            {
+                uint32 owners = _users.CountOwners(failure);
+                if (!failure.empty())
+                    return false;
+                if (owners <= 1)
+                {
+                    recorded.Result = AuditResult::Refused;
+                    recorded.Reason = "the last owner cannot be disabled";
+                    return true;
+                }
+            }
+            if (!_users.SetDisabled(target->Id, disabled, failure))
+                return false;
+            if (disabled && !_sessions.CloseEveryOne(target->Id, "the operator was disabled", failure))
+                return false;
+            if (!_users.BumpGeneration(target->Id, failure))
+                return false;
+            changed = true;
+        }
+        if (body.contains("roles") && body["roles"].is_array())
+        {
+            std::vector<PanelRoleRow> const current = _roles.RolesOf(target->Id, failure);
+            if (!failure.empty())
+                return false;
+            for (PanelRoleRow const& role : current)
+                if (_roles.Unassign(target->Id, role.Id, failure) != PanelRoleResult::Ok)
+                    return false;
+            for (auto const& name : body["roles"])
+            {
+                std::optional<PanelRoleRow> const role = _roles.FindByName(name.get<std::string>(), failure);
+                if (!failure.empty())
+                    return false;
+                if (!role)
+                {
+                    recorded.Result = AuditResult::Refused;
+                    recorded.Reason = "there is no role called " + name.get<std::string>();
+                    return true;
+                }
+                if (_roles.Assign(target->Id, role->Id, PanelStore::NowEpochMs(), failure) != PanelRoleResult::Ok)
+                    return false;
+            }
+            if (!_users.BumpGeneration(target->Id, failure))
+                return false;
+            changed = true;
+        }
+        if (body.contains("grants") && body["grants"].is_array())
+        {
+            std::vector<PanelGrant> const current = _grants.Of(target->Id, failure);
+            if (!failure.empty())
+                return false;
+            for (PanelGrant const& grant : current)
+                if (!_grants.Take(target->Id, grant.App, grant.Permission, actor->Id, failure))
+                    return false;
+            for (auto const& entry : body["grants"])
+            {
+                if (!entry.is_object() || !entry.contains("app") || !entry.contains("permission"))
+                {
+                    recorded.Result = AuditResult::Refused;
+                    recorded.Reason = "a grant names an app and a permission";
+                    return true;
+                }
+                if (!_grants.Give(target->Id, entry["app"].get<std::string>(), entry["permission"].get<std::string>(), actor->Id, PanelStore::NowEpochMs(), failure))
+                    return false;
+            }
+            if (!_users.BumpGeneration(target->Id, failure))
+                return false;
+            changed = true;
+        }
+        return true;
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (event.Result == AuditResult::Refused)
+        return AdminResponse::Problem(409, "user_refused", event.Reason);
+    if (!changed)
+        return AdminResponse::Invalid("Nothing to change", { { "body", "Name disabled, roles or grants" } });
+    return UsersDetail(request);
+}
+
+AdminResponse Panel::UsersRemove(AdminRequest const& request)
+{
+    std::optional<PanelUser> const actor = UserOf(request);
+    std::optional<int64> const id = QueryId(request);
+    if (!actor || !id)
+        return AdminResponse::Invalid("Removing a user takes their id", { { "id", "The user's id" } });
+    std::string error;
+    std::optional<PanelUser> target = _users.FindById(*id, error);
+    if (!target)
+        return AdminResponse::Problem(404, "unknown_user", "There is no such user");
+    if (target->Id == actor->Id)
+        return AdminResponse::Problem(409, "not_themselves", "An operator does not remove themselves");
+    AuditEvent event;
+    event.Name = "panel:users.removed";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(actor->Id);
+    event.ActorName = actor->Username;
+    event.Address = request.RemoteAddress;
+    event.On("panel_user", std::to_string(actor->Id), actor->Username);
+    event.On("panel_user", std::to_string(target->Id), target->Username);
+    PanelUserResult result = PanelUserResult::Ok;
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        if (!_sessions.CloseEveryOne(target->Id, "the operator was removed", failure))
+            return false;
+        result = _users.Remove(target->Id, failure);
+        if (result != PanelUserResult::Ok)
+        {
+            recorded.Result = AuditResult::Refused;
+            recorded.Reason = std::string(PanelUsers::Explain(result));
+        }
+        return true;
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (result != PanelUserResult::Ok)
+        return AdminResponse::Problem(409, "user_refused", std::string(PanelUsers::Explain(result)));
+    return AdminResponse::Json(200, "{\"removed\":true}");
+}
+
+AdminResponse Panel::UsersTwoFactorReset(AdminRequest const& request)
+{
+    std::optional<PanelUser> const actor = UserOf(request);
+    std::optional<int64> const id = QueryId(request);
+    if (!actor || !id)
+        return AdminResponse::Invalid("Resetting two-factor takes the user's id", { { "id", "The user's id" } });
+    std::string error;
+    std::optional<PanelUser> target = _users.FindById(*id, error);
+    if (!target)
+        return AdminResponse::Problem(404, "unknown_user", "There is no such user");
+    if (target->Id == actor->Id)
+        return AdminResponse::Problem(409, "not_themselves", "An operator resets their own two-factor from their own settings");
+    AuditEvent event;
+    event.Name = "panel:users.twofactor_reset";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(actor->Id);
+    event.ActorName = actor->Username;
+    event.Address = request.RemoteAddress;
+    event.On("panel_user", std::to_string(actor->Id), actor->Username);
+    event.On("panel_user", std::to_string(target->Id), target->Username);
+    if (!Record(event, [&](AuditEvent&, std::string& failure)
+    {
+        if (!_twoFactor.Disable(target->Id, failure))
+            return false;
+        if (!_sessions.CloseEveryOne(target->Id, "two-factor was reset", failure))
+            return false;
+        return _users.BumpGeneration(target->Id, failure).has_value();
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    return AdminResponse::Json(200, "{\"twoFactorReset\":true}");
+}
+
+AdminResponse Panel::UsersPasswordLink(AdminRequest const& request)
+{
+    std::optional<PanelUser> const actor = UserOf(request);
+    std::optional<int64> const id = QueryId(request);
+    if (!actor || !id)
+        return AdminResponse::Invalid("Issuing a password link takes the user's id", { { "id", "The user's id" } });
+    std::string error;
+    std::optional<PanelUser> target = _users.FindById(*id, error);
+    if (!target)
+        return AdminResponse::Problem(404, "unknown_user", "There is no such user");
+    AuditEvent event;
+    event.Name = "panel:users.password_link";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(actor->Id);
+    event.ActorName = actor->Username;
+    event.Address = request.RemoteAddress;
+    event.On("panel_user", std::to_string(actor->Id), actor->Username);
+    event.On("panel_user", std::to_string(target->Id), target->Username);
+    std::string link;
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        PanelLinkRefusal refusal;
+        std::optional<PanelLinkIssued> issued = IssueLink({ PanelLinkKind::Password, target->Username, request.RemoteAddress },
+            { AuditActor::User, std::to_string(actor->Id), actor->Username, request.RemoteAddress }, refusal);
+        if (!issued)
+        {
+            recorded.Result = AuditResult::Refused;
+            recorded.Reason = refusal.Message;
+            failure = refusal.Message;
+            return true;
+        }
+        link = issued->Token;
+        return true;
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (event.Result == AuditResult::Refused)
+        return AdminResponse::Problem(409, "link_refused", event.Reason);
+    nlohmann::json answer;
+    answer["linkId"] = link;
+    return AdminResponse::Json(201, answer.dump());
+}
+
+AdminResponse Panel::UsersAudit(AdminRequest const& request)
+{
+    std::optional<int64> const id = QueryId(request);
+    if (!id)
+        return AdminResponse::Invalid("Reading an audit trail takes the user's id", { { "id", "The user's id" } });
+    std::string error;
+    std::optional<PanelStore::Statement> rows = _store.Prepare(
+        "SELECT DISTINCT e.event_id, e.created_epoch_ms, e.name, e.actor_id, e.actor_name, e.result, e.reason"
+        " FROM audit_event e LEFT JOIN audit_subject s ON s.event = e.id"
+        " WHERE (s.kind = 'panel_user' AND s.subject_id = ?1) OR (e.actor_type = 0 AND e.actor_id = ?2)"
+        " ORDER BY e.id DESC LIMIT 100",
+        error);
+    if (!rows)
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    std::string const sid = std::to_string(*id);
+    rows->Bind(1, sid);
+    rows->Bind(2, sid);
+    nlohmann::json answer = nlohmann::json::array();
+    while (rows->Step(error))
+    {
+        nlohmann::json item;
+        item["eventId"] = rows->Text(0);
+        item["createdEpochMs"] = rows->Int64(1);
+        item["name"] = rows->Text(2);
+        item["actorId"] = rows->Text(3);
+        item["actorName"] = rows->Text(4);
+        item["result"] = rows->Int64(5);
+        item["reason"] = rows->Text(6);
+        answer.push_back(item);
+    }
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::UsersSessions(AdminRequest const& request)
+{
+    std::optional<int64> const id = QueryId(request);
+    if (!id)
+        return AdminResponse::Invalid("Reading sessions takes the user's id", { { "id", "The user's id" } });
+    std::string error;
+    nlohmann::json answer = nlohmann::json::array();
+    for (PanelSessionInfo const& session : _sessions.List(*id, error))
+    {
+        nlohmann::json s;
+        s["id"] = session.Id;
+        s["createdEpochMs"] = session.CreatedEpochMs;
+        s["seenEpochMs"] = session.SeenEpochMs;
+        s["address"] = session.Address;
+        s["userAgent"] = session.UserAgent;
+        answer.push_back(s);
+    }
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::RolesList(AdminRequest const& request)
+{
+    (void)request;
+    std::string error;
+    nlohmann::json answer = nlohmann::json::array();
+    for (PanelRoleRow const& role : _roles.All(error))
+    {
+        nlohmann::json item;
+        item["id"] = role.Id;
+        item["name"] = role.Name;
+        item["description"] = role.Description;
+        item["ownerOnly"] = role.OwnerOnly;
+        item["shipped"] = role.Shipped;
+        nlohmann::json keys = nlohmann::json::array();
+        for (std::string const& key : role.Keys)
+            keys.push_back(key);
+        item["keys"] = keys;
+        std::vector<int64> const holders = _roles.HoldersOf(role.Id, error);
+        item["holders"] = holders.size();
+        answer.push_back(item);
+    }
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    return AdminResponse::Json(200, answer.dump());
+}
+
+namespace
+{
+    std::set<std::string, std::less<>> EditorKeys(Panel& panel, PanelUser const& editor, std::string& error)
+    {
+        std::set<std::string, std::less<>> keys;
+        for (PanelPermission const& permission : PanelPermissions::All())
+        {
+            if (permission.OwnerOnly && !editor.IsOwner)
+                continue;
+            if (PanelPermissions::RoleAllows(editor.Role, permission.Key))
+                keys.insert(std::string(permission.Key));
+        }
+        std::set<std::string, std::less<>> const roleKeys = panel.Roles().KeysOfUser(editor.Id, error);
+        keys.insert(roleKeys.begin(), roleKeys.end());
+        return keys;
+    }
+}
+
+AdminResponse Panel::RolesCreate(AdminRequest const& request)
+{
+    std::optional<PanelUser> const actor = UserOf(request);
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (!actor || !body.is_object() || !body.contains("name") || !body.contains("keys"))
+        return AdminResponse::Invalid("Creating a role takes a name and keys", { { "name", "The role's name" }, { "keys", "The permission keys it holds" } });
+    if (!actor->IsOwner)
+        return AdminResponse::Problem(403, "owner_only", "Only an owner adds roles");
+    std::string error;
+    std::set<std::string, std::less<>> const held = EditorKeys(*this, *actor, error);
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    std::vector<std::string> keys;
+    for (auto const& key : body["keys"])
+        keys.push_back(key.get<std::string>());
+    AuditEvent event;
+    event.Name = "panel:roles.created";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(actor->Id);
+    event.ActorName = actor->Username;
+    event.Address = request.RemoteAddress;
+    event.On("panel_user", std::to_string(actor->Id), actor->Username);
+    int64 id = 0;
+    PanelRoleResult result = PanelRoleResult::StoreFailed;
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        result = _roles.Create(body["name"].get<std::string>(), body.value("description", ""), keys, actor->Id, held, &id, failure);
+        if (result != PanelRoleResult::Ok)
+        {
+            recorded.Result = AuditResult::Refused;
+            recorded.Reason = std::string(PanelRoles::Explain(result));
+        }
+        return true;
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (result != PanelRoleResult::Ok)
+        return AdminResponse::Problem(409, "role_refused", std::string(PanelRoles::Explain(result)));
+    return AdminResponse::Json(201, "{\"id\":" + std::to_string(id) + "}");
+}
+
+AdminResponse Panel::RolesUpdate(AdminRequest const& request)
+{
+    std::optional<PanelUser> const actor = UserOf(request);
+    std::optional<int64> const id = QueryId(request);
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (!actor || !id || !body.is_object())
+        return AdminResponse::Invalid("Updating a role takes its id and a changes object", { { "id", "The role's id" } });
+    if (!actor->IsOwner)
+        return AdminResponse::Problem(403, "owner_only", "Only an owner edits roles");
+    std::string error;
+    std::set<std::string, std::less<>> const held = EditorKeys(*this, *actor, error);
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    std::optional<PanelRoleRow> const row = _roles.Find(*id, error);
+    if (!row)
+        return AdminResponse::Problem(404, "unknown_role", "There is no such role");
+    std::vector<std::string> keys;
+    if (body.contains("keys") && body["keys"].is_array())
+        for (auto const& key : body["keys"])
+            keys.push_back(key.get<std::string>());
+    else
+        keys.assign(row->Keys.begin(), row->Keys.end());
+    AuditEvent event;
+    event.Name = "panel:roles.updated";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(actor->Id);
+    event.ActorName = actor->Username;
+    event.Address = request.RemoteAddress;
+    event.On("panel_user", std::to_string(actor->Id), actor->Username);
+    PanelRoleResult result = PanelRoleResult::StoreFailed;
+    std::vector<int64> holders;
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        result = _roles.Update(*id, body.value("name", row->Name), body.value("description", row->Description), keys, actor->Id, held, failure);
+        if (result != PanelRoleResult::Ok)
+        {
+            recorded.Result = AuditResult::Refused;
+            recorded.Reason = std::string(PanelRoles::Explain(result));
+            return true;
+        }
+        holders = _roles.HoldersOf(*id, failure);
+        if (!failure.empty())
+            return false;
+        for (int64 holder : holders)
+        {
+            if (!_users.BumpGeneration(holder, failure))
+                return false;
+        }
+        return true;
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (result != PanelRoleResult::Ok)
+        return AdminResponse::Problem(409, "role_refused", std::string(PanelRoles::Explain(result)));
+    return AdminResponse::Json(200, "{\"updated\":true}");
+}
+
+AdminResponse Panel::RolesRemove(AdminRequest const& request)
+{
+    std::optional<PanelUser> const actor = UserOf(request);
+    std::optional<int64> const id = QueryId(request);
+    if (!actor || !id)
+        return AdminResponse::Invalid("Removing a role takes its id", { { "id", "The role's id" } });
+    if (!actor->IsOwner)
+        return AdminResponse::Problem(403, "owner_only", "Only an owner removes roles");
+    std::string error;
+    AuditEvent event;
+    event.Name = "panel:roles.removed";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(actor->Id);
+    event.ActorName = actor->Username;
+    event.Address = request.RemoteAddress;
+    event.On("panel_user", std::to_string(actor->Id), actor->Username);
+    PanelRoleResult result = PanelRoleResult::StoreFailed;
+    std::vector<int64> holders;
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        holders = _roles.HoldersOf(*id, failure);
+        if (!failure.empty())
+            return false;
+        result = _roles.Remove(*id, failure);
+        if (result != PanelRoleResult::Ok)
+        {
+            recorded.Result = AuditResult::Refused;
+            recorded.Reason = std::string(PanelRoles::Explain(result));
+            return true;
+        }
+        for (int64 holder : holders)
+        {
+            if (!_users.BumpGeneration(holder, failure))
+                return false;
+        }
+        return true;
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (result != PanelRoleResult::Ok)
+        return AdminResponse::Problem(409, "role_refused", std::string(PanelRoles::Explain(result)));
+    return AdminResponse::Json(200, "{\"removed\":true}");
 }
