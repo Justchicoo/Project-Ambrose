@@ -138,31 +138,7 @@ export const routes: Route[] = [
     {
         path: "realms",
         title: "Realms and zones",
-        icon: GlobeIcon,
-        permission: "realms.read",
-        nav: true,
-        group: "Game",
-        view: { kind: "page", load: () => import("./pages/Realms.svelte") },
-    },
-    {
-        path: "players",
-        title: "Players online",
-        icon: UserIcon,
-        permission: "players.read",
-        nav: true,
-        group: "Game",
-        view: { kind: "page", load: () => import("./pages/Players.svelte") },
-    },
-    {
-        path: "accounts",
-        title: "Accounts and bans",
-        icon: ShieldIcon,
-        permission: "accounts.read",
-        nav: true,
-        group: "Game",
-        view: { kind: "arrives", milestone: "17.21", preview: list },
-    },
-    {
+        icon: GlobeIcon,    {
         path: "client",
         title: "Client data",
         icon: HardDriveIcon,
@@ -266,3 +242,27 @@ export function resolve(path: string, granted: ReadonlySet<string>): Resolved {
 export function navigation(granted: ReadonlySet<string>): Route[] {
     return routes.filter((route) => route.nav && canUse(route, granted));
 }
+
+        permission: "realms.read",
+        nav: true,
+        group: "Game",
+        view: { kind: "page", load: () => import("./pages/Realms.svelte") },
+    },
+    {
+        path: "players",
+        title: "Players online",
+        icon: UserIcon,
+        permission: "players.read",
+        nav: true,
+        group: "Game",
+        view: { kind: "page", load: () => import("./pages/Players.svelte") },
+    },
+    {
+        path: "accounts",
+        title: "Accounts and bans",
+        icon: ShieldIcon,
+        permission: "accounts.read",
+        nav: true,
+        group: "Game",
+        view: { kind: "page", load: () => import("./pages/Accounts.svelte") },
+    },
