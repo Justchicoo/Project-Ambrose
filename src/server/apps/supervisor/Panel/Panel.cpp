@@ -8,6 +8,7 @@
 #include "AdminConfigView.h"
 #include "PanelCaptcha.h"
 #include "PanelErrorReport.h"
+#include "PanelGrantPolicy.h"
 #include "PanelMail.h"
 #include "ConfigMgr.h"
 #include "PanelSettingStore.h"
@@ -32,6 +33,7 @@
 #include <array>
 #include <limits>
 #include <mutex>
+#include <set>
 #include <utility>
 
 namespace
@@ -176,12 +178,13 @@ namespace
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
-    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
+    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store),
+      _grantSets(_store), _invites(_store), _keyring(),
       _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
     _listener.SetSessionSource(&_sessions);
-    _authorization = std::make_unique<PanelAuthorization>(_grants,
+    _authorization = std::make_unique<PanelAuthorization>(_grants, _grantSets,
         [this](AdminRequest const& request) { return UserOf(request); },
         [this](AdminRequest const& request, std::string_view permission, std::string_view app, PermissionVerdict verdict)
         {
@@ -224,7 +227,8 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     _secondFactor.SetLimits(PanelTwoFactorSettings::DefaultFailureLimit, std::chrono::minutes(PanelTwoFactorSettings::DefaultFailureWindowMinutes));
     _settingStore = std::make_shared<PanelSettingStore>(_store, _storeMutex);
     RegisterSignIn();
-    _eventSocket = std::make_unique<PanelEventSocket>(_log, _events, _tickets, _sessions, _users, _grants, _listener.Routes());
+    RegisterInvites();
+    _eventSocket = std::make_unique<PanelEventSocket>(_log, _events, _tickets, _sessions, _users, _grants, _grantSets, _listener.Routes());
     _listener.AddSocket(_eventSocket->MakeRoute());
     _listener.Routes().AddOpenCosting("POST", std::string(PanelEventSocket::TicketPath), PanelEventSocket::TicketCost, [this](AdminRequest const& request)
     {
@@ -907,6 +911,874 @@ void Panel::RegisterSignIn()
     });
 }
 
+void Panel::RegisterInvites()
+{
+    AdminRouter& routes = _listener.Routes();
+    routes.AddGuarded("POST", "/api/panel/invites", "users.invite", [this](AdminRequest const& request)
+    {
+        return InviteCreate(request);
+    });
+    routes.AddGuarded("GET", "/api/panel/invites", "users.invite", [this](AdminRequest const& request)
+    {
+        return InviteList(request);
+    });
+    routes.AddGuardedPrefix("DELETE", "/api/panel/invites/", "users.invite", [this](AdminRequest const& request)
+    {
+        return InviteRevoke(request);
+    });
+    routes.AddPublic("POST", "/api/panel/invites/peek", [this](AdminRequest const& request)
+    {
+        return InvitePeek(request);
+    });
+    routes.AddPublic("POST", "/api/panel/invites/claim", [this](AdminRequest const& request)
+    {
+        return InviteClaim(request);
+    });
+    routes.AddGuarded("GET", "/api/panel/grant-sets", "users.read", [this](AdminRequest const& request)
+    {
+        return GrantSetGet(request);
+    });
+    routes.AddGuarded("PUT", "/api/panel/grant-sets", "users.update", [this](AdminRequest const& request)
+    {
+        return GrantSetSave(request);
+    });
+}
+
+namespace
+{
+    bool ReadInviteBody(nlohmann::json const& body, std::string& scope, std::string& role, std::vector<std::string>& grants, std::string& targetUsername, int64& ttlMs, std::string& note, std::string& problem)
+    {
+        scope.clear();
+        role.clear();
+        grants.clear();
+        targetUsername.clear();
+        ttlMs = std::chrono::duration_cast<std::chrono::milliseconds>(PanelInvites::DefaultTtl).count();
+        note.clear();
+        if (!body.is_object() || !body.contains("scope") || !body["scope"].is_string())
+        {
+            problem = "an invite names the scope its grants apply at";
+            return false;
+        }
+        scope = body["scope"].get<std::string>();
+        if (!PanelInvites::ValidScope(scope))
+        {
+            problem = "a scope names an app with lowercase letters, digits, dashes and underscores";
+            return false;
+        }
+        if (body.contains("role"))
+        {
+            if (!body["role"].is_string())
+            {
+                problem = "a role is one of owner, admin, operator, game master or viewer";
+                return false;
+            }
+            role = body["role"].get<std::string>();
+            PanelRole parsed = PanelRole::Viewer;
+            if (!PanelPermissions::ParseRole(role, parsed))
+            {
+                problem = "a role is one of owner, admin, operator, game master or viewer";
+                return false;
+            }
+        }
+        if (body.contains("grants"))
+        {
+            if (!body["grants"].is_array())
+            {
+                problem = "grants is a list of permission keys";
+                return false;
+            }
+            for (nlohmann::json const& grant : body["grants"])
+            {
+                if (!grant.is_string() || !PanelPermissions::Holds(grant.get<std::string>()))
+                {
+                    problem = "every grant names a permission the catalog holds";
+                    return false;
+                }
+                grants.push_back(grant.get<std::string>());
+            }
+        }
+        if (body.contains("target_username"))
+        {
+            if (!body["target_username"].is_string() || body["target_username"].get<std::string>().empty())
+            {
+                problem = "a target username is the name of the operator the invite is for";
+                return false;
+            }
+            targetUsername = body["target_username"].get<std::string>();
+        }
+        if (body.contains("ttl_hours"))
+        {
+            nlohmann::json const& ttl = body["ttl_hours"];
+            double hours = 0;
+            if (ttl.is_number())
+                hours = ttl.get<double>();
+            else
+            {
+                problem = "the lifetime is a number of hours between 1 and 720";
+                return false;
+            }
+            if (hours < 1 || hours > 720)
+            {
+                problem = "the lifetime is a number of hours between 1 and 720";
+                return false;
+            }
+            ttlMs = static_cast<int64>(hours * 3600 * 1000);
+        }
+        if (body.contains("note"))
+        {
+            if (!body["note"].is_string())
+            {
+                problem = "a note is text";
+                return false;
+            }
+            note = body["note"].get<std::string>();
+        }
+        return true;
+    }
+
+    nlohmann::json InviteJson(PanelInvite const& invite)
+    {
+        nlohmann::json body;
+        body["id"] = invite.Id;
+        body["scope"] = invite.Scope;
+        body["role"] = invite.Role.empty() ? nlohmann::json(nullptr) : nlohmann::json(invite.Role);
+        body["grants"] = invite.Grants;
+        body["target_username"] = invite.TargetUsername.empty() ? nlohmann::json(nullptr) : nlohmann::json(invite.TargetUsername);
+        body["created_by"] = invite.CreatedBy;
+        body["created_epoch_ms"] = invite.CreatedEpochMs;
+        body["expires_epoch_ms"] = invite.ExpiresEpochMs;
+        body["used_epoch_ms"] = invite.UsedEpochMs ? nlohmann::json(*invite.UsedEpochMs) : nlohmann::json(nullptr);
+        body["used_by"] = invite.UsedBy ? nlohmann::json(*invite.UsedBy) : nlohmann::json(nullptr);
+        body["revoked_epoch_ms"] = invite.RevokedEpochMs ? nlohmann::json(*invite.RevokedEpochMs) : nlohmann::json(nullptr);
+        body["note"] = invite.Note;
+        return body;
+    }
+
+    std::string GrantRefusalCode(PanelGrantRefusal refusal)
+    {
+        switch (refusal)
+        {
+            case PanelGrantRefusal::None: return "allowed";
+            case PanelGrantRefusal::SelfEdit: return "grant_self_edit";
+            case PanelGrantRefusal::NotStrictSubset: return "grant_not_below_you";
+            case PanelGrantRefusal::UnknownKey: return "grant_unknown_key";
+            case PanelGrantRefusal::CannotGrant: return "grant_not_held";
+            case PanelGrantRefusal::StoreFailed: return "store_unavailable";
+        }
+        return "grant_refused";
+    }
+}
+
+AdminResponse Panel::InviteCreate(AdminRequest const& request)
+{
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    std::string scope;
+    std::string role;
+    std::vector<std::string> grants;
+    std::string targetUsername;
+    int64 ttlMs = 0;
+    std::string note;
+    std::string problem;
+    if (body.is_discarded() || !ReadInviteBody(body, scope, role, grants, targetUsername, ttlMs, note, problem))
+        return AdminResponse::Invalid(body.is_discarded() ? "An invite takes a scope, and optionally a role, grants, a target username, a lifetime and a note"
+                                                          : problem,
+            { { "scope", "Name the app the grants apply at" } });
+
+    std::optional<PanelUser> const caller = UserOf(request);
+    if (!caller)
+        return AdminResponse::Problem(403, "signed_out", "Signing in again comes before inviting an operator");
+
+    std::string error;
+    std::optional<PanelUser> target;
+    std::set<std::string> callerKeys;
+    std::set<std::string> callerKeysAtScope;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (!targetUsername.empty())
+            target = _users.Find(targetUsername, error);
+        if (error.empty())
+            PanelGrantPolicy::EffectiveKeys(_users, _grants, _grantSets, caller->Id, std::nullopt, callerKeys, error);
+        if (error.empty())
+            PanelGrantPolicy::EffectiveKeys(_users, _grants, _grantSets, caller->Id, scope, callerKeysAtScope, error);
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An invite could not read the operators: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not read its operators; try again");
+    }
+    if (!role.empty() && target)
+        return AdminResponse::Invalid("An invite for an operator that already exists carries only grants, never a role",
+            { { "role", "Leave the role out when the operator already exists" } });
+
+    PanelGrantCheck const check = PanelGrantPolicy::PlanInvite(caller->Id, target ? std::optional<int64>(target->Id) : std::nullopt, callerKeys, callerKeysAtScope, role, grants);
+    if (check.Refusal != PanelGrantRefusal::None)
+    {
+        AuditEvent refused;
+        refused.Name = "users:invite.refused";
+        refused.Actor = AuditActor::User;
+        refused.ActorId = std::to_string(caller->Id);
+        refused.ActorName = caller->Username;
+        refused.Address = request.RemoteAddress;
+        refused.UserAgent = request.UserAgent;
+        refused.Result = AuditResult::Refused;
+        refused.Reason = std::string(PanelGrantPolicy::Explain(check.Refusal)) + (check.Key.empty() ? std::string() : ": " + check.Key);
+        nlohmann::json properties;
+        properties["scope"] = scope;
+        properties["role"] = role;
+        properties["grants"] = grants;
+        properties["key"] = check.Key;
+        refused.Properties = properties.dump();
+        refused.On("panel_user", std::to_string(caller->Id), caller->Username);
+        std::string failure;
+        if (!Record(refused, {}, failure))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A refused invite could not be recorded: {}", failure);
+        return AdminResponse::Problem(403, GrantRefusalCode(check.Refusal),
+            check.Key.empty() ? std::string(PanelGrantPolicy::Explain(check.Refusal))
+                              : fmt::format("{}: {}", PanelGrantPolicy::Explain(check.Refusal), check.Key));
+    }
+
+    if (target)
+    {
+        PanelGrantSet before;
+        PanelGrantSet saved;
+        int64 const now = _invites.Now();
+        bool applied = false;
+        bool const done = Transact([&](std::string& why)
+        {
+            PanelInviteMinted minted;
+            PanelInviteDraft draft;
+            draft.Scope = scope;
+            draft.Grants = grants;
+            draft.TargetUsername = targetUsername;
+            draft.CreatedBy = caller->Id;
+            draft.TtlMs = ttlMs;
+            draft.Note = note;
+            if (_invites.Create(draft, minted, why) != PanelInviteResult::Ok)
+            {
+                if (why.empty())
+                    why = "the invite could not be kept";
+                return false;
+            }
+            if (!_invites.MarkUsed(minted.Id, target->Id, now, why))
+            {
+                if (why.empty())
+                    why = "the invite could not be spent";
+                return false;
+            }
+            if (!_grantSets.Get(target->Id, scope, before, why) || !why.empty())
+                return false;
+            if (!_grantSets.Merge(target->Id, scope, grants, caller->Id, now, saved, why))
+                return false;
+            AuditEvent accepted;
+            accepted.Name = "users:invite.accepted";
+            accepted.Actor = AuditActor::User;
+            accepted.ActorId = std::to_string(caller->Id);
+            accepted.ActorName = caller->Username;
+            accepted.Address = request.RemoteAddress;
+            accepted.UserAgent = request.UserAgent;
+            accepted.Reason = "the invite named an operator that already exists, so the grant was added at once";
+            nlohmann::json properties;
+            properties["invite_id"] = minted.Id;
+            properties["scope"] = scope;
+            properties["grants"] = grants;
+            properties["old"] = before.Permissions;
+            properties["new"] = saved.Permissions;
+            accepted.Properties = properties.dump();
+            accepted.On("panel_invite", std::to_string(minted.Id), scope);
+            accepted.On("panel_user", std::to_string(target->Id), target->Username);
+            applied = true;
+            return PanelAudit::Write(_store, accepted, why);
+        }, error);
+        if (!done)
+        {
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An invite for an existing operator could not be applied: {}", error);
+            return AdminResponse::Problem(503, "store_unavailable", "The panel could not add the grant; try again");
+        }
+        std::string bump;
+        _users.BumpGeneration(target->Id, bump);
+        NotifyGrantsChanged(target->Id, scope, saved.Permissions);
+        nlohmann::json answer;
+        answer["schema"] = 1;
+        answer["applied"] = applied;
+        answer["user_id"] = target->Id;
+        answer["username"] = target->Username;
+        answer["scope"] = scope;
+        answer["grants"] = saved.Permissions;
+        return AdminResponse::Json(200, answer.dump());
+    }
+
+    PanelInviteMinted minted;
+    PanelInviteResult made = PanelInviteResult::StoreFailed;
+    {
+        std::lock_guard const lock(_storeMutex);
+        PanelInviteDraft draft;
+        draft.Scope = scope;
+        draft.Role = role;
+        draft.Grants = grants;
+        draft.TargetUsername = targetUsername;
+        draft.CreatedBy = caller->Id;
+        draft.TtlMs = ttlMs;
+        draft.Note = note;
+        made = _invites.Create(draft, minted, error);
+    }
+    if (made == PanelInviteResult::RateLimitedInviter || made == PanelInviteResult::RateLimitedScope)
+    {
+        AdminResponse answer = AdminResponse::Problem(429, "invite_rate_limited",
+            made == PanelInviteResult::RateLimitedInviter ? "Too many invites from this operator lately; wait an hour"
+                                                          : "Too many invites for this scope lately; wait an hour");
+        answer.Headers.emplace_back("Retry-After", "3600");
+        return answer;
+    }
+    if (made != PanelInviteResult::Ok)
+    {
+        if (made == PanelInviteResult::StoreFailed)
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An invite could not be kept: {}", error);
+        return AdminResponse::Problem(made == PanelInviteResult::StoreFailed ? 503 : 422,
+            made == PanelInviteResult::StoreFailed ? "store_unavailable" : "invite_invalid",
+            made == PanelInviteResult::StoreFailed ? "The panel could not keep the invite; try again" : error);
+    }
+
+    AuditEvent created;
+    created.Name = "users:invite.created";
+    created.Actor = AuditActor::User;
+    created.ActorId = std::to_string(caller->Id);
+    created.ActorName = caller->Username;
+    created.Address = request.RemoteAddress;
+    created.UserAgent = request.UserAgent;
+    nlohmann::json properties;
+    properties["invite_id"] = minted.Id;
+    properties["scope"] = scope;
+    properties["role"] = role;
+    properties["grants"] = grants;
+    properties["target_username"] = targetUsername;
+    properties["expires_epoch_ms"] = minted.ExpiresEpochMs;
+    created.Properties = properties.dump();
+    created.On("panel_invite", std::to_string(minted.Id), scope);
+    std::string failure;
+    if (!Record(created, {}, failure))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A made invite could not be recorded: {}", failure);
+
+    nlohmann::json answer;
+    answer["schema"] = 1;
+    answer["id"] = minted.Id;
+    answer["token"] = minted.Token;
+    answer["scope"] = scope;
+    answer["role"] = role.empty() ? nlohmann::json(nullptr) : nlohmann::json(role);
+    answer["grants"] = grants;
+    answer["target_username"] = targetUsername.empty() ? nlohmann::json(nullptr) : nlohmann::json(targetUsername);
+    answer["expires_epoch_ms"] = minted.ExpiresEpochMs;
+    return AdminResponse::Json(201, answer.dump());
+}
+
+AdminResponse Panel::InviteList(AdminRequest const& request)
+{
+    (void)request;
+    std::string error;
+    std::vector<PanelInvite> invites;
+    int64 const now = _invites.Now();
+    {
+        std::lock_guard const lock(_storeMutex);
+        invites = _invites.List(error);
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The invites could not be listed: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not list its invites; try again");
+    }
+    nlohmann::json answer;
+    answer["schema"] = 1;
+    nlohmann::json rows = nlohmann::json::array();
+    for (PanelInvite const& invite : invites)
+    {
+        nlohmann::json row = InviteJson(invite);
+        row["state"] = invite.UsedEpochMs      ? nlohmann::json("used")
+            : invite.RevokedEpochMs            ? nlohmann::json("revoked")
+            : now >= invite.ExpiresEpochMs    ? nlohmann::json("expired")
+                                              : nlohmann::json("live");
+        rows.push_back(std::move(row));
+    }
+    answer["invites"] = std::move(rows);
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::InviteRevoke(AdminRequest const& request)
+{
+    constexpr std::string_view Prefix = "/api/panel/invites/";
+    std::string_view const tail = std::string_view(request.Path).substr(Prefix.size());
+    int64 id = 0;
+    if (tail.empty() || !std::all_of(tail.begin(), tail.end(), [](char c) { return c >= '0' && c <= '9'; }))
+        return AdminResponse::Problem(404, "invite_not_found", "No invite with that id is waiting to be used");
+    try
+    {
+        id = std::stoll(std::string(tail));
+    }
+    catch (...)
+    {
+        return AdminResponse::Problem(404, "invite_not_found", "No invite with that id is waiting to be used");
+    }
+
+    std::optional<PanelUser> const caller = UserOf(request);
+    if (!caller)
+        return AdminResponse::Problem(403, "signed_out", "Signing in again comes before revoking an invite");
+
+    std::string error;
+    bool revoked = false;
+    {
+        std::lock_guard const lock(_storeMutex);
+        revoked = _invites.Revoke(id, _invites.Now(), error);
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An invite could not be revoked: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not revoke the invite; try again");
+    }
+    if (!revoked)
+        return AdminResponse::Problem(404, "invite_not_found", "No invite with that id is waiting to be used");
+
+    AuditEvent event;
+    event.Name = "users:invite.revoked";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(caller->Id);
+    event.ActorName = caller->Username;
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    nlohmann::json properties;
+    properties["invite_id"] = id;
+    event.Properties = properties.dump();
+    event.On("panel_invite", std::to_string(id), {});
+    event.On("panel_user", std::to_string(caller->Id), caller->Username);
+    std::string failure;
+    if (!Record(event, {}, failure))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A revoked invite could not be recorded: {}", failure);
+
+    nlohmann::json answer;
+    answer["schema"] = 1;
+    answer["revoked"] = true;
+    answer["id"] = id;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::InvitePeek(AdminRequest const& request)
+{
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (body.is_discarded() || !body.is_object() || !body.contains("token") || !body["token"].is_string())
+        return AdminResponse::Invalid("Peeking at an invite takes its token", { { "token", "Give the token from the invite link" } });
+    std::string const token = body["token"].get<std::string>();
+
+    std::string error;
+    PanelInvite invite;
+    bool live = false;
+    {
+        std::lock_guard const lock(_storeMutex);
+        live = _invites.FindLive(token, invite, error);
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An invite could not be read: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not read the invite; try again");
+    }
+    if (!live)
+        return AdminResponse::Problem(404, "invite_not_found", "That invite is unknown, used, revoked or expired");
+
+    PanelUser phantom;
+    if (!invite.Role.empty())
+        PanelPermissions::ParseRole(invite.Role, phantom.Role);
+    nlohmann::json answer;
+    answer["schema"] = 1;
+    answer["scope"] = invite.Scope;
+    answer["role"] = invite.Role.empty() ? nlohmann::json(nullptr) : nlohmann::json(invite.Role);
+    answer["grants"] = invite.Grants;
+    answer["target_username"] = invite.TargetUsername.empty() ? nlohmann::json(nullptr) : nlohmann::json(invite.TargetUsername);
+    answer["expires_epoch_ms"] = invite.ExpiresEpochMs;
+    answer["two_factor_required"] = Required(phantom);
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::InviteClaim(AdminRequest const& request)
+{
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (body.is_discarded() || !body.is_object() || !body.contains("token") || !body["token"].is_string() || !body.contains("username") || !body["username"].is_string()
+        || !body.contains("password") || !body["password"].is_string())
+        return AdminResponse::Invalid("Claiming an invite takes its token, a username and a password",
+            { { "token", "Give the token from the invite link" }, { "username", "Choose the name you will sign in with" }, { "password", "Choose a password" } });
+    std::string const token = body["token"].get<std::string>();
+    std::string const username = body["username"].get<std::string>();
+    std::string password = body["password"].get<std::string>();
+
+    std::string error;
+    PanelInvite invite;
+    bool found = false;
+    {
+        std::lock_guard const lock(_storeMutex);
+        found = _invites.Find(token, invite, error);
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An invite could not be read: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not read the invite; try again");
+    }
+    if (!found)
+        return AdminResponse::Problem(404, "invite_not_found", "That invite is unknown, used or revoked");
+    int64 const now = _invites.Now();
+    if (invite.UsedEpochMs || invite.RevokedEpochMs)
+        return AdminResponse::Problem(410, "invite_used", "That invite has already been used or revoked");
+    if (now >= invite.ExpiresEpochMs)
+        return AdminResponse::Problem(410, "invite_expired", "That invite has expired; ask for a new one");
+    if (!invite.TargetUsername.empty() && PanelUsers::Fold(username) != invite.TargetUsername)
+        return AdminResponse::Problem(403, "invite_username_mismatch", "That invite was made for a different username");
+
+    std::optional<PanelUser> inviter;
+    std::set<std::string> inviterKeys;
+    std::set<std::string> inviterKeysAtScope;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (invite.CreatedBy != 0)
+            inviter = _users.FindById(invite.CreatedBy, error);
+        if (error.empty() && inviter)
+        {
+            PanelGrantPolicy::EffectiveKeys(_users, _grants, _grantSets, inviter->Id, std::nullopt, inviterKeys, error);
+            if (error.empty())
+                PanelGrantPolicy::EffectiveKeys(_users, _grants, _grantSets, inviter->Id, invite.Scope, inviterKeysAtScope, error);
+        }
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An invite claim could not read the inviter: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not check the invite; try again");
+    }
+    if (!inviter)
+        return AdminResponse::Problem(403, "invite_issuer_gone", "The operator who made that invite is gone; ask for a new one");
+    PanelGrantCheck const check = PanelGrantPolicy::PlanInvite(inviter->Id, std::nullopt, inviterKeys, inviterKeysAtScope, invite.Role, invite.Grants);
+    if (check.Refusal != PanelGrantRefusal::None)
+        return AdminResponse::Problem(403, GrantRefusalCode(check.Refusal), "The invite no longer fits what its maker may grant; ask for a new one");
+
+    PanelUserDraft draft;
+    PanelUserResult const prepared = _users.PrepareUser(username, password, false, false, draft, error);
+    WipeText(password);
+    if (prepared != PanelUserResult::Ok)
+        return AdminResponse::Invalid("That username or password cannot be used for this invite",
+            { { prepared == PanelUserResult::NameTaken || prepared == PanelUserResult::NameInvalid || prepared == PanelUserResult::NameTooLong
+                        || prepared == PanelUserResult::NameTooShort
+                      ? "username"
+                      : "password",
+                "Choose a different one" } });
+
+    int64 id = 0;
+    PanelInviteSpend spent = PanelInviteSpend::StoreFailed;
+    bool const done = Transact([&](std::string& why)
+    {
+        PanelInvite burned;
+        spent = _invites.Spend(token, 0, burned, why);
+        if (spent != PanelInviteSpend::Spent)
+        {
+            if (why.empty())
+                why = "the invite could not be spent";
+            return false;
+        }
+        PanelUserResult made = PanelUserResult::Ok;
+        PanelLinkIssuer const by{ AuditActor::User, std::to_string(inviter->Id), inviter->Username, request.RemoteAddress };
+        if (!InsertOperator(draft, by, "an operator joined from a one-time invite link", id, made, why))
+            return false;
+        if (!invite.Role.empty() && invite.Role != PanelPermissions::NameOf(PanelRole::Viewer))
+        {
+            PanelRole parsed = PanelRole::Viewer;
+            PanelPermissions::ParseRole(invite.Role, parsed);
+            PanelUserResult const roled = _users.SetRole(id, parsed, inviter->Id, why);
+            if (roled != PanelUserResult::Ok)
+            {
+                if (why.empty())
+                    why = std::string(PanelUsers::Explain(roled));
+                return false;
+            }
+        }
+        PanelGrantSet saved;
+        if (!invite.Grants.empty())
+        {
+            PanelGrantSet before;
+            if (!_grantSets.Get(id, invite.Scope, before, why) || !why.empty())
+                return false;
+            if (!_grantSets.Merge(id, invite.Scope, invite.Grants, inviter->Id, now, saved, why))
+                return false;
+        }
+        AuditEvent accepted;
+        accepted.Name = "users:invite.accepted";
+        accepted.Actor = AuditActor::User;
+        accepted.ActorId = std::to_string(inviter->Id);
+        accepted.ActorName = inviter->Username;
+        accepted.Address = request.RemoteAddress;
+        accepted.UserAgent = request.UserAgent;
+        nlohmann::json properties;
+        properties["invite_id"] = invite.Id;
+        properties["scope"] = invite.Scope;
+        properties["role"] = invite.Role;
+        properties["grants"] = invite.Grants;
+        properties["old"] = nlohmann::json::array();
+        properties["new"] = saved.Permissions;
+        accepted.Properties = properties.dump();
+        accepted.On("panel_invite", std::to_string(invite.Id), invite.Scope);
+        accepted.On("panel_user", std::to_string(id), draft.Username);
+        return PanelAudit::Write(_store, accepted, why);
+    }, error);
+    if (!done)
+    {
+        if (spent == PanelInviteSpend::Invalid)
+            return AdminResponse::Problem(410, "invite_used", "That invite has already been used or revoked");
+        if (spent == PanelInviteSpend::Expired)
+            return AdminResponse::Problem(410, "invite_expired", "That invite has expired; ask for a new one");
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An invite could not be claimed: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not make the operator; try again");
+    }
+
+    std::optional<PanelUser> const made = _users.FindById(id, error);
+    if (!made)
+        return AdminResponse::Problem(503, "store_unavailable", "The operator was made but could not be read back");
+    AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "{} joined the panel from a one-time invite", made->Username);
+    return OpenFor(*made, request, "the one-time invite link");
+}
+
+AdminResponse Panel::GrantSetGet(AdminRequest const& request)
+{
+    std::string_view const userIdText = request.Query("user_id");
+    std::string_view const scope = request.Query("scope");
+    int64 userId = 0;
+    if (userIdText.empty() || scope.empty() || !PanelInvites::ValidScope(scope))
+        return AdminResponse::Invalid("Reading a grant set takes a user id and a scope",
+            { { "user_id", "Give the operator's id" }, { "scope", "Give the scope" } });
+    try
+    {
+        userId = std::stoll(std::string(userIdText));
+    }
+    catch (...)
+    {
+        return AdminResponse::Problem(404, "user_not_found", "No operator with that id exists");
+    }
+
+    std::string error;
+    PanelGrantSet set;
+    bool known = false;
+    {
+        std::lock_guard const lock(_storeMutex);
+        known = _users.FindById(userId, error).has_value();
+        if (known && error.empty())
+            known = _grantSets.Get(userId, scope, set, error) && error.empty();
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A grant set could not be read: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not read the grant set; try again");
+    }
+    if (!known)
+        return AdminResponse::Problem(404, "user_not_found", "No operator with that id exists");
+
+    nlohmann::json answer;
+    answer["schema"] = 1;
+    answer["user_id"] = set.UserId;
+    answer["scope"] = set.Scope;
+    answer["version"] = set.Version;
+    answer["permissions"] = set.Permissions;
+    answer["updated_epoch_ms"] = set.UpdatedEpochMs;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::GrantSetSave(AdminRequest const& request)
+{
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (body.is_discarded() || !body.is_object() || !body.contains("user_id") || !body.contains("scope"))
+        return AdminResponse::Invalid("Saving grants takes a user id, a scope and add and remove lists",
+            { { "user_id", "Give the operator's id" }, { "scope", "Give the scope" } });
+    int64 userId = 0;
+    if (body["user_id"].is_number_integer() || body["user_id"].is_number_unsigned())
+    {
+        int64 const value = body["user_id"].get<int64>();
+        if (value > 0)
+            userId = value;
+    }
+    std::string const scope = body["scope"].is_string() ? body["scope"].get<std::string>() : std::string();
+    std::vector<std::string> add;
+    std::vector<std::string> remove;
+    auto readList = [&](std::string_view name, std::vector<std::string>& into)
+    {
+        if (!body.contains(name) || !body[name].is_array())
+            return true;
+        for (nlohmann::json const& key : body[name])
+        {
+            if (!key.is_string())
+                return false;
+            into.push_back(key.get<std::string>());
+        }
+        return true;
+    };
+    if (userId == 0 || !PanelInvites::ValidScope(scope) || !readList("add", add) || !readList("remove", remove))
+        return AdminResponse::Invalid("Saving grants takes a user id, a scope and add and remove lists",
+            { { "user_id", "Give the operator's id" }, { "scope", "Give the scope" }, { "add", "List permission keys to add" }, { "remove", "List permission keys to remove" } });
+
+    int64 expectedVersion = -1;
+    if (!request.IfMatch.empty() && std::all_of(request.IfMatch.begin(), request.IfMatch.end(), [](char c) { return c >= '0' && c <= '9'; }))
+        try
+        {
+            expectedVersion = std::stoll(request.IfMatch);
+        }
+        catch (...)
+        {
+        }
+    if (expectedVersion < 0)
+    {
+        nlohmann::json answer;
+        answer["schema"] = 1;
+        answer["error"] = "version_required";
+        answer["message"] = "Saving grants takes the version you read in an If-Match header";
+        return AdminResponse::Json(400, answer.dump());
+    }
+
+    std::optional<PanelUser> const caller = UserOf(request);
+    if (!caller)
+        return AdminResponse::Problem(403, "signed_out", "Signing in again comes before changing grants");
+
+    std::string error;
+    std::optional<PanelUser> target;
+    std::set<std::string> callerKeys;
+    PanelGrantSet current;
+    {
+        std::lock_guard const lock(_storeMutex);
+        target = _users.FindById(userId, error);
+        if (target && error.empty())
+            PanelGrantPolicy::EffectiveKeys(_users, _grants, _grantSets, caller->Id, scope, callerKeys, error);
+        if (target && error.empty())
+            _grantSets.Get(userId, scope, current, error);
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "Grants could not be read: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not read the grants; try again");
+    }
+    if (!target)
+        return AdminResponse::Problem(404, "user_not_found", "No operator with that id exists");
+
+    PanelGrantCheck const check = PanelGrantPolicy::PlanEdit(caller->Id, userId, callerKeys, current.Permissions, add, remove);
+    if (check.Refusal != PanelGrantRefusal::None)
+    {
+        AuditEvent refused;
+        refused.Name = "users:grant.refused";
+        refused.Actor = AuditActor::User;
+        refused.ActorId = std::to_string(caller->Id);
+        refused.ActorName = caller->Username;
+        refused.Address = request.RemoteAddress;
+        refused.UserAgent = request.UserAgent;
+        refused.Result = AuditResult::Refused;
+        refused.Reason = std::string(PanelGrantPolicy::Explain(check.Refusal)) + (check.Key.empty() ? std::string() : ": " + check.Key);
+        nlohmann::json properties;
+        properties["scope"] = scope;
+        properties["key"] = check.Key;
+        properties["add"] = add;
+        properties["remove"] = remove;
+        refused.Properties = properties.dump();
+        refused.On("panel_user", std::to_string(caller->Id), caller->Username);
+        refused.On("panel_user", std::to_string(userId), target->Username);
+        std::string failure;
+        if (!Record(refused, {}, failure))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A refused grant change could not be recorded: {}", failure);
+        return AdminResponse::Problem(403, GrantRefusalCode(check.Refusal),
+            check.Key.empty() ? std::string(PanelGrantPolicy::Explain(check.Refusal))
+                              : fmt::format("{}: {}", PanelGrantPolicy::Explain(check.Refusal), check.Key));
+    }
+
+    if (expectedVersion != current.Version)
+    {
+        nlohmann::json answer;
+        answer["schema"] = 1;
+        answer["error"] = "version_conflict";
+        answer["current_version"] = current.Version;
+        answer["permissions"] = current.Permissions;
+        return AdminResponse::Json(409, answer.dump());
+    }
+
+    if (check.Plan.Result == current.Permissions)
+    {
+        nlohmann::json answer;
+        answer["schema"] = 1;
+        answer["user_id"] = userId;
+        answer["scope"] = scope;
+        answer["version"] = current.Version;
+        answer["permissions"] = current.Permissions;
+        answer["changed"] = false;
+        return AdminResponse::Json(200, answer.dump());
+    }
+
+    PanelGrantSet saved;
+    PanelGrantSetSave outcome = PanelGrantSetSave::StoreFailed;
+    bool const done = Transact([&](std::string& why)
+    {
+        outcome = _grantSets.Save(userId, scope, check.Plan.Result, expectedVersion, caller->Id, PanelStore::NowEpochMs(), saved, why);
+        if (outcome != PanelGrantSetSave::Saved)
+        {
+            if (outcome == PanelGrantSetSave::StaleVersion)
+                return true;
+            if (why.empty())
+                why = "the grant set could not be saved";
+            return false;
+        }
+        AuditEvent changed;
+        changed.Name = "users:grant.changed";
+        changed.Actor = AuditActor::User;
+        changed.ActorId = std::to_string(caller->Id);
+        changed.ActorName = caller->Username;
+        changed.Address = request.RemoteAddress;
+        changed.UserAgent = request.UserAgent;
+        nlohmann::json properties;
+        properties["scope"] = scope;
+        properties["old"] = current.Permissions;
+        properties["new"] = saved.Permissions;
+        properties["added"] = check.Plan.Added;
+        properties["removed"] = check.Plan.Removed;
+        changed.Properties = properties.dump();
+        changed.On("panel_user", std::to_string(caller->Id), caller->Username);
+        changed.On("panel_user", std::to_string(userId), target->Username);
+        return PanelAudit::Write(_store, changed, why);
+    }, error);
+    if (!done)
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A grant change could not be saved: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not save the grants; try again");
+    }
+    if (outcome == PanelGrantSetSave::StaleVersion)
+    {
+        PanelGrantSet fresh;
+        {
+            std::lock_guard const lock(_storeMutex);
+            _grantSets.Get(userId, scope, fresh, error);
+        }
+        nlohmann::json answer;
+        answer["schema"] = 1;
+        answer["error"] = "version_conflict";
+        answer["current_version"] = fresh.Version;
+        answer["permissions"] = fresh.Permissions;
+        return AdminResponse::Json(409, answer.dump());
+    }
+
+    std::string bump;
+    _users.BumpGeneration(userId, bump);
+    NotifyGrantsChanged(userId, scope, saved.Permissions);
+
+    nlohmann::json answer;
+    answer["schema"] = 1;
+    answer["user_id"] = userId;
+    answer["scope"] = scope;
+    answer["version"] = saved.Version;
+    answer["permissions"] = saved.Permissions;
+    answer["changed"] = true;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+void Panel::NotifyGrantsChanged(int64 userId, std::string const& scope, std::vector<std::string> const& permissions)
+{
+    nlohmann::json data;
+    data["user_id"] = userId;
+    data["scope"] = scope;
+    data["permissions"] = permissions;
+    if (_eventSocket)
+        _eventSocket->NotifyUser(userId, "permissions.changed", data.dump());
+}
+
 AdminResponse Panel::ClearError(AdminRequest const& request)
 {
     nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
@@ -1330,7 +2202,12 @@ bool Panel::Required(PanelUser const& user)
         return false;
     std::string error;
     std::vector<PanelGrant> const grants = _grants.Of(user.Id, error);
-    return PanelTwoFactor::Covers(policy, user, grants);
+    std::vector<PanelGrantSet> const sets = _grantSets.OfUser(user.Id, error);
+    std::vector<PanelGrant> held = grants;
+    for (PanelGrantSet const& set : sets)
+        for (std::string const& permission : set.Permissions)
+            held.push_back(PanelGrant{ 0, user.Id, set.Scope, permission, 0 });
+    return PanelTwoFactor::Covers(policy, user, held);
 }
 
 std::optional<AdminResponse> Panel::Admit(AdminRequest const& request)
@@ -1435,10 +2312,20 @@ nlohmann::json Panel::UserAnswer(PanelUser const& user)
     std::vector<PanelGrant> const held = _grants.Of(user.Id, error);
     for (PanelGrant const& grant : held)
         grants[grant.App].push_back(grant.Permission);
+    std::vector<PanelGrantSet> const sets = _grantSets.OfUser(user.Id, error);
+    for (PanelGrantSet const& set : sets)
+        for (std::string const& permission : set.Permissions)
+        {
+            nlohmann::json& at = grants[set.Scope];
+            bool const known = std::any_of(at.begin(), at.end(),
+                [&permission](nlohmann::json const& held) { return held.is_string() && held.get<std::string>() == permission; });
+            if (!known)
+                at.push_back(permission);
+        }
     if (!error.empty())
         AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The panel could not read {}'s grants: {}", user.Username, error);
     body["grants"] = std::move(grants);
-    body["two_factor_required"] = PanelTwoFactor::Covers(TwoFactorSettings().Required, user, held);
+    body["two_factor_required"] = Required(user);
     return body;
 }
 
