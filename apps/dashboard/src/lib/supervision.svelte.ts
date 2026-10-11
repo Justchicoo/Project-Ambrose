@@ -15,6 +15,8 @@ import {
     DatabaseUpdatesAnswer,
     OutputAnswer,
     ActivityAnswer,
+    ActivityLogAnswer,
+    ActivityLogDetails,
     AuditChainAnswer,
     ClientAnswer,
     GraphRangeAnswer,
@@ -191,6 +193,20 @@ export function activityOf(app: string, signal?: AbortSignal) {
 
 export function auditChain(signal?: AbortSignal) {
     return request("GET", "api/panel/audit/verify", AuditChainAnswer, undefined, signal);
+}
+
+export function activityLog(params: Record<string, string>, signal?: AbortSignal) {
+    const query = new URLSearchParams(params).toString();
+    return request("GET", `api/panel/activity?${query}`, ActivityLogAnswer, undefined, signal);
+}
+
+export function activityLogDetails(id: number, signal?: AbortSignal) {
+    return request("GET", `api/panel/activity/rows/${id}`, ActivityLogDetails, undefined, signal);
+}
+
+export function activityLogExport(format: string, params: Record<string, string>, signal?: AbortSignal) {
+    const query = new URLSearchParams({ ...params, format }).toString();
+    return request("GET", `api/panel/activity/export?${query}`, v.looseObject({ schema: v.number(), format: v.string(), csv: v.optional(v.string()), json: v.optional(v.string()) }), undefined, signal);
 }
 
 export function playersOf(app: string, signal?: AbortSignal) {

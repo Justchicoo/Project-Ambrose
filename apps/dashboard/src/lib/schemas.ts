@@ -657,6 +657,47 @@ export const ActivityAnswer = v.looseObject({
     activity: v.array(ActivityRow),
 });
 
+export const ActivityLogRow = v.looseObject({
+    id: v.number(),
+    event_id: v.string(),
+    created_epoch_ms: v.number(),
+    name: v.string(),
+    sentence: v.string(),
+    actor_type: v.string(),
+    actor_id: v.string(),
+    actor_name: v.string(),
+    address: v.string(),
+    node: v.string(),
+    result: v.string(),
+    reason: v.string(),
+});
+
+export const ActivityLogAnswer = v.looseObject({
+    schema: v.number(),
+    rows: v.array(ActivityLogRow),
+    next_cursor: v.nullable(v.number()),
+    has_more: v.boolean(),
+});
+
+export const ActivityLogDetails = v.looseObject({
+    schema: v.number(),
+    id: v.number(),
+    event_id: v.string(),
+    created_epoch_ms: v.number(),
+    name: v.string(),
+    sentence: v.string(),
+    actor_type: v.string(),
+    actor_id: v.string(),
+    actor_name: v.string(),
+    api_key_id: v.string(),
+    address: v.string(),
+    node: v.string(),
+    result: v.string(),
+    error: v.string(),
+    reason: v.string(),
+    properties: v.unknown(),
+});
+
 export const AuditChainAnswer = v.looseObject({
     schema: v.number(),
     valid: v.boolean(),
@@ -843,6 +884,9 @@ export type TickProfileAnswer = v.InferOutput<typeof TickProfileAnswer>;
 export type TickProfileTraceAnswer = v.InferOutput<typeof TickProfileTraceAnswer>;
 export type ActivityRow = v.InferOutput<typeof ActivityRow>;
 export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
+export type ActivityLogRow = v.InferOutput<typeof ActivityLogRow>;
+export type ActivityLogAnswer = v.InferOutput<typeof ActivityLogAnswer>;
+export type ActivityLogDetails = v.InferOutput<typeof ActivityLogDetails>;
 export type AuditChainAnswer = v.InferOutput<typeof AuditChainAnswer>;
 export type ClientAnswer = v.InferOutput<typeof ClientAnswer>;
 export type FileOperationState = v.InferOutput<typeof FileOperationState>;

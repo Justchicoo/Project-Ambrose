@@ -190,6 +190,10 @@ private:
     std::optional<AdminResponse> CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username);
     AdminResponse ClearError(AdminRequest const& request);
     AdminResponse ErrorReport(AdminRequest const& request, bool create);
+    AdminResponse ActivityGet(AdminRequest const& request);
+    AdminResponse ActivityDetailsGet(AdminRequest const& request);
+    AdminResponse ActivityExport(AdminRequest const& request);
+    AdminResponse ActivitySweep(AdminRequest const& request);
     std::optional<PanelUser> UserOf(AdminRequest const& request);
     nlohmann::json UserAnswer(PanelUser const& user);
     std::string Issuer() const;
