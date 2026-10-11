@@ -397,10 +397,10 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 
 **Acceptance**
 
-- [ ] Unowned move returns Failure=1
-- [ ] Shared bank visible to second character
+- [x] Unowned move returns Failure=1 (BankMgrTest.AMoveOfAnItemTheWizardDoesNotOwnIsRefusedWithFailureOneAndChangesNothing)
+- [x] Shared bank visible to second character (BankMgrTest.ASharedBankIsVisibleFromASecondCharacterOnTheAccount)
 - [ ] Real client: hat to bank persists
-- [ ] Bank.Capacity change applies from the next move without a restart
+- [x] Bank.Capacity change applies from the next move without a restart (BankMgrTest.RaisingBankCapacityLetsTheNextDepositIntoAFullBankSucceedWithoutARestart)
 
 ### Detailed spec from WIZ-23: Bank and shared bank
 
@@ -422,10 +422,10 @@ Players can open the bank, move items between backpack, bank and shared bank, an
 
 **Acceptance**
 
-- [ ] Unit test: moving an item the player does not own returns Failure=1 and changes nothing
-- [ ] Unit test: shared bank items are visible from a second character on the same account
+- [x] Unit test: moving an item the player does not own returns Failure=1 and changes nothing (BankMgrTest.AMoveOfAnItemTheWizardDoesNotOwnIsRefusedWithFailureOneAndChangesNothing)
+- [x] Unit test: shared bank items are visible from a second character on the same account (BankMgrTest.ASharedBankIsVisibleFromASecondCharacterOnTheAccount)
 - [ ] Real client: opening the bank and dragging a hat from backpack to bank moves the icon across. Relog keeps it there. A second character on the account sees shared-bank items.
-- [ ] Raising Bank.Capacity with `.settings set` lets the next deposit into a full bank succeed without a restart
+- [x] Raising Bank.Capacity with `.settings set` lets the next deposit into a full bank succeed without a restart (BankMgrTest.RaisingBankCapacityLetsTheNextDepositIntoAFullBankSucceedWithoutARestart)
 
 **Risks**
 

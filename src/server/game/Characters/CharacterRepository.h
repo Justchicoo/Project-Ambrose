@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, a wizard's position written under the revision of its row, its character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, and its character_spell rows, read the same way in the order it learned them and each written under its spellbook's revision, and its backpack, read the same way in the order its items arrived, an item added with its instance, its backpack row and the item sequence in one transaction and trashed only by its owner, and the highest item id ever used, and the items it wears, read the same way, each with the slot it is worn in, an item moved from its backpack to a slot, with the item that slot gave back moved the other way, or from a slot back to its backpack, each in one transaction, with statement builders and row readers for callers that query or save asynchronously.
+ * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, a wizard's position written under the revision of its row, its character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, and its character_spell rows, read the same way in the order it learned them and each written under its spellbook's revision, and its backpack, read the same way in the order its items arrived, an item added with its instance, its backpack row and the item sequence in one transaction and trashed only by its owner, its backpack row taken away on its own when the item moves to a bank, and the highest item id ever used, and the items it wears, read the same way, each with the slot it is worn in, an item moved from its backpack to a slot, with the item that slot gave back moved the other way, or from a slot back to its backpack, each in one transaction, with statement builders and row readers for callers that query or save asynchronously, and an item's instance given to a new owner when it leaves the account's shared bank.
  */
 
 #ifndef AMBROSE_CHARACTERREPOSITORY_H
@@ -128,6 +128,15 @@ public:
     static Statement PrepareTrashItem(uint64 guid, uint64 itemGuid);
     static Statement PrepareLockItem(uint64 guid, uint64 itemGuid, bool locked);
     static std::vector<CharacterItem> ReadInventory(PreparedResultSet& result);
+    static Statement PrepareLoadBank(uint64 guid);
+    static Statement PrepareBankItem(uint64 guid, uint64 itemGuid, uint32 slot);
+    static Statement PrepareUnbankItem(uint64 guid, uint64 itemGuid);
+    static Statement PrepareLoadSharedBank(uint64 account);
+    static Statement PrepareShareItem(uint64 account, uint64 itemGuid, uint32 slot);
+    static Statement PrepareUnshareItem(uint64 account, uint64 itemGuid);
+    static Statement PrepareRestoreItem(uint64 guid, CharacterItem const& item);
+    static Statement PrepareUnholdItem(uint64 guid, uint64 itemGuid);
+    static Statement PrepareTransferItem(uint64 newOwner, uint64 itemGuid);
     static Statement PrepareLoadEquipment(uint64 guid);
     static CreateTransaction PrepareEquipItem(uint64 guid, CharacterItem const& item, std::string_view slot, std::optional<CharacterItem> const& returned);
     static CreateTransaction PrepareUnequipItem(uint64 guid, CharacterItem const& item);

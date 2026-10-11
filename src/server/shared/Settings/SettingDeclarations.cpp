@@ -135,6 +135,13 @@ namespace
             Unsigned("Social.MaxFriends", "100", "0", "10000", "", "Social", Game, Live,
                 "How many friends one wizard may have; a change applies to the next friend request and max-friends reply."),
 
+            Unsigned("Bank.Capacity", "100", "0", "10000", "items", "Bank", Game, Live,
+                "How many items one wizard's personal bank holds, read at each move, so raising it lets the next deposit into a full bank succeed; online wizards are told the new limit with UPDATEBANKLIMIT, and items stored above a lowered cap are kept."),
+            Unsigned("Bank.SharedCapacity", "100", "0", "10000", "items", "Bank", Game, Live,
+                "How many items one account's shared bank holds, read at each move, so raising it lets the next deposit into a full shared bank succeed; online wizards are told the new limit with UPDATEBANKLIMIT, and items stored above a lowered cap are kept."),
+            Unsigned("Bank.ObjectTemplate", "0", "0", "4294967295", "", "Bank", Game, Live,
+                "The template id of the object a wizard's interaction opens the bank with, read at each interaction; 0 offers none, since a template id is each install's own."),
+
             Text("Locale.Default", "en-US", "16", "Locale", Game | Login, Live, "The locale names and texts are read in when a client names none."),
 
             Flag("Network.PacketLog.Enable", "false", "Network", Game | Login, Live,

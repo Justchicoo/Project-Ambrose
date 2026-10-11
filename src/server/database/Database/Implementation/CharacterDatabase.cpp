@@ -85,6 +85,20 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_UPD_ITEM_LOCK, "CHAR_UPD_ITEM_LOCK", "UPDATE `item_instance` SET `locked` = ? WHERE `guid` = ? AND `owner` = ?", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_MAX_ITEM_GUID, "CHAR_SEL_MAX_ITEM_GUID", "SELECT GREATEST(COALESCE((SELECT MAX(`guid`) FROM `item_instance`), 0), "
         "COALESCE((SELECT `highest` FROM `id_sequences` WHERE `name` = 'item'), 0))", ConnectionFlags::Both);
+
+    PrepareStatement(CHAR_SEL_CHARACTER_BANK, "CHAR_SEL_CHARACTER_BANK", "SELECT i.`guid` IS NOT NULL, i.`guid`, i.`template`, i.`quantity`, i.`primary_color`, i.`secondary_color`, "
+        "i.`pattern`, i.`locked`, i.`flags`, i.`created`, cb.`slot` FROM `character_bank` cb JOIN `item_instance` i ON i.`guid` = cb.`item_guid` "
+        "WHERE cb.`owner_guid` = ? ORDER BY cb.`slot`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_CHARACTER_BANK, "CHAR_INS_CHARACTER_BANK", "INSERT INTO `character_bank` (`owner_guid`, `item_guid`, `slot`) VALUES (?, ?, ?)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_CHARACTER_BANK, "CHAR_DEL_CHARACTER_BANK", "DELETE FROM `character_bank` WHERE `owner_guid` = ? AND `item_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_ACCOUNT_SHARED_BANK, "CHAR_SEL_ACCOUNT_SHARED_BANK", "SELECT i.`guid` IS NOT NULL, i.`guid`, i.`template`, i.`quantity`, i.`primary_color`, i.`secondary_color`, "
+        "i.`pattern`, i.`locked`, i.`flags`, i.`created`, asb.`slot` FROM `account_shared_bank` asb JOIN `item_instance` i ON i.`guid` = asb.`item_guid` "
+        "WHERE asb.`account_id` = ? ORDER BY asb.`slot`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_ACCOUNT_SHARED_BANK, "CHAR_INS_ACCOUNT_SHARED_BANK", "INSERT INTO `account_shared_bank` (`account_id`, `item_guid`, `slot`) VALUES (?, ?, ?)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_ACCOUNT_SHARED_BANK, "CHAR_DEL_ACCOUNT_SHARED_BANK", "DELETE FROM `account_shared_bank` WHERE `account_id` = ? AND `item_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_ITEM_INSTANCE_BY_GUID, "CHAR_SEL_ITEM_INSTANCE_BY_GUID", "SELECT `guid`, `owner`, `template`, `quantity`, `primary_color`, `secondary_color`, `pattern`, `locked`, `flags`, `created` "
+        "FROM `item_instance` WHERE `guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_UPD_ITEM_OWNER, "CHAR_UPD_ITEM_OWNER", "UPDATE `item_instance` SET `owner` = ? WHERE `guid` = ?", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_CHARACTER_EQUIPMENT, "CHAR_SEL_CHARACTER_EQUIPMENT", "SELECT i.`guid` IS NOT NULL, i.`guid`, i.`template`, i.`quantity`, i.`primary_color`, i.`secondary_color`, "
         "i.`pattern`, i.`locked`, i.`flags`, i.`created`, e.`slot` FROM `characters` c LEFT JOIN `character_equipment` e ON e.`guid` = c.`guid` "
         "LEFT JOIN `item_instance` i ON i.`guid` = e.`item` AND i.`owner` = c.`guid` WHERE c.`guid` = ? ORDER BY e.`item`", ConnectionFlags::Both);

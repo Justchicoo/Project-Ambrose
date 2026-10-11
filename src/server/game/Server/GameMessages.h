@@ -1889,6 +1889,273 @@ namespace GameMessages
             return std::tuple{ DmlField("MobileID", &SendInteractOptions::MobileId), DmlField("Options", &SendInteractOptions::Options) };
         }
     };
-}
 
+
+    struct MoveInvToBank
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_MOVEINVTOBANK";
+
+        int32 ClientRequestID = 0;
+        uint64 GlobalID = 0;
+        int8 UseShared = 0;
+        int32 Quantity = 0;
+        int32 Debug = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &MoveInvToBank::ClientRequestID), DmlField("GlobalID", &MoveInvToBank::GlobalID), DmlField("UseShared", &MoveInvToBank::UseShared),
+                DmlField("Quantity", &MoveInvToBank::Quantity), DmlField("debug", &MoveInvToBank::Debug) };
+        }
+    };
+
+    struct MoveBankToInv
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_MOVEBANKTOINV";
+
+        int32 ClientRequestID = 0;
+        uint64 GlobalID = 0;
+        int8 UseShared = 0;
+        int32 Quantity = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &MoveBankToInv::ClientRequestID), DmlField("GlobalID", &MoveBankToInv::GlobalID), DmlField("UseShared", &MoveBankToInv::UseShared),
+                DmlField("Quantity", &MoveBankToInv::Quantity) };
+        }
+    };
+
+    struct MoveBankToBank
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_MOVEBANKTOBANK";
+
+        int32 ClientRequestID = 0;
+        uint64 BankID = 0;
+        uint64 BankSharedID = 0;
+        uint32 Error = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &MoveBankToBank::ClientRequestID), DmlField("BankID", &MoveBankToBank::BankID), DmlField("BankSharedID", &MoveBankToBank::BankSharedID),
+                DmlField("Error", &MoveBankToBank::Error) };
+        }
+    };
+
+    struct BankDelete
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_BANKDELETE";
+
+        int32 ClientRequestID = 0;
+        uint64 GlobalID = 0;
+        int8 UseShared = 0;
+        int8 FromInventory = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &BankDelete::ClientRequestID), DmlField("GlobalID", &BankDelete::GlobalID), DmlField("UseShared", &BankDelete::UseShared),
+                DmlField("FromInventory", &BankDelete::FromInventory) };
+        }
+    };
+
+    struct SharedBankDeleteReagentOrPetSnack
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_SHAREDBANKDELETEREAGENTORPETSNACK";
+
+        int32 ClientRequestID = 0;
+        uint64 GlobalID = 0;
+        int32 Quantity = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &SharedBankDeleteReagentOrPetSnack::ClientRequestID), DmlField("GlobalID", &SharedBankDeleteReagentOrPetSnack::GlobalID),
+                DmlField("Quantity", &SharedBankDeleteReagentOrPetSnack::Quantity) };
+        }
+    };
+
+    struct BankCount
+    {
+        static constexpr uint8 ServiceId = Wizard2Service;
+        static constexpr std::string_view Tag = "MSG_BANKCOUNT";
+
+        uint32 Count = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("BankCount", &BankCount::Count) };
+        }
+    };
+
+    struct OpenBank
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_OPENBANK";
+
+        uint64 GlobalID = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &OpenBank::GlobalID) };
+        }
+    };
+
+    struct InvToBankConfirm
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_INVTOBANKCONFIRM";
+
+        int32 ClientRequestID = 0;
+        uint64 OriginalGlobalID = 0;
+        uint64 GlobalID = 0;
+        int8 UseShared = 0;
+        int8 Failure = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &InvToBankConfirm::ClientRequestID), DmlField("OriginalGlobalID", &InvToBankConfirm::OriginalGlobalID),
+                DmlField("GlobalID", &InvToBankConfirm::GlobalID), DmlField("UseShared", &InvToBankConfirm::UseShared), DmlField("Failure", &InvToBankConfirm::Failure) };
+        }
+    };
+
+    struct BankToInvConfirm
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_BANKTOINVCONFIRM";
+
+        int32 ClientRequestID = 0;
+        uint64 OriginalGlobalID = 0;
+        uint64 GlobalID = 0;
+        int8 Failure = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &BankToInvConfirm::ClientRequestID), DmlField("OriginalGlobalID", &BankToInvConfirm::OriginalGlobalID),
+                DmlField("GlobalID", &BankToInvConfirm::GlobalID), DmlField("Failure", &BankToInvConfirm::Failure) };
+        }
+    };
+
+    struct BankToBankConfirm
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_BANKTOBANKCONFIRM";
+
+        int32 ClientRequestID = 0;
+        uint64 OriginalGlobalID = 0;
+        uint64 GlobalID = 0;
+        int8 UseShared = 0;
+        uint32 Error = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &BankToBankConfirm::ClientRequestID), DmlField("OriginalGlobalID", &BankToBankConfirm::OriginalGlobalID),
+                DmlField("GlobalID", &BankToBankConfirm::GlobalID), DmlField("UseShared", &BankToBankConfirm::UseShared), DmlField("Error", &BankToBankConfirm::Error) };
+        }
+    };
+
+    struct BankDeleteConfirm
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_BANKDELETECONFIRM";
+
+        int32 ClientRequestID = 0;
+        uint64 GlobalID = 0;
+        int8 UseShared = 0;
+        int8 Failure = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &BankDeleteConfirm::ClientRequestID), DmlField("GlobalID", &BankDeleteConfirm::GlobalID), DmlField("UseShared", &BankDeleteConfirm::UseShared),
+                DmlField("Failure", &BankDeleteConfirm::Failure) };
+        }
+    };
+
+    struct SharedBankDeleteReagentOrPetSnackConfirm
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_SHAREDBANKDELETEREAGENTORPETSNACKCONFIRM";
+
+        int32 ClientRequestID = 0;
+        uint64 GlobalID = 0;
+        int8 Failure = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ClientRequestID", &SharedBankDeleteReagentOrPetSnackConfirm::ClientRequestID),
+                DmlField("GlobalID", &SharedBankDeleteReagentOrPetSnackConfirm::GlobalID), DmlField("Failure", &SharedBankDeleteReagentOrPetSnackConfirm::Failure) };
+        }
+    };
+
+    struct StorageClientAdd
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_STORAGECLIENTADD";
+
+        uint64 GlobalID = 0;
+        std::string SerializedItem;
+        int8 SharedBank = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &StorageClientAdd::GlobalID), DmlField("SerializedItem", &StorageClientAdd::SerializedItem), DmlField("SharedBank", &StorageClientAdd::SharedBank) };
+        }
+    };
+
+    struct StorageClientRemove
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_STORAGECLIENTREMOVE";
+
+        uint64 GlobalID = 0;
+        int8 SharedBank = 0;
+        uint64 ItemID = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &StorageClientRemove::GlobalID), DmlField("SharedBank", &StorageClientRemove::SharedBank), DmlField("ItemID", &StorageClientRemove::ItemID) };
+        }
+    };
+
+    struct ItemOverflowToBank
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_ITEMOVERFLOWTOBANK";
+
+        uint64 ItemID = 0;
+        int32 CountInBank = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ItemID", &ItemOverflowToBank::ItemID), DmlField("CountInBank", &ItemOverflowToBank::CountInBank) };
+        }
+    };
+
+    struct UpdateBankLimit
+    {
+        static constexpr uint8 ServiceId = Wizard2Service;
+        static constexpr std::string_view Tag = "MSG_UPDATEBANKLIMIT";
+
+        uint64 GlobalID = 0;
+        int32 BankLimit = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &UpdateBankLimit::GlobalID), DmlField("BankLimit", &UpdateBankLimit::BankLimit) };
+        }
+    };
+
+    struct QuickSellRequestBank
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_QUICKSELLREQUESTBANK";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{};
+        }
+    };
+
+}
 #endif

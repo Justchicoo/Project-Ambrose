@@ -230,6 +230,14 @@ public:
     std::vector<GameEffectChange> TakeGameEffectChanges() noexcept { return std::exchange(_effectChanges, {}); }
     void ShowGameEffectOf(uint64 worldGuid, GameEffectChange const& change);
 
+    void HandleMoveInvToBank(GameMessages::MoveInvToBank& message);
+    void HandleMoveBankToInv(GameMessages::MoveBankToInv& message);
+    void HandleMoveBankToBank(GameMessages::MoveBankToBank& message);
+    void HandleBankDelete(GameMessages::BankDelete& message);
+    void HandleBankCount(GameMessages::BankCount& message);
+    void HandleQuickSellRequestBank(GameMessages::QuickSellRequestBank& message);
+    void HandleSharedBankDeleteReagentOrPetSnack(GameMessages::SharedBankDeleteReagentOrPetSnack& message);
+
     void HandleGetTimedAccessPasses(GameMessages::GetTimedAccessPasses& message);
     void HandleGetSubscriberOnlyItems(GameMessages::GetSubscriberOnlyItems& message);
     void HandleCrownBalance(GameMessages::CrownBalance& message);
@@ -271,9 +279,12 @@ protected:
 private:
     friend class World;
     friend class SocialMgr;
+    friend class BankMgr;
+    friend class AccountBankMgr;
     friend struct GameSessionLifecycleTestAccess;
     friend struct GameSessionInventoryTestAccess;
     friend struct GameSessionEquipmentTestAccess;
+    friend struct GameSessionBankTestAccess;
     friend struct SocialMgrTestAccess;
     friend struct ChatHandlerTestAccess;
 

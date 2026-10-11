@@ -4,6 +4,8 @@
  */
 
 #include "World.h"
+#include "../Bank/BankMgr.h"
+#include "../Bank/AccountBankMgr.h"
 #include "ChatMgr.h"
 #include "DuelMgr.h"
 #include "GameMessages.h"
@@ -208,6 +210,34 @@ namespace
             LOG_DEBUG("server.world", "Session {} showed {} change(s) to what wizard {} wears to it and {} other wizard(s) in zone instance {}", wearer->GetSessionId(),
                 changes.size(), wearer->GetWorldGuid(), viewers, mapId ? *mapId : 0);
         }
+    }
+
+    void RelayBankLimits(std::vector<std::shared_ptr<GameSession>> const& sessions, uint32& announcedCapacity, uint32& announcedSharedCapacity)
+    {
+        uint32 const capacity = sSettings.Get<uint32>("Bank.Capacity");
+        uint32 const sharedCapacity = sSettings.Get<uint32>("Bank.SharedCapacity");
+        if (announcedCapacity == 0 || (capacity == announcedCapacity && sharedCapacity == announcedSharedCapacity))
+        {
+            announcedCapacity = capacity;
+            announcedSharedCapacity = sharedCapacity;
+            return;
+        }
+        announcedCapacity = capacity;
+        announcedSharedCapacity = sharedCapacity;
+        for (std::shared_ptr<GameSession> const& session : sessions)
+        {
+            if (!session->IsOpen())
+                continue;
+            GameMessages::UpdateBankLimit personal;
+            personal.GlobalID = session->GetCharacterId();
+            personal.BankLimit = static_cast<int32>(capacity);
+            session->SendDmlMessage(personal);
+            GameMessages::UpdateBankLimit shared;
+            shared.GlobalID = session->GetAccountId();
+            shared.BankLimit = static_cast<int32>(sharedCapacity);
+            session->SendDmlMessage(shared);
+        }
+        LOG_INFO("server.bank", "Told every online wizard the bank now holds {} item(s) and the shared bank {}", capacity, sharedCapacity);
     }
 
     void RelayGameEffects(std::vector<std::shared_ptr<GameSession>> const& sessions)
@@ -551,6 +581,8 @@ void World::Clear()
     _sessions.clear();
     _moveFlush.Reset();
     sSocialMgr.Clear();
+    sBankMgr.Clear();
+    sAccountBankMgr.Clear();
     std::lock_guard const threadLock(_threadMutex);
     _worldThread = std::thread::id();
     _worldThreadKnown = false;
@@ -627,6 +659,9 @@ void World::Update(std::chrono::milliseconds diff)
     RelayGameEffects(sessions);
     RelayDuels(sessions);
     RelayEquipment(sessions);
+    static uint32 announcedBankCapacity = 0;
+    static uint32 announcedSharedBankCapacity = 0;
+    RelayBankLimits(sessions, announcedBankCapacity, announcedSharedBankCapacity);
     auto const meetingEnded = std::chrono::steady_clock::now();
     measured[4] = std::chrono::duration_cast<std::chrono::nanoseconds>(meetingEnded - meetingStarted);
     RecordProfileEvent("movement", meetingStarted, meetingEnded);

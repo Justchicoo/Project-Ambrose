@@ -44,6 +44,8 @@
 #include "TypeRegistry.h"
 #include "ZoneMgr.h"
 #include "ZoneTeleportMgr.h"
+#include "../Bank/BankMgr.h"
+#include "../Bank/AccountBankMgr.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -1808,6 +1810,42 @@ void GameSession::HandleUsePotion(GameMessages::UsePotion&)
     if (newHealth != oldHealth)
         sScriptMgr.OnHealthChanged(*_player, oldHealth, newHealth);
     SaveStatsIfDirty();
+}
+
+void GameSession::HandleMoveInvToBank(GameMessages::MoveInvToBank& message)
+{
+    sBankMgr.MoveItemToBank(*this, message);
+}
+
+void GameSession::HandleMoveBankToInv(GameMessages::MoveBankToInv& message)
+{
+    sBankMgr.MoveItemToInventory(*this, message);
+}
+
+void GameSession::HandleMoveBankToBank(GameMessages::MoveBankToBank& message)
+{
+    sBankMgr.MoveItemToSharedBank(*this, message);
+}
+
+void GameSession::HandleBankDelete(GameMessages::BankDelete& message)
+{
+    sBankMgr.DeleteItemFromBank(*this, message);
+}
+
+void GameSession::HandleBankCount(GameMessages::BankCount& message)
+{
+    sBankMgr.SendBankCount(*this);
+    sAccountBankMgr.SendSharedBankCount(*this);
+}
+
+void GameSession::HandleQuickSellRequestBank(GameMessages::QuickSellRequestBank& message)
+{
+    sBankMgr.HandleQuickSellRequestBank(*this, message);
+}
+
+void GameSession::HandleSharedBankDeleteReagentOrPetSnack(GameMessages::SharedBankDeleteReagentOrPetSnack& message)
+{
+    sAccountBankMgr.DeleteItemFromSharedBank(*this, message);
 }
 
 std::string GameSession::GetCharacterName() const

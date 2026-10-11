@@ -132,6 +132,14 @@ namespace
             PendingRest(Wizard2Service, any);
             PendingRest(Wizard3Service, any);
 
+            Accept<&GameSession::HandleMoveInvToBank>(entered, MessageProcessing::Queued, "GameSession::HandleMoveInvToBank");
+            Accept<&GameSession::HandleMoveBankToInv>(entered, MessageProcessing::Queued, "GameSession::HandleMoveBankToInv");
+            Accept<&GameSession::HandleMoveBankToBank>(entered, MessageProcessing::Queued, "GameSession::HandleMoveBankToBank");
+            Accept<&GameSession::HandleBankDelete>(entered, MessageProcessing::Queued, "GameSession::HandleBankDelete");
+            Accept<&GameSession::HandleBankCount>(any, MessageProcessing::Queued, "GameSession::HandleBankCount");
+            Accept<&GameSession::HandleQuickSellRequestBank>(entered, MessageProcessing::Queued, "GameSession::HandleQuickSellRequestBank");
+            Accept<&GameSession::HandleSharedBankDeleteReagentOrPetSnack>(entered, MessageProcessing::Queued, "GameSession::HandleSharedBankDeleteReagentOrPetSnack");
+
             Sends<AttachFailed>();
             Sends<Badges>();
             Sends<LoginComplete>();
@@ -210,6 +218,18 @@ namespace
             Sends<SendNpcOptions>();
             Sends<LeaveServiceRange>();
             Sends<SendInteractOptions>();
+
+            Sends<OpenBank>();
+            Sends<InvToBankConfirm>();
+            Sends<BankToInvConfirm>();
+            Sends<BankToBankConfirm>();
+            Sends<BankDeleteConfirm>();
+            Sends<StorageClientAdd>();
+            Sends<StorageClientRemove>();
+            Sends<ItemOverflowToBank>();
+            Sends<BankCount>();
+            Sends<UpdateBankLimit>();
+            Sends<SharedBankDeleteReagentOrPetSnackConfirm>();
 
             SystemMessages::AddRules(*this);
         }
