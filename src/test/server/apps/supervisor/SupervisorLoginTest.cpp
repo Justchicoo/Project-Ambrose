@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set and a built login server, runs the real login server under the supervisor and stops it the way the panel does: the stop goes through the app's own admin API and the exit is recorded as one that was asked for, and, with AMBROSE_CLIENT_DIR naming an install so the server has the client's message definitions, a client that finished the session handshake is told the server is shutting down before the process ends, and a restart of the game server beside it leaves that client connected and counted, while a game server something else ends is counted as one crash and started again. A server run without a client is started with AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH hidden from it, since an empty ClientDir means the install is found as usual, the environment first, and one with a client needs both set. A login server whose database refuses it is seen as crashed the moment its start fails, so no wait sits out the 300 s start timeout.
+ * With AMBROSE_TEST_DB set and a built login server, runs the real login server under the supervisor against pending updates, stops it through its own admin API and records the requested exit; with a configured client it also checks session shutdown and game-server restarts, while a server that cannot reach its database is reported crashed without waiting out the 300 s start timeout.
  */
 
 #include "AdminClient.h"
@@ -152,7 +152,7 @@ namespace
             std::filesystem::path const appConfig = _directory.Write("loginserver.conf", fmt::format(
                 "BindIP = 127.0.0.1\nLoginServerPort = {}\nClientDir = \"{}\"\nTypeDumpPath = \"{}\"\nSetup.Mode = off\nConsole.Colors = 0\n"
                 "Admin.Enable = 1\nAdmin.BindIP = 127.0.0.1\nAdmin.Port = {}\nAdmin.Token = {}\n"
-                "LoginDatabaseInfo = \"{}\"\nCharacterDatabaseInfo = \"{}\"\nWorldDatabaseInfo = \"\"\nUpdates.EnableDatabases = 3\nUpdates.AutoSetup = 1\n"
+                "LoginDatabaseInfo = \"{}\"\nCharacterDatabaseInfo = \"{}\"\nWorldDatabaseInfo = \"\"\nUpdates.EnableDatabases = 3\nUpdates.AutoSetup = 1\nUpdates.AllowPending = 1\n"
                 "Login.ShutdownGrace = 10\n",
                 Clients, Slashes(ConfigMgr::PathFromUtf8(client)), Slashes(ConfigMgr::PathFromUtf8(dump)), Admin, Token,
                 login.ToConnectionString(), characters.ToConnectionString()));
@@ -167,7 +167,7 @@ namespace
                 std::filesystem::path const realmConfig = _directory.Write("gameserver.conf", fmt::format(
                     "BindIP = 127.0.0.1\nWorldServerPort = {}\nRealmID = 1\nClientDir = \"{}\"\nTypeDumpPath = \"{}\"\nSetup.Mode = off\nConsole.Colors = 0\n"
                     "Admin.Enable = 1\nAdmin.BindIP = 127.0.0.1\nAdmin.Port = {}\nAdmin.Token = {}\n"
-                    "LoginDatabaseInfo = \"{}\"\nCharacterDatabaseInfo = \"{}\"\nWorldDatabaseInfo = \"{}\"\nUpdates.EnableDatabases = 7\nUpdates.AutoSetup = 1\n",
+                    "LoginDatabaseInfo = \"{}\"\nCharacterDatabaseInfo = \"{}\"\nWorldDatabaseInfo = \"{}\"\nUpdates.EnableDatabases = 7\nUpdates.AutoSetup = 1\nUpdates.AllowPending = 1\n",
                     FreePort(), Slashes(ConfigMgr::PathFromUtf8(client)), Slashes(ConfigMgr::PathFromUtf8(dump)), FreePort(), Token,
                     login.ToConnectionString(), characters.ToConnectionString(), world->ToConnectionString()));
                 apps += " gameserver";
