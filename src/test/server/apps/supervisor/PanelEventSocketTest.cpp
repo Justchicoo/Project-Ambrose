@@ -633,10 +633,10 @@ TEST_F(PanelEventSocketTest, PingAnswersPongAndEachMessageThePanelCannotTakeHasI
     EXPECT_TRUE(pong["time"].is_number_integer());
     EXPECT_EQ(pong["data"], nlohmann::json::object());
 
-    nlohmann::json later = answer(Frame("subscribe", "a1", { { "streams", { "logs" } } }));
+    nlohmann::json later = answer(Frame("subscribe", "a1", { { "stream", "weather" } }));
     EXPECT_EQ(later["type"], "error");
     EXPECT_EQ(later["id"], "a1");
-    EXPECT_EQ(later["data"]["code"], "unsupported");
+    EXPECT_EQ(later["data"]["code"], "invalid") << "subscribe to an unknown stream is invalid";
 
     nlohmann::json unknown = answer(Frame("weather", "a2", nlohmann::json::object()));
     EXPECT_EQ(unknown["data"]["code"], "unknown_type");
@@ -671,4 +671,54 @@ TEST_F(PanelEventSocketTest, PingAnswersPongAndEachMessageThePanelCannotTakeHasI
     std::optional<nlohmann::json> hidden = Read(script);
     ASSERT_TRUE(hidden.has_value());
     EXPECT_EQ((*hidden)["data"]["code"], "not_found") << "an app it holds nothing on is not found rather than forbidden";
+}
+
+TEST_F(PanelEventSocketTest, SubscribeOpensAStreamAndUnsubscribeClosesIt)
+{
+    Start();
+    MakeUser("owner", true);
+    Browser const browser = SignIn("owner");
+
+    AdminTest::SocketClient page;
+    ASSERT_TRUE(SignedInSocket(page, browser).has_value());
+
+    auto const answer = [&page](std::string const& frame) -> nlohmann::json
+    {
+        if (!page.SendText(frame))
+            return nlohmann::json();
+        return Read(page).value_or(nlohmann::json());
+    };
+
+    nlohmann::json sub = answer(Frame("subscribe", "s1", { { "stream", "status" } }));
+    EXPECT_TRUE(sub.is_null() || sub.value("type", "") != "error") << "subscribe to status is allowed: " << sub.dump();
+
+    nlohmann::json unsub = answer(Frame("unsubscribe", "s2", { { "stream", "status" } }));
+    EXPECT_TRUE(unsub.is_null() || unsub.value("type", "") != "error") << "unsubscribe is silent: " << unsub.dump();
+
+    nlohmann::json nowhere = answer(Frame("subscribe", "s3", { { "stream", "status" } }, nlohmann::json{ { "app", "nowhere" } }));
+    EXPECT_EQ(nowhere["type"], "error");
+    EXPECT_EQ(nowhere["data"]["code"], "not_found") << "an app the panel does not know is not found";
+}
+
+TEST_F(PanelEventSocketTest, SubscribeChecksPermissionLikeARoute)
+{
+    Start();
+    MakeUser("owner", true);
+    MakeUser("viewer", false);
+    Browser const owner = SignIn("owner");
+    Browser const viewer = SignIn("viewer");
+
+    AdminTest::SocketClient page;
+    ASSERT_TRUE(SignedInSocket(page, viewer).has_value());
+
+    auto const answer = [&page](std::string const& frame) -> nlohmann::json
+    {
+        if (!page.SendText(frame))
+            return nlohmann::json();
+        return Read(page).value_or(nlohmann::json());
+    };
+
+    nlohmann::json denied = answer(Frame("subscribe", "s1", { { "stream", "status" } }));
+    EXPECT_EQ(denied["type"], "error");
+    EXPECT_EQ(denied["data"]["code"], "forbidden") << "a viewer without status.read is forbidden the status stream";
 }

@@ -117,10 +117,14 @@ export const HelloData = v.looseObject({
 });
 export type HelloData = v.InferOutput<typeof HelloData>;
 
-export const SubscribeData = v.looseObject({});
+export const SubscribeData = v.looseObject({
+    stream: v.string(),
+});
 export type SubscribeData = v.InferOutput<typeof SubscribeData>;
 
-export const UnsubscribeData = v.looseObject({});
+export const UnsubscribeData = v.looseObject({
+    stream: v.string(),
+});
 export type UnsubscribeData = v.InferOutput<typeof UnsubscribeData>;
 
 export const ResumeData = v.looseObject({
@@ -288,7 +292,9 @@ export const ErrorData = v.looseObject({
 });
 export type ErrorData = v.InferOutput<typeof ErrorData>;
 
-export const SessionExpiringData = v.looseObject({});
+export const SessionExpiringData = v.looseObject({
+    expires_in: v.number(),
+});
 export type SessionExpiringData = v.InferOutput<typeof SessionExpiringData>;
 
 export const PongData = v.looseObject({});

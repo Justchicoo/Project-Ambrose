@@ -54,6 +54,7 @@ public:
 
     std::optional<PanelSessionOpened> Open(int64 userId, int64 generation, std::string_view address, std::string_view userAgent, int64 checkedEpochMs, std::string& error);
     std::optional<SessionHolder> Hold(std::string_view secret) override;
+    std::optional<SessionExpiry> ExpiryOf(std::string_view secret) override;
 
     bool MarkChecked(std::string_view secret, std::string& error);
     std::optional<int64> CheckedAt(std::string_view secret);
