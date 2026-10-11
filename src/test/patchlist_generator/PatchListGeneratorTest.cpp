@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests synthetic install scanning, WAD header metrics, a played install's launcher banks, Src and Tar rules, type patterns under them, rule lines scoped to the Steam or Windows edition, a type rule naming a WAD type 5 without a sidecar, type 5 sidecars and the WADs still streaming, skipped player files, the reference diff and the one field it takes, deterministic output, and the persistent checksum cache.
+ * Tests synthetic install scanning, WAD header metrics, a played install's launcher banks, Src and Tar rules, type patterns under them, rule lines scoped to the Steam or Windows edition, a type rule naming a WAD type 5 without a sidecar, type 5 sidecars and the WADs still streaming, skipped player files, the reference diff and the one field it takes, deterministic output, the persistent checksum cache, and output the patch server loads as the manifest it serves.
  */
 
 #include "Compression.h"
 #include "Crc32.h"
 #include "PatchListGenerator.h"
+#include "PatchManifest.h"
 
 #include <fmt/format.h>
 #include <gtest/gtest.h>
@@ -247,4 +248,35 @@ TEST_F(InstallFixture, FileCrcIsTheClientCrcOfTheFileOrOfARange)
 
     EXPECT_FALSE(PatchListGenerator::FileCrc(dll, 3, 3, error));
     EXPECT_FALSE(PatchListGenerator::FileCrc(Root / "missing.bin", 0, std::nullopt, error));
+}
+
+TEST_F(InstallFixture, OutputLoadsAsTheManifestThePatchServerServes)
+{
+    std::string error;
+    PatchListGenerator::Options options{ Root, Root / "output", std::nullopt, std::nullopt };
+    std::optional<PatchListGenerator::Result> result = PatchListGenerator::Generate(options, error);
+    ASSERT_TRUE(result) << error;
+    std::ifstream binary(result->OutputDirectory / "LatestFileList.bin", std::ios::binary);
+    std::vector<uint8> const bytes((std::istreambuf_iterator<char>(binary)), std::istreambuf_iterator<char>());
+
+    std::vector<std::string> errors;
+    std::optional<PatchManifest> const manifest = PatchManifest::Load(Root / "output", "", errors);
+    ASSERT_TRUE(manifest) << (errors.empty() ? std::string("no error") : errors.front());
+    EXPECT_EQ(manifest->Revision, "r806919.Wizard_1_610");
+    EXPECT_EQ(manifest->GetDirectoryName(), "V_r806919.Wizard_1_610");
+    EXPECT_EQ(manifest->ListFileSize, bytes.size());
+    EXPECT_EQ(manifest->ListFileCrc, Crc32::ComputeClient(bytes));
+    EXPECT_EQ(manifest->Packages, 3u);
+
+    std::filesystem::create_directories(Root / "output" / "V_r806920.Wizard_1_611");
+    std::filesystem::copy_file(result->OutputDirectory / "LatestFileList.bin", Root / "output" / "V_r806920.Wizard_1_611" / "LatestFileList.bin");
+    errors.clear();
+    EXPECT_FALSE(PatchManifest::Load(Root / "output", "", errors));
+    ASSERT_EQ(errors.size(), 1u);
+    EXPECT_NE(errors.front().find("set Patch.Revision"), std::string::npos) << errors.front();
+    errors.clear();
+    std::optional<PatchManifest> const named = PatchManifest::Load(Root / "output", "r806920.Wizard_1_611", errors);
+    ASSERT_TRUE(named);
+    EXPECT_EQ(named->ListFileCrc, manifest->ListFileCrc);
+    EXPECT_FALSE(PatchManifest::Load(Root / "missing", "", errors));
 }

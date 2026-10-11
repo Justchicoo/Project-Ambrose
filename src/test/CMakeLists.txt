@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's, the desktop shell's and the client-image library's own tests joining it, the shell's smoke program built beside it, and two pages embedded by ambrose_embed_page, a fixture written at configure time and a missing folder's placeholder, for the manifest tests when those libraries are built so one executable holds them, and outside the login server's and the supervisor's folders unless their libraries are built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, hands the tests the path of the generated design token stylesheet so the terminal header can be checked against it and the path of doc/config/settings.md so the settings page can be checked against its declarations, the path of the dashboard's generated protocol module and of doc/PANEL.md so the event socket's catalog can be checked against both, links the Windows security API the admin token permission checks read and Winsock, which makes the unix socket file the file jail tests refuse, registers each test with CTest, the few that measure the machine itself, a process's processor share and memory, logging's cost, a load beside a cache and the panel audit chain's verification budget, run alone so a parallel test run cannot skew what they measure, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable, the supervisor and the bindecode, client, dbimport, extractor, launcher, localetool, schemaprobe and typeextract tools, labelling `client` every tool test that reads the install when AMBROSE_CLIENT_DIR names one, as the client tests are, so one label selects or skips everything that does.
+# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's, the desktop shell's and the client-image library's own tests joining it, the shell's smoke program built beside it, and two pages embedded by ambrose_embed_page, a fixture written at configure time and a missing folder's placeholder, for the manifest tests when those libraries are built so one executable holds them, and outside the login server's, the patch server's and the supervisor's folders unless their libraries are built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, hands the tests the path of the generated design token stylesheet so the terminal header can be checked against it and the path of doc/config/settings.md so the settings page can be checked against its declarations, the path of the dashboard's generated protocol module and of doc/PANEL.md so the event socket's catalog can be checked against both, links the Windows security API the admin token permission checks read and Winsock, which makes the unix socket file the file jail tests refuse, registers each test with CTest, the few that measure the machine itself, a process's processor share and memory, logging's cost, a load beside a cache and the panel audit chain's verification budget, run alone so a parallel test run cannot skew what they measure, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable, the supervisor and the bindecode, client, dbimport, extractor, launcher, localetool, schemaprobe and typeextract tools, labelling `client` every tool test that reads the install when AMBROSE_CLIENT_DIR names one, as the client tests are, so one label selects or skips everything that does.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -11,6 +11,9 @@ foreach(source IN LISTS all_test_sources)
         continue()
     endif()
     if(relative MATCHES "^server/apps/loginserver/" AND NOT TARGET login)
+        continue()
+    endif()
+    if(relative MATCHES "^server/apps/patchserver/" AND NOT TARGET patching)
         continue()
     endif()
     if(relative MATCHES "^server/apps/supervisor/" AND NOT TARGET supervision)
@@ -55,6 +58,10 @@ endif()
 
 if(TARGET login)
     target_link_libraries(unit_tests PRIVATE login)
+endif()
+
+if(TARGET patching)
+    target_link_libraries(unit_tests PRIVATE patching)
 endif()
 
 if(TARGET supervision)

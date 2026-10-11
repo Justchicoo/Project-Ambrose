@@ -157,10 +157,10 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 
 **Acceptance**
 
-- [ ] Fake client gets ListFileSize/ListFileCRC equal to the .bin
-- [ ] Probe without session accept still gets a reply
-- [ ] ListFileURL contains '/V_r806919.Wizard_1_610/'
-- [ ] Corrupt manifest reload keeps the old one; port change rebinds live
+- [x] Fake client gets ListFileSize/ListFileCRC equal to the .bin (`PatchFileListTest.HandshakeThenV2InEnglishGetsTheSizeAndCrcOfTheBinOnDisk`)
+- [x] Probe without session accept still gets a reply (`PatchFileListTest.ProbeWithoutSessionAcceptStillGetsAReply`)
+- [x] ListFileURL contains '/V_r806919.Wizard_1_610/' (`PatchFileListTest.ListFileUrlNamesTheRevisionFolderUnderThePublicAddress`)
+- [x] Corrupt manifest reload keeps the old one; port change rebinds live (`PatchReloadTest.CorruptManifestReloadKeepsTheOldOneServingAndReportsTheError`, `PatchReloadTest.PortChangeRebindsLiveAndAFailedBindKeepsTheOldListener`)
 
 ### Detailed spec from PAT-6: patchserver app: TCP service 8 answering MSG_LATEST_FILE_LIST_V2
 
@@ -183,11 +183,11 @@ A client or probe that connects to the patch port gets a correct pointer to our 
 
 **Acceptance**
 
-- [ ] Integration test (src/test): fake client completes the NET session handshake, sends MSG_LATEST_FILE_LIST_V2 with Locale 'English', and gets a reply whose ListFileSize/ListFileCRC equal the .bin on disk
-- [ ] A probe that sends the V2 request right after the 28-byte session offer, without a session accept first (the reference probe byte sequence 0D F0 27 00 00 00 00 00 08 02 22 00 + 30 zero bytes), still gets a reply
-- [ ] Reply ListFileURL contains '/V_r806919.Wizard_1_610/'
+- [x] Integration test (src/test): fake client completes the NET session handshake, sends MSG_LATEST_FILE_LIST_V2 with Locale 'English', and gets a reply whose ListFileSize/ListFileCRC equal the .bin on disk (`PatchFileListTest.HandshakeThenV2InEnglishGetsTheSizeAndCrcOfTheBinOnDisk`: the reply's size is the file's and its CRC the client CRC of the file's bytes, with LatestVersion 1, ListFileType 1, ListFileTime the file's modification time and the locale echoed)
+- [x] A probe that sends the V2 request right after the 28-byte session offer, without a session accept first (the reference probe byte sequence 0D F0 27 00 00 00 00 00 08 02 22 00 + 30 zero bytes), still gets a reply (`PatchFileListTest.ProbeWithoutSessionAcceptStillGetsAReply`: the frame's own length 0x27 counts 39 bytes after its 4-byte prefix, so the sequence is the 30 zero body bytes and the frame's zero trailer byte, 43 bytes in all, which the test checks against `FrameWriter::WriteDml` before sending it)
+- [x] Reply ListFileURL contains '/V_r806919.Wizard_1_610/' (`PatchFileListTest.ListFileUrlNamesTheRevisionFolderUnderThePublicAddress`)
 - [ ] Unknown locale: behaviour matches the client string 'Locale (%s) not supported by the server' (exact reply to be decided from the PAT-8 client test, logged)
-- [ ] Reloading a corrupt manifest keeps the old manifest serving and reports the error, and changing PatchServer.Port rebinds without a restart while a failed bind keeps the old listener
+- [x] Reloading a corrupt manifest keeps the old manifest serving and reports the error, and changing PatchServer.Port rebinds without a restart while a failed bind keeps the old listener (`PatchReloadTest.CorruptManifestReloadKeepsTheOldOneServingAndReportsTheError` through the `manifest` reload target, `PatchReloadTest.PortChangeRebindsLiveAndAFailedBindKeepsTheOldListener` through a configuration reload; the port option keeps the name `PatchServerPort` phase 1 gave it beside `LoginServerPort` and `WorldServerPort`)
 
 **Risks**
 

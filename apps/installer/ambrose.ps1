@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names, made as root with no password when it installed MariaDB itself, asking for the root password when MariaDB was already there or the passwordless login is refused; -Plan prints those steps without taking them. It reads PATH, and VCPKG_ROOT when the shell has none, afresh before looking, so a tool an earlier run installed is found from a shell opened before it, and winget's answer that a package is already installed counts as done.
+# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names, made as root with no password when it installed MariaDB itself, asking for the root password when MariaDB was already there or the passwordless login is refused; -Plan prints those steps without taking them. It reads PATH, and VCPKG_ROOT when the shell has none, afresh before looking, so a tool an earlier run installed is found from a shell opened before it, and winget's answer that a package is already installed counts as done; when winget gives up on Build Tools while the Visual Studio installer it started is still working, it waits for that installer and trusts vswhere's answer instead.
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $EnvFile = if ($env:AMBROSE_INSTALL_ENV) { $env:AMBROSE_INSTALL_ENV } else { Join-Path $Root 'conf\dist\env.dist' }
@@ -68,15 +68,38 @@ function Invoke-Step([bool]$Found, [string]$What, [string]$Seen, [scriptblock]$A
 
 $WingetNothingToUpgrade = -1978335189
 
-function Install-Winget([string]$Id, [string[]]$Extra = @()) {
+function Install-Winget([string]$Id, [string[]]$Extra = @(), [scriptblock]$Installed = $null) {
     & winget @('install', '--exact', '--id', $Id, '--accept-package-agreements', '--accept-source-agreements', '--silent') @Extra
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $WingetNothingToUpgrade) { Fail "winget failed with exit code $LASTEXITCODE" }
+    $code = $LASTEXITCODE
+    if ($code -ne 0 -and $code -ne $WingetNothingToUpgrade) {
+        if (-not $Installed) { Fail "winget failed with exit code $code" }
+        Write-Output "winget ended with exit code $code; waiting for the installer it started to finish before deciding"
+        Wait-VsSetup
+        if (-not (& $Installed)) { Fail "winget failed with exit code $code and $Id is not installed; run deps -Install again" }
+        Write-Output "$Id finished installing after winget ended"
+    }
     Update-Path
+}
+
+function Wait-VsSetup {
+    $names = 'vs_BuildTools', 'vs_setup_bootstrapper', 'vs_installer', 'vs_installershell', 'winsdksetup', 'setup'
+    $installer = if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer' } else { $null }
+    $deadline = (Get-Date).AddHours(2)
+    while ((Get-Date) -lt $deadline) {
+        $running = Get-Process -Name $names -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'setup' -or ($installer -and $_.Path -and $_.Path.StartsWith($installer, [StringComparison]::OrdinalIgnoreCase)) }
+        if (-not $running) { return }
+        Start-Sleep -Seconds 15
+    }
+    Fail 'the Visual Studio installer was still running after two hours'
+}
+
+function Test-VsTools {
+    return [bool]($VsWhere -and (Test-Path $VsWhere) -and (& $VsWhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath))
 }
 
 function Install-Tools {
     Update-Path
-    $vs = Test-Found 'vs' { $VsWhere -and (Test-Path $VsWhere) -and (& $VsWhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath) }
+    $vs = Test-Found 'vs' { Test-VsTools }
     $cmake = Test-Found 'cmake' { Get-Command cmake -ErrorAction SilentlyContinue }
     $git = Test-Found 'git' { Get-Command git -ErrorAction SilentlyContinue }
     $cloned = Test-Found 'vcpkg' { Test-Path (Join-Path $VcpkgDir 'scripts\buildsystems\vcpkg.cmake') }
@@ -85,7 +108,7 @@ function Install-Tools {
         Fail 'winget is missing; install App Installer from the Microsoft Store, or install Visual Studio 2022 Build Tools, CMake and Git yourself, then run deps again'
     }
     Invoke-Step $vs 'Visual Studio 2022 Build Tools with the C++ workload (winget Microsoft.VisualStudio.2022.BuildTools, --add Microsoft.VisualStudio.Workload.VCTools)' 'the C++ tools through vswhere' {
-        Install-Winget 'Microsoft.VisualStudio.2022.BuildTools' @('--override', '--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --wait --norestart')
+        Install-Winget 'Microsoft.VisualStudio.2022.BuildTools' @('--override', '--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --wait --norestart') { Test-VsTools }
     }
     Invoke-Step $cmake 'CMake (winget Kitware.CMake)' 'cmake' { Install-Winget 'Kitware.CMake' }
     Invoke-Step $git 'Git (winget Git.Git)' 'git' { Install-Winget 'Git.Git' }
