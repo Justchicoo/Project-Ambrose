@@ -112,6 +112,13 @@ enum class StepUpWhen : uint8
     Always
 };
 
+enum class KeyAuthOutcome : uint8
+{
+    NotAKey,
+    Accepted,
+    Refused
+};
+
 class AdminRouter
 {
 public:
@@ -133,6 +140,7 @@ public:
     using Throttle = std::function<std::optional<AdminResponse>(AdminRequest const&, uint32 cost)>;
     using Admission = std::function<std::optional<AdminResponse>(AdminRequest const&)>;
     using StepUpCheck = std::function<std::optional<AdminResponse>(AdminRequest const&, std::string_view permission, StepUpWhen when)>;
+    using KeyCheck = std::function<KeyAuthOutcome(AdminRequest&, AdminResponse&)>;
 
     void Add(std::string method, std::string path, Handler handler);
     void AddGuarded(std::string method, std::string path, std::string permission, Handler handler);
@@ -152,6 +160,7 @@ public:
     void AddOpenCosting(std::string method, std::string path, uint32 cost, Handler handler);
     void SetThrottle(Throttle throttle);
     std::optional<AdminResponse> Charge(AdminRequest const& request, uint32 cost) const;
+    void SetKeyCheck(KeyCheck check);
     uint32 CostOf(std::string_view method, std::string_view path) const;
     void AddPublic(std::string method, std::string path, Handler handler);
     void AddPrefix(std::string method, std::string prefix, Handler handler);
@@ -204,6 +213,7 @@ private:
 
     AdminResponse Answer(AdminRequest& request) const;
     AdminResponse Serve(AdminRequest const& request) const;
+    std::optional<bool> TryKey(AdminRequest& request, AdminResponse& refused) const;
     void Put(std::string method, std::string path, Handler handler, RouteAccess access, bool prefix = false, uint32 cost = 0, std::string permission = {}, bool enrollment = false);
 
     PermissionCheck _permission;
@@ -216,6 +226,7 @@ private:
     Throttle _throttle;
     Admission _admission;
     StepUpCheck _stepUp;
+    KeyCheck _keyCheck;
     mutable std::shared_mutex _mutex;
     std::vector<Route> _routes;
     std::vector<std::string> _refused;
