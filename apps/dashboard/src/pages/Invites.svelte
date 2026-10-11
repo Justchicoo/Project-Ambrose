@@ -13,6 +13,7 @@
     import GrantEditor from "../components/GrantEditor.svelte";
     import PageHeader from "../components/PageHeader.svelte";
     import { onMount } from "svelte";
+    import { SvelteSet } from "svelte/reactivity";
 
     let invites = $state<InviteRow[]>([]);
     let roles = $state<string[]>([]);
@@ -29,7 +30,7 @@
     let grants = $state<string[]>([]);
 
     const grantable = $derived.by(() => {
-        const keys = new Set(session.user?.permissions ?? []);
+        const keys = new SvelteSet(session.user?.permissions ?? []);
         for (const key of session.user?.grants?.[scope] ?? []) keys.add(key);
         return keys;
     });

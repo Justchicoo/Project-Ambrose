@@ -7,6 +7,7 @@
     import { Switch } from "$lib/components/ui/switch/index.js";
     import type { PermissionCatalogAnswer, PermissionCatalogEntry } from "$lib/schemas.js";
     import { onMount } from "svelte";
+    import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
     type Props = {
         scope: string;
@@ -30,7 +31,7 @@
     const groups = $derived.by((): Group[] => {
         if (!catalog) return [];
         const ordered: Group[] = [];
-        const byName = new Map<string, Group>();
+        const byName = new SvelteMap<string, Group>();
         for (const entry of catalog.permissions) {
             let group = byName.get(entry.group);
             if (!group) {
@@ -57,14 +58,14 @@
     }
 
     function toggle(key: string, on: boolean) {
-        const next = new Set(chosen);
+        const next = new SvelteSet(chosen);
         if (on) next.add(key);
         else next.delete(key);
         selected = [...next].sort();
     }
 
     function selectGroup(group: Group, on: boolean) {
-        const next = new Set(chosen);
+        const next = new SvelteSet(chosen);
         for (const entry of group.entries) {
             if (disabledReason(entry) !== null) continue;
             if (on) next.add(entry.key);
@@ -106,12 +107,7 @@
                     <section>
                         <div class="mb-2 flex items-center justify-between">
                             <h3 class="text-sm font-semibold capitalize">{group.name}</h3>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={selectable.length === 0}
-                                onclick={() => selectGroup(group, !allOn)}
-                            >
+                            <Button variant="ghost" size="sm" disabled={selectable.length === 0} onclick={() => selectGroup(group, !allOn)}>
                                 {allOn ? "Clear group" : "Select all grantable"}
                             </Button>
                         </div>
