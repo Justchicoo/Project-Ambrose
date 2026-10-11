@@ -167,6 +167,7 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `LoginComplete.Permissions` | unsigned | 47 | from 0 to 4294967295 | next connection or operation | gameserver | normal | The permission bits MSG_LOGINCOMPLETE gives a wizard: 0x1 and 0x4 chat level, 0x2 and 0x8 show chat, 0x20 gifting, 0x40 test features, 0x400 paying, 0x1000 earning crowns. |
 | `LoginComplete.TestServer` | bool | false | none | next connection or operation | gameserver | normal | Whether MSG_LOGINCOMPLETE tells the client it is on a test server. |
 | `Templates.CacheSize` | unsigned | 256 MiB | from 1 to 65536 MiB | live | gameserver | normal | How much memory the object templates decoded from the install may hold before the least recently used is dropped; a smaller budget drops them at once. |
+| `World.CreatureDeckFile` | string | empty | at most 1024 bytes | live | gameserver | normal | A creature deck file kept on this machine, a SQLite database whose deck table lists each deck's spells with their copies, read beside the world database's decks at each load; empty reads none. |
 | `World.Heartbeat` | unsigned | 60 s | from 0 to 86400 s | live | gameserver | normal | How often the world logs that it is still ticking; 0 turns the line off. |
 | `World.UpdateInterval` | unsigned | 50 ms | from 1 to 10000 ms | live | gameserver | normal | How long the world waits between ticks. |
 

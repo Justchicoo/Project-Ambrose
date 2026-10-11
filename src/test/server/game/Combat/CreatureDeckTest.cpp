@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the creature decks on made-up decks and spells: a set is built with each card's spell resolved and its copies kept, a deck is found by id and by name whatever its case, a deck named twice, a card of a missing deck, a card with no copies or a spell the install does not hold refuses the set and names each fault, a failed replace keeps the set serving, and the resolver finds a spell by its name, its template file's name or that name without spaces.
+ * Tests the creature decks on made-up decks and spells: a set is built with each card's spell resolved and its copies kept, a deck is found by id and by name whatever its case, a deck named twice, a card of a missing deck, a card with no copies or a spell the install does not hold refuses the set and names each fault, a failed replace keeps the set serving, the resolver finds a spell by its name, its template file's name or that name without spaces, and a deck file kept on the machine is read into decks numbered from the id given, while a missing file or one with no deck table is refused.
  */
 
 #include "CreatureDeck.h"
@@ -8,6 +8,9 @@
 #include "SpellMgr.h"
 
 #include <gtest/gtest.h>
+#include <sqlite3.h>
+
+#include <filesystem>
 
 #include <memory>
 #include <optional>
@@ -102,4 +105,32 @@ TEST(CreatureDeckTest, ResolverFindsSpellsByNameOrFile)
     EXPECT_EQ(resolve("Test Bolt - Mob"), SpellStore::NameHash("Test Bolt"));
     EXPECT_EQ(resolve("Test Gust"), SpellStore::NameHash("Gust Of Testing"));
     EXPECT_EQ(resolve("Test Missing"), std::nullopt);
+}
+
+TEST(CreatureDeckTest, ReadsADeckFileKeptOnTheMachine)
+{
+    std::filesystem::path const file = std::filesystem::temp_directory_path() / "ambrose-creature-deck-test.db";
+    std::filesystem::remove(file);
+    sqlite3* database = nullptr;
+    ASSERT_EQ(sqlite3_open(file.string().c_str(), &database), SQLITE_OK);
+    ASSERT_EQ(sqlite3_exec(database, "CREATE TABLE deck (id INTEGER PRIMARY KEY, name TEXT, spell TEXT, count INTEGER);"
+        "INSERT INTO deck (name, spell, count) VALUES ('Test-Deck-A', 'Test Bolt', 2), ('Test-Deck-B', 'Test Shield', 1), ('Test-Deck-A', 'Test Shield', 3);", nullptr, nullptr, nullptr), SQLITE_OK);
+    sqlite3_close(database);
+    std::vector<CreatureDeckRow> decks{ { 4, "Test-Deck-World" } };
+    std::vector<CreatureDeckSpellRow> spells;
+    std::vector<std::string> errors;
+    ASSERT_TRUE(CreatureDeckMgr::ReadDeckFile(file, 5, decks, spells, errors));
+    ASSERT_EQ(decks.size(), 3u);
+    EXPECT_EQ(decks[1].Id, 5u);
+    EXPECT_EQ(decks[1].Name, "Test-Deck-A");
+    EXPECT_EQ(decks[2].Id, 6u);
+    ASSERT_EQ(spells.size(), 3u);
+    EXPECT_EQ(spells[2].DeckId, 5u);
+    EXPECT_EQ(spells[2].Count, 3u);
+    auto const set = CreatureDeckSet::Build(decks, spells, KnownSpells, errors);
+    ASSERT_NE(set, nullptr);
+    EXPECT_EQ(set->FindByName("Test-Deck-A")->GetCardCount(), 5u);
+    std::filesystem::remove(file);
+    EXPECT_FALSE(CreatureDeckMgr::ReadDeckFile(file, 1, decks, spells, errors));
+    EXPECT_TRUE(Holds(errors, "cannot be opened"));
 }

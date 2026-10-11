@@ -73,6 +73,7 @@ LoginComplete.CSRSecurityLevel = 2
 LoginComplete.TestServer = 0
 Templates.CacheSize = 256
 World.Heartbeat = 60
+World.CreatureDeckFile =
 GM.CommandPrefix = .
 GM.LogCommands = 1
 Admin.Enable = 0
