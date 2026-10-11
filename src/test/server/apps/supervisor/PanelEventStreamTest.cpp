@@ -26,7 +26,7 @@ namespace
 {
     std::string StatusOf(std::string const& app, uint64 sequence)
     {
-        return fmt::format(R"({{"app":"{}","state":"running","since":{},"pid":{},"exit_code":null,"crashes":0,"next_restart":null}})", app, 1789650000000 + sequence, 4000 + sequence);
+        return fmt::format(R"({{"app":"{}","state":"running","since":{},"pid":{},"exit_code":null,"classification":null,"crashes":0,"crash_loop":false,"next_restart":null}})", app, 1789650000000 + sequence, 4000 + sequence);
     }
 
     struct PanelFeed
