@@ -6,6 +6,7 @@
 #include "LogTestDirectory.h"
 #include "PanelAuthorization.h"
 #include "PanelGrants.h"
+#include "PanelGrantSets.h"
 #include "PanelPermissions.h"
 #include "PanelStore.h"
 #include "PanelUsers.h"
@@ -88,10 +89,11 @@ namespace
             ASSERT_TRUE(_store.Open(_directory.Path() / "panel.sqlite3", Ambrose::FindSourceFolder(), warnings, error)) << error;
             _users = std::make_unique<PanelUsers>(_store);
             _grants = std::make_unique<PanelGrants>(_store);
+            _sets = std::make_unique<PanelGrantSets>(_store);
             ASSERT_EQ(_users->Create("chico", "a good long password", true, false, &_owner, error), PanelUserResult::Ok) << error;
             ASSERT_EQ(_users->Create("helper", "a good long password", false, false, &_helper, error), PanelUserResult::Ok) << error;
             ASSERT_TRUE(_grants->Give(_helper, "gameserver", "power.restart", _owner, 1, error)) << error;
-            _decide = std::make_unique<PanelAuthorization>(*_grants,
+            _decide = std::make_unique<PanelAuthorization>(*_grants, *_sets,
                 [this](AdminRequest const&)
                 {
                     std::string error;
@@ -116,6 +118,7 @@ namespace
         PanelStore _store;
         std::unique_ptr<PanelUsers> _users;
         std::unique_ptr<PanelGrants> _grants;
+        std::unique_ptr<PanelGrantSets> _sets;
         std::unique_ptr<PanelAuthorization> _decide;
         int64 _owner = 0;
         int64 _helper = 0;

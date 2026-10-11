@@ -268,6 +268,7 @@ TEST(PanelEventCatalogTest, EveryFrameTheServerWritesValidatesAgainstItsEntry)
         { "status", Supervisor::StatusData(Snapshot(AppState::Running)) },
         { "status", Supervisor::StatusData(Snapshot(AppState::Crashed)) },
         { "status", Supervisor::StatusData(Snapshot(AppState::Offline)) },
+        { "permissions.changed", R"({"user_id":2,"scope":"gameserver","permissions":["power.restart"]})" },
         { "pong", "{}" },
     };
     std::set<std::string> covered;
