@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the two creature deck tables in one snapshot and the deck file World.CreatureDeckFile names, resolves their spells against the spells being served, and swaps the set in only once it has checked itself whole.
+ * Reads the two creature deck tables and the deck file World.CreatureDeckFile names, resolves their spells against the spells being served, and swaps the set in only once it has checked itself whole.
  */
 
 #include "CreatureDeckMgr.h"
@@ -40,39 +40,35 @@ void CreatureDeckMgr::RegisterReloadTargets()
 
 bool CreatureDeckMgr::Load(std::vector<std::string>& errors)
 {
-    bool const open = WorldDatabase.IsOpen();
-    auto const decks = open ? WorldDatabase.GetPreparedStatement(WORLD_SEL_CREATURE_DECKS) : nullptr;
-    auto const cards = open ? WorldDatabase.GetPreparedStatement(WORLD_SEL_CREATURE_DECK_SPELLS) : nullptr;
-    if (!decks || !cards)
+    if (!WorldDatabase.IsOpen())
     {
         errors.emplace_back("the world database is not open, so the creature decks cannot be read");
         return false;
     }
-    std::vector<PreparedQueryResult> results;
-    if (!WorldDatabase.QuerySnapshot({ decks.get(), cards.get() }, results))
+    QueryResult decks;
+    QueryResult cards;
+    if (!WorldDatabase.TryQuery("SELECT `id`, `name` FROM `creature_deck` ORDER BY `id`", decks) || !WorldDatabase.TryQuery("SELECT `deck_id`, `spell`, `count` FROM `creature_deck_spell` ORDER BY `deck_id`, `spell`", cards))
     {
         errors.emplace_back("creature_deck and creature_deck_spell cannot be read from the world database");
         return false;
     }
     std::vector<CreatureDeckRow> deckRows;
-    if (PreparedResultSet* const result = results[0].get(); result && result->GetRowCount() > 0)
+    if (decks)
     {
-        deckRows.reserve(result->GetRowCount());
         do
         {
-            Field const* const row = result->Fetch();
+            Field const* const row = decks->Fetch();
             deckRows.push_back({ row[0].Get<uint32>(), row[1].Get<std::string>() });
-        } while (result->NextRow());
+        } while (decks->NextRow());
     }
     std::vector<CreatureDeckSpellRow> cardRows;
-    if (PreparedResultSet* const result = results[1].get(); result && result->GetRowCount() > 0)
+    if (cards)
     {
-        cardRows.reserve(result->GetRowCount());
         do
         {
-            Field const* const row = result->Fetch();
+            Field const* const row = cards->Fetch();
             cardRows.push_back({ row[0].Get<uint32>(), row[1].Get<std::string>(), row[2].Get<uint32>() });
-        } while (result->NextRow());
+        } while (cards->NextRow());
     }
     if (std::string const file = sSettings.Get<std::string>("World.CreatureDeckFile"); !file.empty())
     {

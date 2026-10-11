@@ -34,6 +34,4 @@ void WorldDatabaseConnection::DoPrepareStatements()
     PrepareStatement(WORLD_SEL_STAT_CRIT_BLOCK_BANDS, "WORLD_SEL_STAT_CRIT_BLOCK_BANDS", "SELECT `min_level`, `position`, `cap_value`, `critical_hit_scalar_base`, `critical_hit_scaling_factor`, `block_scalar_base`, `block_scaling_factor` FROM `stat_crit_block_band` ORDER BY `min_level`, `position`", ConnectionFlags::Sync);
     PrepareStatement(WORLD_SEL_STAT_PIP_CONVERSION_BANDS, "WORLD_SEL_STAT_PIP_CONVERSION_BANDS", "SELECT `min_level`, `position`, `cap_value`, `scalar_base`, `scaling_factor` FROM `stat_pip_conversion_band` ORDER BY `min_level`, `position`", ConnectionFlags::Sync);
     PrepareStatement(WORLD_SEL_CLIENT_EXTRACTION, "WORLD_SEL_CLIENT_EXTRACTION", "SELECT `revision`, `executable_sha256`, `extracted_at` FROM `client_extraction` WHERE `kind` = ?", ConnectionFlags::Sync);
-    PrepareStatement(WORLD_SEL_CREATURE_DECKS, "WORLD_SEL_CREATURE_DECKS", "SELECT `id`, `name` FROM `creature_deck` ORDER BY `id`", ConnectionFlags::Sync);
-    PrepareStatement(WORLD_SEL_CREATURE_DECK_SPELLS, "WORLD_SEL_CREATURE_DECK_SPELLS", "SELECT `deck_id`, `spell`, `count` FROM `creature_deck_spell` ORDER BY `deck_id`, `spell`", ConnectionFlags::Sync);
 }

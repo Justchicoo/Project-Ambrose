@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Every creature deck the world database holds (sCreatureDeckMgr), read from creature_deck and creature_deck_spell in one snapshot, with the decks of the deck file World.CreatureDeckFile names when it names one, a SQLite database kept on this machine whose deck table gives each deck's name, spell and copies, numbered after the world database's, each card's spell found among the spells the install holds, and swapped in as one checked set through the reload target creature_decks, which follows spells; a set that fails to load keeps the one serving and reports every fault, and a caller holds the set it was given for as long as it needs it.
+ * Every creature deck the world database holds (sCreatureDeckMgr), read from creature_deck and creature_deck_spell, with the decks of the deck file World.CreatureDeckFile names when it names one, a SQLite database kept on this machine whose deck table gives each deck's name, spell and copies, numbered after the world database's, each card's spell found among the spells the install holds, and swapped in as one checked set through the reload target creature_decks, which follows spells; a set that fails to load keeps the one serving and reports every fault, and a caller holds the set it was given for as long as it needs it.
  */
 
 #ifndef AMBROSE_CREATUREDECKMGR_H
