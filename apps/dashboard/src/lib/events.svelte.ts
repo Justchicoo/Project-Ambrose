@@ -215,7 +215,19 @@ export const handlers: Handlers = {
         entry.supervision.state = data.state;
         entry.supervision.pid = data.pid;
         entry.supervision.crashes = data.crashes;
+        entry.supervision.crash_loop = data.crash_loop;
         entry.supervision.restart_epoch_ms = data.next_restart;
+    },
+    "app.crashed": (_frame, data) => {
+        const entry = live.apps.find((app) => app.name === data.app && app.supervision != null);
+        if (!entry?.supervision) return;
+        entry.supervision.crashes = Math.max(entry.supervision.crashes, data.crashes_in_window);
+    },
+    "app.crash_loop": (_frame, data) => {
+        const entry = live.apps.find((app) => app.name === data.app && app.supervision != null);
+        if (!entry?.supervision) return;
+        entry.supervision.crash_loop = true;
+        entry.supervision.state = "crash_loop";
     },
     dropped: (frame, data) => {
         const app = frame.scope?.app ?? null;

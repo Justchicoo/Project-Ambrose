@@ -9,6 +9,7 @@ import { live } from "./status.svelte";
 import {
     CommandAnswer,
     CommandHistoryAnswer,
+    CrashHistoryAnswer,
     LogAnswer,
     DatabaseAnswer,
     DatabaseApplyAnswer,
@@ -99,6 +100,10 @@ export function power(app: string, action: PowerAction, seconds = 0) {
 
 export function output(app: string, run: OutputRun, signal?: AbortSignal) {
     return request("GET", `api/apps/${app}/output/${run}`, OutputAnswer, undefined, signal);
+}
+
+export function crashes(app: string, signal?: AbortSignal) {
+    return request("GET", `api/apps/${app}/crashes`, CrashHistoryAnswer, undefined, signal);
 }
 
 export function logsAfter(app: string, after: number, signal?: AbortSignal) {
