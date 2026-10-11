@@ -15,6 +15,7 @@
 #include "PatchMgr.h"
 #include "PortProbe.h"
 #include "ServerApp.h"
+#include "Settings.h"
 
 #include <fmt/format.h>
 
@@ -144,7 +145,7 @@ namespace
                     author.Who = "patchserver";
                     author.Source = "listener";
                     std::string const reason = fmt::format("the new address would not bind, so the listener keeps serving {}:{}", _listener.GetBindIp(), _listener.GetPort());
-                    std::vector<Settings::SettingEntry> const entries{
+                    std::vector<SettingEntry> const entries{
                         { "BindIP", _listener.GetBindIp() }, { std::string(PatchListener::PortOption), std::to_string(_listener.GetPort()) }
                     };
                     if (!sSettings.SetMany(entries, author, reason).Ok())

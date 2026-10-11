@@ -1096,7 +1096,7 @@ namespace
             author.Who = "gameserver";
             author.Source = "listener";
             std::string const reason = fmt::format("the new address would not bind, so the listener keeps serving {}:{}", serving.BindIp, serving.Port);
-            std::vector<Settings::SettingEntry> const entries{ { "BindIP", serving.BindIp }, { "WorldServerPort", std::to_string(serving.Port) } };
+            std::vector<SettingEntry> const entries{ { "BindIP", serving.BindIp }, { "WorldServerPort", std::to_string(serving.Port) } };
             if (!sSettings.SetMany(entries, author, reason).Ok())
                 LOG_ERROR("server.gameserver", "Could not revert the listen settings after the failed rebind");
         }
