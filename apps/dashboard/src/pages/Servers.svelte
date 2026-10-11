@@ -14,8 +14,8 @@
     import { live } from "$lib/status.svelte.js";
     import LogView from "$lib/components/LogView.svelte";
     import { may } from "$lib/permission.svelte.js";
-    import { output, power, supervised, supervisorServes, type OutputRun, type PowerAction } from "$lib/supervision.svelte.js";
-    import type { AppEntry, OutputAnswer } from "$lib/schemas.js";
+    import { crashes, output, power, supervised, supervisorServes, type OutputRun, type PowerAction } from "$lib/supervision.svelte.js";
+    import type { AppEntry, CrashRecord, OutputAnswer } from "$lib/schemas.js";
     import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
     import PlayIcon from "@lucide/svelte/icons/play";
     import PowerIcon from "@lucide/svelte/icons/power";
@@ -31,7 +31,17 @@
         starting: "waiting",
         stopping: "waiting",
         crashed: "wrong",
+        backoff: "waiting",
+        crash_loop: "wrong",
         offline: "unknown",
+    };
+
+    const classificationWords: Record<string, string> = {
+        requested: "Requested",
+        clean_unexpected: "Clean but unexpected",
+        crash: "Crash",
+        out_of_memory: "Out of memory",
+        startup_failure: "Startup failure",
     };
 
     const words: Record<PowerAction, string> = { start: "Start", stop: "Stop", restart: "Restart", kill: "Kill" };
@@ -42,6 +52,8 @@
     let run = $state<OutputRun>("current");
     let lines = $state<OutputAnswer | null>(null);
     let outputError = $state("");
+    let history = $state<CrashRecord[] | null>(null);
+    let historyError = $state("");
     let asking = $state(false);
     let askApp = $state("");
     let askAction = $state<PowerAction>("stop");
@@ -80,10 +92,19 @@
     function appearance(entry: AppEntry): { tone: Tone; word: string } {
         const supervision = entry.supervision;
         if (!supervision) return { tone: "unknown", word: "Not supervised" };
+        if (supervision.crash_loop) return { tone: "wrong", word: "Crash looping" };
         if (supervision.state === "backoff" || (supervision.state === "crashed" && supervision.restart_epoch_ms))
             return { tone: "waiting", word: "Starting again" };
         const word = supervision.state.charAt(0).toUpperCase() + supervision.state.slice(1);
         return { tone: tones[supervision.state] ?? "unknown", word };
+    }
+
+    function exitSummary(record: CrashRecord): string {
+        const parts = [classificationWords[record.classification] ?? record.classification];
+        if (record.signal !== null && record.signal !== undefined) parts.push(`signal ${record.signal}`);
+        else if (record.code !== null && record.code !== undefined) parts.push(`code ${record.code}`);
+        parts.push(`after ${formatUptime(Math.max(0, Math.round(record.uptime_ms / 1000)))}`);
+        return parts.join(" · ");
     }
 
     function uptime(entry: AppEntry): string {
@@ -92,6 +113,23 @@
         if (!running || started === 0) return "Not running";
         return formatUptime(Math.max(0, Math.round((live.now - started) / 1000)));
     }
+
+    $effect(() => {
+        const name = app?.name;
+        if (name === undefined) return;
+        const controller = new AbortController();
+        history = null;
+        historyError = "";
+        void crashes(name, controller.signal)
+            .then((records) => {
+                history = [...records].reverse();
+            })
+            .catch((failure) => {
+                if (controller.signal.aborted) return;
+                historyError = failure instanceof ApiError ? failure.message : "The crash history could not be read";
+            });
+        return () => controller.abort();
+    });
 
     function needsAsking(action: PowerAction): boolean {
         return action !== "start";
@@ -189,6 +227,9 @@
                                 </div>{/if}
                             {#if supervision?.message}<div class="mt-1 max-w-64 text-xs text-muted-foreground">
                                     {supervision.message}
+                                </div>{/if}
+                            {#if supervision?.lock}<div class="mt-1 max-w-64 text-xs text-muted-foreground">
+                                    Held by {supervision.lock.holder}'s {supervision.lock.action}
                                 </div>{/if}
                         </Table.Cell>
                         <Table.Cell class="hidden font-mono text-xs md:table-cell"
@@ -294,6 +335,53 @@
                     </p>
                 {:else}
                     <LogView lines={lines.lines} label={`Output of ${app.name}`} />
+                {/if}
+            </Card.Content>
+        </Card.Root>
+
+        <Card.Root class="shadow-xs">
+            <Card.Header>
+                <Card.Title>Crash history of {app.name}</Card.Title>
+                <Card.Description>
+                    Every crash the supervisor recorded, newest first, each with its classification, exit code or signal, uptime and the
+                    last 200 log lines. Dumps are written by a later milestone; until then each record says so.
+                </Card.Description>
+            </Card.Header>
+            <Card.Content>
+                {#if historyError}
+                    <p class="text-sm text-destructive">{historyError}</p>
+                {:else if history === null}
+                    <p class="text-sm text-muted-foreground">Reading the crash history…</p>
+                {:else if history.length === 0}
+                    <p class="text-sm text-muted-foreground">No crashes recorded for {app.name}.</p>
+                {:else}
+                    <div class="space-y-4">
+                        {#each history as record (record.epoch_ms)}
+                            <div class="rounded-md border p-4">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <StatusBadge tone={record.classification === "crash" || record.classification === "out_of_memory" ? "wrong" : "waiting"}>
+                                        {classificationWords[record.classification] ?? record.classification}
+                                    </StatusBadge>
+                                    <span class="text-sm text-muted-foreground">{new Date(record.epoch_ms).toLocaleString()}</span>
+                                    <span class="text-sm text-muted-foreground">{exitSummary(record)}</span>
+                                </div>
+                                <p class="mt-2 text-xs text-muted-foreground">
+                                    {record.dump_written ? "A dump was written." : record.dump_note}
+                                </p>
+                                {#if record.log_tail.length > 0}
+                                    <details class="mt-2">
+                                        <summary class="cursor-pointer text-sm text-muted-foreground"
+                                            >Last {record.log_tail.length} log lines</summary
+                                        >
+                                        <pre
+                                            class="mt-2 max-h-64 overflow-auto rounded bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap">{record.log_tail.join(
+                                                "\n",
+                                            )}</pre>
+                                    </details>
+                                {/if}
+                            </div>
+                        {/each}
+                    </div>
                 {/if}
             </Card.Content>
         </Card.Root>

@@ -197,6 +197,13 @@ namespace
             {
                 _panel.Events().Publish("status", "status", snapshot.Name, Supervisor::StatusData(snapshot), snapshot.Name);
             });
+            _supervisor.SetCrashObserver([this](std::string_view app, CrashEvent const& event)
+            {
+                std::string const name(app);
+                _panel.Events().Publish("status", "app.crashed", name, Supervisor::CrashEventJson(name, event), name);
+                if (event.CrashLoop)
+                    _panel.Events().Publish("status", "app.crash_loop", name, Supervisor::CrashLoopEventJson(name, event), name);
+            });
             _panel.SetAppSource([this]
             {
                 std::vector<std::string> names;
