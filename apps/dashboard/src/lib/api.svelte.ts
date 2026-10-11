@@ -5,9 +5,14 @@
 
 import * as v from "valibot";
 import {
+    GrantSetAnswer,
+    InviteCreatedAnswer,
+    InviteListAnswer,
+    InvitePeekAnswer,
     PanelSessionAnswer,
     PanelSignedIn,
     PanelSignInAnswer,
+    PermissionCatalogAnswer,
     RecoveryCodesIssued,
     SessionAnswer,
     StepUpAnswer,
@@ -118,8 +123,9 @@ async function send<Schema extends v.GenericSchema>(
     schema: Schema | null,
     body?: unknown,
     signal?: AbortSignal,
+    extraHeaders?: Record<string, string>,
 ): Promise<v.InferOutput<Schema>> {
-    const headers: Record<string, string> = { Accept: "application/json" };
+    const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (changing.has(method) && session.csrf) headers["X-CSRF-Token"] = session.csrf;
 
@@ -169,9 +175,10 @@ export async function request<Schema extends v.GenericSchema>(
     schema: Schema | null,
     body?: unknown,
     signal?: AbortSignal,
+    extraHeaders?: Record<string, string>,
 ): Promise<v.InferOutput<Schema>> {
     try {
-        return await send(method, path, schema, body, signal);
+        return await send(method, path, schema, body, signal, extraHeaders);
     } catch (failure) {
         const prompt = stepUpPrompt;
         if (!(failure instanceof ApiError) || failure.status !== 403 || failure.code !== "step_up_required" || prompt === null)
@@ -179,7 +186,7 @@ export async function request<Schema extends v.GenericSchema>(
         const asked = v.safeParse(StepUpAsked, failure.body);
         if (!asked.success || signal?.aborted) throw failure;
         if (!(await prompt(asked.output))) throw failure;
-        return send(method, path, schema, body, signal);
+        return send(method, path, schema, body, signal, extraHeaders);
     }
 }
 
@@ -256,6 +263,49 @@ export async function answerSecondFactor(factor: SecondFactor) {
 
 export async function claimOwner(token: string, username: string, password: string) {
     adoptSignedIn(await request("POST", "api/panel/claim", PanelSignedIn, { token, username, password }));
+}
+
+export type InviteDraft = {
+    scope: string;
+    role?: string;
+    grants: string[];
+    target_username?: string;
+    ttl_hours?: number;
+    note?: string;
+};
+
+export async function listInvites(signal?: AbortSignal) {
+    return request("GET", "api/panel/invites", InviteListAnswer, undefined, signal);
+}
+
+export async function createInvite(draft: InviteDraft) {
+    return request("POST", "api/panel/invites", InviteCreatedAnswer, draft);
+}
+
+export async function revokeInvite(id: number) {
+    return request("DELETE", `api/panel/invites/${id}`, null);
+}
+
+export async function peekInvite(token: string) {
+    return request("POST", "api/panel/invites/peek", InvitePeekAnswer, { token });
+}
+
+export async function claimInvite(token: string, username: string, password: string) {
+    adoptSignedIn(await request("POST", "api/panel/invites/claim", PanelSignedIn, { token, username, password }));
+}
+
+export async function permissionCatalog(signal?: AbortSignal) {
+    return request("GET", "api/panel/permissions", PermissionCatalogAnswer, undefined, signal);
+}
+
+export async function readGrantSet(userId: number, scope: string, signal?: AbortSignal) {
+    return request("GET", `api/panel/grant-sets?user_id=${userId}&scope=${encodeURIComponent(scope)}`, GrantSetAnswer, undefined, signal);
+}
+
+export async function saveGrantSet(userId: number, scope: string, add: string[], remove: string[], version: number) {
+    return request("PUT", "api/panel/grant-sets", GrantSetAnswer, { user_id: userId, scope, add, remove }, undefined, {
+        "If-Match": String(version),
+    });
 }
 
 export async function openLink(token: string) {
