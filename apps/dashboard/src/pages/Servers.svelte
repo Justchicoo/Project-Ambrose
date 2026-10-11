@@ -32,6 +32,13 @@
         stopping: "waiting",
         crashed: "wrong",
         offline: "unknown",
+        backoff: "waiting",
+        crash_loop: "wrong",
+        disabled: "unknown",
+        setup: "waiting",
+        updating: "waiting",
+        restoring: "waiting",
+        moving: "waiting",
     };
 
     const words: Record<PowerAction, string> = { start: "Start", stop: "Stop", restart: "Restart", kill: "Kill" };

@@ -93,6 +93,12 @@ std::string_view ManagedApp::StateName(AppState state) noexcept
         case AppState::Stopping: return "stopping";
         case AppState::Crashed: return "crashed";
         case AppState::Backoff: return "backoff";
+        case AppState::CrashLoop: return "crash_loop";
+        case AppState::Disabled: return "disabled";
+        case AppState::Setup: return "setup";
+        case AppState::Updating: return "updating";
+        case AppState::Restoring: return "restoring";
+        case AppState::Moving: return "moving";
     }
     return "offline";
 }

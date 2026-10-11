@@ -35,7 +35,13 @@ enum class AppState : uint8
     Running,
     Stopping,
     Crashed,
-    Backoff
+    Backoff,
+    CrashLoop,
+    Disabled,
+    Setup,
+    Updating,
+    Restoring,
+    Moving
 };
 
 enum class PowerAction : uint8

@@ -2428,6 +2428,10 @@ PanelUserResult Panel::MakeOperator(std::string_view username, PanelLinkIssuer c
 void Panel::RegisterAdminRoutes(AdminRouter& routes)
 {
     routes.AddGuarded("POST", std::string(LinksPath), "users.link", [this](AdminRequest const& request) { return MintLinkRoute(request); });
+    routes.AddGuarded("POST", "/api/panel/power", "power.request", [this](AdminRequest const& request) { return PowerRoute(request); });
+    routes.AddGuarded("GET", "/api/panel/power/operations", "power.read", [this](AdminRequest const& request) { return PowerOperationsRoute(request); });
+    routes.AddGuarded("POST", "/api/panel/power/disable", "power.disable", [this](AdminRequest const& request) { return PowerDisableRoute(request); });
+    routes.AddGuarded("POST", "/api/panel/power/enable", "power.disable", [this](AdminRequest const& request) { return PowerEnableRoute(request); });
 }
 
 AdminResponse Panel::MintLinkRoute(AdminRequest const& request)
@@ -2477,6 +2481,161 @@ AdminResponse Panel::MintLinkRoute(AdminRequest const& request)
     answer["created_owner"] = issued->CreatedOwner;
     answer["expires_epoch_ms"] = issued->ExpiresEpochMs;
     answer["expires_seconds"] = std::chrono::duration_cast<std::chrono::seconds>(PanelLinks::LifetimeOf(kind)).count();
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::PowerRoute(AdminRequest const& request)
+{
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object())
+        return AdminResponse::Invalid("A power request takes a JSON object", { { "target", "Name an app, a realm or stack" } });
+    std::string const targetText = TextOf(body, "target");
+    std::string const actionText = TextOf(body, "action");
+    if (targetText.empty() || actionText.empty())
+        return AdminResponse::Invalid("A power request names its target and action", { { "target", "Name an app, a realm or stack" }, { "action", "Name start, stop, restart or kill" } });
+
+    PowerTargetKind kind = PowerTargetKind::App;
+    std::string target = targetText;
+    if (targetText == "stack")
+    {
+        kind = PowerTargetKind::Stack;
+        target = "stack";
+    }
+    else if (targetText.rfind("realm:", 0) == 0)
+    {
+        kind = PowerTargetKind::Realm;
+        target = targetText.substr(6);
+    }
+
+    if (_power.IsDisabled(target) && actionText == "start")
+    {
+        std::optional<PowerDisableRecord> info = _power.DisableInfo(target);
+        std::string reason = info ? info->Reason : "disabled";
+        AuditEvent event;
+        event.Name = "panel:power.refused";
+        event.Actor = NameOf(request);
+        event.Subject = target;
+        event.Result = "refused";
+        event.Reason = "App is disabled: " + reason;
+        std::string error;
+        Record(event, [&](std::string&) { return true; }, error);
+        return AdminResponse::Problem(409, "app_disabled", "The app is disabled: " + reason);
+    }
+
+    PowerOperationLock existing;
+    std::string const holder = NameOf(request);
+    bool locked = false;
+    if (kind == PowerTargetKind::Stack)
+        locked = _power.TryAcquireStackLock(holder, actionText, target, existing);
+    else
+        locked = _power.TryAcquireAppLock(target, holder, actionText, target, existing);
+    if (!locked)
+    {
+        AuditEvent event;
+        event.Name = "panel:power.refused";
+        event.Actor = holder;
+        event.Subject = target;
+        event.Result = "refused";
+        event.Reason = "Locked by " + existing.Holder + " running " + existing.Action + " since " + std::to_string(existing.StartEpochMs);
+        std::string error;
+        Record(event, [&](std::string&) { return true; }, error);
+        return AdminResponse::Problem(409, "operation_locked",
+            "Locked by " + existing.Holder + " running " + existing.Action + " since " + std::to_string(existing.StartEpochMs));
+    }
+
+    std::string const operationId = _power.BeginOperation(kind, target, actionText, holder);
+    _events.Publish("power", "power.progress", target, "{\"operation\":\"" + operationId + "\",\"state\":\"started\"}", operationId);
+
+    AuditEvent event;
+    event.Name = "panel:power.requested";
+    event.Actor = holder;
+    event.Subject = target;
+    event.Result = "ok";
+    event.Reason = actionText + " on " + std::string(PanelPower::TargetKindName(kind)) + " " + target;
+    std::string error;
+    Record(event, [&](std::string&) { return true; }, error);
+
+    nlohmann::json answer;
+    answer["operation"] = operationId;
+    answer["target"] = target;
+    answer["action"] = actionText;
+    answer["accepted"] = true;
+    return AdminResponse::Json(202, answer.dump());
+}
+
+AdminResponse Panel::PowerOperationsRoute(AdminRequest const& request)
+{
+    (void)request;
+    nlohmann::json answer = nlohmann::json::array();
+    for (PowerOperation const& op : _power.ListOperations())
+    {
+        nlohmann::json row;
+        row["id"] = op.Id;
+        row["target_kind"] = std::string(PanelPower::TargetKindName(op.TargetKind));
+        row["target"] = op.Target;
+        row["action"] = op.Action;
+        row["requested_by"] = op.RequestedBy;
+        row["start_epoch_ms"] = op.StartEpochMs;
+        if (op.EndEpochMs)
+            row["end_epoch_ms"] = *op.EndEpochMs;
+        row["state"] = std::string(PanelPower::OperationStateName(op.State));
+        row["result"] = op.Result;
+        row["steps"] = op.Steps;
+        answer.push_back(std::move(row));
+    }
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::PowerDisableRoute(AdminRequest const& request)
+{
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object())
+        return AdminResponse::Invalid("A disable request takes a JSON object", { { "app", "Name the app" } });
+    std::string const app = TextOf(body, "app");
+    std::string const reason = TextOf(body, "reason");
+    if (app.empty())
+        return AdminResponse::Invalid("A disable request names the app", { { "app", "Name the app" } });
+    std::string error;
+    if (!_power.DisableApp(app, reason, NameOf(request), error))
+        return AdminResponse::Invalid(error, { { "reason", error } });
+
+    AuditEvent event;
+    event.Name = "panel:power.disabled";
+    event.Actor = NameOf(request);
+    event.Subject = app;
+    event.Result = "ok";
+    event.Reason = reason;
+    Record(event, [&](std::string&) { return true; }, error);
+
+    nlohmann::json answer;
+    answer["app"] = app;
+    answer["disabled"] = true;
+    answer["reason"] = reason;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::PowerEnableRoute(AdminRequest const& request)
+{
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object())
+        return AdminResponse::Invalid("An enable request takes a JSON object", { { "app", "Name the app" } });
+    std::string const app = TextOf(body, "app");
+    if (app.empty())
+        return AdminResponse::Invalid("An enable request names the app", { { "app", "Name the app" } });
+    std::string error;
+    if (!_power.EnableApp(app, error))
+        return AdminResponse::Invalid(error, { { "app", error } });
+
+    AuditEvent event;
+    event.Name = "panel:power.enabled";
+    event.Actor = NameOf(request);
+    event.Subject = app;
+    event.Result = "ok";
+    Record(event, [&](std::string&) { return true; }, error);
+
+    nlohmann::json answer;
+    answer["app"] = app;
+    answer["disabled"] = false;
     return AdminResponse::Json(200, answer.dump());
 }
 
