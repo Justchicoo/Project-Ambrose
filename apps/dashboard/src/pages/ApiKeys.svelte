@@ -20,6 +20,7 @@
         type CatalogPermission,
     } from "$lib/apikeys.js";
     import { onMount } from "svelte";
+    import { SvelteMap } from "svelte/reactivity";
     import PageHeader from "../components/PageHeader.svelte";
 
     let keys = $state<ApiKey[]>([]);
@@ -49,7 +50,7 @@
 
     const held = $derived(new Set(session.user?.permissions ?? []));
     const grouped = $derived.by(() => {
-        const groups = new Map<string, CatalogPermission[]>();
+        const groups = new SvelteMap<string, CatalogPermission[]>();
         for (const permission of catalog) {
             if (!held.has("*") && !held.has(permission.key)) continue;
             const list = groups.get(permission.group) ?? [];
@@ -280,7 +281,8 @@
                                             onclick={() => {
                                                 revoking = key;
                                                 askRevoke = true;
-                                            }}>Revoke</Button>
+                                            }}>Revoke</Button
+                                        >
                                     {/if}
                                 </div>
                             </Table.Cell>
@@ -297,13 +299,15 @@
         <Dialog.Header>
             <Dialog.Title>New API key</Dialog.Title>
             <Dialog.Description>
-                The key can never do more than you can: its subset is checked against your own rights when it is made, and against
-                your current rights on every request, so losing a permission shrinks every key at once.
+                The key can never do more than you can: its subset is checked against your own rights when it is made, and against your
+                current rights on every request, so losing a permission shrinks every key at once.
             </Dialog.Description>
         </Dialog.Header>
         <div class="space-y-4">
             {#if formFailure}
-                <p class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{formFailure}</p>
+                <p class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+                    {formFailure}
+                </p>
             {/if}
             <div class="space-y-2">
                 <Label for="key-name">Name</Label>
@@ -347,7 +351,7 @@
                 </div>
                 <div class="space-y-2">
                     <Label for="key-cidrs">Allowed CIDRs</Label>
-                    <Textarea id="key-cidrs" bind:value={cidrs} rows={3} placeholder={"10.0.0.0/8\n2001:db8::/32"} />
+                    <Textarea id="key-cidrs" bind:value={cidrs} rows={3} placeholder="10.0.0.0/8, 2001:db8::/32" />
                     <p class="text-xs text-muted-foreground">One address or CIDR range per line, IPv4 or IPv6. Empty allows everywhere.</p>
                 </div>
             </div>
@@ -377,11 +381,7 @@
 </Dialog.Root>
 
 <Dialog.Root bind:open={showSecret}>
-    <Dialog.Content
-        showCloseButton={false}
-        escapeKeydownBehavior="ignore"
-        onInteractOutside={(event) => event.preventDefault()}
-    >
+    <Dialog.Content showCloseButton={false} escapeKeydownBehavior="ignore" onInteractOutside={(event) => event.preventDefault()}>
         <Dialog.Header>
             <Dialog.Title>Copy this key now</Dialog.Title>
             <Dialog.Description>
@@ -411,13 +411,15 @@
         <Dialog.Header>
             <Dialog.Title>Rotate {rotating?.name ?? "key"}</Dialog.Title>
             <Dialog.Description>
-                A replacement is made with the same permissions, scopes and CIDRs. The old secret keeps working for the grace you give
-                it, then stops.
+                A replacement is made with the same permissions, scopes and CIDRs. The old secret keeps working for the grace you give it,
+                then stops.
             </Dialog.Description>
         </Dialog.Header>
         <div class="space-y-4">
             {#if formFailure}
-                <p class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{formFailure}</p>
+                <p class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+                    {formFailure}
+                </p>
             {/if}
             <div class="space-y-2">
                 <Label for="rotate-grace">Grace for the old secret (seconds)</Label>

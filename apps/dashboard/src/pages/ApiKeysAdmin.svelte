@@ -123,7 +123,8 @@
                                         onclick={() => {
                                             revoking = key;
                                             askRevoke = true;
-                                        }}>Revoke</Button>
+                                        }}>Revoke</Button
+                                    >
                                 {/if}
                             </Table.Cell>
                         </Table.Row>

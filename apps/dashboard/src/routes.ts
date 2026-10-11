@@ -231,7 +231,7 @@ export const routes: Route[] = [
         title: "API keys",
         icon: KeyRoundIcon,
         permission: "none",
-        nav: true,
+        nav: false,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/ApiKeys.svelte") },
     },
