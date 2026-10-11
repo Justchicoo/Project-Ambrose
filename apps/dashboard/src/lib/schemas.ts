@@ -812,6 +812,78 @@ export const FileRulesAnswer = v.looseObject({
     errors: v.optional(v.array(v.string()), []),
 });
 
+export const InviteRow = v.looseObject({
+    id: v.number(),
+    scope: v.string(),
+    role: v.nullable(v.string()),
+    grants: v.array(v.string()),
+    target_username: v.nullable(v.string()),
+    created_by: v.number(),
+    created_epoch_ms: v.number(),
+    expires_epoch_ms: v.number(),
+    used_epoch_ms: v.nullable(v.number()),
+    used_by: v.nullable(v.number()),
+    revoked_epoch_ms: v.nullable(v.number()),
+    note: v.string(),
+    state: v.picklist(["live", "used", "revoked", "expired"]),
+});
+
+export const InviteListAnswer = v.looseObject({
+    schema: v.number(),
+    invites: v.array(InviteRow),
+});
+
+export const InviteCreatedAnswer = v.looseObject({
+    schema: v.number(),
+    id: v.number(),
+    token: v.optional(v.string()),
+    applied: v.optional(v.boolean()),
+    user_id: v.optional(v.number()),
+    username: v.optional(v.string()),
+    scope: v.string(),
+    role: v.nullable(v.string()),
+    grants: v.array(v.string()),
+    target_username: v.nullable(v.string()),
+    expires_epoch_ms: v.optional(v.number()),
+});
+
+export const InvitePeekAnswer = v.looseObject({
+    schema: v.number(),
+    scope: v.string(),
+    role: v.nullable(v.string()),
+    grants: v.array(v.string()),
+    target_username: v.nullable(v.string()),
+    expires_epoch_ms: v.number(),
+    two_factor_required: v.boolean(),
+});
+
+export const GrantSetAnswer = v.looseObject({
+    schema: v.number(),
+    user_id: v.number(),
+    scope: v.string(),
+    version: v.number(),
+    permissions: v.array(v.string()),
+    updated_epoch_ms: v.optional(v.number(), 0),
+    changed: v.optional(v.boolean()),
+    code: v.optional(v.string()),
+    current_version: v.optional(v.number()),
+});
+
+export const PermissionCatalogEntry = v.looseObject({
+    group: v.string(),
+    key: v.string(),
+    description: v.string(),
+    danger: v.boolean(),
+    owner_only: v.boolean(),
+    opt_in: v.boolean(),
+});
+
+export const PermissionCatalogAnswer = v.looseObject({
+    schema: v.number(),
+    permissions: v.array(PermissionCatalogEntry),
+    roles: v.array(v.looseObject({ name: v.string(), keys: v.array(v.string()) })),
+});
+
 export type OutputAnswer = v.InferOutput<typeof OutputAnswer>;
 export type SettingsAnswer = v.InferOutput<typeof SettingsAnswer>;
 export type SettingLock = v.InferOutput<typeof SettingLock>;
@@ -855,3 +927,10 @@ export type FileEntry = v.InferOutput<typeof FileEntry>;
 export type FileListing = v.InferOutput<typeof FileListing>;
 export type FileContent = v.InferOutput<typeof FileContent>;
 export type FileRulesAnswer = v.InferOutput<typeof FileRulesAnswer>;
+export type InviteRow = v.InferOutput<typeof InviteRow>;
+export type InviteListAnswer = v.InferOutput<typeof InviteListAnswer>;
+export type InviteCreatedAnswer = v.InferOutput<typeof InviteCreatedAnswer>;
+export type InvitePeekAnswer = v.InferOutput<typeof InvitePeekAnswer>;
+export type GrantSetAnswer = v.InferOutput<typeof GrantSetAnswer>;
+export type PermissionCatalogEntry = v.InferOutput<typeof PermissionCatalogEntry>;
+export type PermissionCatalogAnswer = v.InferOutput<typeof PermissionCatalogAnswer>;

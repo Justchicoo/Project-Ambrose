@@ -6,10 +6,11 @@
 #include "PanelAuthorization.h"
 
 #include "PanelGrants.h"
+#include "PanelGrantSets.h"
 #include "PanelUsers.h"
 
-PanelAuthorization::PanelAuthorization(PanelGrants& grants, Finder finder, Recorder recorder)
-    : _grants(grants), _finder(std::move(finder)), _recorder(std::move(recorder))
+PanelAuthorization::PanelAuthorization(PanelGrants& grants, PanelGrantSets& sets, Finder finder, Recorder recorder)
+    : _grants(grants), _sets(sets), _finder(std::move(finder)), _recorder(std::move(recorder))
 {
 }
 
@@ -58,8 +59,8 @@ PermissionVerdict PanelAuthorization::Decide(AdminRequest const& request, std::s
     if (!app.empty())
     {
         std::string error;
-        grantedHere = _grants.Holds(asking.UserId, app, permission, error);
-        holdsAnythingHere = grantedHere || _grants.AppsOf(asking.UserId, error).contains(app);
+        grantedHere = _grants.Holds(asking.UserId, app, permission, error) || _sets.Holds(asking.UserId, app, permission, error);
+        holdsAnythingHere = grantedHere || _grants.AppsOf(asking.UserId, error).contains(app) || _sets.HoldsAny(asking.UserId, app, error);
     }
 
     PermissionVerdict const verdict = Weigh(asking, permission, grantedHere, holdsAnythingHere, !app.empty());
