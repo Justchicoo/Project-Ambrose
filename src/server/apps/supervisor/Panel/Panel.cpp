@@ -232,6 +232,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     });
     RegisterTwoFactor();
     RegisterCommandHistory();
+    RegisterNetwork();
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
