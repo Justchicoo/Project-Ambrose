@@ -7,6 +7,7 @@
 #define AMBROSE_PANEL_H
 
 #include "AdminServer.h"
+#include "AdminClient.h"
 #include "ListenerSettings.h"
 #include "PanelAudit.h"
 #include "PanelAuditForwarder.h"
@@ -50,6 +51,7 @@ class EmbeddedPage;
 class Log;
 class PanelSettingStore;
 class SettingStore;
+struct PortAllocationDraft;
 
 class Panel
 {
@@ -119,6 +121,12 @@ public:
     void SetAppSource(PanelEventSocket::AppSource source);
     void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
+    using AppAdminCall = std::function<std::optional<AdminClientResponse>(std::string_view app, std::string_view method, std::string_view path, std::string_view body)>;
+    using AppNameSource = std::function<std::vector<std::string>()>;
+    void SetAppAdminCall(AppAdminCall call);
+    void SetAppNames(AppNameSource source);
+    void RegisterNetwork();
+
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
     bool Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error);
     bool VerifyAuditChain(AuditChainVerification& verification, std::string& error);
@@ -160,6 +168,25 @@ private:
     void RegisterSignIn();
     void RegisterTwoFactor();
     void RegisterCommandHistory();
+    std::string NetworkNodeOf(AdminRequest const& request, std::string_view fallback);
+    bool NetworkDraftOf(nlohmann::json const& body, PortAllocationDraft& draft, std::string& refusal);
+    std::optional<std::pair<std::string, uint16>> AppListenerOf(std::string_view app);
+    bool AppListensOn(std::string_view app, std::string_view address, uint16 port);
+    AdminResponse NetworkAudited(AdminRequest const& request, std::string_view name, std::function<AdminResponse(std::string& refusal, std::string& error)> operation);
+    AdminResponse NetworkNodes(AdminRequest const& request);
+    AdminResponse NetworkNode(AdminRequest const& request);
+    AdminResponse NetworkApp(AdminRequest const& request);
+    AdminResponse NetworkAllocations(AdminRequest const& request);
+    AdminResponse NetworkAllocationAdd(AdminRequest const& request);
+    AdminResponse NetworkAllocationAddRange(AdminRequest const& request);
+    AdminResponse NetworkAllocationPost(AdminRequest const& request);
+    AdminResponse NetworkAllocationDelete(AdminRequest const& request);
+    AdminResponse NetworkAllocationsBulkDelete(AdminRequest const& request);
+    AdminResponse NetworkAllocationAssign(AdminRequest const& request, int64 id);
+    AdminResponse NetworkAllocationUnassign(AdminRequest const& request, int64 id);
+    AdminResponse NetworkPoolGet(AdminRequest const& request);
+    AdminResponse NetworkPoolSet(AdminRequest const& request);
+    AdminResponse NetworkPoolTake(AdminRequest const& request);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
@@ -239,6 +266,8 @@ private:
     std::unique_ptr<PanelEventSocket> _eventSocket;
     AdminServer _listener;
     bool _secure = false;
+    AppAdminCall _appAdminCall;
+    AppNameSource _appNames;
 };
 
 #endif

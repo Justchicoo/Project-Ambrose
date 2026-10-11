@@ -204,6 +204,17 @@ namespace
                     names.push_back(snapshot.Name);
                 return names;
             });
+            _panel.SetAppNames([this]
+            {
+                std::vector<std::string> names;
+                for (AppSnapshot const& snapshot : _supervisor.Snapshots())
+                    names.push_back(snapshot.Name);
+                return names;
+            });
+            _panel.SetAppAdminCall([this](std::string_view app, std::string_view method, std::string_view path, std::string_view body)
+            {
+                return _supervisor.CallAppAdmin(app, method, path, body, Supervisor::RelayTimeout);
+            });
             std::string error;
             bool const started = _supervisor.Start(Config(), settings, !IsCheckOnly(), problems, error);
             for (std::string const& problem : problems)
