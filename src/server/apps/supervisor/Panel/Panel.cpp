@@ -177,7 +177,12 @@ namespace
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
     : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
-      _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
+      _twoFactor(_store, _keyring), _fileRules(_store), _links(_store),
+      _apiKeys(_store,
+          [this](std::string_view key) { return _settings.ValueOf(key); },
+          [this](AuditEvent& event, std::function<bool(AuditEvent&, std::string&)> const& change, std::string& error)
+          { return Record(event, change, error); }),
+      _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
     _listener.SetSessionSource(&_sessions);
@@ -201,7 +206,15 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
                 { "verdict", verdict == PermissionVerdict::OutOfScope ? "out_of_scope" : "forbidden" }
             }.dump();
             std::optional<PanelUser> const user = UserOf(request);
-            if (user)
+            if (PanelApiKeys::IsKeyPrincipal(request.Principal))
+            {
+                std::string const publicId(PanelApiKeys::PublicIdOfPrincipal(request.Principal));
+                event.Actor = AuditActor::Token;
+                event.ActorId = publicId;
+                event.ActorName = user ? user->Username : std::string();
+                event.On("api_key", publicId, user ? user->Username : std::string());
+            }
+            else if (user)
             {
                 event.Actor = AuditActor::User;
                 event.ActorId = std::to_string(user->Id);
@@ -216,14 +229,26 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
         });
     _listener.Routes().SetPermissionCheck([this](AdminRequest const& request, std::string_view permission)
     {
+        if (PanelApiKeys::IsKeyPrincipal(request.Principal))
+        {
+            std::string error;
+            if (!_apiKeys.KeyAllows(request.Principal, permission, PanelAuthorization::AppInPath(request.Path), error))
+                return PermissionVerdict::Forbidden;
+            PermissionVerdict const verdict = _authorization->Decide(request, permission);
+            if (verdict == PermissionVerdict::OutOfScope)
+                return PermissionVerdict::Forbidden;
+            return verdict;
+        }
         return _authorization->Decide(request, permission);
     });
+    _listener.Routes().SetKeyCheck([this](AdminRequest& request, AdminResponse& refused) { return CheckApiKey(request, refused); });
     _listener.Routes().SetPermissionKnown([](std::string_view permission) { return PanelPermissions::Holds(permission); });
     _listener.Routes().SetAdmission([this](AdminRequest const& request) { return Admit(request); });
     _listener.Routes().SetStepUp([this](AdminRequest const& request, std::string_view permission, StepUpWhen when) { return StepUpCheck(request, permission, when); });
     _secondFactor.SetLimits(PanelTwoFactorSettings::DefaultFailureLimit, std::chrono::minutes(PanelTwoFactorSettings::DefaultFailureWindowMinutes));
     _settingStore = std::make_shared<PanelSettingStore>(_store, _storeMutex);
     RegisterSignIn();
+    RegisterApiKeys();
     _eventSocket = std::make_unique<PanelEventSocket>(_log, _events, _tickets, _sessions, _users, _grants, _listener.Routes());
     _listener.AddSocket(_eventSocket->MakeRoute());
     _listener.Routes().AddOpenCosting("POST", std::string(PanelEventSocket::TicketPath), PanelEventSocket::TicketCost, [this](AdminRequest const& request)
@@ -766,14 +791,24 @@ std::optional<AdminResponse> Panel::Throttle(AdminRequest const& request, uint32
 {
     if (cost == 0)
         return std::nullopt;
-    PanelRateVerdict const verdict = _rateLimit.Take(request.Principal, request.RemoteAddress, cost);
+    PanelRateVerdict verdict = _rateLimit.Take(request.Principal, request.RemoteAddress, cost);
+    if (verdict.Allowed && PanelApiKeys::IsKeyPrincipal(request.Principal))
+    {
+        std::string error;
+        if (std::optional<int64> const owner = _apiKeys.OwnerOf(request.Principal, error); owner)
+        {
+            PanelRateVerdict const userVerdict = _rateLimit.Take("user:" + std::to_string(*owner), request.RemoteAddress, cost);
+            if (!userVerdict.Allowed)
+                verdict = userVerdict;
+        }
+    }
     if (verdict.Allowed)
         return std::nullopt;
     if (verdict.FirstThisMinute)
     {
         AuditEvent event;
         event.Name = "panel:request.throttled";
-        event.Actor = request.Principal == "token" ? AuditActor::Token : AuditActor::User;
+        event.Actor = (request.Principal == "token" || PanelApiKeys::IsKeyPrincipal(request.Principal)) ? AuditActor::Token : AuditActor::User;
         event.ActorId = request.Principal;
         event.Address = request.RemoteAddress;
         event.Result = AuditResult::Throttled;
@@ -1054,6 +1089,310 @@ void Panel::RegisterTwoFactor()
     routes.AddOpenCosting("POST", "/api/panel/step-up", PasswordCheckCost, [this](AdminRequest const& request) { return StepUpRoute(request); });
 }
 
+KeyAuthOutcome Panel::CheckApiKey(AdminRequest& request, AdminResponse& refused)
+{
+    std::optional<std::string_view> const bearer = AdminAuth::BearerToken(request.Authorization);
+    if (!bearer || !PanelApiKeys::IsKeyText(*bearer))
+        return KeyAuthOutcome::NotAKey;
+    if (_listener.Routes().SessionSecret(request))
+    {
+        refused = AdminResponse::Problem(401, "key_with_session",
+            "An API key is not accepted together with a signed-in browser session; send one or the other");
+        return KeyAuthOutcome::Refused;
+    }
+    std::string error;
+    PanelApiKeyAuth const auth = _apiKeys.Authenticate(*bearer, request.RemoteAddress, request.UserAgent, error);
+    switch (auth.Result)
+    {
+        case PanelApiKeyResult::Ok:
+            request.Principal = PanelApiKeys::PrincipalOf(auth.Key.PublicId);
+            return KeyAuthOutcome::Accepted;
+        case PanelApiKeyResult::OutsideCidrs:
+            refused = AdminResponse::Problem(403, "key_cidr_refused", "This API key is not allowed from this address");
+            return KeyAuthOutcome::Refused;
+        case PanelApiKeyResult::Expired:
+            refused = AdminResponse::Problem(401, "key_expired", "This API key has expired");
+            return KeyAuthOutcome::Refused;
+        case PanelApiKeyResult::Revoked:
+            refused = AdminResponse::Problem(401, "key_revoked", "This API key was revoked");
+            return KeyAuthOutcome::Refused;
+        default:
+            refused = AdminResponse::Problem(401, "unauthorized", "The admin API needs its bearer token in an Authorization header, or a signed-in browser session");
+            refused.Headers.emplace_back("WWW-Authenticate", "Bearer");
+            return KeyAuthOutcome::Refused;
+    }
+}
+
+void Panel::RegisterApiKeys()
+{
+    AdminRouter& routes = _listener.Routes();    routes.AddOpen("GET", "/api/panel/apikeys", [this](AdminRequest const& request) { return ApiKeyList(request); });
+    routes.AddOpen("POST", "/api/panel/apikeys", [this](AdminRequest const& request) { return ApiKeyCreate(request); });
+    routes.AddOpenPrefix("DELETE", "/api/panel/apikeys/", [this](AdminRequest const& request) { return ApiKeyRevoke(request); });
+    routes.AddOpenPrefix("POST", "/api/panel/apikeys/", [this](AdminRequest const& request) { return ApiKeyRotate(request); });
+    routes.AddGuarded("GET", "/api/panel/admin/apikeys", "apikeys.manage", [this](AdminRequest const& request) { return ApiKeyListAll(request); });
+    routes.AddGuardedPrefix("DELETE", "/api/panel/admin/apikeys/", "apikeys.manage", [this](AdminRequest const& request) { return ApiKeyRevokeAny(request); });
+}
+
+std::optional<PanelApiKeyCall> Panel::KeyCallOf(AdminRequest const& request)
+{
+    std::string error;
+    PanelApiKeyCall call;
+    call.Address = request.RemoteAddress;
+    call.UserAgent = request.UserAgent;
+    if (PanelApiKeys::IsKeyPrincipal(request.Principal))
+    {
+        std::optional<PanelApiKey> const key = _apiKeys.FindByPublicId(PanelApiKeys::PublicIdOfPrincipal(request.Principal), error);
+        if (!key || !key->Live(PanelStore::NowEpochMs()))
+            return std::nullopt;
+        std::optional<PanelUser> const owner = _users.FindById(key->OwnerUserId, error);
+        if (!owner)
+            return std::nullopt;
+        call.UserId = owner->Id;
+        call.Username = owner->Username;
+        call.ViaKey = key->PublicId;
+        call.Rights = _apiKeys.EffectiveRights(request.Principal, RightsOf(*owner, error), error);
+        return call;
+    }
+    std::optional<PanelUser> const user = UserOf(request);
+    if (!user)
+        return std::nullopt;
+    call.UserId = user->Id;
+    call.Username = user->Username;
+    call.Rights = RightsOf(*user, error);
+    return call;
+}
+
+std::set<std::string, std::less<>> Panel::RightsOf(PanelUser const& user, std::string& error)
+{
+    std::set<std::string, std::less<>> rights;
+    for (std::string_view const key : PanelPermissions::KeysOf(user.Role))
+        rights.emplace(key);
+    for (PanelGrant const& grant : _grants.Of(user.Id, error))
+        rights.emplace(grant.Permission);
+    return rights;
+}
+
+nlohmann::json Panel::KeyAnswer(PanelApiKey const& key) const
+{
+    nlohmann::json answer;
+    answer["id"] = key.Id;
+    answer["public_id"] = key.PublicId;
+    answer["owner_user_id"] = key.OwnerUserId;
+    if (!key.OwnerUsername.empty())
+        answer["owner_username"] = key.OwnerUsername;
+    answer["name"] = key.Name;
+    answer["permissions"] = key.Permissions;
+    answer["scopes"] = key.Scopes;
+    answer["cidrs"] = key.Cidrs;
+    answer["created_epoch_ms"] = key.CreatedEpochMs;
+    answer["expires_epoch_ms"] = key.ExpiresEpochMs ? nlohmann::json(*key.ExpiresEpochMs) : nlohmann::json(nullptr);
+    answer["revoked_epoch_ms"] = key.RevokedEpochMs ? nlohmann::json(*key.RevokedEpochMs) : nlohmann::json(nullptr);
+    answer["grace_expires_epoch_ms"] = key.GraceExpiresEpochMs ? nlohmann::json(*key.GraceExpiresEpochMs) : nlohmann::json(nullptr);
+    answer["last_used_epoch_ms"] = key.LastUsedEpochMs ? nlohmann::json(*key.LastUsedEpochMs) : nlohmann::json(nullptr);
+    answer["last_used_address"] = key.LastUsedAddress.empty() ? nlohmann::json(nullptr) : nlohmann::json(key.LastUsedAddress);
+    answer["live"] = key.Live(PanelStore::NowEpochMs());
+    return answer;
+}
+
+AdminResponse Panel::KeyProblem(PanelApiKeyResult result, std::string const& error)
+{
+    switch (result)
+    {
+        case PanelApiKeyResult::TooMany:
+            return AdminResponse::Problem(409, "too_many_keys", error);
+        case PanelApiKeyResult::BadName:
+        case PanelApiKeyResult::BadPermissions:
+        case PanelApiKeyResult::BadScopes:
+        case PanelApiKeyResult::BadCidrs:
+        case PanelApiKeyResult::BadExpiry:
+            return AdminResponse::Invalid(error, {});
+        case PanelApiKeyResult::UnknownKey:
+            return AdminResponse::Problem(404, "unknown_key", "The panel has no API key with that id");
+        case PanelApiKeyResult::Revoked:
+            return AdminResponse::Problem(409, "key_revoked", "The API key was already revoked");
+        case PanelApiKeyResult::Expired:
+            return AdminResponse::Problem(409, "key_expired", "The API key has expired");
+        case PanelApiKeyResult::Ok:
+        case PanelApiKeyResult::WrongSecret:
+        case PanelApiKeyResult::OutsideCidrs:
+        case PanelApiKeyResult::StoreFailed:
+            break;
+    }
+    return AdminResponse::Problem(503, "store_unavailable", error);
+}
+
+AdminResponse Panel::ApiKeyList(AdminRequest const& request)
+{
+    std::optional<PanelApiKeyCall> const call = KeyCallOf(request);
+    if (!call)
+        return AdminResponse::Problem(403, "forbidden", "Only a panel operator lists API keys");
+    std::string error;
+    std::vector<PanelApiKey> const keys = _apiKeys.ListOf(call->UserId, error);
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    nlohmann::json answer = nlohmann::json::array();
+    for (PanelApiKey const& key : keys)
+        answer.push_back(KeyAnswer(key));
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::ApiKeyCreate(AdminRequest const& request)
+{
+    std::optional<PanelApiKeyCall> const call = KeyCallOf(request);
+    if (!call)
+        return AdminResponse::Problem(403, "forbidden", "Only a panel operator makes API keys");
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object())
+        return AdminResponse::Invalid("A key takes a JSON object", { { "body", "Give a JSON object" } });
+    std::vector<std::pair<std::string, std::string>> fields;
+    auto stringsOf = [&fields](nlohmann::json const& body, char const* name, std::vector<std::string>& into)
+    {
+        if (!body.contains(name))
+            return;
+        if (!body[name].is_array())
+        {
+            fields.emplace_back(name, "Give it as an array of text");
+            return;
+        }
+        for (nlohmann::json const& entry : body[name])
+        {
+            if (!entry.is_string())
+            {
+                fields.emplace_back(name, "Give it as an array of text");
+                return;
+            }
+            into.push_back(entry.get<std::string>());
+        }
+    };
+    PanelApiKeyDraft draft;
+    draft.OwnerUserId = call->UserId;
+    draft.Name = TextOf(body, "name");
+    stringsOf(body, "permissions", draft.Permissions);
+    stringsOf(body, "scopes", draft.Scopes);
+    stringsOf(body, "cidrs", draft.Cidrs);
+    if (body.contains("expires_epoch_ms"))
+    {
+        if (!body["expires_epoch_ms"].is_number_integer())
+            fields.emplace_back("expires_epoch_ms", "Give it as whole milliseconds since the epoch");
+        else
+            draft.ExpiresEpochMs = body["expires_epoch_ms"].get<int64>();
+    }
+    if (body.contains("no_expiry"))
+    {
+        if (!body["no_expiry"].is_boolean())
+            fields.emplace_back("no_expiry", "Give it as true or false");
+        else
+            draft.NoExpiry = body["no_expiry"].get<bool>();
+    }
+    if (draft.ExpiresEpochMs && draft.NoExpiry)
+        fields.emplace_back("no_expiry", "A key takes either an expiry or no expiry, not both");
+    for (auto const& [name, value] : body.items())
+        if (name != "name" && name != "permissions" && name != "scopes" && name != "cidrs" && name != "expires_epoch_ms" && name != "no_expiry")
+            fields.emplace_back(name, "A key takes only name, permissions, scopes, cidrs, expires_epoch_ms and no_expiry");
+    if (!fields.empty())
+        return AdminResponse::Invalid("That is not a key this panel makes", std::move(fields));
+
+    PanelApiKeyIssued issued;
+    std::string error;
+    PanelApiKeyResult const result = _apiKeys.Create(*call, draft, issued, error);
+    if (result != PanelApiKeyResult::Ok)
+        return KeyProblem(result, error);
+    nlohmann::json answer = KeyAnswer(issued.Key);
+    answer["key"] = issued.Text;
+    return AdminResponse::Json(201, answer.dump());
+}
+
+namespace
+{
+    std::optional<std::string_view> KeyIdIn(std::string_view path, std::string_view base)
+    {
+        if (!path.starts_with(base))
+            return std::nullopt;
+        std::string_view const rest = path.substr(base.size());
+        if (rest.empty() || rest.find('/') != std::string_view::npos)
+            return std::nullopt;
+        return rest;
+    }
+}
+
+AdminResponse Panel::ApiKeyRevoke(AdminRequest const& request)
+{
+    std::optional<PanelApiKeyCall> const call = KeyCallOf(request);
+    if (!call)
+        return AdminResponse::Problem(403, "forbidden", "Only a panel operator revokes API keys");
+    std::optional<std::string_view> const id = KeyIdIn(request.Path, "/api/panel/apikeys/");
+    if (!id)
+        return AdminResponse::Problem(404, "not_found", "The admin API has no " + request.Path);
+    std::string error;
+    PanelApiKeyResult const result = _apiKeys.Revoke(*call, *id, false, error);
+    if (result != PanelApiKeyResult::Ok)
+        return KeyProblem(result, error);
+    return AdminResponse::Json(200, R"({"revoked":true})");
+}
+
+AdminResponse Panel::ApiKeyRotate(AdminRequest const& request)
+{
+    constexpr std::string_view base = "/api/panel/apikeys/";
+    constexpr std::string_view tail = "/rotate";
+    std::optional<PanelApiKeyCall> const call = KeyCallOf(request);
+    if (!call)
+        return AdminResponse::Problem(403, "forbidden", "Only a panel operator rotates API keys");
+    std::string_view const path(request.Path);
+    std::optional<std::string_view> id;
+    if (path.starts_with(base) && path.ends_with(tail))
+        id = KeyIdIn(path.substr(0, path.size() - tail.size()), base);
+    if (!id)
+        return AdminResponse::Problem(404, "not_found", "The admin API has no " + request.Path);
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object())
+        return AdminResponse::Invalid("A rotation takes a JSON object", { { "body", "Give a JSON object" } });
+    uint32 graceSeconds = 0;
+    if (body.contains("grace_seconds"))
+    {
+        if (!body["grace_seconds"].is_number_unsigned())
+            return AdminResponse::Invalid("That is not a rotation this panel makes", { { "grace_seconds", "Give whole seconds from 0 to 3600" } });
+        uint64 const wanted = body["grace_seconds"].get<uint64>();
+        if (wanted > PanelApiKeys::MaxRotateGraceSeconds)
+            return AdminResponse::Invalid("That is not a rotation this panel makes", { { "grace_seconds", "Give whole seconds from 0 to 3600" } });
+        graceSeconds = static_cast<uint32>(wanted);
+    }
+    PanelApiKeyIssued issued;
+    std::string error;
+    PanelApiKeyResult const result = _apiKeys.Rotate(*call, *id, graceSeconds, false, issued, error);
+    if (result != PanelApiKeyResult::Ok)
+        return KeyProblem(result, error);
+    nlohmann::json answer = KeyAnswer(issued.Key);
+    answer["key"] = issued.Text;
+    return AdminResponse::Json(201, answer.dump());
+}
+
+AdminResponse Panel::ApiKeyListAll(AdminRequest const&)
+{
+    std::string error;
+    std::vector<PanelApiKey> const keys = _apiKeys.ListAll(error);
+    if (!error.empty())
+        return AdminResponse::Problem(503, "store_unavailable", error);
+    nlohmann::json answer = nlohmann::json::array();
+    for (PanelApiKey const& key : keys)
+        answer.push_back(KeyAnswer(key));
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::ApiKeyRevokeAny(AdminRequest const& request)
+{
+    std::optional<PanelApiKeyCall> const call = KeyCallOf(request);
+    if (!call)
+        return AdminResponse::Problem(403, "forbidden", "Only a panel operator revokes API keys");
+    std::optional<std::string_view> const id = KeyIdIn(request.Path, "/api/panel/admin/apikeys/");
+    if (!id)
+        return AdminResponse::Problem(404, "not_found", "The admin API has no " + request.Path);
+    std::string error;
+    PanelApiKeyResult const result = _apiKeys.Revoke(*call, *id, true, error);
+    if (result != PanelApiKeyResult::Ok)
+        return KeyProblem(result, error);
+    return AdminResponse::Json(200, R"({"revoked":true})");
+}
+
 void Panel::RegisterCommandHistory()
 {
     _listener.Routes().AddGuardedPrefix("GET", "/api/panel/apps/", "console.read", [this](AdminRequest const& request)
@@ -1315,7 +1654,15 @@ std::optional<PanelUser> Panel::UserOf(AdminRequest const& request)
 {
     constexpr std::string_view Signed = "user:";
     if (!request.Principal.starts_with(Signed))
-        return std::nullopt;
+    {
+        if (!PanelApiKeys::IsKeyPrincipal(request.Principal))
+            return std::nullopt;
+        std::string error;
+        std::optional<int64> const owner = _apiKeys.OwnerOf(request.Principal, error);
+        if (!owner)
+            return std::nullopt;
+        return _users.FindById(*owner, error);
+    }
     std::optional<int64> const id = Ambrose::StringTo<int64>(std::string_view(request.Principal).substr(Signed.size()));
     if (!id)
         return std::nullopt;
