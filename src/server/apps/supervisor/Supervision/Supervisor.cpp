@@ -669,6 +669,25 @@ std::optional<std::string> Supervisor::AskApp(std::string_view name, std::string
     return answer.Body;
 }
 
+std::optional<AdminClientResponse> Supervisor::CallAppAdmin(std::string_view name, std::string_view method, std::string_view path, std::string_view body,
+    std::chrono::milliseconds timeout) const
+{
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    ManagedApp* const app = Find(name);
+    if (!app)
+        return std::nullopt;
+    if (!app->Snapshot().ProcessId)
+        return std::nullopt;
+    std::optional<AdminClient> const admin = app->GetAdminClient();
+    if (!admin)
+        return std::nullopt;
+    AdminClientRequest request;
+    request.Method = std::string(method);
+    request.Path = std::string(path);
+    request.Body = std::string(body);
+    return admin->Send(request, timeout);
+}
+
 AdminResponse Supervisor::Relay(ManagedApp& app, AdminRequest const& request, std::string_view path, std::vector<std::pair<std::string, std::string>> headers)
 {
     std::string const& name = app.GetDefinition().Name;
