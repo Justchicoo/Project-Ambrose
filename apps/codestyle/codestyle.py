@@ -47,6 +47,8 @@ def classify(relpath):
         return "linehash"
     if lower in ("license", "license.txt", "notice"):
         return "exempt"
+    if lower == "combatdecks.db":
+        return "exempt"
     if lower == ".editorconfig":
         return "editorconfig"
     if lower.endswith(".conf.dist") or lower.endswith(".conf"):
