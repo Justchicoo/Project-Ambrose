@@ -359,7 +359,11 @@
                         {#each history as record (record.epoch_ms)}
                             <div class="rounded-md border p-4">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <StatusBadge tone={record.classification === "crash" || record.classification === "out_of_memory" ? "wrong" : "waiting"}>
+                                    <StatusBadge
+                                        tone={record.classification === "crash" || record.classification === "out_of_memory"
+                                            ? "wrong"
+                                            : "waiting"}
+                                    >
                                         {classificationWords[record.classification] ?? record.classification}
                                     </StatusBadge>
                                     <span class="text-sm text-muted-foreground">{new Date(record.epoch_ms).toLocaleString()}</span>
