@@ -127,6 +127,20 @@ class Scratch:
             connection.close()
         return f"applied {applied} statement(s) from {path} to {self.names[kind]}"
 
+    def seed_world_hubs(self, routes):
+        connection = self._connect(self.names["world"])
+        try:
+            with connection.cursor() as cursor:
+                for route in routes:
+                    cursor.execute(
+                        "INSERT INTO world_hub (world, client_world, hub_zone, hub_location, universe_zone, universe_location) "
+                        "VALUES (%s, %s, %s, %s, %s, %s)",
+                        tuple(route[field] for field in ("world", "client_world", "hub_zone", "hub_location", "universe_zone", "universe_location")))
+            connection.commit()
+        finally:
+            connection.close()
+        return f"seeded {len(routes)} world-hub route(s)"
+
     def execute(self, kind, statement):
         connection = self._connect(self.names[kind])
         try:
@@ -149,7 +163,7 @@ class Scratch:
             raise StepFailed(f"the account {user} is not in {self.names['login']}")
         return int(found)
 
-    def seed_character(self, user, wizard):
+    def seed_character(self, user, wizard, unlocked_worlds=()):
         stats = {STATS[key]: value for key, value in (wizard.get("stats") or {}).items()}
         account = self.account_id(user)
         locale = LOCALES.index(wizard.get("locale", "en-US")) + 1
@@ -171,6 +185,8 @@ class Scratch:
                                [guid] + [look[key] for key in APPEARANCE])
                 cursor.execute("INSERT INTO id_sequences (name, highest) VALUES ('character', %s) ON DUPLICATE KEY UPDATE highest = GREATEST(highest, VALUES(highest))",
                                (guid,))
+                for world in unlocked_worlds:
+                    cursor.execute("INSERT INTO character_world_unlock (guid, world) VALUES (%s, %s)", (guid, world))
             connection.commit()
         finally:
             connection.close()

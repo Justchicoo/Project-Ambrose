@@ -196,6 +196,8 @@ struct ZoneExtraction
     void AddError(std::string error);
     void FinishErrors();
     std::size_t GetLocationCount() const noexcept;
+    std::string LocationsCsv() const;
+    bool WriteLocationsCsv(std::filesystem::path const& file, std::string& error) const;
     std::size_t GetObjectCount() const noexcept;
     std::size_t GetSkippedObjectCount() const noexcept;
     std::size_t GetVolumeCount() const noexcept;

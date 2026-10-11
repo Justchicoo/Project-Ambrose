@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, spell templates with their effects and pip ranks, a tiered spell's retired flag and the group each tiered spell belongs to, the spellbook behavior and the tracker it keeps for each spell, sigils with their circles and a combat sigil's scalars and limits, requirement lists, named effects, and the quick chat phrases with the ones filed under each.
+ * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, spell templates with their effects and pip ranks, a tiered spell's retired flag and the group each tiered spell belongs to, the spellbook behavior and the tracker it keeps for each spell, sigils with their circles and a combat sigil's scalars and limits, requirement lists, teleporter behavior templates, named effects, and the quick chat phrases with the ones filed under each.
  */
 
 #ifndef AMBROSE_OBJECTVIEWS_H
@@ -574,6 +574,34 @@ public:
     decltype(auto) GetRequirements() const noexcept { return Read<Requirements>(); }
 
     AMBROSE_TYPED_VIEW(RequirementListView)
+};
+
+class TeleportProximityBehaviorTemplateView : public TypedView<TeleportProximityBehaviorTemplateView>
+{
+public:
+    enum Field : std::size_t { Radius, OffsetX, OffsetY, OffsetZ, LocationName, HousingExtraZone, RequirementList, AllowGuildVisitors, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<float>(Radius, "float", "m_radius"),
+        ViewField::Of<float>(OffsetX, "float", "m_offsetX"),
+        ViewField::Of<float>(OffsetY, "float", "m_offsetY"),
+        ViewField::Of<float>(OffsetZ, "float", "m_offsetZ"),
+        ViewField::Of<std::string>(LocationName, "std::string", "m_locationName"),
+        ViewField::Of<std::string>(HousingExtraZone, "std::string", "m_housingExtraZone"),
+        ViewField::Of<PropertyObjectPtr>(RequirementList, "class RequirementList*", "m_requirementList"),
+        ViewField::Of<bool>(AllowGuildVisitors, "bool", "m_allowGuildVisitors"),
+    } };
+    static constexpr ViewDefinition Definition{ "TeleportProximityBehaviorTemplateView", "class TeleportProximityBehaviorTemplate", Fields };
+
+    decltype(auto) GetRadius() const noexcept { return Read<Radius>(); }
+    decltype(auto) GetOffsetX() const noexcept { return Read<OffsetX>(); }
+    decltype(auto) GetOffsetY() const noexcept { return Read<OffsetY>(); }
+    decltype(auto) GetOffsetZ() const noexcept { return Read<OffsetZ>(); }
+    decltype(auto) GetLocationName() const noexcept { return Read<LocationName>(); }
+    decltype(auto) GetHousingExtraZone() const noexcept { return Read<HousingExtraZone>(); }
+    decltype(auto) GetRequirementList() const noexcept { return Read<RequirementList>(); }
+    decltype(auto) AllowsGuildVisitors() const noexcept { return Read<AllowGuildVisitors>(); }
+
+    AMBROSE_TYPED_VIEW(TeleportProximityBehaviorTemplateView)
 };
 
 class NamedEffectView : public TypedView<NamedEffectView>

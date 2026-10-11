@@ -41,7 +41,9 @@ namespace
             _characters.Database = fmt::format("ambrose_settings_chars_{:08x}", tag);
             _login = *info;
             _login.Database = fmt::format("ambrose_settings_login_{:08x}", tag);
-            ASSERT_TRUE(DBUpdater::Run(_characters, "characters", UpdaterSettings{}));
+            UpdaterSettings updates;
+            updates.AllowPending = true;
+            ASSERT_TRUE(DBUpdater::Run(_characters, "characters", updates));
             ASSERT_TRUE(DBUpdater::Run(_login, "login", UpdaterSettings{}));
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_characters.ToConnectionString(), 1, 1));
             ASSERT_EQ(CharacterDatabase.Open(), 0u);

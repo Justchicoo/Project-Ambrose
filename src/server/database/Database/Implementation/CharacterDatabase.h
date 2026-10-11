@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The characters database's statement ids, the most characters one account's list returns, and the connection type that prepares them.
+ * The characters database's statement ids, the most characters one account's list returns, and the connection type that prepares them, including persistent world-unlock rows.
  */
 
 #ifndef AMBROSE_CHARACTERDATABASE_H
@@ -36,6 +36,8 @@ enum CharacterDatabaseStatements : uint32
     CHAR_UPD_PLACE,
     CHAR_SEL_CHARACTER_SPELLS,
     CHAR_REP_CHARACTER_SPELL,
+    CHAR_SEL_CHARACTER_WORLD_UNLOCKS,
+    CHAR_INS_CHARACTER_WORLD_UNLOCK,
     CHAR_SEL_CHARACTER_INVENTORY,
     CHAR_INS_ITEM_INSTANCE,
     CHAR_INS_CHARACTER_INVENTORY,

@@ -494,6 +494,67 @@ CharacterRepository::Statement CharacterRepository::PrepareSaveSpell(uint64 guid
     return statement;
 }
 
+CharacterWorldUnlocksLoad CharacterRepository::LoadWorldUnlocks(uint64 guid)
+{
+    if (guid == 0)
+        return { CharacterOpResult::InvalidData, {} };
+    Statement const statement = PrepareLoadWorldUnlocks(guid);
+    if (!statement)
+        return {};
+    PreparedQueryResult result;
+    if (!CharacterDatabase.TryQuery(*statement, result))
+        return {};
+    if (!result)
+        return { CharacterOpResult::NotFound, {} };
+
+    return ReadWorldUnlocks(*result);
+}
+
+CharacterWorldUnlocksLoad CharacterRepository::ReadWorldUnlocks(PreparedResultSet& result)
+{
+    CharacterWorldUnlocksLoad loaded{ CharacterOpResult::Ok, {} };
+    do
+    {
+        Field const* const row = result.Fetch();
+        if (row[0].Get<uint32>() == 0)
+            return { CharacterOpResult::NotFound, {} };
+        if (row[1].Get<uint32>() != 0)
+            loaded.Worlds.push_back(row[2].Get<std::string>());
+    } while (result.NextRow());
+    return loaded;
+}
+
+CharacterOpResult CharacterRepository::UnlockWorld(uint64 guid, std::string_view world)
+{
+    if (guid == 0 || world.empty() || !IsStorableText(world, 64))
+        return CharacterOpResult::InvalidData;
+    CharacterLoad const character = Load(guid);
+    if (character.Result != CharacterOpResult::Ok)
+        return character.Result;
+    Statement const statement = PrepareUnlockWorld(guid, world);
+    if (!statement)
+        return CharacterOpResult::DatabaseError;
+    return CharacterDatabase.DirectExecute(*statement) ? CharacterOpResult::Ok : CharacterOpResult::DatabaseError;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareLoadWorldUnlocks(uint64 guid)
+{
+    Statement statement = Prepare(CHAR_SEL_CHARACTER_WORLD_UNLOCKS);
+    if (statement)
+        statement->SetData(0, guid);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareUnlockWorld(uint64 guid, std::string_view world)
+{
+    Statement statement = Prepare(CHAR_INS_CHARACTER_WORLD_UNLOCK);
+    if (!statement)
+        return statement;
+    statement->SetData(0, guid);
+    statement->SetData(1, std::string(world));
+    return statement;
+}
+
 std::vector<CharacterSpell> CharacterRepository::ReadSpells(PreparedResultSet& result)
 {
     std::vector<CharacterSpell> spells;

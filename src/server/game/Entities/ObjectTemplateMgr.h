@@ -39,6 +39,7 @@ struct ObjectTemplate
     std::size_t Bytes = 0;
 
     bool IsLoaded() const noexcept { return TemplateId != 0; }
+    bool HasBehavior(std::string_view behavior) const noexcept;
 
     template <class View>
     std::optional<View> As() const noexcept

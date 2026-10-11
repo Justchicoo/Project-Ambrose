@@ -15,6 +15,7 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <chrono>
 #include <utility>
 
@@ -57,6 +58,11 @@ namespace
         }
         return {};
     }
+}
+
+bool ObjectTemplate::HasBehavior(std::string_view behavior) const noexcept
+{
+    return std::find(Behaviors.begin(), Behaviors.end(), behavior) != Behaviors.end();
 }
 
 ObjectTemplateMgr& ObjectTemplateMgr::Instance()

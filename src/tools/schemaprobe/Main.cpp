@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * schemaprobe entry point: sweeps the user's own Root.wad or every GameData WAD, BINd files and headerless versionable objects such as a zone's gamedata.bin alike, and every plain-XML object file, reports unknown classes with each property an object of one holds and unknown properties, with counts, paths and bit-width distributions, and the XML files' unknown classes with each element their objects hold, how often, whether repeated or keyed, the classes it holds and its distinct values, names each unknown class from the client program's own strings read as class names and each property hash through the property oracle from every type and name the loaded registry lists, every property name the client program holds or prints and every one the swept archives' text files spell out, and any candidates given, and writes the report with a draft schema of every property the oracle names one way only, in JSON. Given --server-classes it first finds the classes those archives hold, in BINd and XML files alike, that every object of reads cleanly with and writes them, with the evidence for each, the sweeps before and after and the version of the way they were found, as a class file in the type dump's own format, which --supplement loads back before a sweep, so the unknown classes it removes are seen gone; with no --output as well, the class file is all it writes, and it says every few seconds how far each round's sweep has got, so a caller waiting on it sees it working.
+ * schemaprobe entry point: scans the user's own BINd, versionable and XML object data, optionally filters named archive entries, reports unknown classes and properties with oracle-backed names, can propose server classes and resweep with them, and reports sweep progress.
  */
 
 #include "ArchiveText.h"
@@ -55,6 +55,7 @@ namespace
         std::optional<std::string> Client;
         std::optional<std::string> TypeDump;
         std::vector<std::string> Wads;
+        std::vector<std::string> Entries;
         std::vector<std::string> Candidates;
         std::optional<std::string> Output;
         std::optional<std::string> Program;
@@ -75,7 +76,7 @@ namespace
                 parsed.Help = true;
             else if (arg == "--all-wads")
                 parsed.AllWads = true;
-            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--candidate" || arg == "--output" || arg == "--threads" || arg == "--program"
+            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--entry" || arg == "--candidate" || arg == "--output" || arg == "--threads" || arg == "--program"
                 || arg == "--server-classes" || arg == "--supplement")
             {
                 if (index + 1 >= args.size())
@@ -95,6 +96,8 @@ namespace
                     parsed.TypeDump = value;
                 else if (arg == "--wad")
                     parsed.Wads.push_back(value);
+                else if (arg == "--entry")
+                    parsed.Entries.push_back(value);
                 else if (arg == "--candidate")
                     parsed.Candidates.push_back(value);
                 else if (arg == "--output")
@@ -118,6 +121,11 @@ namespace
                 error = fmt::format("unknown option {}", arg);
                 return std::nullopt;
             }
+        }
+        if (parsed.ServerClasses && !parsed.Entries.empty())
+        {
+            error = "--entry cannot be combined with --server-classes";
+            return std::nullopt;
         }
         return parsed;
     }
@@ -297,7 +305,7 @@ int main(int argc, char** argv)
         }
         if (arguments->Help)
         {
-            std::cout << "Usage: schemaprobe --client <dir> --type-dump <file> [--wad <file>] [--all-wads] [--candidate <class-or-type:name>] [--program <exe>] [--output <file>] [--threads <count>] "
+            std::cout << "Usage: schemaprobe --client <dir> --type-dump <file> [--wad <file>] [--entry <name>]... [--all-wads] [--candidate <class-or-type:name>] [--program <exe>] [--output <file>] [--threads <count>] "
                          "[--server-classes <file>] [--supplement <file>]\n";
             return Success;
         }
@@ -441,6 +449,8 @@ int main(int argc, char** argv)
         uint64 headerless = 0;
         uint64 headerlessDecoded = 0;
         XmlSweepReport xml;
+        std::set<std::string> foundEntries;
+        std::vector<std::string> const* const only = arguments->Entries.empty() ? nullptr : &arguments->Entries;
         for (std::filesystem::path const& path : FindWads(*arguments))
         {
             std::unique_ptr<KiwadArchive> archive = KiwadArchive::Open(path, error);
@@ -449,11 +459,15 @@ int main(int argc, char** argv)
                 std::cerr << fmt::format("schemaprobe: cannot open {}: {}\n", ConfigMgr::PathToUtf8(path), error);
                 return Failure;
             }
-            XmlSweepReport xmlSweep = XmlSweep::Run(*archive, catalog);
+            if (only)
+                for (KiwadEntry const& entry : archive->GetEntries())
+                    if (std::find(arguments->Entries.begin(), arguments->Entries.end(), entry.Name) != arguments->Entries.end())
+                        foundEntries.insert(entry.Name);
+            XmlSweepReport xmlSweep = XmlSweep::Run(*archive, catalog, only);
             for (XmlSweepFailure& failure : xmlSweep.Failures)
                 failure.File = ConfigMgr::PathToUtf8(path.filename()) + ":" + failure.File;
             XmlSweep::Merge(xml, std::move(xmlSweep));
-            BindSweepReport const sweep = BindSweep::Run(*archive, catalog, arguments->Threads);
+            BindSweepReport const sweep = BindSweep::Run(*archive, catalog, arguments->Threads, BindFile::GetDefaultLimits(), only);
             entries += sweep.Entries;
             files += sweep.Files;
             decoded += sweep.Decoded;
@@ -478,6 +492,12 @@ int main(int argc, char** argv)
                     into.Sweep.Roots[hash] += count;
             }
         }
+        for (std::string const& entry : arguments->Entries)
+            if (!foundEntries.contains(entry))
+            {
+                std::cerr << fmt::format("schemaprobe: no selected WAD holds entry {}\n", entry);
+                return Failure;
+            }
         for (auto const& [name, kind] : fileKinds)
         {
             if (kind.Archives < 2)

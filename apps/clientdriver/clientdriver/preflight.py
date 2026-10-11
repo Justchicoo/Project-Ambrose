@@ -3,10 +3,11 @@
 import importlib.util
 import os
 import re
-import socket
 import subprocess
 import sys
 import tempfile
+
+import pymysql
 
 from . import paths
 
@@ -25,9 +26,11 @@ def missing_packages():
     return [distribution for module, distribution in PACKAGES if importlib.util.find_spec(module) is None]
 
 
-def ask_launcher(binaries, host, port, window, run_dir):
+def ask_launcher(binaries, host, port, window, run_dir, client=None):
     program = os.path.join(binaries, paths.program("launcher"))
     command = [program, "--dry-run", "--host", host, "--port", str(port), "--window", window, "--run-dir", run_dir]
+    if client:
+        command += ["--client", client]
     try:
         finished = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace", timeout=180,
                                   creationflags=creation_flags())
@@ -41,12 +44,13 @@ def ask_launcher(binaries, host, port, window, run_dir):
     return None, None, f"the launcher found no Wizard101 install: {reason}"
 
 
-def database_answers(host, port, timeout=2.0):
+def database_error(host, port, user, password, timeout=2.0):
     try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except OSError:
-        return False
+        connection = pymysql.connect(host=host, port=port, user=user, password=password, connect_timeout=timeout)
+    except (OSError, pymysql.MySQLError) as error:
+        return f"scratch database connection failed on {host}:{port}: {error}"
+    connection.close()
+    return ""
 
 
 def capture_ready(tshark):
@@ -110,7 +114,8 @@ def probe(scenario, references, options):
     environment["server_defaults"] = paths.server_defaults(binaries)
     if binaries:
         with tempfile.TemporaryDirectory(prefix="ambrose-clientdriver-") as folder:
-            install, revision, install_reason = ask_launcher(binaries, options["host"], options["port"], options["window"], folder)
+            install, revision, install_reason = ask_launcher(
+                binaries, options["host"], options["port"], options["window"], folder, options.get("client"))
         environment["install"] = install
         environment["revision"] = revision
         environment["install_reason"] = install_reason
@@ -119,7 +124,8 @@ def probe(scenario, references, options):
         environment["revision"] = None
         environment["install_reason"] = "the launcher is not built, so no install was looked for"
     environment["install_readable"] = bool(environment["install"]) and os.path.isdir(environment["install"])
-    environment["database_answers"] = database_answers(options["db_host"], options["db_port"])
+    environment["database_error"] = database_error(options["db_host"], options["db_port"], options["db_user"], options["db_password"])
+    environment["database_authenticated"] = not environment["database_error"]
     environment["tshark"] = paths.tshark()
     if options.get("capture", True) and scenario.needs_capture:
         environment["capture"], environment["capture_reason"] = capture_ready(environment["tshark"])
@@ -150,8 +156,9 @@ def missing(scenario, environment, options):
     elif not environment.get("install_readable"):
         gaps.append(f"the launcher named the install {environment['install']}, which is not a folder this driver can read, "
                     "so it could not prove that a run only read it")
-    if not environment.get("database_answers"):
-        gaps.append(f"no database answers on {environment.get('database')}, and the driver uses only that one")
+    if not environment.get("database_authenticated"):
+        gaps.append(environment.get("database_error") or
+                    f"the scratch database check failed on {environment.get('database')}, and the driver uses only that one")
     if options.get("capture", True) and scenario.needs_capture and not environment.get("capture"):
         gaps.append(environment.get("capture_reason") or "the loopback capture is not available")
     if scenario.needs_client:

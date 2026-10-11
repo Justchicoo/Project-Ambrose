@@ -81,7 +81,9 @@ namespace
             _infos[1].Database = fmt::format("ambrose_gm_{:08x}_characters", suffix);
             _infos[2].Database = fmt::format("ambrose_gm_{:08x}_world", suffix);
             ASSERT_TRUE(DBUpdater::Run(_infos[0], "login", UpdaterSettings{}));
-            ASSERT_TRUE(DBUpdater::Run(_infos[1], "characters", UpdaterSettings{}));
+            UpdaterSettings updates;
+            updates.AllowPending = true;
+            ASSERT_TRUE(DBUpdater::Run(_infos[1], "characters", updates));
             ASSERT_TRUE(DBUpdater::Run(_infos[2], "world", UpdaterSettings{}));
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_infos[0].ToConnectionString(), 1, 1));
             ASSERT_EQ(LoginDatabase.Open(), 0u);

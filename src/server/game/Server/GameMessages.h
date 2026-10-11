@@ -188,6 +188,45 @@ namespace GameMessages
         }
     };
 
+    struct GoHome
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_GOHOME";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple<>{};
+        }
+    };
+
+    struct WorldTeleportList
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_WORLDTELEPORTLIST";
+
+        uint64 GlobalId = 0;
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &WorldTeleportList::GlobalId), DmlField("Data", &WorldTeleportList::Data) };
+        }
+    };
+
+    struct WorldTeleportRequest
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_WORLDTELEPORTREQUEST";
+
+        uint64 TeleportId = 0;
+        std::string World;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("TeleportID", &WorldTeleportRequest::TeleportId), DmlField("World", &WorldTeleportRequest::World) };
+        }
+    };
+
     struct UpdateCustomEmotes
     {
         static constexpr uint8 ServiceId = Wizard2Service;

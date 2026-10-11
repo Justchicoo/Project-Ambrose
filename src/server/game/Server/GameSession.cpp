@@ -1,6 +1,6 @@
-/*
- * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
+ /*
+  * Project Ambrose by Imjustchico
+  * Implements game-session attachment, persistent character state including quests, inventory, equipment and world unlocks, client messages and NPC/teleporter interactions, chat, movement and shared world updates, duels, and custom emotes.
  */
 
 #include "GameSession.h"
@@ -19,6 +19,7 @@
 #include "ConfigMgr.h"
 #include "CryptoRandom.h"
 #include "DisconnectReason.h"
+#include "GameEffectMgr.h"
 #include "LocationString.h"
 #include "LoginSalt.h"
 #include "Log.h"
@@ -29,11 +30,14 @@
 #include "ObjectSerializer.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
+#include "ObjectViews.h"
+#include "PropertyObject.h"
 #include "PlayerLevelMgr.h"
 #include "PackedName.h"
 #include "PassKey3.h"
 #include "PlayerObjectBuilder.h"
 #include "PropertyFiller.h"
+#include "RequirementMgr.h"
 #include "InstanceSight.h"
 #include "ScriptMgr.h"
 #include "Settings.h"
@@ -43,6 +47,7 @@
 #include "StringUtil.h"
 #include "TypeRegistry.h"
 #include "ZoneMgr.h"
+#include "WorldHubMgr.h"
 #include "ZoneTeleportMgr.h"
 
 #include <fmt/format.h>
@@ -50,6 +55,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -132,6 +138,46 @@ namespace
         }
         return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
     }
+
+    std::optional<std::string> EncodeWorldTeleportOptions(std::vector<WorldHub> const& routes, std::string& problem)
+    {
+        TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+        PropertyObjectPtr const options = catalog ? PropertyObject::Create(catalog, "class WorldTeleportOptions") : nullptr;
+        ObjectField const* const field = ObjectFields::Find("MSG_WORLDTELEPORTLIST", "Data");
+        if (!options || !field)
+        {
+            problem = !options ? "the loaded type dump has no class WorldTeleportOptions" : "the loaded message definitions do not describe MSG_WORLDTELEPORTLIST.Data";
+            return std::nullopt;
+        }
+
+        PropertyValue::List worlds;
+        worlds.reserve(routes.size());
+        for (WorldHub const& route : routes)
+            worlds.emplace_back(route.ClientWorld);
+
+        PropertyFiller(*options, problem).Set("m_worldList", std::move(worlds));
+        if (!problem.empty())
+            return std::nullopt;
+
+        EncodeResult const encoded = ObjectSerializer::EncodeField(*field, options.get());
+        if (!encoded.Ok())
+        {
+            problem = encoded.Detail;
+            return std::nullopt;
+        }
+        return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
+    }
+
+    class SessionRequirementContext final : public RequirementContext
+    {
+    public:
+        explicit SessionRequirementContext(std::string_view zone) : _zone(zone) {}
+
+        std::optional<bool> IsInZone(std::string_view zoneName) const override { return zoneName == _zone; }
+
+    private:
+        std::string_view _zone;
+    };
 }
 
 GameSession::GameSession(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context)
@@ -608,12 +654,43 @@ void GameSession::LoadEquipment(LoginKeyClaim const& claim, CharacterSummary cha
             RefuseEntry(claim, fmt::format("wizard {}'s equipment cannot be read from the characters database", character.Guid));
             return;
         }
-        LoadQuests(claim, character, stored, spells, items, CharacterRepository::ReadEquipment(*result));
+        std::vector<CharacterEquippedItem> equipped = CharacterRepository::ReadEquipment(*result);
+        LoadWorldUnlocks(claim, character, stored, spells, std::move(items), std::move(equipped));
+    }));
+}
+
+void GameSession::LoadWorldUnlocks(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells,
+    std::vector<CharacterItem> items, std::vector<CharacterEquippedItem> equipped)
+{
+    CharacterRepository::Statement statement = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareLoadWorldUnlocks(character.Guid) : nullptr;
+    if (!statement)
+    {
+        RefuseEntry(claim, "the characters database is not open");
+        return;
+    }
+    _queryCallbacks.AddCallback(CharacterDatabase.AsyncQuery(std::move(statement), MakeCompletionHandler()).WithPreparedCallback(
+        [this, claim, character = std::move(character), stored = std::move(stored), spells = std::move(spells), items = std::move(items), equipped = std::move(equipped)]
+        (PreparedQueryResult result)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        if (!result)
+        {
+            RefuseEntry(claim, fmt::format("wizard {}'s unlocked worlds cannot be read from the characters database", character.Guid));
+            return;
+        }
+        CharacterWorldUnlocksLoad loaded = CharacterRepository::ReadWorldUnlocks(*result);
+        if (loaded.Result != CharacterOpResult::Ok)
+        {
+            RefuseEntry(claim, fmt::format("wizard {}'s unlocked worlds could not be read: {}", character.Guid, CharacterRepository::GetResultName(loaded.Result)));
+            return;
+        }
+        LoadQuests(claim, std::move(character), std::move(stored), std::move(spells), std::move(items), std::move(equipped), std::move(loaded.Worlds));
     }));
 }
 
 void GameSession::LoadQuests(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells,
-    std::vector<CharacterItem> items, std::vector<CharacterEquippedItem> equipped)
+    std::vector<CharacterItem> items, std::vector<CharacterEquippedItem> equipped, std::vector<std::string> worldUnlocks)
 {
     CharacterQuestRepository::LoadHolder holder = CharacterDatabase.IsOpen() ? CharacterQuestRepository::PrepareLoad(character.Guid) : nullptr;
     if (!holder)
@@ -622,8 +699,8 @@ void GameSession::LoadQuests(LoginKeyClaim const& claim, CharacterSummary charac
         return;
     }
     _holderCallbacks.AddCallback(CharacterDatabase.DelayQueryHolder(std::move(holder), MakeCompletionHandler()).AfterComplete(
-        [this, claim, character = std::move(character), stored = std::move(stored), spells = std::move(spells), items = std::move(items), equipped = std::move(equipped)](
-            SQLQueryHolderBase const& done)
+        [this, claim, character = std::move(character), stored = std::move(stored), spells = std::move(spells), items = std::move(items), equipped = std::move(equipped),
+            worldUnlocks = std::move(worldUnlocks)](SQLQueryHolderBase const& done)
     {
         if (!IsOpen() || IsKicked())
             return;
@@ -634,14 +711,14 @@ void GameSession::LoadQuests(LoginKeyClaim const& claim, CharacterSummary charac
             return;
         }
         std::shared_ptr<GameSession> const self = SharedSelf();
-        if (!QueueInbound([self, claim, character, stored, spells, items, equipped, quests = std::move(*quests)]
-            { self->EnterWorld(claim, character, stored, spells, items, equipped, quests); }))
+        if (!QueueInbound([self, claim, character, stored, spells, items, equipped, worldUnlocks = std::move(worldUnlocks), quests = std::move(*quests)]() mutable
+            { self->EnterWorld(claim, character, stored, spells, items, equipped, std::move(worldUnlocks), quests); }))
             RefuseEntry(claim, "its queue of work is full");
     }));
 }
 
 void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells,
-    std::vector<CharacterItem> const& items, std::vector<CharacterEquippedItem> const& equipped, CharacterQuests const& quests)
+    std::vector<CharacterItem> const& items, std::vector<CharacterEquippedItem> const& equipped, std::vector<std::string> worldUnlocks, CharacterQuests const& quests)
 {
     if (!_world)
     {
@@ -869,6 +946,17 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _relay.Reset(_movement);
         _characterRevision = entering.StateRevision;
     }
+    _unlockedWorlds = std::move(worldUnlocks);
+    if (resumed && previous)
+        for (std::string const& world : previous->_unlockedWorlds)
+            if (std::find(_unlockedWorlds.begin(), _unlockedWorlds.end(), world) == _unlockedWorlds.end())
+                _unlockedWorlds.push_back(world);
+    if (std::optional<WorldHub> const currentWorld = sWorldHubMgr.FindForZone(_zonePath);
+        currentWorld && std::find(_unlockedWorlds.begin(), _unlockedWorlds.end(), currentWorld->World) == _unlockedWorlds.end())
+    {
+        _unlockedWorlds.push_back(currentWorld->World);
+        SaveWorldUnlock(currentWorld->World);
+    }
     ArriveInVolumes();
     _zoneDisplay = entering.ZoneDisplay.empty() ? entering.Zone : entering.ZoneDisplay;
     if (resumedPlayer)
@@ -919,6 +1007,25 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the {} of the zone's {} object(s) in sight",
         GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _player->GetStats().GetLevel(), _player->GetStats().GetHitpoints(),
         _player->GetStats().GetMaxHitpoints(), _player->GetStats().GetMana(), _player->GetStats().GetMaxMana(), trackers.size(), data.Bytes.size(), objectsInSight, map->GetObjects().size());
+}
+
+void GameSession::SaveWorldUnlock(std::string world)
+{
+    CharacterRepository::Statement statement = CharacterRepository::PrepareUnlockWorld(_worldGuid, world);
+    if (!statement)
+    {
+        LOG_WARN("server.gamesession", "Session {} could not prepare the characters database write to unlock world {} for wizard {}", GetSessionId(),
+            Ambrose::ForLog(world, 64), _worldGuid);
+        return;
+    }
+    auto transaction = CharacterDatabase.BeginTransaction();
+    transaction->Append(std::move(statement));
+    _transactionCallbacks.AddCallback(CharacterDatabase.AsyncCommitTransaction(std::move(transaction), MakeCompletionHandler()).AfterComplete(
+        [this, world = std::move(world)](bool saved)
+    {
+        if (!saved)
+            LOG_WARN("server.gamesession", "Session {} could not persist the unlock of world {} for wizard {}", GetSessionId(), Ambrose::ForLog(world, 64), _worldGuid);
+    }));
 }
 
 void GameSession::ApplyMute(uint64 until)
@@ -1256,23 +1363,323 @@ void GameSession::ShowTeleportOf(GameSession const& mover, PackedMove const& pla
 
 bool GameSession::RequestZoneTransfer(ZoneTransfer transfer, std::string& problem)
 {
+    std::string const zone = transfer.Zone;
+    if (!QueueZoneTransfer(std::move(transfer), problem))
+        return false;
+
+    SendZoneTransferRequest(zone);
+    return true;
+}
+
+bool GameSession::QueueZoneTransfer(ZoneTransfer transfer, std::string& problem)
+{
     if (!IsShown())
     {
         problem = "the wizard does not stand in a zone";
         return false;
     }
-    std::string const zone = transfer.Zone;
     if (!_transfers.Request(std::move(transfer)))
     {
         problem = "a transfer is already waiting on this wizard's client";
         return false;
     }
+    ClearWorldTeleportWizBang();
+    return true;
+}
+
+void GameSession::SendZoneTransferRequest(std::string const& zone)
+{
     GameMessages::ZoneTransferRequest request;
     request.ZoneName = zone;
     request.SendAck = 1;
     SendDmlMessage(request);
     LOG_INFO("server.gamesession", "Session {} asked its client to leave {} for {}", GetSessionId(), Ambrose::ForLog(_zonePath, 128), Ambrose::ForLog(zone, 128));
-    return true;
+}
+
+bool GameSession::CheckTeleporterRequirements(PropertyObject const& requirements, RequirementContext const& context, uint64 objectId)
+{
+    if (sRequirementMgr.Evaluate(requirements, context))
+        return true;
+
+    GameMessages::ClientNotifyText notify;
+    notify.NotifyText = "You do not meet the requirements to use this teleporter.";
+    SendDmlMessage(notify);
+    LOG_INFO("server.gamesession", "Session {} refused teleporter object {} because wizard {} does not meet its requirements", GetSessionId(), objectId, _worldGuid);
+    return false;
+}
+
+void GameSession::HandleGoHome(GameMessages::GoHome&)
+{
+    if (!IsShown() || IsTransferring())
+        return;
+
+    std::optional<WorldHub> const hub = sWorldHubMgr.FindForZone(_zonePath);
+    if (!hub)
+    {
+        LOG_WARN("server.gamesession", "Session {} cannot send wizard {} home from {} because world_hub has no route for that zone",
+            GetSessionId(), _worldGuid, Ambrose::ForLog(_zonePath, 128));
+        return;
+    }
+
+    ZonePlace const destination = sZoneMgr.FindPlace(hub->HubZone, hub->HubLocation);
+    if (!destination.Found())
+    {
+        LOG_WARN("server.gamesession", "Session {} cannot send wizard {} home to {} in {} because the place is no longer available",
+            GetSessionId(), _worldGuid, Ambrose::ForLog(hub->HubLocation, 128), Ambrose::ForLog(hub->HubZone, 128));
+        return;
+    }
+
+    GoHomeCooldown::Clock::time_point const now = GoHomeCooldown::Clock::now();
+    std::chrono::seconds const cooldown(sSettings.Get<uint32>("GoHome.CooldownSeconds"));
+    if (!_goHomeCooldown.CanUse(now, cooldown))
+    {
+        ShowTeleportEffect("CantGoHome");
+        LOG_INFO("server.gamesession", "Session {} refused wizard {}'s Go Home press within the live {} second cooldown",
+            GetSessionId(), _worldGuid, cooldown.count());
+        return;
+    }
+
+    PlayerPosition const place{ destination.Location.X, destination.Location.Y, destination.Location.Z, destination.Location.Yaw };
+    ZoneTransfer transfer{ hub->HubZone, hub->HubZone, hub->HubLocation, place };
+    std::string problem;
+    if (!QueueZoneTransfer(std::move(transfer), problem))
+    {
+        LOG_WARN("server.gamesession", "Session {} could not send wizard {} home: {}", GetSessionId(), _worldGuid, problem);
+        return;
+    }
+
+    _goHomeCooldown.RecordUse(now);
+    GameMessages::EnterState state;
+    state.GameObjectId = _worldGuid;
+    state.State = StringHash::StringId("Teleport");
+    SendDmlMessage(state);
+    ShowTeleportEffect("RecallHome");
+    SendZoneTransferRequest(hub->HubZone);
+}
+
+void GameSession::HandleInteractObject(GameMessages::InteractObject& message)
+{
+    if (!IsShown() || IsTransferring() || message.TemplateId > std::numeric_limits<uint32>::max())
+        return;
+
+    Map* const map = _mapId ? sMapMgr.Find(*_mapId) : nullptr;
+    MapObject const* const object = map ? map->FindObject(message.GlobalId) : nullptr;
+    if (!object || object->Spawn.TemplateId != message.TemplateId)
+    {
+        LOG_INFO("server.gamesession", "Session {} refused interaction with object {} because it is not a matching server-known object in {}",
+            GetSessionId(), message.GlobalId, Ambrose::ForLog(_zonePath, 128));
+        return;
+    }
+
+    TemplateLookup const found = sObjectTemplateMgr.Lookup(static_cast<uint32>(object->Spawn.TemplateId));
+    if (!found.Template)
+    {
+        LOG_WARN("server.gamesession", "Session {} cannot resolve the template for interactable object {}: {}", GetSessionId(), message.GlobalId, found.Error);
+        return;
+    }
+    if (found.Template->HasBehavior("UniverseMapBehavior"))
+    {
+        std::optional<WorldHub> const route = sWorldHubMgr.FindForUniverseZone(_zonePath);
+        if (!route)
+        {
+            LOG_WARN("server.gamesession", "Session {} refused the Spiral Door object {} outside a configured universe arrival zone ({})",
+                GetSessionId(), message.GlobalId, Ambrose::ForLog(_zonePath, 128));
+            return;
+        }
+
+        std::vector<WorldHub> const unlocked = WorldHubMgr::FindUnlocked(sWorldHubMgr.All(), _unlockedWorlds);
+        std::string problem;
+        std::optional<std::string> const data = EncodeWorldTeleportOptions(unlocked, problem);
+        if (!data)
+        {
+            LOG_ERROR("server.gamesession", "Session {} cannot encode the Spiral Door world list for object {}: {}", GetSessionId(), message.GlobalId, problem);
+            return;
+        }
+
+        ClearWorldTeleportWizBang();
+        _pendingWorldTeleportId = message.GlobalId;
+        GameMessages::WorldTeleportList list;
+        list.GlobalId = message.GlobalId;
+        list.Data = *data;
+        SendDmlMessage(list);
+        return;
+    }
+
+    std::optional<GameObjectTemplateView> const objectTemplate = GameObjectTemplateView::From(found.Template->Object.get());
+    if (!objectTemplate)
+        return;
+
+    std::optional<TeleportProximityBehaviorTemplateView> teleport;
+    for (PropertyValue const& behaviorValue : objectTemplate->GetBehaviors())
+    {
+        PropertyObject const* const behavior = behaviorValue.AsObject();
+        if (!behavior || !behavior->IsA(TeleportProximityBehaviorTemplateView::Definition.ClassName))
+            continue;
+        teleport = TeleportProximityBehaviorTemplateView::From(behavior);
+        if (teleport)
+            break;
+    }
+    if (!teleport)
+        return;
+
+    double const radius = teleport->GetRadius();
+    if (!std::isfinite(radius) || radius <= 0.0f)
+    {
+        LOG_WARN("server.gamesession", "Session {} refused teleporter object {} because its interaction radius {} is invalid",
+            GetSessionId(), message.GlobalId, radius);
+        return;
+    }
+    PlayerPosition const& current = _movement.GetPosition();
+    PropertyTypes::Vector3D const& origin = object->Spawn.Position;
+    double const dx = static_cast<double>(current.X) - (static_cast<double>(origin.X) + teleport->GetOffsetX());
+    double const dy = static_cast<double>(current.Y) - (static_cast<double>(origin.Y) + teleport->GetOffsetY());
+    double const dz = static_cast<double>(current.Z) - (static_cast<double>(origin.Z) + teleport->GetOffsetZ());
+    if (!std::isfinite(dx) || !std::isfinite(dy) || !std::isfinite(dz) || dx * dx + dy * dy + dz * dz > radius * radius)
+    {
+        LOG_INFO("server.gamesession", "Session {} refused teleporter object {} because wizard {} is outside its interaction radius",
+            GetSessionId(), message.GlobalId, _worldGuid);
+        return;
+    }
+
+    if (PropertyObject const* const requirements = teleport->GetRequirementList())
+    {
+        SessionRequirementContext const context(_zonePath);
+        if (!CheckTeleporterRequirements(*requirements, context, message.GlobalId))
+            return;
+    }
+
+    std::string destinationZone = teleport->GetHousingExtraZone();
+    if (destinationZone.empty())
+        destinationZone = _zonePath;
+    else if (destinationZone.find('/') == std::string::npos)
+    {
+        std::optional<WorldHub> const route = sWorldHubMgr.FindForZone(_zonePath);
+        if (!route)
+        {
+            LOG_WARN("server.gamesession", "Session {} cannot resolve teleporter object {}'s extra zone {} from {}",
+                GetSessionId(), message.GlobalId, Ambrose::ForLog(destinationZone, 128), Ambrose::ForLog(_zonePath, 128));
+            return;
+        }
+        destinationZone = fmt::format("{}/{}", route->World, destinationZone);
+    }
+
+    ZonePlace const destination = sZoneMgr.FindPlace(destinationZone, teleport->GetLocationName());
+    if (!destination.Found())
+    {
+        LOG_WARN("server.gamesession", "Session {} cannot send wizard {} through teleporter object {} to {} in {} because the place is unavailable",
+            GetSessionId(), _worldGuid, message.GlobalId, Ambrose::ForLog(teleport->GetLocationName(), 128), Ambrose::ForLog(destinationZone, 128));
+        return;
+    }
+
+    PlayerPosition const place{ destination.Location.X, destination.Location.Y, destination.Location.Z, destination.Location.Yaw };
+    ZoneTransfer transfer{ destinationZone, destinationZone, teleport->GetLocationName(), place };
+    std::string problem;
+    if (!RequestZoneTransfer(std::move(transfer), problem))
+    {
+        LOG_WARN("server.gamesession", "Session {} could not send wizard {} through teleporter object {}: {}",
+            GetSessionId(), _worldGuid, message.GlobalId, problem);
+        return;
+    }
+
+    GameMessages::EnterState state;
+    state.GameObjectId = _worldGuid;
+    state.State = StringHash::StringId("Teleport");
+    SendDmlMessage(state);
+}
+
+void GameSession::HandleWorldTeleportRequest(GameMessages::WorldTeleportRequest& message)
+{
+    if (message.World.empty())
+    {
+        ClearWorldTeleportWizBang();
+        return;
+    }
+
+    if (!IsShown() || IsTransferring() || !_pendingWorldTeleportId || *_pendingWorldTeleportId != message.TeleportId)
+    {
+        LOG_INFO("server.gamesession", "Session {} refused world teleport request for '{}' without a matching open Spiral Door",
+            GetSessionId(), Ambrose::ForLog(message.World, 64));
+        return;
+    }
+
+    Map* const map = _mapId ? sMapMgr.Find(*_mapId) : nullptr;
+    MapObject const* const object = map ? map->FindObject(*_pendingWorldTeleportId) : nullptr;
+    TemplateLookup const found = object && object->Spawn.TemplateId <= std::numeric_limits<uint32>::max()
+        ? sObjectTemplateMgr.Lookup(static_cast<uint32>(object->Spawn.TemplateId))
+        : TemplateLookup{};
+    if (!object || !found.Template || !found.Template->HasBehavior("UniverseMapBehavior") || !sWorldHubMgr.FindForUniverseZone(_zonePath))
+    {
+        LOG_INFO("server.gamesession", "Session {} refused world teleport request for '{}' because the Spiral Door is no longer available in {}",
+            GetSessionId(), Ambrose::ForLog(message.World, 64), Ambrose::ForLog(_zonePath, 128));
+        ClearWorldTeleportWizBang();
+        return;
+    }
+
+    std::optional<WorldHub> const route = sWorldHubMgr.FindForClientWorld(message.World);
+    if (!route || std::find(_unlockedWorlds.begin(), _unlockedWorlds.end(), route->World) == _unlockedWorlds.end())
+    {
+        LOG_INFO("server.gamesession", "Session {} refused locked or unknown world '{}' at the Spiral Door", GetSessionId(), Ambrose::ForLog(message.World, 64));
+        ClearWorldTeleportWizBang();
+        return;
+    }
+
+    ZonePlace const destination = sZoneMgr.FindPlace(route->UniverseZone, route->UniverseLocation);
+    if (!destination.Found())
+    {
+        LOG_WARN("server.gamesession", "Session {} cannot send wizard {} to {} because its arrival place {} in {} is no longer available",
+            GetSessionId(), _worldGuid, Ambrose::ForLog(message.World, 64), Ambrose::ForLog(route->UniverseLocation, 128), Ambrose::ForLog(route->UniverseZone, 128));
+        ClearWorldTeleportWizBang();
+        return;
+    }
+
+    PlayerPosition const place{ destination.Location.X, destination.Location.Y, destination.Location.Z, destination.Location.Yaw };
+    ZoneTransfer transfer{ route->UniverseZone, route->UniverseZone, route->UniverseLocation, place };
+    std::string problem;
+    if (!RequestZoneTransfer(std::move(transfer), problem))
+    {
+        LOG_WARN("server.gamesession", "Session {} could not send wizard {} through the Spiral Door to {}: {}",
+            GetSessionId(), _worldGuid, Ambrose::ForLog(message.World, 64), problem);
+        return;
+    }
+
+    GameMessages::EnterState state;
+    state.GameObjectId = _worldGuid;
+    state.State = StringHash::StringId("Teleport");
+    SendDmlMessage(state);
+}
+
+void GameSession::ClearWorldTeleportWizBang()
+{
+    if (!_pendingWorldTeleportId)
+        return;
+
+    GameMessages::WizBang wizBang;
+    wizBang.GameObjectId = *_pendingWorldTeleportId;
+    wizBang.WizBangId = 0;
+    SendDmlMessage(wizBang);
+    _pendingWorldTeleportId.reset();
+}
+
+void GameSession::ShowTeleportEffect(std::string_view name)
+{
+    std::shared_ptr<GameEffectStore const> const effects = sGameEffectMgr.GetEffects();
+    GameEffectInfo const* const info = effects ? effects->FindByName(name) : nullptr;
+    if (!info)
+    {
+        LOG_WARN("server.gamesession", "Session {} cannot show teleport effect {} to wizard {} because no matching client effect is loaded",
+            GetSessionId(), Ambrose::ForLog(name, 64), _worldGuid);
+        return;
+    }
+
+    std::string problem;
+    PropertyObjectPtr effect = info->MakeEffect(problem);
+    if (!effect)
+    {
+        LOG_WARN("server.gamesession", "Session {} cannot show teleport effect {} to wizard {}: {}", GetSessionId(), Ambrose::ForLog(name, 64), _worldGuid, problem);
+        return;
+    }
+    if (!AddGameEffect(std::move(effect), problem))
+        LOG_WARN("server.gamesession", "Session {} cannot add teleport effect {} to wizard {}: {}", GetSessionId(), Ambrose::ForLog(name, 64), _worldGuid, problem);
 }
 
 void GameSession::HandleZoneTransferNack(GameMessages::ZoneTransferNack&)
@@ -1983,6 +2390,8 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
     replacement._questRevision = _questRevision;
     replacement._arrived = _arrived;
     replacement._effects = std::move(_effects);
+    replacement._goHomeCooldown = _goHomeCooldown;
+    _goHomeCooldown.Clear();
     _effects.Clear();
     _effectChanges.clear();
     _superseded.store(true, std::memory_order_relaxed);

@@ -97,6 +97,8 @@ public:
     virtual std::optional<bool> HasBadge(std::string_view badgeName) const;
 };
 
+class PropertyObject;
+
 class RequirementMgr
 {
 public:
@@ -114,6 +116,7 @@ public:
     bool Load(std::vector<std::string>& errors);
     bool Evaluate(std::string_view listId, RequirementContext const& context) const;
     bool EvaluateRequirements(RequirementListRow const& list, std::vector<RequirementRow> const& requirements, RequirementContext const& context) const;
+    bool Evaluate(PropertyObject const& list, RequirementContext const& context) const;
     std::uint64_t GetGeneration() const;
     void Clear();
 
@@ -130,6 +133,14 @@ private:
     std::optional<bool> EvaluateRequirement(
         RequirementRow const& row,
         RequirementContext const& context) const;
+    std::optional<bool> EvaluateObjectList(
+        PropertyObject const& list,
+        RequirementContext const& context,
+        std::set<PropertyObject const*>& activeLists) const;
+    std::optional<RequirementRow> DecodeObjectRequirement(
+        PropertyObject const& requirement,
+        std::string const& listId,
+        std::uint32_t position) const;
     void LogUnknownTypeOnce(std::string_view type) const;
 
     ReloadableStore<RequirementStore> _requirements;

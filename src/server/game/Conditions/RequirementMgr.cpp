@@ -7,12 +7,15 @@
 
 #include "DatabaseEnv.h"
 #include "Log.h"
+#include "ObjectViews.h"
+#include "PropertyObject.h"
 #include "ReloadMgr.h"
 #include "ScriptMgr.h"
 
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <set>
 #include <string>
 #include <utility>
@@ -385,6 +388,220 @@ bool RequirementMgr::EvaluateRequirements(RequirementListRow const& list, std::v
     if (result && list.ApplyNot)
         result = !*result;
     return result.value_or(false);
+}
+
+bool RequirementMgr::Evaluate(PropertyObject const& list, RequirementContext const& context) const
+{
+    std::set<PropertyObject const*> activeLists;
+    return EvaluateObjectList(list, context, activeLists).value_or(false);
+}
+
+std::optional<bool> RequirementMgr::EvaluateObjectList(
+    PropertyObject const& object,
+    RequirementContext const& context,
+    std::set<PropertyObject const*>& activeLists) const
+{
+    std::optional<RequirementListView> const list = RequirementListView::From(object);
+    if (!list || !activeLists.insert(&object).second)
+        return std::nullopt;
+
+    int64 const operation = list->GetOperator();
+    if (operation != 0 && operation != 1)
+    {
+        activeLists.erase(&object);
+        return std::nullopt;
+    }
+    bool const isAnd = operation == 0;
+    std::optional<bool> result = isAnd;
+    auto combine = [&result, isAnd](std::optional<bool> value)
+    {
+        if (isAnd)
+        {
+            if ((result && !*result) || (value && !*value))
+                result = false;
+            else if (!result || !value)
+                result = std::nullopt;
+        }
+        else
+        {
+            if ((result && *result) || (value && *value))
+                result = true;
+            else if (!result || !value)
+                result = std::nullopt;
+        }
+    };
+
+    std::uint32_t position = 0;
+    for (PropertyValue const& value : list->GetRequirements())
+    {
+        PropertyObject const* const requirement = value.AsObject();
+        if (!requirement)
+        {
+            combine(std::nullopt);
+            ++position;
+            continue;
+        }
+        if (requirement->IsA(RequirementListView::Definition.ClassName))
+        {
+            combine(EvaluateObjectList(*requirement, context, activeLists));
+            ++position;
+            continue;
+        }
+
+        std::optional<RequirementRow> row = DecodeObjectRequirement(*requirement, "embedded", position++);
+        if (!row)
+        {
+            combine(std::nullopt);
+            continue;
+        }
+        std::optional<bool> valueResult = EvaluateRequirement(*row, context);
+        if (valueResult && row->ApplyNot)
+            valueResult = !*valueResult;
+        combine(valueResult);
+    }
+
+    activeLists.erase(&object);
+    if (result && list->AppliesNot())
+        result = !*result;
+    return result;
+}
+
+std::optional<RequirementRow> RequirementMgr::DecodeObjectRequirement(
+    PropertyObject const& requirement,
+    std::string const& listId,
+    std::uint32_t position) const
+{
+    RequirementRow row;
+    row.ListId = listId;
+    row.Position = position;
+    row.Type = requirement.GetClass().Name;
+    constexpr std::string_view ClassPrefix = "class ";
+    if (row.Type.starts_with(ClassPrefix))
+        row.Type.erase(0, ClassPrefix.size());
+
+    auto const text = [&requirement](std::string_view name) -> std::optional<std::string>
+    {
+        PropertyValue const* const value = requirement.Get(name);
+        std::string const* const result = value ? value->GetIf<std::string>() : nullptr;
+        return result ? std::optional<std::string>(*result) : std::nullopt;
+    };
+    auto const number = [&requirement](std::string_view name) -> std::optional<double>
+    {
+        PropertyValue const* const value = requirement.Get(name);
+        if (value)
+        {
+            if (float const* const result = value->GetIf<float>())
+                return *result;
+            if (double const* const result = value->GetIf<double>())
+                return *result;
+        }
+        return std::nullopt;
+    };
+    auto const boolean = [&requirement](std::string_view name) -> std::optional<bool>
+    {
+        PropertyValue const* const value = requirement.Get(name);
+        bool const* const result = value ? value->GetIf<bool>() : nullptr;
+        return result ? std::optional<bool>(*result) : std::nullopt;
+    };
+    auto const integer = [&requirement](std::string_view name) -> std::optional<std::uint32_t>
+    {
+        PropertyValue const* const value = requirement.Get(name);
+        if (!value)
+            return std::nullopt;
+        if (uint32 const* const result = value->GetIf<uint32>())
+            return *result;
+        if (int32 const* const result = value->GetIf<int32>(); result && *result >= 0)
+            return static_cast<std::uint32_t>(*result);
+        if (int64 const* const result = value->GetIf<int64>(); result && *result >= 0 && static_cast<std::uint64_t>(*result) <= std::numeric_limits<std::uint32_t>::max())
+            return static_cast<std::uint32_t>(*result);
+        return std::nullopt;
+    };
+    auto const fillText = [&row, &text](std::string_view property, std::string& destination)
+    {
+        std::optional<std::string> value = text(property);
+        if (!value)
+            return false;
+        destination = std::move(*value);
+        return true;
+    };
+
+    std::optional<bool> const applyNot = boolean("m_applyNOT");
+    if (!applyNot)
+        return std::nullopt;
+    row.ApplyNot = *applyNot;
+    if (row.Type == "ReqHasQuest")
+    {
+        if (!fillText("m_questName", row.QuestName))
+            return std::nullopt;
+    }
+    else if (row.Type == "ReqHasGoal")
+    {
+        if (!fillText("m_questName", row.QuestName) || !fillText("m_goalName", row.GoalName))
+            return std::nullopt;
+        std::optional<std::uint32_t> const status = integer("m_requiredStatus");
+        if (!status || *status > 2)
+            return std::nullopt;
+        row.RequiredStatus = static_cast<std::uint8_t>(*status);
+    }
+    else if (row.Type == "ReqHasEntry" || row.Type == "ReqEntryValue")
+    {
+        if (!fillText("m_entryName", row.EntryName) || !fillText("m_questName", row.QuestName))
+            return std::nullopt;
+        std::optional<bool> const isQuestRegistry = boolean("m_isQuestRegistry");
+        if (!isQuestRegistry)
+            return std::nullopt;
+        row.IsQuestRegistry = *isQuestRegistry;
+    }
+    else if (row.Type == "ReqGlobalRegistryValue")
+    {
+        if (!fillText("m_entryName", row.EntryName))
+            return std::nullopt;
+    }
+    else if (row.Type == "ReqMagicLevel")
+    {
+        if (!fillText("m_magicSchool", row.MagicSchool))
+            return std::nullopt;
+    }
+    else if (row.Type == "ReqSchoolOfFocus")
+    {
+        if (!fillText("m_magicSchool", row.MagicSchool))
+            return std::nullopt;
+    }
+    else if (row.Type == "ReqIsSchool")
+    {
+        if (!fillText("m_magicSchoolName", row.MagicSchool))
+            return std::nullopt;
+        std::optional<std::uint32_t> const target = integer("m_targetType");
+        if (!target || *target > 1)
+            return std::nullopt;
+        row.TargetType = static_cast<std::uint8_t>(*target);
+    }
+    else if (row.Type == "ReqInZone")
+    {
+        if (!fillText("m_zoneName", row.ZoneName))
+            return std::nullopt;
+    }
+    else if (row.Type == "ReqIsGender")
+    {
+        if (!fillText("m_playerGender", row.Gender))
+            return std::nullopt;
+    }
+    else if (row.Type == "ReqHasBadge")
+    {
+        if (!fillText("m_badgeName", row.BadgeName))
+            return std::nullopt;
+    }
+    else
+        return std::nullopt;
+
+    if (row.Type == "ReqEntryValue" || row.Type == "ReqGlobalRegistryValue" || row.Type == "ReqMagicLevel")
+    {
+        row.NumericValue = number("m_numericValue");
+        row.OperatorType = integer("m_operatorType");
+        if (!row.NumericValue || !row.OperatorType || *row.OperatorType > 4)
+            return std::nullopt;
+    }
+    return row;
 }
 
 std::optional<bool> RequirementMgr::EvaluateList(

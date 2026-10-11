@@ -153,7 +153,9 @@ namespace
             ASSERT_TRUE(info);
             info->Database = fmt::format("ambrose_social_{:08x}", std::random_device()());
             _info = *info;
-            ASSERT_TRUE(DBUpdater::Run(_info, "characters", UpdaterSettings{}));
+            UpdaterSettings updates;
+            updates.AllowPending = true;
+            ASSERT_TRUE(DBUpdater::Run(_info, "characters", updates));
             CharacterDatabase.Close();
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_info.ToConnectionString(), 1, 1));
             ASSERT_EQ(CharacterDatabase.Open(), 0u);

@@ -44,8 +44,9 @@ CLIENTS = ("main", "companion")
 CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "hold_key", "click", "shot",
                   "kill_client", "restart_client", "wait_listener", "play", "hover")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
+WORLD_HUB_FIELDS = ("world", "client_world", "hub_zone", "hub_location", "universe_zone", "universe_location")
 TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "more_wizards", "companion", "variables", "expect", "steps",
-             "patching", "launch", "listeners", "patch_config") + ALLOW_LISTS
+             "patching", "launch", "listeners", "patch_config", "world_hubs", "unlocked_worlds") + ALLOW_LISTS
 COMPANION = ("wizard",)
 PATCHING = ("off", "default")
 LAUNCH = ("console", "window")
@@ -122,6 +123,8 @@ class Scenario:
         self.launch = document.get("launch", "console")
         self.listeners = [dict(listener) for listener in document.get("listeners") or []]
         self.patch_config = dict(document["patch_config"]) if document.get("patch_config") else None
+        self.world_hubs = [dict(route) for route in document.get("world_hubs") or []]
+        self.unlocked_worlds = list(document.get("unlocked_worlds") or [])
 
     @property
     def name(self):
@@ -284,6 +287,28 @@ def _check_document(path, document):
         _check_wizard(path, wizard, "the wizard")
         if not (document.get("requires") or {}).get("gameserver"):
             raise Refused(f"{path} seeds a wizard but does not require the game server it enters the world on")
+    world_hubs = document.get("world_hubs")
+    if world_hubs is not None:
+        if not isinstance(world_hubs, list) or not world_hubs:
+            raise Refused(f"{path}: world_hubs must be a list of one or more routes")
+        if not (document.get("requires") or {}).get("gameserver"):
+            raise Refused(f"{path} seeds world-hub routes but does not require the game server that loads them")
+        for index, route in enumerate(world_hubs):
+            if not isinstance(route, dict) or set(route) != set(WORLD_HUB_FIELDS):
+                raise Refused(f"{path}: world-hub route {index + 1} needs exactly {', '.join(WORLD_HUB_FIELDS)}")
+            for field in WORLD_HUB_FIELDS:
+                if not isinstance(route[field], str) or not route[field].strip():
+                    raise Refused(f"{path}: world-hub route {index + 1} needs a non-empty {field}")
+    unlocked_worlds = document.get("unlocked_worlds")
+    if unlocked_worlds is not None:
+        if not isinstance(unlocked_worlds, list) or any(not isinstance(world, str) or not world.strip() for world in unlocked_worlds):
+            raise Refused(f"{path}: unlocked_worlds must be a list of non-empty world names")
+        if len(unlocked_worlds) != len(set(unlocked_worlds)):
+            raise Refused(f"{path}: unlocked_worlds repeats a world")
+        if unlocked_worlds and wizard is None:
+            raise Refused(f"{path} seeds unlocked worlds but does not seed the wizard that receives them")
+        if unlocked_worlds and not (document.get("requires") or {}).get("gameserver"):
+            raise Refused(f"{path} seeds unlocked worlds but does not require the game server the wizard enters")
     more = document.get("more_wizards")
     if more is not None:
         if not isinstance(more, list) or not more:
@@ -408,6 +433,8 @@ def _merge(base, scenario):
     scenario.expect_failure = base.expect_failure or scenario.expect_failure
     scenario.notes = base.notes + scenario.notes
     scenario.listeners = base.listeners + scenario.listeners
+    scenario.world_hubs = base.world_hubs + [route for route in scenario.world_hubs if route not in base.world_hubs]
+    scenario.unlocked_worlds = base.unlocked_worlds + [world for world in scenario.unlocked_worlds if world not in base.unlocked_worlds]
     scenario.patching = scenario.patching if scenario.patching != "off" else base.patching
     scenario.launch = scenario.launch if scenario.launch != "console" else base.launch
     scenario.patch_config = scenario.patch_config or base.patch_config
@@ -436,6 +463,11 @@ def load(path, search=(), seen=()):
     if included:
         base = load(included, search=list(search) + [os.path.dirname(resolved)], seen=seen + (resolved,))
         scenario = _merge(base, scenario)
+    if scenario.unlocked_worlds:
+        route_worlds = {route["world"] for route in scenario.world_hubs}
+        missing = [world for world in scenario.unlocked_worlds if world not in route_worlds]
+        if missing:
+            raise Refused(f"{scenario.path} unlocks {', '.join(missing)}, which its world_hubs do not route")
     _check_launch(scenario)
     if scenario.companion is None:
         for index, step in enumerate(scenario.steps):
