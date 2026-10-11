@@ -45,6 +45,7 @@ struct SupervisorSettings
     std::filesystem::path DataFolder;
     std::filesystem::path ProgramFolder;
     std::filesystem::path WorkingFolder;
+    CrashPolicySettings CrashPolicy;
 
     static SupervisorSettings Load(ConfigMgr const& config, std::filesystem::path dataFolder, std::filesystem::path programFolder, std::filesystem::path workingFolder, std::vector<std::string>& problems);
 };
@@ -83,7 +84,11 @@ public:
     void SetCommandContext(SupervisorCommandLevel level, SupervisorActorName actor);
     void SetRelayHooks(SupervisorRelayHooks hooks);
     void SetStatusObserver(AppStatusObserver observer);
+    void SetCrashObserver(AppCrashObserver observer);
     static std::string StatusData(AppSnapshot const& snapshot);
+    static std::string CrashEventJson(std::string_view app, CrashEvent const& event);
+    static std::string CrashLoopEventJson(std::string_view app, CrashEvent const& event);
+    static std::string CrashHistoryJson(std::vector<CrashRecord> const& records);
     static std::vector<std::pair<std::string, std::string>> ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,
         std::string_view permission, std::string const& name);
     static std::string QueryString(AdminRequest const& request);
@@ -93,6 +98,8 @@ public:
     static std::optional<AdminResponse> StepUpFor(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail);
 
     PowerResult Power(std::string_view name, PowerAction action, uint32 countdownSeconds);
+    LockResult AcquireAppLock(std::string_view name, std::string holder, std::string action);
+    bool ReleaseAppLock(std::string_view name, std::string holder);
     std::vector<AppSnapshot> Snapshots() const;
     std::optional<std::string> AskApp(std::string_view name, std::string_view path, std::chrono::milliseconds timeout) const;
     std::vector<OutputLine> Output(std::string_view name, OutputRun run, uint64 after) const;
@@ -112,6 +119,7 @@ private:
         std::vector<std::pair<std::string, std::string>> headers);
     ManagedApp* Find(std::string_view name) const;
     void ForwardStatus(AppSnapshot const& snapshot);
+    void ForwardCrash(std::string_view app, CrashEvent const& event);
 
     Log& _log;
     ChildBreakSender _sendBreak;
@@ -124,6 +132,7 @@ private:
     SupervisorRelayHooks _hooks;
     std::mutex _observerMutex;
     AppStatusObserver _statusObserver;
+    AppCrashObserver _crashObserver;
 };
 
 #endif

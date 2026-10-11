@@ -503,6 +503,16 @@ int main(int argc, char** argv)
         {
             Write(stdout, std::string(static_cast<std::size_t>(*number), 'x') + "\n");
         }
+        else if (command == "alloc")
+        {
+            std::size_t const bytes = static_cast<std::size_t>(*number) * 1024 * 1024;
+            std::vector<char> held(bytes, 'x');
+            for (std::size_t page = 0; page < bytes; page += 4096)
+                held[page] = static_cast<char>(page & 0xFF);
+            Write(stdout, "allocated\n");
+            static std::vector<char> kept;
+            kept = std::move(held);
+        }
         else if (command == "unfinished")
         {
             Write(stdout, std::string(static_cast<std::size_t>(*number), 'x'));
