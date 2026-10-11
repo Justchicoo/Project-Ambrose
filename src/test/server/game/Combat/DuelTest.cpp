@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests a duel on a type dump the test writes with the duel classes laid out as the client's dump gives them: a wizard and a creature are seated on the first player and monster circles at the places SubCircle gives them, with each circle's angle and radius copied into them, and a side with no free circle is refused; the circle's WizardClientDuelBehavior carrying its Duel, and each CombatParticipant MSG_COMBATADD carries, the wizard's with its WizGameStats and the creature's with none, decode back to identical objects; the circle's behaviors are filled with the duel and its state categories' start states under the global id it is given; a creature's health, level and school are read from its NPCBehaviorTemplate; and the duel manager finds a duel by participant and sigil and hands an ended one back once.
+ * Tests a duel on a type dump the test writes with the duel classes laid out as the client's dump gives them: a wizard and a creature are seated on the first player and monster circles at the places SubCircle gives them, with each circle's angle and radius copied into them, and a side with no free circle is refused; the circle's WizardClientDuelBehavior carrying its Duel, and each CombatParticipant MSG_COMBATADD carries, the wizard's with its WizGameStats and the creature's with none, decode back to identical objects; the circle's behaviors are filled with the duel and its state categories' start states under the global id it is given; a creature's health, level and school are read from its NPCBehaviorTemplate; the objects each round sends, who is up first, every participant's pips and health, the wizard's planning timer and the round's actions, decode back with the values the round gave them; and the duel manager finds a duel by participant and sigil, steps its round, puts a participant's pass to it and hands an ended one back once.
  */
 
 #include "Duel.h"
@@ -16,7 +16,10 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -73,6 +76,19 @@ namespace
         AddClass(classes, "class NPCBehaviorTemplate", Json::array({ "BehaviorTemplate", "PropertyClass" }),
             { { "std::string", "m_behaviorName" }, { "int", "m_nStartingHealth" }, { "int", "m_nLevel" }, { "std::string", "m_schoolOfFocus" } });
         AddClass(classes, "class Mob", Json::array({ "PropertyClass" }), { { "class BehaviorTemplate*", "m_behaviors" } }, { "m_behaviors" });
+        AddClass(classes, "class UpFirstData", Json::array({ "PropertyClass" }), { { "int", "m_upFirst" }, { "int", "m_roundNum" }, { "int", "m_resultType" } });
+        AddClass(classes, "class PipCount", Json::array({ "PropertyClass" }), { { "unsigned char", "m_genericPips" }, { "unsigned char", "m_powerPips" } });
+        AddClass(classes, "class ParticipantPipData", Json::array({ "PropertyClass" }),
+            { { "gid", "m_partID" }, { "class SharedPointer<class PipCount>", "m_pips" }, { "unsigned int", "m_acq" }, { "unsigned int", "m_arch" }, { "float", "m_archPoints" } });
+        AddClass(classes, "class CombatPipListObj", Json::array({ "PropertyClass" }), { { "class ParticipantPipData", "m_pipList" }, { "unsigned __int64", "m_duelID.m_full" } },
+            { "m_pipList" });
+        AddClass(classes, "class ParticipantParameter", Json::array({ "PropertyClass" }), { { "gid", "m_partID" }, { "unsigned int", "m_data" } });
+        AddClass(classes, "class CombatHealthListObj", Json::array({ "PropertyClass" }), { { "class ParticipantParameter", "m_healthList" }, { "unsigned __int64", "m_duelID.m_full" } },
+            { "m_healthList" });
+        AddClass(classes, "class CombatTimerListObj", Json::array({ "PropertyClass" }), { { "class ParticipantParameter", "m_timeList" }, { "unsigned __int64", "m_duelID.m_full" } },
+            { "m_timeList" });
+        AddClass(classes, "class CombatAction", Json::array({ "PropertyClass" }), { { "int", "m_spellCaster" } });
+        AddClass(classes, "class CombatActionListObj", Json::array({ "PropertyClass" }), { { "class CombatAction", "m_actionList" } }, { "m_actionList" });
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
     }
 
@@ -300,4 +316,98 @@ TEST_F(DuelTest, TheManagerFindsADuelByParticipantAndSigilAndHandsAnEndedOneBack
     EXPECT_EQ(ended.front().GetWinningTeam(), Duel::PlayerTeam);
     EXPECT_TRUE(sDuelMgr.TakeEnded().empty());
     EXPECT_EQ(sDuelMgr.GetCount(), 0u);
+}
+
+TEST_F(DuelTest, EachRoundsObjectsDecodeBackWithTheValuesTheRoundGaveThem)
+{
+    Duel duel = Seated();
+    duel.SetId(0x4000000000300ull);
+    DuelRoundRules rules;
+    rules.StartGraceMs = 0;
+    rules.PrePlanningMs = 0;
+    rules.PlanningMs = 12000;
+    duel.Update(1000, rules);
+    ASSERT_EQ(duel.GetRound(), 1);
+    duel.Update(1100, rules);
+    ASSERT_EQ(duel.GetPhase(), DuelPhase::Planning);
+
+    SerializerOptions options;
+    options.Mask = PropertyFlags::Bit(PropertyFlag::Public);
+    auto const decode = [&](std::string_view message, std::string_view name, std::optional<std::string> const& data) -> PropertyObjectPtr
+    {
+        EXPECT_TRUE(data.has_value()) << message;
+        ObjectField const* const field = ObjectFields::Find(message, name);
+        EXPECT_NE(field, nullptr) << message;
+        if (!data || !field)
+            return nullptr;
+        DecodeResult decoded = ObjectSerializer::DecodeField(_catalog, *field, std::vector<uint8>(data->begin(), data->end()), options);
+        EXPECT_TRUE(decoded.Ok()) << message << ": " << decoded.Detail;
+        return std::move(decoded.Object);
+    };
+    std::string problem;
+
+    PropertyObjectPtr const upFirst = decode("MSG_COMBATPHASE", "Data", duel.EncodeUpFirst(_catalog, problem));
+    ASSERT_TRUE(upFirst) << problem;
+    EXPECT_EQ(*upFirst->Get("m_upFirst")->GetIf<int32>(), Duel::PlayerTeam);
+    EXPECT_EQ(*upFirst->Get("m_roundNum")->GetIf<int32>(), 1);
+
+    PropertyObjectPtr const pips = decode("MSG_COMBATPIPS", "PipData", duel.EncodePips(_catalog, problem));
+    ASSERT_TRUE(pips) << problem;
+    EXPECT_EQ(*pips->Get("m_duelID.m_full")->GetIf<uint64>(), 0x4000000000300ull);
+    PropertyValue::List const* const pipList = pips->Get("m_pipList")->GetList();
+    ASSERT_NE(pipList, nullptr);
+    ASSERT_EQ(pipList->size(), 2u);
+    PropertyObject const* const wizardPips = (*pipList)[0].AsObject();
+    ASSERT_NE(wizardPips, nullptr);
+    EXPECT_EQ(*wizardPips->Get("m_partID")->GetIf<uint64>(), Wizard().OwnerId);
+    PropertyObject const* const count = wizardPips->Get("m_pips")->AsObject();
+    ASSERT_NE(count, nullptr);
+    EXPECT_EQ(*count->Get("m_genericPips")->GetIf<uint8>(), 1u) << "round one gives every participant its first pip";
+
+    PropertyObjectPtr const health = decode("MSG_COMBATHEALTH", "HealthData", duel.EncodeHealth(_catalog, problem));
+    ASSERT_TRUE(health) << problem;
+    PropertyValue::List const* const healthList = health->Get("m_healthList")->GetList();
+    ASSERT_NE(healthList, nullptr);
+    ASSERT_EQ(healthList->size(), 2u);
+    EXPECT_EQ(*(*healthList)[0].AsObject()->Get("m_data")->GetIf<uint32>(), 415u);
+    EXPECT_EQ(*(*healthList)[1].AsObject()->Get("m_partID")->GetIf<uint64>(), Creature().OwnerId);
+    EXPECT_EQ(*(*healthList)[1].AsObject()->Get("m_data")->GetIf<uint32>(), 55u);
+
+    PropertyObjectPtr const timer = decode("MSG_SETPLANNINGPHASETIMER", "TimeData", duel.EncodePlanningTimer(_catalog, problem));
+    ASSERT_TRUE(timer) << problem;
+    PropertyValue::List const* const times = timer->Get("m_timeList")->GetList();
+    ASSERT_NE(times, nullptr);
+    ASSERT_EQ(times->size(), 1u) << "only the wizard plans against the timer";
+    EXPECT_EQ(*(*times)[0].AsObject()->Get("m_partID")->GetIf<uint64>(), Wizard().OwnerId);
+    EXPECT_EQ(*(*times)[0].AsObject()->Get("m_data")->GetIf<uint32>(), 12u);
+
+    PropertyObjectPtr const actions = decode("MSG_COMBATACTIONS", "ActionData", duel.EncodeActions(_catalog, problem));
+    ASSERT_TRUE(actions) << problem;
+    EXPECT_TRUE(actions->Get("m_actionList")->GetList()->empty()) << "a round of passes acts on nothing";
+}
+
+TEST_F(DuelTest, TheManagerStepsEachRoundAndPutsAPassToTheDuelItsWizardIsIn)
+{
+    sDuelMgr.Clear();
+    Duel duel = Seated();
+    duel.SetId(0x4000000000400ull);
+    sDuelMgr.Add(std::move(duel));
+    DuelRoundRules rules;
+    rules.StartGraceMs = 0;
+    rules.PrePlanningMs = 0;
+    EXPECT_FALSE(sDuelMgr.Choose(0x999, static_cast<uint8>(DuelMove::Pass)).has_value());
+    sDuelMgr.Update(0, rules);
+    sDuelMgr.Update(100, rules);
+    ASSERT_EQ(sDuelMgr.Find(0x4000000000400ull)->GetPhase(), DuelPhase::Planning);
+    EXPECT_FALSE(sDuelMgr.Find(0x4000000000400ull)->GetRoundState().GetEvents().empty());
+
+    std::optional<std::pair<uint64, DuelMoveResult>> const passed = sDuelMgr.Choose(Wizard().OwnerId, static_cast<uint8>(DuelMove::Pass));
+    ASSERT_TRUE(passed.has_value());
+    EXPECT_EQ(passed->first, 0x4000000000400ull);
+    EXPECT_EQ(passed->second, DuelMoveResult::Chosen);
+    sDuelMgr.Update(200, rules);
+    EXPECT_EQ(sDuelMgr.Find(0x4000000000400ull)->GetPhase(), DuelPhase::Execution) << "the creature passed as planning opened, so the wizard's pass ends planning";
+    sDuelMgr.ClearEvents();
+    EXPECT_TRUE(sDuelMgr.Find(0x4000000000400ull)->GetRoundState().GetEvents().empty());
+    sDuelMgr.Clear();
 }

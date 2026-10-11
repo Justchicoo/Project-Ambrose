@@ -6,6 +6,7 @@
 #ifndef AMBROSE_DUEL_H
 #define AMBROSE_DUEL_H
 
+#include "DuelRound.h"
 #include "PropertyObject.h"
 #include "SigilInfo.h"
 #include "StringHash.h"
@@ -27,18 +28,6 @@ namespace DuelStates
     inline constexpr uint32 CircleAdded = StringHash::StringId("OnAdd");
     inline constexpr uint32 CircleNotInteracting = StringHash::StringId("NotInteracting");
 }
-
-enum class DuelPhase : uint8
-{
-    Starting = 0,
-    PrePlanning = 1,
-    Planning = 2,
-    PreExecution = 3,
-    Execution = 4,
-    Resolution = 5,
-    Victory = 6,
-    Ended = 7
-};
 
 struct DuelCombatant
 {
@@ -78,6 +67,14 @@ public:
     static constexpr std::string_view BehaviorClass = "class WizardClientDuelBehavior";
     static constexpr std::string_view NpcBehaviorClass = "class NPCBehaviorTemplate";
     static constexpr std::string_view StateBehaviorClass = "class ObjectStateBehavior";
+    static constexpr std::string_view UpFirstClass = "class UpFirstData";
+    static constexpr std::string_view PipListClass = "class CombatPipListObj";
+    static constexpr std::string_view ParticipantPipsClass = "class ParticipantPipData";
+    static constexpr std::string_view PipCountClass = "class PipCount";
+    static constexpr std::string_view HealthListClass = "class CombatHealthListObj";
+    static constexpr std::string_view TimerListClass = "class CombatTimerListObj";
+    static constexpr std::string_view ParameterClass = "class ParticipantParameter";
+    static constexpr std::string_view ActionListClass = "class CombatActionListObj";
     static constexpr std::string_view PlayerCircle = "PlayerCircle";
     static constexpr std::string_view MonsterCircle = "MonsterCircle";
     static constexpr int32 PlayerTeam = 0;
@@ -92,13 +89,16 @@ public:
     PropertyTypes::Vector3D const& GetPosition() const noexcept { return _position; }
     float GetYaw() const noexcept { return _yaw; }
     SigilInfo const& GetSigil() const noexcept { return _sigil; }
-    DuelPhase GetPhase() const noexcept { return _phase; }
-    void SetPhase(DuelPhase phase) noexcept { _phase = phase; }
-    int32 GetRound() const noexcept { return _round; }
-    int32 GetFirstTeam() const noexcept { return _firstTeam; }
+    DuelPhase GetPhase() const noexcept { return _round.GetPhase(); }
+    int32 GetRound() const noexcept { return _round.GetRound(); }
+    int32 GetFirstTeam() const noexcept { return _round.GetFirstTeam(); }
+    DuelRound const& GetRoundState() const noexcept { return _round; }
+    void Update(uint64 nowMs, DuelRoundRules const& rules) { _round.Update(nowMs, rules); }
+    DuelMoveResult Choose(uint64 ownerId, uint8 moveType) { return _round.Choose(ownerId, moveType); }
+    void ClearEvents() noexcept { _round.ClearEvents(); }
     int32 GetWinningTeam() const noexcept { return _winningTeam; }
     void End(int32 winningTeam) noexcept;
-    bool IsEnded() const noexcept { return _phase == DuelPhase::Ended; }
+    bool IsEnded() const noexcept { return _round.GetPhase() == DuelPhase::Ended; }
 
     std::optional<SubCirclePlacement> NextSeat(bool player) const;
     bool Seat(DuelCombatant const& combatant, std::string& problem);
@@ -113,10 +113,18 @@ public:
     bool EncodeParticipants(TypeCatalogPtr const& catalog, std::string& problem);
     std::vector<std::string> const& GetEncodedParticipants() const noexcept { return _encoded; }
 
+    std::optional<std::string> EncodeUpFirst(TypeCatalogPtr const& catalog, std::string& problem) const;
+    std::optional<std::string> EncodePips(TypeCatalogPtr const& catalog, std::string& problem) const;
+    std::optional<std::string> EncodeHealth(TypeCatalogPtr const& catalog, std::string& problem) const;
+    std::optional<std::string> EncodePlanningTimer(TypeCatalogPtr const& catalog, std::string& problem) const;
+    std::optional<std::string> EncodeActions(TypeCatalogPtr const& catalog, std::string& problem) const;
+
     static std::optional<std::string> EncodeParticipant(PropertyObject const& participant, std::string& problem);
+    static std::optional<std::string> EncodeField(std::string_view message, std::string_view field, PropertyObject const& object, std::string& problem);
     static std::optional<CreatureCombatStats> ReadCreature(PropertyObject const& objectTemplate, std::string& problem);
 
 private:
+    PropertyObjectPtr Make(TypeCatalogPtr const& catalog, std::string_view className, std::string& problem) const;
     std::optional<std::size_t> FreeCircle(std::string_view side) const;
 
     uint64 _id = 0;
@@ -125,9 +133,7 @@ private:
     PropertyTypes::Vector3D _position;
     float _yaw = 0.0f;
     SigilInfo _sigil;
-    DuelPhase _phase = DuelPhase::Starting;
-    int32 _round = 0;
-    int32 _firstTeam = PlayerTeam;
+    DuelRound _round;
     int32 _winningTeam = PlayerTeam;
     std::vector<DuelParticipant> _participants;
     std::vector<std::string> _encoded;

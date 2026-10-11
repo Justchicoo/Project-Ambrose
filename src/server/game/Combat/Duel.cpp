@@ -39,7 +39,7 @@ Duel::Duel(uint32 mapId, uint64 sigilRow, PropertyTypes::Vector3D const& positio
 void Duel::End(int32 winningTeam) noexcept
 {
     _winningTeam = winningTeam;
-    _phase = DuelPhase::Ended;
+    _round.End();
 }
 
 std::optional<std::size_t> Duel::FreeCircle(std::string_view side) const
@@ -81,6 +81,7 @@ bool Duel::Seat(DuelCombatant const& combatant, std::string& problem)
     participant.Rotation = at.Rotation;
     participant.Radius = at.Radius;
     participant.Place = SubCircle::Place(_position, _yaw, at.Rotation, at.Radius);
+    _round.Seat(combatant.OwnerId, participant.Team, combatant.IsPlayer);
     _participants.push_back(std::move(participant));
     return true;
 }
@@ -89,6 +90,7 @@ void Duel::SetOwner(std::size_t participant, uint64 ownerId) noexcept
 {
     if (participant < _participants.size())
         _participants[participant].Combatant.OwnerId = ownerId;
+    _round.SetOwner(participant, ownerId);
 }
 
 DuelParticipant const* Duel::FindParticipant(uint64 ownerId) const noexcept
@@ -109,9 +111,9 @@ PropertyObjectPtr Duel::BuildDuelObject(TypeCatalogPtr const& catalog, std::stri
         .Set("m_duelID.m_full", _id)
         .Set("m_position", _position)
         .Set("m_yaw", _yaw)
-        .Set("m_firstTeamToAct", _firstTeam)
-        .Set("m_originalFirstTeamToAct", _firstTeam)
-        .Set("m_roundNum", _round)
+        .Set("m_firstTeamToAct", _round.GetFirstTeam())
+        .Set("m_originalFirstTeamToAct", _round.GetFirstTeam())
+        .Set("m_roundNum", _round.GetRound())
         .Set("m_bPVP", false);
     if (!problem.empty())
         return nullptr;
@@ -212,22 +214,118 @@ bool Duel::EncodeParticipants(TypeCatalogPtr const& catalog, std::string& proble
 
 std::optional<std::string> Duel::EncodeParticipant(PropertyObject const& participant, std::string& problem)
 {
-    ObjectField const* const field = ObjectFields::Find("MSG_COMBATADD", "ParticipantData");
-    if (!field)
+    return EncodeField("MSG_COMBATADD", "ParticipantData", participant, problem);
+}
+
+std::optional<std::string> Duel::EncodeField(std::string_view message, std::string_view field, PropertyObject const& object, std::string& problem)
+{
+    ObjectField const* const declared = ObjectFields::Find(message, field);
+    if (!declared)
     {
-        problem = "MSG_COMBATADD's ParticipantData is not declared";
+        problem = fmt::format("{}'s {} is not declared", message, field);
         return std::nullopt;
     }
     SerializerOptions options;
     options.Mask = PropertyFlags::Bit(PropertyFlag::Public);
     options.Flags = SerializerFlag::None;
-    EncodeResult encoded = ObjectSerializer::EncodeField(*field, &participant, options);
+    EncodeResult encoded = ObjectSerializer::EncodeField(*declared, &object, options);
     if (!encoded.Ok())
     {
         problem = std::move(encoded.Detail);
         return std::nullopt;
     }
     return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
+}
+
+PropertyObjectPtr Duel::Make(TypeCatalogPtr const& catalog, std::string_view className, std::string& problem) const
+{
+    PropertyObjectPtr made = catalog ? PropertyObject::Create(catalog, className) : nullptr;
+    if (!made)
+        problem = fmt::format("the type dump has no {}", className);
+    return made;
+}
+
+std::optional<std::string> Duel::EncodeUpFirst(TypeCatalogPtr const& catalog, std::string& problem) const
+{
+    PropertyObjectPtr const upFirst = Make(catalog, UpFirstClass, problem);
+    if (!upFirst)
+        return std::nullopt;
+    PropertyFiller(*upFirst, problem).Set("m_upFirst", _round.GetFirstTeam()).Set("m_roundNum", _round.GetRound()).Set("m_resultType", int32{ 0 });
+    if (!problem.empty())
+        return std::nullopt;
+    return EncodeField("MSG_COMBATPHASE", "Data", *upFirst, problem);
+}
+
+std::optional<std::string> Duel::EncodePips(TypeCatalogPtr const& catalog, std::string& problem) const
+{
+    PropertyObjectPtr const list = Make(catalog, PipListClass, problem);
+    if (!list)
+        return std::nullopt;
+    PropertyValue::List pips;
+    for (DuelSeat const& seat : _round.GetSeats())
+    {
+        PropertyObjectPtr entry = Make(catalog, ParticipantPipsClass, problem);
+        PropertyObjectPtr count = Make(catalog, PipCountClass, problem);
+        if (!entry || !count)
+            return std::nullopt;
+        PropertyFiller(*count, problem).Set("m_genericPips", static_cast<uint8>(seat.Pips));
+        PropertyFiller(*entry, problem).Set("m_partID", seat.OwnerId).Set("m_pips", std::move(count));
+        pips.emplace_back(std::move(entry));
+    }
+    PropertyFiller(*list, problem).Set("m_pipList", std::move(pips)).Set("m_duelID.m_full", _id);
+    if (!problem.empty())
+        return std::nullopt;
+    return EncodeField("MSG_COMBATPIPS", "PipData", *list, problem);
+}
+
+std::optional<std::string> Duel::EncodeHealth(TypeCatalogPtr const& catalog, std::string& problem) const
+{
+    PropertyObjectPtr const list = Make(catalog, HealthListClass, problem);
+    if (!list)
+        return std::nullopt;
+    PropertyValue::List health;
+    for (DuelParticipant const& participant : _participants)
+    {
+        PropertyObjectPtr entry = Make(catalog, ParameterClass, problem);
+        if (!entry)
+            return std::nullopt;
+        PropertyFiller(*entry, problem).Set("m_partID", participant.Combatant.OwnerId).Set("m_data", static_cast<uint32>(std::max(participant.Combatant.Health, 0)));
+        health.emplace_back(std::move(entry));
+    }
+    PropertyFiller(*list, problem).Set("m_healthList", std::move(health)).Set("m_duelID.m_full", _id);
+    if (!problem.empty())
+        return std::nullopt;
+    return EncodeField("MSG_COMBATHEALTH", "HealthData", *list, problem);
+}
+
+std::optional<std::string> Duel::EncodePlanningTimer(TypeCatalogPtr const& catalog, std::string& problem) const
+{
+    PropertyObjectPtr const list = Make(catalog, TimerListClass, problem);
+    if (!list)
+        return std::nullopt;
+    PropertyValue::List times;
+    for (DuelSeat const& seat : _round.GetSeats())
+    {
+        if (!seat.IsPlayer)
+            continue;
+        PropertyObjectPtr entry = Make(catalog, ParameterClass, problem);
+        if (!entry)
+            return std::nullopt;
+        PropertyFiller(*entry, problem).Set("m_partID", seat.OwnerId).Set("m_data", _round.GetPlanningSeconds());
+        times.emplace_back(std::move(entry));
+    }
+    PropertyFiller(*list, problem).Set("m_timeList", std::move(times)).Set("m_duelID.m_full", _id);
+    if (!problem.empty())
+        return std::nullopt;
+    return EncodeField("MSG_SETPLANNINGPHASETIMER", "TimeData", *list, problem);
+}
+
+std::optional<std::string> Duel::EncodeActions(TypeCatalogPtr const& catalog, std::string& problem) const
+{
+    PropertyObjectPtr const list = Make(catalog, ActionListClass, problem);
+    if (!list)
+        return std::nullopt;
+    return EncodeField("MSG_COMBATACTIONS", "ActionData", *list, problem);
 }
 
 std::optional<CreatureCombatStats> Duel::ReadCreature(PropertyObject const& objectTemplate, std::string& problem)

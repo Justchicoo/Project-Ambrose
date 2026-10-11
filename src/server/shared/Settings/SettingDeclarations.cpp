@@ -73,6 +73,11 @@ namespace
             Unsigned("LoginComplete.CSRSecurityLevel", "2", "0", "4", "", "World", Game, NextUse, "The account security level from which MSG_LOGINCOMPLETE opens the client's game master tools."),
             Flag("LoginComplete.TestServer", "false", "World", Game, NextUse, "Whether MSG_LOGINCOMPLETE tells the client it is on a test server."),
 
+            Unsigned("Combat.MaxPips", "7", "0", "14", "pips", "Combat", Game, Live, "The most pips a duel participant may hold; the round's gain stops there."),
+            Unsigned("Combat.PipsPerRound", "1", "0", "7", "pips", "Combat", Game, Live, "How many pips every living duel participant gains as each round begins."),
+            Unsigned("Combat.PlanningSeconds", "30", "1", "600", "s", "Combat", Game, Live, "How long a duel's planning phase lasts before every participant without a move passes; read as each round begins, so a change applies from the next round."),
+            Unsigned("Combat.PrePlanningSeconds", "2", "0", "60", "s", "Combat", Game, Live, "How long each round shows who is up first before its planning phase opens; read as each round begins."),
+            Unsigned("Combat.StartGraceSeconds", "3", "0", "60", "s", "Combat", Game, Live, "How long a new duel waits, with its participants on their circles, before its first round begins."),
             Unsigned("Inventory.Slots", "100", "0", "10000", "items", "Inventory", Game, NextUse,
                 "How many items every wizard's backpack holds, read when the wizard enters the world and sent to its client as the m_numItemsAllowed of its inventory behavior, since neither the player template nor any other file of the install gives one."),
             Unsigned("Inventory.ExtraSlots", "0", "0", "10000", "items", "Inventory", Game, Live,
