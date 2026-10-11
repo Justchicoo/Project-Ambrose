@@ -1,6 +1,6 @@
- /*
-  * Project Ambrose by Imjustchico
-  * Implements game-session attachment, persistent character state including quests, inventory, equipment and world unlocks, client messages and NPC/teleporter interactions, chat, movement and shared world updates, duels, and custom emotes.
+/*
+ * Project Ambrose by Imjustchico
+ * Implements game-session attachment, persistent character state including quests, inventory, equipment and world unlocks, client messages and NPC/teleporter interactions, chat, movement and shared world updates, duels, and custom emotes.
  */
 
 #include "GameSession.h"

@@ -1,6 +1,6 @@
- /*
-  * Project Ambrose by Imjustchico
-  * Ambrose-authored LOGIN, GAME, WIZARD, WIZARD2, WIZARD3 and WizCombat fixtures for login and game tests, including authentication, character selection, transfers, movement, combat, chat, social, inventory, equipment, quest, and NPC interactions, plus MSG_GOHOME, MSG_WORLDTELEPORTLIST and MSG_WORLDTELEPORTREQUEST.
+/*
+ * Project Ambrose by Imjustchico
+ * Ambrose-authored LOGIN, GAME, WIZARD, WIZARD2, WIZARD3 and WizCombat fixtures for login and game tests, including authentication, character selection, transfers, movement, combat, chat, social, inventory, equipment, quest, and NPC interactions, plus MSG_GOHOME, MSG_WORLDTELEPORTLIST and MSG_WORLDTELEPORTREQUEST.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
