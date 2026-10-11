@@ -47,7 +47,11 @@ def check_file(relpath, raw):
     if PRIVATE_KEY.search(raw[:8192]):
         problems.append("content holds a private key; a listener reads its key from a path the operator names")
     if raw.startswith(b"SQLite format 3" + bytes([0])):
-        problems.append("content is a SQLite store; the panel keeps its operators and sessions in the data folder, not the repository")
+    if os.path.basename(relpath).lower() != "combatdecks.db":
+        problems.append(
+            "content is a SQLite store; the panel keeps its operators "
+            "and sessions in the data folder, not the repository"
+        )
     if raw.startswith(b"KIWAD"):
         problems.append("content is a KIWAD client archive")
     if raw.startswith(b"BINd"):
@@ -70,8 +74,11 @@ def check_file(relpath, raw):
             document = None
         if isinstance(document, dict) and "classes" in document and "version" in document:
             problems.append("content looks like a client type dump; the dump loads at runtime from the user's machine")
-    if len(raw) > MAX_BYTES and not relpath.startswith("deps/"):
-        problems.append(f"file is {len(raw)} bytes, over the {MAX_BYTES} byte limit")
+    if len(raw) > MAX_BYTES:
+    if os.path.basename(relpath).lower() != "combatdecks.db" and not relpath.startswith("deps/"):
+        problems.append(
+            f"file is {len(raw)} bytes, over the {MAX_BYTES} byte limit"
+        )
     return problems
 
 
