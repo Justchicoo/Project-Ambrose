@@ -7,8 +7,6 @@ import subprocess
 import sys
 import tempfile
 
-import pymysql
-
 from . import paths
 
 PACKAGES = (("win32gui", "pywin32"), ("PIL", "pillow"), ("psutil", "psutil"), ("pymysql", "pymysql"),
@@ -45,6 +43,10 @@ def ask_launcher(binaries, host, port, window, run_dir, client=None):
 
 
 def database_error(host, port, user, password, timeout=2.0):
+    try:
+        import pymysql
+    except ImportError:
+        return "PyMySQL is not installed, so the scratch database could not be checked"
     try:
         connection = pymysql.connect(host=host, port=port, user=user, password=password, connect_timeout=timeout)
     except (OSError, pymysql.MySQLError) as error:

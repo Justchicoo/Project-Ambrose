@@ -2857,7 +2857,9 @@ class PreflightTests(unittest.TestCase):
 
     def test_scratch_database_preflight_authenticates_without_selecting_a_database(self):
         connection = mock.Mock()
-        with mock.patch.object(preflight.pymysql, "connect", return_value=connection) as connect:
+        driver = SimpleNamespace(connect=mock.Mock(return_value=connection), MySQLError=RuntimeError)
+        connect = driver.connect
+        with mock.patch.dict(sys.modules, {"pymysql": driver}):
             problem = preflight.database_error("127.0.0.1", 3307, "ambrose", "ambrose")
 
         self.assertEqual(problem, "")
@@ -2865,10 +2867,20 @@ class PreflightTests(unittest.TestCase):
         connection.close.assert_called_once_with()
 
     def test_scratch_database_authentication_failure_is_reported(self):
-        with mock.patch.object(preflight.pymysql, "connect", side_effect=preflight.pymysql.MySQLError("access denied")):
+        class MySQLError(Exception):
+            pass
+
+        driver = SimpleNamespace(connect=mock.Mock(side_effect=MySQLError("access denied")), MySQLError=MySQLError)
+        with mock.patch.dict(sys.modules, {"pymysql": driver}):
             problem = preflight.database_error("127.0.0.1", 3306, "ambrose", "wrong")
 
         self.assertEqual(problem, "scratch database connection failed on 127.0.0.1:3306: access denied")
+
+    def test_missing_pymysql_is_reported_without_importing_it_at_module_load(self):
+        with mock.patch.dict(sys.modules, {"pymysql": None}):
+            problem = preflight.database_error("127.0.0.1", 3306, "ambrose", "ambrose")
+
+        self.assertEqual(problem, "PyMySQL is not installed, so the scratch database could not be checked")
 
     def test_launcher_probe_receives_the_explicit_client_install(self):
         result = mock.Mock(stdout="launcher: install C:/Wizard101 (r806919.Wizard_1_610)\n", stderr="", returncode=0)
