@@ -29,6 +29,7 @@
 
 class Log;
 class PanelGrants;
+class PanelGrantSets;
 class PanelUsers;
 
 struct PanelEventCaller
@@ -83,7 +84,7 @@ public:
 
     using Handler = std::function<void(Call const&)>;
 
-    PanelEventSocket(Log& log, PanelEventStreams& streams, PanelEventTickets& tickets, SessionSource& sessions, PanelUsers& users, PanelGrants& grants, AdminRouter& routes);
+    PanelEventSocket(Log& log, PanelEventStreams& streams, PanelEventTickets& tickets, SessionSource& sessions, PanelUsers& users, PanelGrants& grants, PanelGrantSets& sets, AdminRouter& routes);
     ~PanelEventSocket();
 
     PanelEventSocket(PanelEventSocket const&) = delete;
@@ -102,6 +103,7 @@ public:
     void Stop();
     std::size_t Sweep();
     std::size_t GetConnectionCount() const;
+    void NotifyUser(int64 userId, std::string_view type, std::string const& data);
 
     static std::string ReadyData(PanelEventCaller const& caller, std::string_view instance, std::vector<std::string> const& apps, int64 nowMs);
     static std::string ErrorData(std::optional<std::string> const& request, std::string_view code, std::string_view message, std::string_view correlation);
@@ -131,6 +133,7 @@ private:
     SessionSource& _sessions;
     PanelUsers& _users;
     PanelGrants& _grants;
+    PanelGrantSets& _sets;
     AdminRouter& _routes;
 
     mutable std::mutex _mutex;
