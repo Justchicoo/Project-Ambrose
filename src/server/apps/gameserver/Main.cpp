@@ -70,6 +70,7 @@
 #include "MessageRegistry.h"
 #include "SessionContext.h"
 #include "NetworkHooks.h"
+#include "PortProbe.h"
 #include "SocketMgr.h"
 #include "World.h"
 #include "ServerApp.h"
@@ -336,6 +337,8 @@ namespace
                 return false;
             }
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
+            sSettings.AddCheck("WorldServerPort", [this](std::string_view, Settings::ProposedValue const& proposed) { return CheckListenEndpoint(proposed); });
+            sSettings.AddCheck("BindIP", [this](std::string_view, Settings::ProposedValue const& proposed) { return CheckListenEndpoint(proposed); });
             if (!sAccountMgr.LoadSettings(Config()))
             {
                 _databases.Close();
@@ -1063,6 +1066,41 @@ namespace
             }
         }
 
+        std::optional<std::string> CheckListenEndpoint(Settings::ProposedValue const& proposed)
+        {
+            std::string const address = proposed("BindIP");
+            uint16 port = 0;
+            try
+            {
+                unsigned long const parsed = std::stoul(proposed("WorldServerPort"));
+                if (parsed > 65535)
+                    return fmt::format("port {} is outside 1-65535", proposed("WorldServerPort"));
+                port = static_cast<uint16>(parsed);
+            }
+            catch (std::exception const&)
+            {
+                return std::nullopt;
+            }
+            if (_sockets && _sockets->GetSettings().BindIp == address && _sockets->GetPort() == port)
+                return std::nullopt;
+            std::string error;
+            if (PortProbe::IsFree(PortProbe::Protocol::Tcp, address, port, error))
+                return std::nullopt;
+            return fmt::format("port {} is already in use on {}: {}", port, address, error);
+        }
+
+        void RevertListenSettings()
+        {
+            NetworkSettings const serving = _sockets->GetSettings();
+            SettingAuthor author;
+            author.Who = "gameserver";
+            author.Source = "listener";
+            std::string const reason = fmt::format("the new address would not bind, so the listener keeps serving {}:{}", serving.BindIp, serving.Port);
+            std::vector<Settings::SettingEntry> const entries{ { "BindIP", serving.BindIp }, { "WorldServerPort", std::to_string(serving.Port) } };
+            if (!sSettings.SetMany(entries, author, reason).Ok())
+                LOG_ERROR("server.gameserver", "Could not revert the listen settings after the failed rebind");
+        }
+
         void ApplySetting(SettingChange const& change)
         {
             std::string_view const key = change.Key;
@@ -1085,19 +1123,25 @@ namespace
                 sObjectTemplateMgr.SetBudget(std::size_t{ sSettings.Get<uint32>("Templates.CacheSize") } << 20);
             else if (key == "Realm.Name" || key == "Realm.Address" || key == "PublicAddress" || key == "Realm.HeartbeatInterval")
                 _heartbeat.Reconfigure(RealmHeartbeatSettings::Load(Config()));
-            else if (_context && (key.starts_with("Network.") || key == "Attach.Timeout"))
+            else if (_context && (key.starts_with("Network.") || key == "Attach.Timeout" || key == "BindIP" || key == "WorldServerPort"))
             {
                 std::vector<std::string> problems;
                 _context->SetSettings(SessionSettings::Load(Config(), &problems));
                 for (std::string const& problem : problems)
                     LOG_WARN("server.gameserver", "{}", problem);
-                if (_sockets && key.starts_with("Network."))
+                if (_sockets && (key.starts_with("Network.") || key == "BindIP" || key == "WorldServerPort"))
                 {
                     problems.clear();
                     NetworkSettings const settings = NetworkSettings::Load(Config(), "WorldServerPort", DefaultWorldPort, &problems);
                     std::string error;
                     if (!_sockets->ApplySettings(settings, error))
-                        LOG_WARN("server.gameserver", "Cannot apply network settings: {}", error);
+                    {
+                        LOG_WARN("server.gameserver", "Cannot apply network settings, so the listener on {}:{} goes on serving: {}",
+                            _sockets->GetSettings().BindIp, _sockets->GetPort(), error);
+                        RevertListenSettings();
+                    }
+                    else
+                        SetListener(settings.BindIp, _sockets->GetPort());
                     for (std::string const& problem : problems)
                         LOG_WARN("server.gameserver", "{}", problem);
                 }
