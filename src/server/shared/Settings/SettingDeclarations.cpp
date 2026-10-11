@@ -68,6 +68,7 @@ namespace
         std::vector<SettingDeclaration> table{
             Unsigned("World.UpdateInterval", "50", "1", "10000", "ms", "World", Game, Live, "How long the world waits between ticks."),
             Unsigned("World.Heartbeat", "60", "0", "86400", "s", "World", Game, Live, "How often the world logs that it is still ticking; 0 turns the line off."),
+            Text("World.CreatureDeckFile", "", "1024", "World", Game, Live, "A creature deck file kept on this machine, a SQLite database whose deck table lists each deck's spells with their copies, read beside the world database's decks at each load; empty reads none."),
             Unsigned("LoginComplete.Permissions", "47", "0", "4294967295", "", "World", Game, NextUse,
                 "The permission bits MSG_LOGINCOMPLETE gives a wizard: 0x1 and 0x4 chat level, 0x2 and 0x8 show chat, 0x20 gifting, 0x40 test features, 0x400 paying, 0x1000 earning crowns."),
             Unsigned("LoginComplete.CSRSecurityLevel", "2", "0", "4", "", "World", Game, NextUse, "The account security level from which MSG_LOGINCOMPLETE opens the client's game master tools."),
