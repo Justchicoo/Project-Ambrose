@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Splits Supervisor.Apps at spaces and commas, refuses a name that is not 1 to 32 letters, digits, dashes or underscores and a name given twice, finds a program named without a folder beside the supervisor and adds .exe on Windows, resolves the working folder against the supervisor's and the config file against the app's working folder, and keeps each timeout from 1 second to an hour.
+ * Splits Supervisor.Apps at spaces and commas, refuses a name that is not 1 to 32 letters, digits, dashes or underscores and a name given twice, finds a program named without a folder beside the supervisor and adds .exe on Windows, resolves the working folder against the supervisor's and the config file against the app's working folder, keeps each timeout from 1 second to an hour, and reads the optional memory limit in megabytes.
  */
 
 #include "AppDefinition.h"
@@ -79,6 +79,11 @@ std::vector<AppDefinition> AppDefinition::Load(ConfigMgr const& config, std::fil
         app.Autostart = config.GetOption<bool>(prefix + "Autostart", true, true);
         app.StartTimeout = ReadTimeout(config, prefix + "StartTimeout", DefaultStartTimeoutSeconds, problems);
         app.StopTimeout = ReadTimeout(config, prefix + "StopTimeout", DefaultStopTimeoutSeconds, problems);
+        uint64 const limitMb = config.GetOption<uint64>(prefix + "MemoryLimitMB", 0, true);
+        uint64 const boundedMb = std::clamp<uint64>(limitMb, 0, 1048576);
+        if (boundedMb != limitMb)
+            problems.push_back(fmt::format("{} is {} MB, outside 0 to 1048576; using {}", prefix + "MemoryLimitMB", limitMb, boundedMb));
+        app.MemoryLimitBytes = boundedMb * 1024 * 1024;
         apps.push_back(std::move(app));
     }
     return apps;

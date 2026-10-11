@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports, through that API or a start-step line, asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running and reports that wait as backoff, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches. Every change of state passes through one place that stamps when the state began, and each change, or a change of its process, crash count or restart time within a state, reaches the status observer once and in order, from the controller thread and never under the app's own lock.
+ * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports, through that API or a start-step line, asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, classifies every exit as requested, clean but unexpected, a crash, out of memory or a startup failure, keeps a crash record with the last 200 log lines for each crash, restarts a crashed app after an exponential backoff from a second towards five minutes that resets after ten healthy minutes, stops restarting once enough crashes inside the window make a crash loop until someone starts it by hand, ends an app past its memory limit, holds one operation lock that refuses power actions and defers the restart while held, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches. Every change of state passes through one place that stamps when the state began, and each change, or a change of its process, crash count or restart time within a state, reaches the status observer once and in order, from the controller thread and never under the app's own lock.
  */
 
 #ifndef AMBROSE_MANAGEDAPP_H
@@ -9,6 +9,7 @@
 #include "AdminClient.h"
 #include "AppDefinition.h"
 #include "ChildProcess.h"
+#include "CrashPolicy.h"
 #include "OutputLog.h"
 #include "SupervisorState.h"
 #include "Types.h"
@@ -35,7 +36,8 @@ enum class AppState : uint8
     Running,
     Stopping,
     Crashed,
-    Backoff
+    Backoff,
+    CrashLoop
 };
 
 enum class PowerAction : uint8
@@ -61,8 +63,23 @@ struct AppExit
     std::optional<int64> Code;
     std::optional<int> Signal;
     bool Requested = false;
+    bool MemoryKill = false;
     AppState During = AppState::Running;
     int64 UptimeMs = 0;
+    ExitClassification Classification = ExitClassification::Requested;
+};
+
+struct OperationLock
+{
+    std::string Holder;
+    std::string Action;
+    int64 StartedEpochMs = 0;
+};
+
+struct LockResult
+{
+    bool Acquired = false;
+    std::string Refusal;
 };
 
 struct AppIdentity
@@ -101,6 +118,10 @@ struct AppSnapshot
     uint32 FailedStarts = 0;
     uint32 Restarts = 0;
     std::vector<AppExit> Exits;
+    std::vector<CrashRecord> CrashHistory;
+    bool CrashLoop = false;
+    std::optional<int64> BackoffSeconds;
+    std::optional<OperationLock> Lock;
     std::string Message;
     AppIdentity Identity;
 };
@@ -114,21 +135,25 @@ struct PowerResult
 };
 
 using AppStatusObserver = std::function<void(AppSnapshot const&)>;
+using AppCrashObserver = std::function<void(std::string_view, CrashEvent const&)>;
 
 class ManagedApp
 {
 public:
-    static constexpr std::chrono::seconds RestartDelay{ 1 };
     static constexpr std::chrono::milliseconds TickInterval{ 100 };
     static constexpr std::chrono::milliseconds FirstHealthDelay{ 200 };
     static constexpr std::chrono::milliseconds HealthInterval{ 500 };
     static constexpr std::chrono::milliseconds HealthTimeout{ 1000 };
     static constexpr std::chrono::hours MaxStartGrant{ 6 };
     static constexpr std::chrono::milliseconds ShutdownRequestTimeout{ 5000 };
+    static constexpr std::chrono::seconds MemoryCheckInterval{ 5 };
     static constexpr uint32 MaxCountdownSeconds = 86400;
     static constexpr std::size_t MaxExits = 20;
+    static constexpr std::size_t MaxCrashRecords = 20;
+    static constexpr std::size_t CrashLogTailLines = 200;
 
-    ManagedApp(AppDefinition definition, SupervisorState& state, std::filesystem::path const& outputFolder, uint64 maxOutputBytes, std::filesystem::path dataFolder, ChildBreakSender sendBreak, Log& log);
+    ManagedApp(AppDefinition definition, CrashPolicySettings crashPolicy, SupervisorState& state, std::filesystem::path const& outputFolder, uint64 maxOutputBytes,
+        std::filesystem::path dataFolder, ChildBreakSender sendBreak, Log& log);
     ~ManagedApp();
 
     ManagedApp(ManagedApp const&) = delete;
@@ -137,8 +162,11 @@ public:
     void Start();
     void Shutdown();
     void SetStatusObserver(AppStatusObserver observer);
+    void SetCrashObserver(AppCrashObserver observer);
 
     PowerResult Power(PowerAction action, uint32 countdownSeconds);
+    LockResult AcquireLock(std::string holder, std::string action);
+    bool ReleaseLock(std::string holder);
     AppSnapshot Snapshot() const;
     std::vector<OutputLine> Output(OutputRun run, uint64 after) const;
     std::optional<AdminClient> GetAdminClient() const;
@@ -166,6 +194,8 @@ private:
         uint32 Crashes = 0;
         int64 RestartEpochMs = 0;
         std::size_t Exits = 0;
+        bool CrashLoop = false;
+        std::string LockHolder;
 
         bool operator==(StatusMark const&) const = default;
     };
@@ -188,12 +218,19 @@ private:
     void LoadAdmin();
     void FetchIdentity();
     void SetWantRunning(bool wantRunning);
+    void EndCrashLoop();
     void Save();
     void Note(std::string const& text, bool warning = false);
     AppState GetState() const;
     bool WantsRunning() const;
+    void OnCrash(AppExit const& exit);
+    void PruneCrashEpochs(int64 nowEpochMs);
+    void CheckMemory();
+    void CheckHealthyReset();
+    std::string LockRefusal(std::string_view what) const;
 
     AppDefinition _definition;
+    CrashPolicy _crashPolicy;
     SupervisorState& _state;
     OutputLog _output;
     std::filesystem::path _dataFolder;
@@ -214,21 +251,28 @@ private:
     std::optional<StatusMark> _statusMark;
     std::mutex _deliveryMutex;
     AppStatusObserver _observer;
+    AppCrashObserver _crashObserver;
 
     ChildProcessHandle _process;
     Clock::time_point _startedAt{};
     Clock::time_point _startGrantedUntil{};
     Clock::time_point _nextHealth{};
+    Clock::time_point _nextMemoryCheck{};
     Clock::time_point _interruptAt{};
     Clock::time_point _endAt{};
     Clock::time_point _restartAt{};
     bool _restartPending = false;
     bool _stopRequested = false;
+    bool _memoryKill = false;
     bool _interrupted = false;
     bool _ended = false;
     bool _restartAfterStop = false;
     bool _startTimedOut = false;
     bool _watchStart = true;
+    bool _crashLoop = false;
+    bool _healthyResetDone = false;
+    bool _restartDeferredNote = false;
+    std::vector<int64> _crashEpochs;
 };
 
 #endif

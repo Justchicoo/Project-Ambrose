@@ -8,6 +8,7 @@
 #include "AdminToken.h"
 #include "ConfigMgr.h"
 #include "Log.h"
+#include "ProcessInfo.h"
 #include "StartProgress.h"
 #include "StringUtil.h"
 #include "ThreadName.h"
@@ -28,6 +29,20 @@ namespace
     int64 NowEpochMs()
     {
         return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+
+    std::string IsoUtc(int64 epochMs)
+    {
+        std::time_t const seconds = static_cast<std::time_t>(epochMs / 1000);
+        std::tm fields{};
+#ifdef _WIN32
+        gmtime_s(&fields, &seconds);
+#else
+        gmtime_r(&seconds, &fields);
+#endif
+        char text[32]{};
+        std::strftime(text, sizeof(text), "%Y-%m-%dT%H:%M:%SZ", &fields);
+        return text;
     }
 
     std::string DescribeStop(StopMethod method, uint32 countdown)
@@ -66,8 +81,10 @@ namespace
     }
 }
 
-ManagedApp::ManagedApp(AppDefinition definition, SupervisorState& state, std::filesystem::path const& outputFolder, uint64 maxOutputBytes, std::filesystem::path dataFolder, ChildBreakSender sendBreak, Log& log)
-    : _definition(std::move(definition)), _state(state), _output(outputFolder / ConfigMgr::PathFromUtf8(_definition.Name), maxOutputBytes), _dataFolder(std::move(dataFolder)), _sendBreak(std::move(sendBreak)), _log(log)
+ManagedApp::ManagedApp(AppDefinition definition, CrashPolicySettings crashPolicy, SupervisorState& state, std::filesystem::path const& outputFolder, uint64 maxOutputBytes,
+    std::filesystem::path dataFolder, ChildBreakSender sendBreak, Log& log)
+    : _definition(std::move(definition)), _crashPolicy(std::move(crashPolicy)), _state(state), _output(outputFolder / ConfigMgr::PathFromUtf8(_definition.Name), maxOutputBytes),
+      _dataFolder(std::move(dataFolder)), _sendBreak(std::move(sendBreak)), _log(log)
 {
     _readySuffix = fmt::format("[server.{}] {} ready", _definition.ProgramName, _definition.ProgramName);
     _stepMarker = fmt::format("[server.{}] {}", _definition.ProgramName, StartProgress::StepPrefix(_definition.ProgramName));
@@ -93,6 +110,7 @@ std::string_view ManagedApp::StateName(AppState state) noexcept
         case AppState::Stopping: return "stopping";
         case AppState::Crashed: return "crashed";
         case AppState::Backoff: return "backoff";
+        case AppState::CrashLoop: return "crash_loop";
     }
     return "offline";
 }
@@ -132,17 +150,7 @@ std::optional<PowerAction> ManagedApp::ParseAction(std::string_view text) noexce
 
 std::string ManagedApp::DescribeExit(std::string_view name, AppExit const& exit)
 {
-    std::string how;
-    if (exit.Signal)
-        how = fmt::format("was ended by signal {}", *exit.Signal);
-    else if (exit.Code && *exit.Code >= 0xC0000000LL && *exit.Code <= 0xFFFFFFFFLL)
-        how = fmt::format("ended with exception 0x{:08X}", static_cast<uint64>(*exit.Code));
-    else if (exit.Code)
-        how = fmt::format("exited with code {}", *exit.Code);
-    else
-        how = "exited, and its exit code could not be read because an earlier supervisor started it";
-    std::string_view const why = exit.Requested ? "as asked" : exit.During == AppState::Starting ? "before it was ready" : "without being asked";
-    return fmt::format("{} {} {} after {} ms", name, how, why, exit.UptimeMs);
+    return DescribeClassifiedExit(name, exit.Classification, exit.Code, exit.Signal, exit.UptimeMs);
 }
 
 void ManagedApp::Note(std::string const& text, bool warning)
@@ -217,13 +225,47 @@ void ManagedApp::SetStatusObserver(AppStatusObserver observer)
     _observer = std::move(observer);
 }
 
+void ManagedApp::SetCrashObserver(AppCrashObserver observer)
+{
+    std::lock_guard<std::mutex> const lock(_deliveryMutex);
+    _crashObserver = std::move(observer);
+}
+
+LockResult ManagedApp::AcquireLock(std::string holder, std::string action)
+{
+    std::lock_guard<std::mutex> const lock(_mutex);
+    if (_view.Lock)
+        return { false, fmt::format("{} is already held by {}'s {}, so {}'s {} was refused", _definition.Name, _view.Lock->Holder, _view.Lock->Action, holder, action) };
+    if (holder.empty() || action.empty())
+        return { false, fmt::format("A lock on {} needs a holder and an action, and one of them was empty", _definition.Name) };
+    _view.Lock = OperationLock{ std::move(holder), std::move(action), NowEpochMs() };
+    EnterState(_view.State);
+    return { true, {} };
+}
+
+bool ManagedApp::ReleaseLock(std::string holder)
+{
+    std::lock_guard<std::mutex> const lock(_mutex);
+    if (!_view.Lock || _view.Lock->Holder != holder)
+        return false;
+    _view.Lock.reset();
+    EnterState(_view.State);
+    return true;
+}
+
+std::string ManagedApp::LockRefusal(std::string_view what) const
+{
+    OperationLock const& held = *_view.Lock;
+    return fmt::format("{} is held by {}'s {} since {}, so {} was refused", _definition.Name, held.Holder, held.Action, IsoUtc(held.StartedEpochMs), what);
+}
+
 void ManagedApp::EnterState(AppState state)
 {
     bool const changed = _view.StateSinceEpochMs == 0 || _view.State != state;
     if (changed)
         _view.StateSinceEpochMs = NowEpochMs();
     _view.State = state;
-    StatusMark const mark{ state, _view.ProcessId, _view.Crashes, _view.RestartEpochMs, _view.Exits.size() };
+    StatusMark const mark{ state, _view.ProcessId, _view.Crashes, _view.RestartEpochMs, _view.Exits.size(), _view.CrashLoop, _view.Lock ? _view.Lock->Holder : std::string() };
     if (!changed && _statusMark && *_statusMark == mark)
         return;
     _statusMark = mark;
@@ -388,7 +430,7 @@ void ManagedApp::Launch()
     {
         {
             std::lock_guard<std::mutex> const lock(_mutex);
-            _view.Exits.push_back(AppExit{ now, std::nullopt, std::nullopt, false, AppState::Starting, 0 });
+            _view.Exits.push_back(AppExit{ now, std::nullopt, std::nullopt, false, false, AppState::Starting, 0, ExitClassification::StartupFailure });
             if (_view.Exits.size() > MaxExits)
                 _view.Exits.erase(_view.Exits.begin());
             ++_view.FailedStarts;
@@ -404,11 +446,14 @@ void ManagedApp::Launch()
     _startedAt = Clock::now();
     _startGrantedUntil = {};
     _nextHealth = _startedAt + FirstHealthDelay;
+    _nextMemoryCheck = _startedAt + MemoryCheckInterval;
     _stopRequested = false;
+    _memoryKill = false;
     _interrupted = false;
     _ended = false;
     _startTimedOut = false;
     _watchStart = true;
+    _healthyResetDone = false;
     {
         std::lock_guard<std::mutex> const lock(_mutex);
         _view.ProcessId = _process.GetIdentity().Id;
@@ -420,12 +465,26 @@ void ManagedApp::Launch()
         _view.Stop = StopMethod::None;
         _view.StopRequestedEpochMs = 0;
         _view.RestartEpochMs = 0;
+        _view.BackoffSeconds.reset();
         _view.Message.clear();
         _view.Identity = AppIdentity{};
         EnterState(AppState::Starting);
     }
     Note(fmt::format("Started {} as process {}", _definition.Name, _process.GetIdentity().Id));
     Save();
+}
+
+void ManagedApp::EndCrashLoop()
+{
+    {
+        std::lock_guard<std::mutex> const lock(_mutex);
+        _view.CrashLoop = false;
+        _view.BackoffSeconds.reset();
+        if (_view.State == AppState::CrashLoop)
+            EnterState(AppState::Offline);
+    }
+    _crashLoop = false;
+    _crashEpochs.clear();
 }
 
 void ManagedApp::Handle(Command const& command)
@@ -436,6 +495,7 @@ void ManagedApp::Handle(Command const& command)
         case PowerAction::Start:
             SetWantRunning(true);
             _restartPending = false;
+            EndCrashLoop();
             if (running)
             {
                 Save();
@@ -446,6 +506,7 @@ void ManagedApp::Handle(Command const& command)
         case PowerAction::Restart:
             SetWantRunning(true);
             _restartPending = false;
+            EndCrashLoop();
             if (!running)
             {
                 Launch();
@@ -694,6 +755,126 @@ void ManagedApp::FetchIdentity()
     _view.Identity = std::move(identity);
 }
 
+void ManagedApp::PruneCrashEpochs(int64 nowEpochMs)
+{
+    int64 const windowMs = _crashPolicy.Settings().CrashLoopWindow.count() * 60000;
+    while (!_crashEpochs.empty() && nowEpochMs - _crashEpochs.front() > windowMs)
+        _crashEpochs.erase(_crashEpochs.begin());
+}
+
+void ManagedApp::OnCrash(AppExit const& exit)
+{
+    int64 const now = exit.EpochMs;
+    PruneCrashEpochs(now);
+    _crashEpochs.push_back(now);
+    uint32 const inWindow = static_cast<uint32>(_crashEpochs.size());
+    bool const loop = _crashPolicy.IsCrashLoop(inWindow);
+    std::chrono::seconds const backoff = _crashPolicy.BackoffForCrash(inWindow);
+
+    CrashRecord record;
+    record.EpochMs = exit.EpochMs;
+    record.Code = exit.Code;
+    record.Signal = exit.Signal;
+    record.Classification = exit.Classification;
+    record.UptimeMs = exit.UptimeMs;
+    std::vector<OutputLine> const lines = _output.Lines(OutputRun::Current, 0);
+    std::size_t const tail = lines.size() > CrashLogTailLines ? lines.size() - CrashLogTailLines : 0;
+    for (std::size_t index = tail; index < lines.size(); ++index)
+        record.LogTail.push_back(lines[index].Text);
+
+    std::optional<OperationLock> held;
+    bool restart = false;
+    {
+        std::lock_guard<std::mutex> const lock(_mutex);
+        ++_view.Crashes;
+        _view.CrashHistory.push_back(record);
+        if (_view.CrashHistory.size() > MaxCrashRecords)
+            _view.CrashHistory.erase(_view.CrashHistory.begin());
+        _crashLoop = loop;
+        _view.CrashLoop = loop;
+        _view.BackoffSeconds = loop ? std::nullopt : std::optional<int64>(backoff.count());
+        held = _view.Lock;
+        restart = _view.WantRunning && !loop;
+        if (loop)
+        {
+            _view.Message = fmt::format("It crashed {} times in {} minutes, so it stays stopped until someone starts it again", inWindow,
+                _crashPolicy.Settings().CrashLoopWindow.count());
+            _view.RestartEpochMs = 0;
+            EnterState(AppState::CrashLoop);
+        }
+        else
+        {
+            _view.Message = held
+                ? fmt::format("It crashed and starts again in {} s, once {}'s {} releases it", backoff.count(), held->Holder, held->Action)
+                : fmt::format("It crashed and starts again in {} s", backoff.count());
+            _view.RestartEpochMs = now + backoff.count() * 1000;
+            EnterState(AppState::Backoff);
+        }
+    }
+    CrashEvent const event{ record, loop, inWindow };
+    AppCrashObserver observer;
+    {
+        std::lock_guard<std::mutex> const delivering(_deliveryMutex);
+        observer = _crashObserver;
+    }
+    if (observer)
+    {
+        try
+        {
+            observer(_definition.Name, event);
+        }
+        catch (std::exception const& failure)
+        {
+            AMBROSE_LOG(_log, LogLevel::Error, "server.supervisor", "The crash of {} could not be handed on: {}", _definition.Name, failure.what());
+        }
+    }
+    _restartPending = restart;
+    _restartAt = Clock::now() + backoff;
+    _restartDeferredNote = false;
+    Save();
+}
+
+void ManagedApp::CheckMemory()
+{
+    if (_definition.MemoryLimitBytes == 0 || !_process)
+        return;
+    Clock::time_point const now = Clock::now();
+    if (now < _nextMemoryCheck)
+        return;
+    _nextMemoryCheck = now + MemoryCheckInterval;
+    std::optional<Ambrose::ProcessSnapshot> const snapshot = Ambrose::ProcessInfo::SnapshotOf(static_cast<uint32>(_process.GetIdentity().Id));
+    if (!snapshot || snapshot->ResidentBytes <= _definition.MemoryLimitBytes)
+        return;
+    _memoryKill = true;
+    uint64 const usedMb = snapshot->ResidentBytes / (1024 * 1024);
+    uint64 const limitMb = _definition.MemoryLimitBytes / (1024 * 1024);
+    std::string error;
+    if (_process.EndTree(error))
+        Note(fmt::format("{} used {} MB, past its limit of {} MB, so its process tree was ended", _definition.Name, usedMb, limitMb), true);
+    else
+        Note(fmt::format("{} used {} MB, past its limit of {} MB, and its process tree could not be ended: {}", _definition.Name, usedMb, limitMb, error), true);
+}
+
+void ManagedApp::CheckHealthyReset()
+{
+    if (_healthyResetDone || _crashEpochs.empty())
+        return;
+    int64 readyMs = 0;
+    {
+        std::lock_guard<std::mutex> const lock(_mutex);
+        readyMs = _view.ReadyEpochMs;
+    }
+    if (!HealthyResetDue(readyMs, NowEpochMs(), _crashPolicy.Settings().HealthyReset))
+        return;
+    _healthyResetDone = true;
+    _crashEpochs.clear();
+    {
+        std::lock_guard<std::mutex> const lock(_mutex);
+        _view.BackoffSeconds.reset();
+    }
+    Note(fmt::format("{} has been healthy for {} minutes, so its backoff and crash count start over", _definition.Name, _crashPolicy.Settings().HealthyReset.count()));
+}
+
 void ManagedApp::OnExit()
 {
     std::optional<ChildExit> const exit = _process.GetExit();
@@ -706,11 +887,15 @@ void ManagedApp::OnExit()
         record.Signal = exit->Signal;
     }
     record.Requested = _stopRequested;
+    record.MemoryKill = _memoryKill;
     _process = ChildProcessHandle();
+    AppState during = AppState::Running;
     {
         std::lock_guard<std::mutex> const lock(_mutex);
-        record.During = _view.State;
+        during = _view.State;
+        record.During = during;
         record.UptimeMs = _view.StartedEpochMs == 0 ? 0 : now - _view.StartedEpochMs;
+        record.Classification = ClassifyExit(record.Requested, record.MemoryKill, during == AppState::Starting, record.Code, record.Signal);
         _view.Exits.push_back(record);
         if (_view.Exits.size() > MaxExits)
             _view.Exits.erase(_view.Exits.begin());
@@ -720,9 +905,10 @@ void ManagedApp::OnExit()
         _view.StopRequestedEpochMs = 0;
     }
     _output.Poll();
-    Note(DescribeExit(_definition.Name, record), !record.Requested);
+    Note(DescribeExit(_definition.Name, record), record.Classification == ExitClassification::Crash || record.Classification == ExitClassification::OutOfMemory);
     bool const requested = _stopRequested;
     _stopRequested = false;
+    _memoryKill = false;
     if (requested)
     {
         if (_restartAfterStop)
@@ -742,28 +928,35 @@ void ManagedApp::OnExit()
         Save();
         return;
     }
-    bool restart = false;
+    switch (record.Classification)
     {
-        std::lock_guard<std::mutex> const lock(_mutex);
-        if (record.During == AppState::Running)
+        case ExitClassification::CleanUnexpected:
         {
-            ++_view.Crashes;
-            restart = _view.WantRunning;
-            _view.Message = restart ? fmt::format("It exited without being asked and starts again in {} s", RestartDelay.count()) : "It exited without being asked";
+            std::lock_guard<std::mutex> const lock(_mutex);
+            _view.Message = "It exited with code 0 without being asked, so it stays stopped; start it again if it should run";
+            _view.RestartEpochMs = 0;
+            EnterState(AppState::Crashed);
+            break;
         }
-        else
+        case ExitClassification::StartupFailure:
         {
+            std::lock_guard<std::mutex> const lock(_mutex);
             ++_view.FailedStarts;
             std::string const cause = _startTimedOut ? std::string() : ExitCause(_output.Lines(OutputRun::Current, 0));
             _view.Message = _startTimedOut ? "It " + StartLate(_view.StartStage)
                 : fmt::format("It exited before it was ready{}{}; start it again once that is fixed", record.Code ? fmt::format(" with exit code {}", *record.Code) : std::string(),
                     cause.empty() ? std::string() : ": " + cause);
+            _view.RestartEpochMs = 0;
+            EnterState(AppState::Crashed);
+            break;
         }
-        _view.RestartEpochMs = restart ? now + std::chrono::duration_cast<std::chrono::milliseconds>(RestartDelay).count() : 0;
-        EnterState(restart ? AppState::Backoff : AppState::Crashed);
+        case ExitClassification::Crash:
+        case ExitClassification::OutOfMemory:
+            OnCrash(record);
+            return;
+        case ExitClassification::Requested:
+            break;
     }
-    _restartPending = restart;
-    _restartAt = Clock::now() + RestartDelay;
     Save();
 }
 
@@ -778,6 +971,11 @@ void ManagedApp::Step()
             return;
         }
         AppState const state = GetState();
+        if (state == AppState::Running)
+        {
+            CheckMemory();
+            CheckHealthyReset();
+        }
         if (state == AppState::Starting)
         {
             CheckReady(lines);
@@ -806,6 +1004,25 @@ void ManagedApp::Step()
     }
     if (_restartPending && Clock::now() >= _restartAt)
     {
+        if (_crashLoop)
+        {
+            _restartPending = false;
+            return;
+        }
+        std::optional<OperationLock> held;
+        {
+            std::lock_guard<std::mutex> const lock(_mutex);
+            held = _view.Lock;
+        }
+        if (held)
+        {
+            if (!_restartDeferredNote)
+            {
+                _restartDeferredNote = true;
+                Note(fmt::format("Not starting {} again yet: {}'s {} still holds it", _definition.Name, held->Holder, held->Action));
+            }
+            return;
+        }
         _restartPending = false;
         if (!WantsRunning())
             return;
@@ -823,6 +1040,8 @@ PowerResult ManagedApp::Power(PowerAction action, uint32 countdownSeconds)
     std::lock_guard<std::mutex> const lock(_mutex);
     if (!_view.Watching)
         return { false, 503, "not_watching", fmt::format("The supervisor is not watching {}", _definition.Name) };
+    if (_view.Lock && action != PowerAction::Kill)
+        return { false, 409, "app_locked", LockRefusal(ActionName(action)) };
     bool const alive = _view.State == AppState::Starting || _view.State == AppState::Running || _view.State == AppState::Stopping;
     if (action == PowerAction::Start && alive)
         return { false, 409, "already_running", fmt::format("{} is already {}", _definition.Name, StateName(_view.State)) };
