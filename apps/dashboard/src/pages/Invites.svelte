@@ -134,8 +134,8 @@
                 {:else}
                     <p class="text-sm text-muted-foreground">Send this link within {ttlHours} hours. It works once.</p>
                     <div class="mt-2 flex gap-2">
-                        <Input readonly value={created.link} class="font-mono text-xs" />
-                        <Button variant="outline" onclick={() => copyLink(created.link)}>Copy</Button>
+                        <Input readonly value={created?.link ?? ""} class="font-mono text-xs" />
+                        <Button variant="outline" onclick={() => copyLink(created?.link ?? "")}>Copy</Button>
                     </div>
                 {/if}
             </Card.Content>

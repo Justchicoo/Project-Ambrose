@@ -31,7 +31,6 @@
     import InviteClaim from "./pages/InviteClaim.svelte";
     import SignIn from "./pages/SignIn.svelte";
     import Unavailable from "./pages/Unavailable.svelte";
-    import { arrivedWith } from "$lib/links.js";
 
     const granted = $derived(session.panel ? new Set(session.user?.permissions ?? []) : everything);
     let inviteToken = $state(arrivedWith.link?.page === "invite" ? (arrivedWith.link.token ?? null) : null);
