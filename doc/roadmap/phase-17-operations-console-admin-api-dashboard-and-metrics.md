@@ -1145,11 +1145,11 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] A key's secret is shown once and cannot be read again from any response
-- [ ] Demoting a key's owner to viewer makes the key's restart request answer 403 at once
-- [ ] A key used from an address outside its CIDR list is refused and the attempt is audited with the key id
-- [ ] An expired key answers 401, and a rotated key's old secret stops working when its grace ends
-- [ ] A key presented to an app's own admin API is refused, and a key sent with a session cookie is refused as well
+- [x] A key's secret is shown once and cannot be read again from any response (PanelApiKeysTest.SecretIsShownOnceAndNeverAgain)
+- [x] Demoting a key's owner to viewer makes the key's restart request answer 403 at once (PanelApiKeysTest.DemotingTheOwnerShrinksTheKeyAtOnce)
+- [x] A key used from an address outside its CIDR list is refused and the attempt is audited with the key id (PanelApiKeysTest.CidrRefusalIsAuditedWithTheKeyId)
+- [x] An expired key answers 401, and a rotated key's old secret stops working when its grace ends (PanelApiKeysTest.ExpiredKeyAnswers401, PanelApiKeysTest.RotatedOldSecretStopsWhenItsGraceEnds)
+- [x] A key presented to an app's own admin API is refused, and a key sent with a session cookie is refused as well (PanelApiKeysTest.KeyIsRefusedOnAnAppAdminApi, PanelApiKeysTest.KeyWithASessionCookieIsRefused)
 
 ## 17.37 Invites and the grant editor
 
