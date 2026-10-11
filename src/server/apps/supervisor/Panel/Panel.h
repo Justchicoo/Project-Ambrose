@@ -8,6 +8,7 @@
 
 #include "AdminServer.h"
 #include "ListenerSettings.h"
+#include "PanelApiKeys.h"
 #include "PanelAudit.h"
 #include "PanelAuditForwarder.h"
 #include "PanelRateLimit.h"
@@ -35,6 +36,7 @@
 #include <map>
 #include <condition_variable>
 #include <memory>
+#include <set>
 #include <thread>
 #include <utility>
 #include <functional>
@@ -112,6 +114,7 @@ public:
     PanelSignInThrottle& SecondFactorThrottle() { return _secondFactor; }
     PanelSignInThrottle& LinkThrottle() { return _linkFailures; }
     PanelRateLimit& Limit() { return _rateLimit; }
+    PanelApiKeys& ApiKeys() { return _apiKeys; }
     AdminRouter& Routes() { return _listener.Routes(); }
     PanelEventStreams& Events() { return _events; }
     PanelEventTickets& Tickets() { return _tickets; }
@@ -159,6 +162,7 @@ private:
     void ApplyTwoFactorSettings(ConfigMgr const& config, PanelTwoFactorSettings const& loaded);
     void RegisterSignIn();
     void RegisterTwoFactor();
+    void RegisterApiKeys();
     void RegisterCommandHistory();
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
@@ -178,6 +182,17 @@ private:
     AdminResponse SecondFactor(AdminRequest const& request);
     AdminResponse SignOut(AdminRequest const& request);
     AdminResponse WhoAmI(AdminRequest const& request);
+    AdminResponse ApiKeyList(AdminRequest const& request);
+    AdminResponse ApiKeyCreate(AdminRequest const& request);
+    AdminResponse ApiKeyRevoke(AdminRequest const& request);
+    AdminResponse ApiKeyRotate(AdminRequest const& request);
+    AdminResponse ApiKeyListAll(AdminRequest const&);
+    AdminResponse ApiKeyRevokeAny(AdminRequest const& request);
+    AdminResponse KeyProblem(PanelApiKeyResult result, std::string const& error);
+    std::optional<PanelApiKeyCall> KeyCallOf(AdminRequest const& request);
+    std::set<std::string, std::less<>> RightsOf(PanelUser const& user, std::string& error);
+    KeyAuthOutcome CheckApiKey(AdminRequest& request, AdminResponse& refused);
+    nlohmann::json KeyAnswer(PanelApiKey const& key) const;
     AdminResponse TwoFactorGet(AdminRequest const& request);
     AdminResponse TwoFactorSetup(AdminRequest const& request);
     AdminResponse TwoFactorEnable(AdminRequest const& request);
@@ -215,6 +230,7 @@ private:
     PanelSignInThrottle _secondFactor;
     PanelSignInThrottle _linkFailures;
     PanelLinks _links;
+    PanelApiKeys _apiKeys;
     std::chrono::seconds _sessionIdle{ 0 };
     std::chrono::seconds _sessionLifetime{ 0 };
     std::mutex _challengeMutex;

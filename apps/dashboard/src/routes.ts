@@ -16,6 +16,7 @@ import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import GlobeIcon from "@lucide/svelte/icons/globe";
 import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
 import LockIcon from "@lucide/svelte/icons/lock";
+import KeyRoundIcon from "@lucide/svelte/icons/key-round";
 import ServerIcon from "@lucide/svelte/icons/server";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import SlidersHorizontalIcon from "@lucide/svelte/icons/sliders-horizontal";
@@ -224,6 +225,24 @@ export const routes: Route[] = [
         nav: false,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/TwoFactor.svelte") },
+    },
+    {
+        path: "api-keys",
+        title: "API keys",
+        icon: KeyRoundIcon,
+        permission: "none",
+        nav: true,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/ApiKeys.svelte") },
+    },
+    {
+        path: "api-keys-admin",
+        title: "API key review",
+        icon: KeyRoundIcon,
+        permission: "apikeys.manage",
+        nav: true,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/ApiKeysAdmin.svelte") },
     },
     { path: "denied", title: "Access denied", icon: LockIcon, permission: "none", nav: false, group: "Panel", view: { kind: "denied" } },
 ];
