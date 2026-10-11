@@ -1,4 +1,5 @@
 # Project Ambrose by Imjustchico
+# Fails when the tree contains client game files, captures, protocol definitions, type dumps, local config, private keys, a panel or game store, a log, oversized files, or text naming another Wizard101 project or one of its source files, which is permanent once it reaches a pull request.
 import argparse
 import json
 import os
@@ -7,7 +8,6 @@ import subprocess
 import sys
 
 MAX_BYTES = 1_000_000
-
 FORBIDDEN_EXTENSIONS = {
     ".wad": "client archive",
     ".nif": "client model",
@@ -24,60 +24,13 @@ FORBIDDEN_EXTENSIONS = {
     ".log": "log",
     ".token": "token",
 }
-
-PRIVATE_KEY = re.compile(
-    rb"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----"
-)
-
-PROTOCOL_XML = re.compile(
-    r"\s*(<\?xml[^>]*\?>\s*)?<[A-Za-z0-9_]*Messages>\s*<_ProtocolInfo>"
-)
-
-OTHER_PROJECTS = re.compile(
-    "|".join([
-        "im" + "light",
-        "auror" + "ium",
-        "im" + "codec",
-        "spiral" + "db",
-        "revive" + "101",
-    ]),
-    re.IGNORECASE,
-)
-
-OTHER_LANGUAGE_FILE = re.compile(
-    r"(?<=[A-Za-z0-9_-])\.(?:cs|rs|csproj|sln)(?![A-Za-z0-9/])"
-)
-
-TEXT_EXTENSIONS = (
-    ".md",
-    ".txt",
-    ".json",
-    ".yml",
-    ".yaml",
-    ".py",
-    ".cpp",
-    ".h",
-    ".sql",
-    ".dist",
-    ".conf",
-    ".cmake",
-    ".ts",
-    ".svelte",
-    ".css",
-    ".js",
-    ".mjs",
-)
-
-SCANNED_FOR_NAMES = (
-    "apps/ci/ci_forbidden_files.py",
-    "apps/ci/tests/test_ci.py",
-)
-
+PRIVATE_KEY = re.compile(rb"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----")
+PROTOCOL_XML = re.compile(r"\s*(<\?xml[^>]*\?>\s*)?<[A-Za-z0-9_]*Messages>\s*<_ProtocolInfo>")
+OTHER_PROJECTS = re.compile("|".join(["im" + "light", "auror" + "ium", "im" + "codec", "spiral" + "db", "revive" + "101"]), re.IGNORECASE)
+OTHER_LANGUAGE_FILE = re.compile(r"(?<=[A-Za-z0-9_-])\.(?:cs|rs|csproj|sln)(?![A-Za-z0-9/])")
+TEXT_EXTENSIONS = (".md", ".txt", ".json", ".yml", ".yaml", ".py", ".cpp", ".h", ".sql", ".dist", ".conf", ".cmake", ".ts", ".svelte", ".css", ".js", ".mjs")
+SCANNED_FOR_NAMES = ("apps/ci/ci_forbidden_files.py", "apps/ci/tests/test_ci.py")
 SCANNED_BYTES = 512 * 1024
-
-# This database is explicitly permitted by the repository scan.
-# Matching is case-insensitive and based on the filename.
-ALLOWED_DATABASE = "combatdecks.db"
 
 
 def check_file(relpath, raw):
@@ -85,99 +38,66 @@ def check_file(relpath, raw):
     name = relpath.rsplit("/", 1)[-1].lower()
     extension = os.path.splitext(name)[1]
     problems = []
-
-    # Preserve the existing forbidden-extension checks.
-    # combatdecks.db has a .db extension, so it is not affected here.
     if extension in FORBIDDEN_EXTENSIONS:
-        problems.append(
-            f"{FORBIDDEN_EXTENSIONS[extension]} files must never be committed"
-        )
-
+        problems.append(f"{FORBIDDEN_EXTENSIONS[extension]} files must never be committed")
     if name.endswith(".conf"):
-        problems.append(
-            "local config must not be committed; "
-            "commit a .conf.dist template instead"
-        )
-
+        problems.append("local config must not be committed; commit a .conf.dist template instead")
     if name.endswith(".secret"):
-        problems.append(
-            "secret files must never be committed; "
-            "an app makes its own beside its config"
-        )
-
-    # Keep the private-key check enabled for every file.
+        problems.append("secret files must never be committed; an app makes its own beside its config")
     if PRIVATE_KEY.search(raw[:8192]):
-        problems.append(
-            "content holds a private key; "
-            "a listener reads its key from a path the operator names"
-        )
-
-    # Permit combatdecks.db while rejecting other SQLite database content.
+        problems.append("content holds a private key; a listener reads its key from a path the operator names")
     if raw.startswith(b"SQLite format 3" + bytes([0])):
-        if name != ALLOWED_DATABASE:
-            problems.append(
-                "content is a SQLite store; the panel keeps its operators "
-                "and sessions in the data folder, not the repository"
-            )
-
+        problems.append("content is a SQLite store; the panel keeps its operators and sessions in the data folder, not the repository")
     if raw.startswith(b"KIWAD"):
         problems.append("content is a KIWAD client archive")
-
     if raw.startswith(b"BINd"):
         problems.append("content is BINd client data")
-
-    if PROTOCOL_XML.match(
-        raw[:4096].decode("utf-8", "replace")
-    ):
-        problems.append(
-            "content is a client protocol definition XML; "
-            "definitions load at runtime from the user's install"
-        )
-
-    # Scan text files for references to other projects and source files.
+    if PROTOCOL_XML.match(raw[:4096].decode("utf-8", "replace")):
+        problems.append("content is a client protocol definition XML; definitions load at runtime from the user's install")
     if extension in TEXT_EXTENSIONS and relpath not in SCANNED_FOR_NAMES:
         text = raw[:SCANNED_BYTES].decode("utf-8", "replace")
-
         named = OTHER_PROJECTS.search(text)
         if named:
-            problems.append(
-                f"content names another Wizard101 project, "
-                f"'{named.group(0)}'; behaviour may be studied but "
-                "nothing here names it"
-            )
-
+            problems.append(f"content names another Wizard101 project, '{named.group(0)}'; behaviour may be studied but nothing here names it")
         foreign = OTHER_LANGUAGE_FILE.search(text)
         if foreign:
-            token = text[
-                max(0, foreign.start() - 40):foreign.end()
-            ].rsplit(None, 1)[-1]
-
-            problems.append(
-                f"content names '{token}', a file from another project: "
-                "this server is C++ and its tools are Python, so no .cs, "
-                ".rs, .csproj or .sln path belongs in the tree"
-            )
-
-    # Detect client type dumps in JSON files.
+            token = text[max(0, foreign.start() - 40):foreign.end()].rsplit(None, 1)[-1]
+            problems.append(f"content names '{token}', a file from another project: this server is C++ and its tools are Python, so no .cs, .rs, .csproj or .sln path belongs in the tree")
     if extension == ".json":
         try:
             document = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
             document = None
+        if isinstance(document, dict) and "classes" in document and "version" in document:
+            problems.append("content looks like a client type dump; the dump loads at runtime from the user's machine")
+    if len(raw) > MAX_BYTES and not relpath.startswith("deps/"):
+        problems.append(f"file is {len(raw)} bytes, over the {MAX_BYTES} byte limit")
+    return problems
 
-        if (
-            isinstance(document, dict)
-            and "classes" in document
-            and "version" in document
-        ):
-            problems.append(
-                "content looks like a client type dump; "
-                "the dump loads at runtime from the user's machine"
-            )
 
-    # Permit combatdecks.db to exceed the normal 1 MB file-size limit.
-    # Other files remain subject to the existing limit, except files in deps/.
-    if len(raw) > MAX_BYTES:
-        if name != ALLOWED_DATABASE and not relpath.startswith("deps/"):
-            problems.append(
-                f"file
+def collect_files(root):
+    output = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root, capture_output=True, check=True).stdout
+    return sorted(path for path in set(output.decode("utf-8").split("\0")) if path and os.path.isfile(os.path.join(root, path)))
+
+
+def main(argv=None):
+    default_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    parser = argparse.ArgumentParser(description="Project Ambrose forbidden file scan")
+    parser.add_argument("--root", default=default_root, help="repository root")
+    args = parser.parse_args(argv)
+    root = os.path.abspath(args.root)
+    files = collect_files(root)
+    failures = 0
+    for relpath in files:
+        with open(os.path.join(root, relpath), "rb") as handle:
+            for problem in check_file(relpath, handle.read()):
+                print(f"{relpath}: {problem}")
+                failures += 1
+    print(f"forbidden files: {len(files)} files scanned, {failures} problem(s)")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
