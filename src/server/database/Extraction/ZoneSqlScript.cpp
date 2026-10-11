@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lays extracted zones out for the world tables in the order they were read: one zone_template row per zone, then its locations, objects, volumes, triggers, spawners and paths in list order, each volume and trigger known by its place in its list, with every event of each in order and every result of each trigger, replacing zone_template first so the rows that name a zone are only ever written after it, zone_trigger before its results zone_spawner before the entries each spawner may place, and zone_path before the nodes each path visits in its order, with every float carried as the double it widens to and requirements, placed objects and result bytes NULL where there are none.
+ * Lays extracted zones out for the world tables in the order they were read: one zone_template row per zone, then its locations, objects, volumes, triggers, spawners and paths in list order, each volume and trigger known by its place in its list, with every event of each in order and every result of each trigger, replacing zone_template first so the rows that name a zone are only ever written after it, zone_trigger before its results zone_spawner before the entries each spawner may place, and zone_path before the nodes each path visits in its order, with every float carried as the double it widens to and requirements, placed objects and result bytes NULL where there are none, and a sigil's record name beside its object row, empty for every other object.
  */
 
 #include "ZoneSqlScript.h"
@@ -50,7 +50,8 @@ WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
                 number(object.Orientation.X), number(object.Orientation.Y), number(object.Orientation.Z), number(object.Scale), object.ZoneTag, object.StartState, object.OverrideName,
                 flag(object.GlobalDynamic), flag(object.Undetectable), whole(object.LoadingType),
                 object.SpawnRequirements ? WorldSqlScript::Value{ std::string(object.SpawnRequirements->begin(), object.SpawnRequirements->end()) }
-                                         : WorldSqlScript::Value{ std::monostate{} } });
+                                         : WorldSqlScript::Value{ std::monostate{} },
+                object.SigilTemplate });
         for (std::size_t index = 0; index < zone.Volumes.size(); ++index)
         {
             ExtractedVolume const& volume = zone.Volumes[index];
@@ -112,7 +113,7 @@ WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
     script.ReplaceTable(tables[0], { "zone_path", "display_name_key", "far_clip", "healing_per_minute", "soft_limit", "hard_limit", "no_mounts" }, templates);
     script.ReplaceTable(tables[1], { "zone_path", "name", "position_x", "position_y", "position_z", "direction" }, locations);
     script.ReplaceTable(tables[2], { "zone_path", "class_name", "template_id", "object_id", "position_x", "position_y", "position_z", "orientation_x", "orientation_y", "orientation_z",
-        "scale", "zone_tag", "start_state", "override_name", "global_dynamic", "undetectable", "loading_type", "spawn_requirements" }, objects);
+        "scale", "zone_tag", "start_state", "override_name", "global_dynamic", "undetectable", "loading_type", "spawn_requirements", "sigil_template" }, objects);
     script.ReplaceTable(tables[3], { "zone_path", "volume_index", "name", "object_id", "template_id", "shape", "position_x", "position_y", "position_z", "radius", "length", "width", "depth",
         "quest_events", "player_only", "loading_type", "spawn_requirements" }, volumes);
     script.ReplaceTable(tables[4], { "zone_path", "trigger_index", "name", "class_name", "trigger_max", "cooldown", "unnamed_780900737", "unnamed_847435658", "unnamed_1549045087",

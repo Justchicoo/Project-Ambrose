@@ -525,7 +525,7 @@ bool SpawnerMgr::Despawn(Map& map, uint64 globalId, std::optional<uint32> effect
 }
 
 std::optional<uint64> SpawnerMgr::SpawnTemporary(Map& map, uint64 templateId, PropertyTypes::Vector3D const& position, float yaw, SpawnerContext const& context,
-    MapObjectChanges& changes)
+    MapObjectChanges& changes, MapObjectDecorator const& decorate)
 {
     MapSpawnerState& state = map.GetSpawnerState();
     ZoneObjectSpawn row;
@@ -535,7 +535,7 @@ std::optional<uint64> SpawnerMgr::SpawnTemporary(Map& map, uint64 templateId, Pr
     row.Orientation = { 0.0f, 0.0f, yaw };
     row.Loading = ZoneObjectLoading::DynamicServer;
     changes.DynamicZoneId = map.GetDynamicZoneId();
-    return MapObjectSpawner::Place(map, row, MapObjectOrigin::Command, 0, context.Sources, context.Now, context.ReleaseDelay, changes);
+    return MapObjectSpawner::Place(map, row, MapObjectOrigin::Command, 0, context.Sources, context.Now, context.ReleaseDelay, changes, decorate);
 }
 
 MapObject const* SpawnerMgr::FindNearest(Map const& map, PropertyTypes::Vector3D const& position, float range)

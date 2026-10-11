@@ -1,0 +1,313 @@
+{
+  "title": "A game master's .duel start puts the wizard and a Lost Soul on their circles in Sigil 001's ring, and .duel end frees the wizard",
+  "include": "parts/common.json",
+  "notes": [
+    "9.05: one game master enters Unicorn Way and goes inside the ring of the combat sigil nearest the street's west end (Sigil 001). .duel start 35085",
+    "seats the wizard on the first player circle and a Lost Soul on the first monster circle, places the Duel Circle, sends MSG_AGGRO, MSG_COMBATADD for both",
+    "and the Sigil and Stationary states; the client is shot as the wizard runs to its circle and the ring, circles and nameplates show. .duel end sends",
+    "MSG_COMBATMATCHRESULT, MSG_COMBATPHASE Ended and MSG_ENDDUEL, the ring and creature go, and the wizard walks off."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "server_settings": [
+    "Updates.AllowPending=1"
+  ],
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000",
+    "Updates.AllowPending=1"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Streets/WC_Unicorn",
+    "zone_display": "Unicorn Way",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard on Unicorn Way",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Streets/WC_Unicorn instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Streets/WC_Unicorn"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type the .go xyz inside the sigil's ring",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before the .go xyz inside the sigil's ring",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type the .go xyz inside the sigil's ring",
+      "text": ".go xyz -7700 7460 0.1 3.14"
+    },
+    {
+      "action": "char",
+      "name": "send the .go xyz inside the sigil's ring",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master goes inside Sigil 001's ring",
+      "pattern": "ran go xyz -7700 7460 \\S+ 3.14, which (\\S+)",
+      "timeout": 20,
+      "expect": "worked",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard beside the sigil before the duel",
+      "file": "before-duel",
+      "settle": 2
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .duel start 35085",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .duel start 35085",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .duel start 35085",
+      "text": ".duel start 35085"
+    },
+    {
+      "action": "char",
+      "name": "send .duel start 35085",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the duel starts",
+      "pattern": "ran duel start 35085, which (\\S+)",
+      "timeout": 20,
+      "expect": "worked",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard is shown the duel with both participants",
+      "pattern": "wizard {wizard_guid} was shown duel \\d+ with (\\d+) participant",
+      "timeout": 20,
+      "expect": "2",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard runs to its circle, 1",
+      "file": "duel-1",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ring, circles and nameplates, 2",
+      "file": "duel-2",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "the ring, circles and nameplates, 3",
+      "file": "duel-3",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .duel end",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .duel end",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .duel end",
+      "text": ".duel end"
+    },
+    {
+      "action": "char",
+      "name": "send .duel end",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the duel ends",
+      "pattern": "ran duel end, which (\\S+)",
+      "timeout": 20,
+      "expect": "worked",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard is shown the duel end",
+      "pattern": "wizard {wizard_guid} was shown duel \\d+ (end)",
+      "timeout": 20,
+      "expect": "end",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the ring is gone after the duel",
+      "file": "after-duel",
+      "settle": 3
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward, free again",
+      "vk": "0x57",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the wizard has walked off its circle",
+      "file": "walked-free",
+      "settle": 1
+    },
+    {
+      "action": "forbid_log",
+      "name": "the client loaded the circle and the creature",
+      "side": "client",
+      "pattern": "Failed to find core template|LoadObject Failed"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the game server built every duel object",
+      "side": "game",
+      "pattern": "gets no object|No duel was started"
+    }
+  ]
+}
