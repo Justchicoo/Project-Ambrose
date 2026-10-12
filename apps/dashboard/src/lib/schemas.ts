@@ -857,39 +857,49 @@ export type FileContent = v.InferOutput<typeof FileContent>;
 export type FileRulesAnswer = v.InferOutput<typeof FileRulesAnswer>;
 
 export const PanelClientDataAnswer = v.looseObject({
-    installs: v.array(v.looseObject({
-        id: v.string(),
-        display_name: v.string(),
-        revision: v.string(),
-        has_program: v.boolean(),
-        archives: v.number(),
-        in_use: v.boolean(),
-    })),
-    server_revisions: v.array(v.looseObject({
-        server: v.string(),
-        revision: v.string(),
-        install_id: v.string(),
-    })),
-    type_dump: v.nullable(v.looseObject({
-        revision: v.string(),
-        executable_hash: v.string(),
-        extractor_version: v.string(),
-        build_time: v.number(),
-        fast_copy_current: v.boolean(),
-        in_use: v.boolean(),
-    })),
-    caches: v.array(v.looseObject({
-        kind: v.string(),
-        revision: v.string(),
-        size_bytes: v.number(),
-        build_time: v.number(),
-    })),
-    world_table_sets: v.array(v.looseObject({
-        name: v.string(),
-        row_count: v.number(),
-        extraction_revision: v.string(),
-        revision_mismatch: v.boolean(),
-    })),
+    installs: v.array(
+        v.looseObject({
+            id: v.string(),
+            display_name: v.string(),
+            revision: v.string(),
+            has_program: v.boolean(),
+            archives: v.number(),
+            in_use: v.boolean(),
+        }),
+    ),
+    server_revisions: v.array(
+        v.looseObject({
+            server: v.string(),
+            revision: v.string(),
+            install_id: v.string(),
+        }),
+    ),
+    type_dump: v.nullable(
+        v.looseObject({
+            revision: v.string(),
+            executable_hash: v.string(),
+            extractor_version: v.string(),
+            build_time: v.number(),
+            fast_copy_current: v.boolean(),
+            in_use: v.boolean(),
+        }),
+    ),
+    caches: v.array(
+        v.looseObject({
+            kind: v.string(),
+            revision: v.string(),
+            size_bytes: v.number(),
+            build_time: v.number(),
+        }),
+    ),
+    world_table_sets: v.array(
+        v.looseObject({
+            name: v.string(),
+            row_count: v.number(),
+            extraction_revision: v.string(),
+            revision_mismatch: v.boolean(),
+        }),
+    ),
     revision_state: v.looseObject({
         newest_revision_seen: v.string(),
         data_built: v.boolean(),
