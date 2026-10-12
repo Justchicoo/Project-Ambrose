@@ -40,3 +40,4 @@ coverage/
 *.tsbuildinfo
 .npm-cache/
 /site/
+play-credentials.txt
