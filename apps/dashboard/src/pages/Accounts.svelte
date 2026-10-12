@@ -4,30 +4,36 @@
     import * as Table from "$lib/components/ui/table/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
-    import { ApiError, api } from "$lib/api.svelte.js";
+    import { ApiError, request } from "$lib/api.svelte.js";
+    import * as v from "valibot";
     import SearchIcon from "@lucide/svelte/icons/search";
     import PageHeader from "../components/PageHeader.svelte";
 
-    type Account = {
-        id: number;
-        username: string;
-        email?: string;
-        last_address?: string;
-        last_machine_id?: number;
-        security_level: number;
-        locked: boolean;
-        online: boolean;
-        banned: boolean;
-    };
+    const AccountSchema = v.looseObject({
+        id: v.number(),
+        username: v.string(),
+        email: v.optional(v.string()),
+        last_address: v.optional(v.string()),
+        last_machine_id: v.optional(v.number()),
+        security_level: v.number(),
+        locked: v.boolean(),
+        online: v.boolean(),
+        banned: v.boolean(),
+    });
+    type Account = v.InferOutput<typeof AccountSchema>;
 
-    type Ban = {
-        kind: string;
-        target: string;
-        banned_at: number;
-        unban_at: number;
-        banned_by: string;
-        reason: string;
-    };
+    const BanSchema = v.looseObject({
+        kind: v.string(),
+        target: v.string(),
+        banned_at: v.number(),
+        unban_at: v.number(),
+        banned_by: v.string(),
+        reason: v.string(),
+    });
+    type Ban = v.InferOutput<typeof BanSchema>;
+
+    const AccountsAnswer = v.looseObject({ accounts: v.optional(v.array(AccountSchema)) });
+    const BansAnswer = v.looseObject({ bans: v.optional(v.array(BanSchema)) });
 
     let search = $state("");
     let accounts = $state<Account[]>([]);
@@ -39,7 +45,9 @@
         failure = "";
         try {
             const query = search.trim();
-            accounts = await api<{ accounts: Account[] }>(`/api/panel/accounts${query ? `?q=${encodeURIComponent(query)}` : ""}`).then((r) => r.accounts ?? []);
+            accounts =
+                (await request("GET", `/api/panel/accounts${query ? `?q=${encodeURIComponent(query)}` : ""}`, AccountsAnswer)).accounts ??
+                [];
         } catch (problem) {
             failure = problem instanceof ApiError ? problem.message : "Search failed";
         }
@@ -48,7 +56,7 @@
     async function loadBans() {
         failure = "";
         try {
-            bans = await api<{ bans: Ban[] }>(`/api/panel/bans`).then((r) => r.bans ?? []);
+            bans = (await request("GET", "/api/panel/bans", BansAnswer)).bans ?? [];
         } catch (problem) {
             failure = problem instanceof ApiError ? problem.message : "Could not load bans";
         }
@@ -76,7 +84,12 @@
     <div class="mb-4 flex gap-2">
         <div class="relative flex-1">
             <SearchIcon class="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input bind:value={search} placeholder="Search by username, email, address or machine id…" class="pl-9" onkeydown={(e) => e.key === "Enter" && runSearch()} />
+            <Input
+                bind:value={search}
+                placeholder="Search by username, email, address or machine id…"
+                class="pl-9"
+                onkeydown={(e) => e.key === "Enter" && runSearch()}
+            />
         </div>
         <Button onclick={runSearch}>Search</Button>
     </div>
@@ -91,7 +104,7 @@
                 </Table.Row>
             </Table.Header>
             <Table.Body>
-                {#each accounts as account}
+                {#each accounts as account (account.id)}
                     <Table.Row>
                         <Table.Cell class="font-medium">{account.username}</Table.Cell>
                         <Table.Cell>{account.security_level}</Table.Cell>
@@ -101,7 +114,9 @@
                         <Table.Cell>{account.email ?? "—"}</Table.Cell>
                     </Table.Row>
                 {:else}
-                    <Table.Row><Table.Cell colspan={4} class="text-muted-foreground">No accounts found. Search to begin.</Table.Cell></Table.Row>
+                    <Table.Row
+                        ><Table.Cell colspan={4} class="text-muted-foreground">No accounts found. Search to begin.</Table.Cell></Table.Row
+                    >
                 {/each}
             </Table.Body>
         </Table.Root>
@@ -118,7 +133,7 @@
                 </Table.Row>
             </Table.Header>
             <Table.Body>
-                {#each bans as ban}
+                {#each bans as ban (`${ban.kind}-${ban.target}-${ban.banned_at}`)}
                     <Table.Row>
                         <Table.Cell class="font-medium">{ban.kind}</Table.Cell>
                         <Table.Cell>{ban.target}</Table.Cell>

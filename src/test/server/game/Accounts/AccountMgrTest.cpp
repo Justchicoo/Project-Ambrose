@@ -420,5 +420,7 @@ TEST_F(AccountMgrDatabaseTest, PasswordResetSealsVerifierClearsSessionsAndStaysO
     EXPECT_EQ(sAccountMgr.GetVerifier(*lookup.Account), ClientKey::HashPassword("brandnewpassword123"));
     QueryResult remaining = LoginDatabase.Query("SELECT COUNT(*) FROM `account_session`");
     if (remaining)
+    {
         EXPECT_EQ((*remaining)[0].Get<uint64>(), 0u);
+    }
 }
