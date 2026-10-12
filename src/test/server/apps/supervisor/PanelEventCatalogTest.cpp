@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <optional>
@@ -253,9 +254,13 @@ TEST(PanelEventCatalogTest, EveryFrameTheServerWritesValidatesAgainstItsEntry)
     PanelEventCaller owner;
     owner.Principal = "user:1";
     owner.Name = "owner";
-    owner.Asking = PanelAsking{ 1, PanelRole::Owner, true };
+    std::set<std::string, std::less<>> roleKeys;
     for (std::string_view const key : PanelPermissions::KeysOf(PanelRole::Owner))
+    {
+        roleKeys.emplace(key);
         owner.Panel.emplace_back(key);
+    }
+    owner.Asking = PanelAsking{ 1, PanelRole::Owner, true, std::move(roleKeys) };
     owner.Apps["gameserver-1"] = { "console.read" };
     PanelEventCaller const script;
 
