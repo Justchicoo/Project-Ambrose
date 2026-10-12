@@ -167,23 +167,25 @@ PanelRoleResult PanelRoles::Create(std::string_view name, std::string_view descr
         return PanelRoleResult::NameTaken;
     if (!error.empty())
         return PanelRoleResult::StoreFailed;
+    bool hasOwnerOnlyKey = false;
     for (std::string const& key : keys)
     {
-        PanelPermission const* const held = PanelPermissions::Find(key);
-        if (!held)
+        PanelPermission const* const perm = PanelPermissions::Find(key);
+        if (!perm)
             return PanelRoleResult::KeyUnknown;
-        if (held->OwnerOnly)
-            return PanelRoleResult::KeyOwnerOnly;
         if (!editorKeys.contains(key))
             return PanelRoleResult::KeyNotHeld;
+        if (perm->OwnerOnly)
+            hasOwnerOnlyKey = true;
     }
     std::optional<PanelStore::Statement> insert = _store.Prepare(
-        "INSERT INTO panel_role (name, description, owner_only, shipped, created_epoch_ms) VALUES (?1, ?2, 0, 0, ?3)", error);
+        "INSERT INTO panel_role (name, description, owner_only, shipped, created_epoch_ms) VALUES (?1, ?2, ?3, 0, ?4)", error);
     if (!insert)
         return PanelRoleResult::StoreFailed;
     insert->Bind(1, name);
     insert->Bind(2, Ambrose::Trim(description).substr(0, 200));
-    insert->Bind(3, PanelStore::NowEpochMs());
+    insert->Bind(3, hasOwnerOnlyKey ? 1 : 0);
+    insert->Bind(4, PanelStore::NowEpochMs());
     if (!insert->Run(error))
         return PanelRoleResult::StoreFailed;
     int64 const roleId = _store.LastInsertId();
@@ -223,10 +225,10 @@ PanelRoleResult PanelRoles::Update(int64 id, std::string_view name, std::string_
         PanelPermission const* const held = PanelPermissions::Find(key);
         if (!held)
             return PanelRoleResult::KeyUnknown;
-        if (held->OwnerOnly && !row->OwnerOnly)
-            return PanelRoleResult::KeyOwnerOnly;
         if (!editorKeys.contains(key))
             return PanelRoleResult::KeyNotHeld;
+        if (held->OwnerOnly && !row->OwnerOnly)
+            return PanelRoleResult::KeyOwnerOnly;
     }
     std::optional<PanelStore::Statement> update = _store.Prepare("UPDATE panel_role SET name = ?1, description = ?2 WHERE id = ?3", error);
     if (!update)

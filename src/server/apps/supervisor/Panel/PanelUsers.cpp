@@ -308,7 +308,10 @@ PanelUserResult PanelUsers::Authenticate(std::string_view username, std::string_
         return PanelUserResult::Disabled;
     if (!matches)
         return PanelUserResult::WrongPassword;
+    if (!RecordSignIn(found->Id, error))
+        return PanelUserResult::StoreFailed;
     user = *found;
+    user.SignedInEpochMs = PanelStore::NowEpochMs();
     return PanelUserResult::Ok;
 }
 
