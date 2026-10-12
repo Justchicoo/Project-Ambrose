@@ -26,7 +26,6 @@
 
     type Tone = "healthy" | "waiting" | "wrong" | "unknown";
 
-    // AppState value -> badge tone, kept in sync with the supervisor's state list.
     const tones: Record<string, Tone> = {
         running: "healthy",
         starting: "waiting",
