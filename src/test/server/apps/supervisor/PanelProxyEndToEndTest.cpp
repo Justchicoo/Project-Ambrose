@@ -38,8 +38,8 @@ namespace
     {
     public:
         ForwardingProxy(uint16 backendPort, std::string forwardedFor)
-            : _backendPort(backendPort), _forwardedFor(std::move(forwardedFor)),
-              _acceptor(_io, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0))
+            : _acceptor(_io, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0)),
+              _backendPort(backendPort), _forwardedFor(std::move(forwardedFor))
         {
             _thread = std::thread([this] { AcceptLoop(); });
         }
