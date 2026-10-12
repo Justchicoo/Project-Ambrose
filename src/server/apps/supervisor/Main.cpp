@@ -204,6 +204,21 @@ namespace
                     names.push_back(snapshot.Name);
                 return names;
             });
+            _panel.SetLaunchAppSource([this]
+            {
+                std::vector<std::string> names;
+                for (AppSnapshot const& snapshot : _supervisor.Snapshots())
+                    names.push_back(snapshot.Name);
+                return names;
+            });
+            _supervisor.SetLaunchSettingsProvider([this](std::string_view app)
+            {
+                LaunchSettings settings;
+                std::string error;
+                if (!_panel.LaunchStore().Load(app, settings, error))
+                    return LaunchSettings();
+                return settings;
+            });
             std::string error;
             bool const started = _supervisor.Start(Config(), settings, !IsCheckOnly(), problems, error);
             for (std::string const& problem : problems)
