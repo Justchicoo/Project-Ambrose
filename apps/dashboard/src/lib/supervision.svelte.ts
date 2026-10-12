@@ -4,6 +4,8 @@
  */
 
 import { ApiError, request } from "./api.svelte";
+import * as v from "valibot";
+import { SvelteURLSearchParams } from "svelte/reactivity";
 import { filesQuery } from "./files";
 import { live } from "./status.svelte";
 import {
@@ -196,7 +198,7 @@ export function auditChain(signal?: AbortSignal) {
 }
 
 export function activityLog(params: Record<string, string>, signal?: AbortSignal) {
-    const query = new URLSearchParams(params).toString();
+    const query = new SvelteURLSearchParams(params).toString();
     return request("GET", `api/panel/activity?${query}`, ActivityLogAnswer, undefined, signal);
 }
 
@@ -205,8 +207,14 @@ export function activityLogDetails(id: number, signal?: AbortSignal) {
 }
 
 export function activityLogExport(format: string, params: Record<string, string>, signal?: AbortSignal) {
-    const query = new URLSearchParams({ ...params, format }).toString();
-    return request("GET", `api/panel/activity/export?${query}`, v.looseObject({ schema: v.number(), format: v.string(), csv: v.optional(v.string()), json: v.optional(v.string()) }), undefined, signal);
+    const query = new SvelteURLSearchParams({ ...params, format }).toString();
+    return request(
+        "GET",
+        `api/panel/activity/export?${query}`,
+        v.looseObject({ schema: v.number(), format: v.string(), csv: v.optional(v.string()), json: v.optional(v.string()) }),
+        undefined,
+        signal,
+    );
 }
 
 export function playersOf(app: string, signal?: AbortSignal) {
