@@ -67,6 +67,14 @@ function open() {
     flushSync();
 }
 
+function choose(app: string) {
+    const select = host.querySelector<HTMLSelectElement>("#launch-app");
+    if (!select) throw new Error("the app picker did not render");
+    select.value = app;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+}
+
 function signIn(permissions: string[]) {
     session.state = "signed-in";
     session.user = {
@@ -77,7 +85,7 @@ function signIn(permissions: string[]) {
         role: "viewer",
         permissions,
         grants: {},
-must_change_password: <redacted>
+        must_change_password: false,
         two_factor: false,
         two_factor_required: false,
     };
@@ -113,6 +121,7 @@ describe("the launch page", () => {
     it("shows a reader the preview, the masked secret and the locked override naming its layer", async () => {
         signIn(["launch.read"]);
         open();
+        choose("gameserver");
         await vi.waitFor(() => expect(host.textContent).toContain("--set Rate.Drop.Item=1.5"));
         expect(host.textContent).toContain("Rate.Drop.Item is locked by the command-line override layer");
         expect(host.textContent).not.toContain("s3cret");
@@ -122,6 +131,7 @@ describe("the launch page", () => {
     it("lets an editor save the settings with a reason", async () => {
         signIn(["launch.read", "launch.edit"]);
         open();
+        choose("gameserver");
         await vi.waitFor(() => expect(host.textContent).toContain("--set Rate.Drop.Item=1.5"));
         const reason = host.querySelector<HTMLInputElement>("#launch-reason");
         expect(reason).not.toBeNull();

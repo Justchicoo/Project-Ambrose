@@ -8,13 +8,16 @@
     import { ApiError } from "$lib/api.svelte.js";
     import { may } from "$lib/permission.svelte.js";
     import { candidates, launchOf, updateLaunch } from "$lib/supervision.svelte.js";
-    import type { LaunchAnswer } from "$lib/schemas.js";
+    import { LaunchAnswer } from "$lib/schemas.js";
+    import type { InferOutput } from "valibot";
     import LockIcon from "@lucide/svelte/icons/lock";
     import PageHeader from "../components/PageHeader.svelte";
 
+    type Launch = InferOutput<typeof LaunchAnswer>;
+
     const choices = $derived(candidates());
     let chosen = $state("");
-    let answer = $state<LaunchAnswer | null>(null);
+    let answer = $state<Launch | null>(null);
     let failure = $state("");
     let saving = $state(false);
     let saved = $state("");
@@ -44,7 +47,7 @@
         return value === null || value === undefined ? "" : String(value);
     }
 
-    function fill(form: LaunchAnswer) {
+    function fill(form: Launch) {
         build = form.build;
         workingDirectory = form.working_directory;
         startTimeout = textOf(form.start_timeout);
@@ -139,7 +142,12 @@
             fill(form);
             saved = `The launch settings for ${app} were saved and apply at its next start`;
         } catch (problem) {
-            failure = problem instanceof ApiError ? problem.message : problem instanceof Error ? problem.message : "The launch settings could not be saved";
+            failure =
+                problem instanceof ApiError
+                    ? problem.message
+                    : problem instanceof Error
+                      ? problem.message
+                      : "The launch settings could not be saved";
         } finally {
             saving = false;
         }
@@ -157,7 +165,7 @@
     <div class="mb-4 flex items-center gap-2">
         <Label for="launch-app">App</Label>
         <select id="launch-app" class="rounded border px-2 py-1" bind:value={chosen} aria-label="App">
-            {#each choices as name}
+            {#each choices as name (name)}
                 <option value={name}>{name}</option>
             {/each}
         </select>
@@ -183,7 +191,12 @@
                     </div>
                     <div>
                         <Label for="launch-workdir">Working folder</Label>
-                        <Input id="launch-workdir" bind:value={workingDirectory} disabled={!canEdit} placeholder="Inherit the configured folder" />
+                        <Input
+                            id="launch-workdir"
+                            bind:value={workingDirectory}
+                            disabled={!canEdit}
+                            placeholder="Inherit the configured folder"
+                        />
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -198,7 +211,12 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <Label for="launch-policy">Restart policy</Label>
-                            <select id="launch-policy" class="w-full rounded border px-2 py-1" bind:value={restartPolicy} disabled={!canEdit}>
+                            <select
+                                id="launch-policy"
+                                class="w-full rounded border px-2 py-1"
+                                bind:value={restartPolicy}
+                                disabled={!canEdit}
+                            >
                                 <option value="">Inherit</option>
                                 <option value="always">Always</option>
                                 <option value="on-crash">On crash</option>
@@ -207,7 +225,12 @@
                         </div>
                         <div>
                             <Label for="launch-autostart">Autostart</Label>
-                            <select id="launch-autostart" class="w-full rounded border px-2 py-1" bind:value={autostart} disabled={!canEdit}>
+                            <select
+                                id="launch-autostart"
+                                class="w-full rounded border px-2 py-1"
+                                bind:value={autostart}
+                                disabled={!canEdit}
+                            >
                                 <option value="">Inherit</option>
                                 <option value="true">Yes</option>
                                 <option value="false">No</option>
@@ -235,7 +258,13 @@
                         </div>
                         <div>
                             <Label for="launch-memory">Memory limit (MB)</Label>
-                            <Input id="launch-memory" bind:value={memoryLimitMb} disabled={!canEdit} inputmode="numeric" placeholder="Off" />
+                            <Input
+                                id="launch-memory"
+                                bind:value={memoryLimitMb}
+                                disabled={!canEdit}
+                                inputmode="numeric"
+                                placeholder="Off"
+                            />
                         </div>
                         <div>
                             <Label for="launch-cpu">CPU limit (%)</Label>
@@ -250,22 +279,42 @@
                 <Card.Content class="grid gap-3">
                     <div>
                         <Label for="launch-overrides">Command-line overrides, one key=value per line</Label>
-                        <textarea id="launch-overrides" class="w-full rounded border px-2 py-1 font-mono text-sm" rows="4" bind:value={overridesText} disabled={!canEdit}></textarea>
+                        <textarea
+                            id="launch-overrides"
+                            class="w-full rounded border px-2 py-1 font-mono text-sm"
+                            rows="4"
+                            bind:value={overridesText}
+                            disabled={!canEdit}
+                        ></textarea>
                         {#if lockedKeys.length > 0}
                             <ul class="mt-2 text-sm">
-                                {#each lockedKeys as entry}
-                                    <li class="flex items-center gap-1"><LockIcon size={14} />{entry.key} is locked by the {entry.layer} layer</li>
+                                {#each lockedKeys as entry (entry.key)}
+                                    <li class="flex items-center gap-1">
+                                        <LockIcon size={14} />{entry.key} is locked by the {entry.layer} layer
+                                    </li>
                                 {/each}
                             </ul>
                         {/if}
                     </div>
                     <div>
                         <Label for="launch-env">Environment, one name=value per line</Label>
-                        <textarea id="launch-env" class="w-full rounded border px-2 py-1 font-mono text-sm" rows="4" bind:value={environmentText} disabled={!canEdit}></textarea>
+                        <textarea
+                            id="launch-env"
+                            class="w-full rounded border px-2 py-1 font-mono text-sm"
+                            rows="4"
+                            bind:value={environmentText}
+                            disabled={!canEdit}
+                        ></textarea>
                     </div>
                     <div>
                         <Label for="launch-secrets">Secret variables, one name per line, sealed and masked</Label>
-                        <textarea id="launch-secrets" class="w-full rounded border px-2 py-1 font-mono text-sm" rows="2" bind:value={secretsText} disabled={!canEdit}></textarea>
+                        <textarea
+                            id="launch-secrets"
+                            class="w-full rounded border px-2 py-1 font-mono text-sm"
+                            rows="2"
+                            bind:value={secretsText}
+                            disabled={!canEdit}
+                        ></textarea>
                     </div>
                 </Card.Content>
             </Card.Root>
@@ -280,7 +329,7 @@
                     <p class="mb-1 text-sm font-medium">Environment</p>
                     <Table.Root>
                         <Table.Body>
-                            {#each previewEnvironment as entry}
+                            {#each previewEnvironment as entry (entry.name)}
                                 <Table.Row>
                                     <Table.Cell class="font-mono">{entry.name}</Table.Cell>
                                     <Table.Cell class="font-mono">{entry.value}</Table.Cell>
