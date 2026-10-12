@@ -29,6 +29,9 @@ namespace
             { "power", "power.stop", "Stop an app", false, false, false },
             { "power", "power.restart", "Restart an app", false, false, false },
             { "power", "power.kill", "End an app at once, which can lose unsaved character state", Danger, false, false },
+            { "power", "power.request", "Request a tracked power operation on an app, a realm or the stack", false, false, false },
+            { "power", "power.read", "See power operations and their progress", false, false, false },
+            { "power", "power.disable", "Disable an app or enable it again", false, false, false },
 
             { "launch", "launch.read", "See how an app is launched", false, false, false },
             { "launch", "launch.edit", "Change how an app is launched", false, false, false },
@@ -176,6 +179,7 @@ namespace
 
     std::vector<std::string_view> const OperatorKeys{
         "status.read", "console.read", "console.write", "power.start", "power.stop", "power.restart",
+        "power.request", "power.read", "power.disable",
         "settings.read", "reload.read", "reload.run", "files.list", "files.read", "files.download",
         "backups.read", "backups.create", "schedules.read", "schedules.edit", "schedules.run",
         "clientdata.read", "database.read", "realms.read", "players.read", "players.kick",
@@ -194,7 +198,8 @@ namespace
         "status.read", "console.read", "settings.read", "reload.read", "files.list", "files.read", "files.download",
         "backups.read", "schedules.read", "updates.read", "clientdata.read", "database.read", "world.read",
         "realms.read", "accounts.read", "characters.read", "players.read", "reports.read",
-        "metrics.read", "alerts.read", "activity.read", "users.read", "nodes.read", "launch.read", "network.read", "errors.read"
+        "metrics.read", "alerts.read", "activity.read", "users.read", "nodes.read", "launch.read", "network.read", "errors.read",
+        "power.read"
     };
 }
 
