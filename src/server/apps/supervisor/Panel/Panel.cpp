@@ -1168,9 +1168,11 @@ void Panel::ApplyTrustedProxies()
         trusted.Value = _configTrustedProxies;
         trusted.Layer = "config";
     }
+    {
+        std::lock_guard const lock(_proxyWatchMutex);
+        _proxyWatch.clear();
+    }
     _listener.Routes().SetTrustedProxies(TrustedProxies::Parse(trusted.Value));
-    std::lock_guard const lock(_proxyWatchMutex);
-    _proxyWatch.clear();
 }
 
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
