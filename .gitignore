@@ -41,3 +41,4 @@ coverage/
 .npm-cache/
 /site/
 play-credentials.txt
+play_login.py
