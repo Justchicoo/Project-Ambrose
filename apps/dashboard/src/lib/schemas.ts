@@ -855,3 +855,56 @@ export type FileEntry = v.InferOutput<typeof FileEntry>;
 export type FileListing = v.InferOutput<typeof FileListing>;
 export type FileContent = v.InferOutput<typeof FileContent>;
 export type FileRulesAnswer = v.InferOutput<typeof FileRulesAnswer>;
+
+export const MaintenanceAnswer = v.looseObject({
+    active: v.boolean(),
+    reason: v.string(),
+    started_by: v.string(),
+    started_epoch_ms: v.number(),
+    window_start_epoch_ms: v.nullable(v.number()),
+    window_end_epoch_ms: v.nullable(v.number()),
+});
+export interface MaintenanceState {
+    active: boolean;
+    reason: string;
+    started_by: string;
+    started_epoch_ms: number;
+    window_start_epoch_ms: number | null;
+    window_end_epoch_ms: number | null;
+}
+
+export const OpsCalendarEvent = v.looseObject({
+    id: v.string(),
+    source: v.string(),
+    color: v.string(),
+    title: v.string(),
+    detail: v.string(),
+    start_epoch_ms: v.number(),
+    end_epoch_ms: v.number(),
+    disruptive: v.boolean(),
+    url: v.string(),
+});
+export type OpsCalendarEvent = v.InferOutput<typeof OpsCalendarEvent>;
+
+export const OpsCalendarSource = v.looseObject({
+    source: v.string(),
+    color: v.string(),
+    available: v.boolean(),
+    unavailable_reason: v.optional(v.string()),
+});
+export type OpsCalendarSource = v.InferOutput<typeof OpsCalendarSource>;
+
+export const OpsCalendarConflict = v.looseObject({
+    event_a_id: v.string(),
+    event_b_id: v.string(),
+    reason: v.string(),
+});
+export type OpsCalendarConflict = v.InferOutput<typeof OpsCalendarConflict>;
+
+export const OpsCalendarAnswer = v.looseObject({
+    events: v.array(OpsCalendarEvent),
+    sources: v.array(OpsCalendarSource),
+    conflicts: v.array(OpsCalendarConflict),
+    server_utc_offset_minutes: v.number(),
+});
+export type OpsCalendarAnswer = v.InferOutput<typeof OpsCalendarAnswer>;
