@@ -192,6 +192,11 @@ namespace
         incoming.Method = crow::method_name(request.method);
         incoming.Path = request.url;
         incoming.RemoteAddress = router.ResolveAddress(request.remote_ip_address, request.get_header_value("x-forwarded-for"));
+        incoming.PeerAddress = request.remote_ip_address;
+        incoming.ForwardedFor = request.get_header_value("x-forwarded-for");
+        incoming.ForwardedProto = request.get_header_value("x-forwarded-proto");
+        incoming.ForwardedHost = request.get_header_value("x-forwarded-host");
+        incoming.Forwarded = request.get_header_value("forwarded");
         incoming.UserAgent = request.get_header_value("user-agent");
         incoming.Authorization = request.get_header_value("Authorization");
         incoming.ForwardedActor = request.get_header_value("X-Ambrose-Panel-User");
