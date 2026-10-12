@@ -36,7 +36,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 ## 13.01 Pet core (EXT-10)
 
-**Goal:** Pet spawn/follow and energy.
+**Goal:** Pet spawn/follow, energy, and hatching eligibility.
 
 **Size:** M. **Depends on:** 8.10, 6.16, 4.16
 
@@ -44,35 +44,59 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] Energy never exceeds max; unequip despawns
-- [ ] Real client: pet follows through doors; others see it
-- [ ] Changing Pet.EnergyRegenInterval applies from the next energy tick without a restart
+- [ ] Energy never exceeds max; unequip despawns pet.
+- [ ] Real client: pet follows through doors; others see it.
+- [ ] Changing Pet.EnergyRegenInterval applies from the next energy tick without a restart.
+- [ ] Pets must be hatched before they can be equipped.
+- [ ] Pets can only be hatched after their hatch timer finishes or by using the Hatch Now button to pay gold and hatch instantly.
+- [ ] Instant hatching deducts the required gold and completes the hatch immediately.
+- [ ] Players cannot equip unhatched pets or bypass the hatch timer and gold cost through client-side requests.
 
 ### Detailed spec from EXT-10: Pet core: equip, spawn/follow, energy
 
-An equipped pet follows the wizard, and the energy bar ticks and caps correctly.
+An equipped pet follows the wizard, and the energy bar ticks and caps correctly. Pets must first be hatched before they become eligible for equipping.
+
+Pet hatching and equip eligibility
+
+- Newly acquired pets that require hatching remain unhatched until their hatch timer finishes or the player chooses to hatch them instantly.
+- When the hatch timer reaches zero, the pet becomes hatched and eligible for equipping.
+- Players may use the Hatch Now button to spend the required amount of gold to complete hatching immediately.
+- The server must validate the pet's hatch state, timer, and available gold before processing an instant hatch. Gold must be deducted server-side, and the hatch must not complete if the player cannot afford it.
+- The client must not be able to equip an unhatched pet, skip the timer for free, or bypass the gold payment.
+- Once hatched, the pet can be equipped and follow the normal pet equip, spawn, and energy behavior.
+- Hatching is a one-time prerequisite for each pet; a hatched pet does not need to be hatched again when unequipped or re-equipped.
 
 **Deliverables**
 
-- game/Pets/PetMgr and Pet object on character (ServerPetOwnerBehavior state)
-- Pet spawn/despawn on equip/unequip and zone change, leash offset
-- Energy regen timer and max from level table, with the regen interval as the live setting Pet.EnergyRegenInterval
+- game/Pets/PetMgr and Pet object on character (ServerPetOwnerBehavior state).
+- Pet spawn/despawn on equip/unequip and zone change, including leash offset.
+- Energy regeneration timer and maximum energy from the level table, with the regeneration interval controlled by the live setting Pet.EnergyRegenInterval.
+- Pet hatching state, hatch timer, and server-authoritative instant hatching using gold.
+- Equip validation that rejects pets that have not yet hatched.
 
 **Client messages:** MSG_PETUPDATEBEHAVIOR, MSG_PETENERGYTICK, MSG_PETENERGYMAX, MSG_LEASH, MSG_LEASHOFFSET, MSG_EQUIPMENTBEHAVIOR_EQUIPITEM, MSG_EQUIPMENTBEHAVIOR_UNEQUIPITEM, MSG_NEWOBJECT, MSG_DELETEOBJECT
 
 **Data sources**
 
-- ObjectData/Pets (1480) templates
-- Energy per level: Root.wad MagicXPConfig.xml, whose 181 MagicLevelInfo rows for levels 0 to 180 each carry m_petEnergy (finding F-69); src/server/shared/ClientData/LevelExtractor.cpp already reads it into PlayerLevelInfo.PetEnergy
+- ObjectData/Pets (1480) templates.
+- Energy per level: Root.wad MagicXPConfig.xml, whose 181 MagicLevelInfo rows for levels 0 to 180 each carry m_petEnergy (finding F-69); src/server/shared/ClientData/LevelExtractor.cpp already reads it into PlayerLevelInfo.PetEnergy.
+- Hatch duration and gold cost must be sourced from the appropriate pet configuration or existing game data where available; do not invent values if the source data has not been established.
 
 **Database tables**
 
-- characters.character_pet (item guid, level, xp, talents, stats)
+- characters.character_pet (item GUID, level, XP, talents, stats).
+- Persist any additional hatch state or timing data required to ensure hatch timers survive relogs and cannot be bypassed by restarting the client.
 
 **Acceptance**
-
-- [ ] Unit: energy tick never exceeds max; unequip despawns pet object
-- [ ] Client: equipping a pet spawns it beside the wizard, it follows while running and through zone doors, and other players see it; the energy bar refills over time
+  
+- [ ] Unit: energy tick never exceeds max; unequip despawns pet object.
+- [ ] Unit: unhatched pets cannot be equipped.
+- [ ] Unit: a pet becomes eligible for equipping when its hatch timer expires.
+- [ ] Unit: Hatch Now deducts the correct gold amount and completes hatching immediately.
+- [ ] Unit: instant hatching fails safely when the player has insufficient gold.
+- [ ] Client: equipping a hatched pet spawns it beside the wizard, it follows while running and through zone doors, and other players see it.
+- [ ] Client: the energy bar refills over time.
+- [ ] Client: the hatch timer and Hatch Now option correctly reflect the pet's hatching state.
 
 ## 13.02 Pet snacks, level, talents, rename (EXT-11)
 
