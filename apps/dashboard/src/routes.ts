@@ -16,6 +16,7 @@ import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import GlobeIcon from "@lucide/svelte/icons/globe";
 import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
 import LockIcon from "@lucide/svelte/icons/lock";
+import NetworkIcon from "@lucide/svelte/icons/network";
 import ServerIcon from "@lucide/svelte/icons/server";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import SlidersHorizontalIcon from "@lucide/svelte/icons/sliders-horizontal";
@@ -188,6 +189,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/Settings.svelte") },
+    },
+    {
+        path: "proxy",
+        title: "Reverse proxy",
+        icon: NetworkIcon,
+        permission: "panel.settings",
+        nav: true,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/Proxy.svelte") },
     },
     {
         path: "reload",

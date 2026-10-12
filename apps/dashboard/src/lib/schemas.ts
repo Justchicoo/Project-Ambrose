@@ -347,6 +347,33 @@ export const PanelMailTestAnswer = v.looseObject({
     to: v.string(),
 });
 
+export const ProxyCheckAnswer = v.looseObject({
+    peer: v.string(),
+    forwarded_headers: v.looseObject({}),
+    peer_trusted: v.boolean(),
+    trusted_proxies: v.string(),
+    trusted_proxies_layer: v.string(),
+    trusted_proxies_locked: v.boolean(),
+    client_address: v.string(),
+    scheme: v.string(),
+    host: v.string(),
+    public_url: v.string(),
+    socket_upgrade_received: v.boolean(),
+    problems: v.array(
+        v.looseObject({
+            code: v.string(),
+            message: v.string(),
+            fix: v.string(),
+        }),
+    ),
+});
+
+export const ProxyConfigAnswer = v.looseObject({
+    product: v.string(),
+    hostname: v.string(),
+    config: v.string(),
+});
+
 export const ErrorGroup = v.looseObject({
     id: v.number(),
     app: v.string(),
