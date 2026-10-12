@@ -119,6 +119,31 @@ std::optional<SessionHolder> PanelSessions::Hold(std::string_view secret)
     return SessionHolder{ CsrfOf(secret), fmt::format("user:{}", userId) };
 }
 
+std::optional<SessionExpiry> PanelSessions::ExpiryOf(std::string_view secret)
+{
+    if (secret.empty() || secret.size() > 512)
+        return std::nullopt;
+
+    std::lock_guard const lock(_mutex);
+    std::string error;
+    std::optional<PanelStore::Statement> rows = _store.Prepare(
+        "SELECT s.idle_expires_epoch_ms, s.absolute_expires_epoch_ms FROM panel_session s JOIN panel_user u ON u.id = s.user_id"
+        " WHERE s.token_hash = ? AND s.ended_epoch_ms IS NULL AND s.idle_expires_epoch_ms > ? AND s.absolute_expires_epoch_ms > ?"
+        " AND s.generation = u.generation AND u.disabled = 0", error);
+    if (!rows)
+        return std::nullopt;
+    int64 const now = PanelStore::NowEpochMs();
+    rows->Bind(1, Digest(secret));
+    rows->Bind(2, now);
+    rows->Bind(3, now);
+    if (!rows->Step(error))
+        return std::nullopt;
+    SessionExpiry expiry;
+    expiry.IdleRemaining = std::chrono::seconds((rows->Int64(0) - now) / 1000);
+    expiry.AbsoluteRemaining = std::chrono::seconds((rows->Int64(1) - now) / 1000);
+    return expiry;
+}
+
 bool PanelSessions::MarkChecked(std::string_view secret, std::string& error)
 {
     std::lock_guard const lock(_mutex);
