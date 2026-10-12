@@ -298,7 +298,7 @@ TEST_F(PanelSettingsTest, ClearingASecretRemovesItsSealedValue)
     EXPECT_TRUE(saved->IsNull(2));
 }
 
-TEST_F(PanelSettingsTest, CaptchaRequiredAnswerNamesTheProviderAndSiteKey)
+TEST_F(PanelSettingsTest, CaptchaRequiredAnswerNamesTheProviderSiteKeyAndScript)
 {
     Credentials owner;
     ASSERT_TRUE(MakeOwner(owner));
@@ -324,6 +324,7 @@ TEST_F(PanelSettingsTest, CaptchaRequiredAnswerNamesTheProviderAndSiteKey)
     EXPECT_EQ(body.value("error", ""), "captcha_required");
     EXPECT_EQ(body.value("captcha_provider", ""), "turnstile");
     EXPECT_EQ(body.value("captcha_site_key", ""), "test-site-key");
+    EXPECT_EQ(body.value("captcha_script_url", ""), "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit");
     EXPECT_EQ(asked.Body.find("test-secret"), std::string::npos);
 }
 
