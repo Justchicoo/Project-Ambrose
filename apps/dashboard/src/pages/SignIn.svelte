@@ -31,6 +31,7 @@
     let notice = $state("");
     let captchaProvider = $state("");
     let captchaSiteKey = $state("");
+    let captchaScriptUrl = $state("");
     let captchaToken = $state("");
     let captchaWidget: CaptchaWidget | undefined = $state();
     session.secondFactorPending = false;
@@ -100,12 +101,13 @@
         notice = message;
     }
 
-    function readCaptcha(body: unknown): { provider: string; siteKey: string } | null {
+    function readCaptcha(body: unknown): { provider: string; siteKey: string; scriptUrl: string } | null {
         if (body === null || typeof body !== "object") return null;
         const record = body as Record<string, unknown>;
         if (typeof record.captcha_provider !== "string" || typeof record.captcha_site_key !== "string") return null;
+        if (typeof record.captcha_script_url !== "string") return null;
         if (record.captcha_provider === "" || record.captcha_provider === "off") return null;
-        return { provider: record.captcha_provider, siteKey: record.captcha_site_key };
+        return { provider: record.captcha_provider, siteKey: record.captcha_site_key, scriptUrl: record.captcha_script_url };
     }
 
     function switchFactor() {
@@ -157,6 +159,7 @@
                     if (asked !== null) {
                         captchaProvider = asked.provider;
                         captchaSiteKey = asked.siteKey;
+                        captchaScriptUrl = asked.scriptUrl;
                         captchaToken = "";
                     }
                     problem = null;
@@ -373,6 +376,7 @@
                             bind:this={captchaWidget}
                             provider={captchaProvider}
                             siteKey={captchaSiteKey}
+                            scriptUrl={captchaScriptUrl}
                             onToken={(token) => (captchaToken = token)}
                             onExpired={() => (captchaToken = "")}
                         />

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The sign-in captcha widget's provider map: which script to load and which global renders the challenge for each provider the panel knows, with the script load shared so the page never fetches it twice. The three providers expose the same explicit-render shape, so one component drives them all.
+ * The sign-in captcha widget's provider map: the render global for each provider the panel knows, with the widget script's own address taken from the panel's sign-in refusal so the dashboard bundle never names another host, and with the script load shared so the page never fetches it twice. The three providers expose the same explicit-render shape, so one component drives them all.
  */
 
 export type CaptchaProvider = "recaptcha" | "hcaptcha" | "turnstile";
@@ -25,26 +25,15 @@ export interface CaptchaConfig {
     globalName: string;
 }
 
-export function captchaConfig(provider: string): CaptchaConfig | null {
+export function captchaConfig(provider: string, scriptUrl: string): CaptchaConfig | null {
+    if (scriptUrl === "") return null;
     switch (provider) {
         case "recaptcha":
-            return {
-                provider,
-                scriptUrl: "https://www.google.com/recaptcha/api.js?render=explicit",
-                globalName: "grecaptcha",
-            };
+            return { provider, scriptUrl, globalName: "grecaptcha" };
         case "hcaptcha":
-            return {
-                provider,
-                scriptUrl: "https://js.hcaptcha.com/1/api.js?render=explicit",
-                globalName: "hcaptcha",
-            };
+            return { provider, scriptUrl, globalName: "hcaptcha" };
         case "turnstile":
-            return {
-                provider,
-                scriptUrl: "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
-                globalName: "turnstile",
-            };
+            return { provider, scriptUrl, globalName: "turnstile" };
         default:
             return null;
     }

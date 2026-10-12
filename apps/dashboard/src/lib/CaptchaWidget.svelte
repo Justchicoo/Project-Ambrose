@@ -1,22 +1,23 @@
-<!-- Project Ambrose by Imjustchico: The sign-in captcha challenge. Renders the configured provider's widget once its script loads, hands the solved token to the page, and can be reset when an answer is refused. A provider the panel does not know, or a script that will not load, is said plainly instead of leaving an empty box. -->
+<!-- Project Ambrose by Imjustchico: The sign-in captcha challenge. Renders the provider's widget once the script the panel named loads, hands the solved token to the page, and can be reset when an answer is refused. A provider the panel does not know, or a script that will not load, is said plainly instead of leaving an empty box. -->
 <script lang="ts">
     import { captchaConfig, loadCaptchaScript, renderCaptcha, resetCaptcha } from "$lib/captcha.js";
 
     interface Props {
         provider: string;
         siteKey: string;
+        scriptUrl: string;
         onToken: (token: string) => void;
         onExpired?: () => void;
     }
 
-    let { provider, siteKey, onToken, onExpired }: Props = $props();
+    let { provider, siteKey, scriptUrl, onToken, onExpired }: Props = $props();
 
     let container: HTMLDivElement | undefined = $state();
     let widgetId: number | null = $state(null);
     let failed = $state(false);
 
     $effect(() => {
-        const config = captchaConfig(provider);
+        const config = captchaConfig(provider, scriptUrl);
         if (!config || !container) {
             failed = true;
             return;
@@ -47,7 +48,7 @@
     });
 
     export function reset() {
-        const config = captchaConfig(provider);
+        const config = captchaConfig(provider, scriptUrl);
         if (!config) return;
         resetCaptcha(config, widgetId);
         widgetId = null;
