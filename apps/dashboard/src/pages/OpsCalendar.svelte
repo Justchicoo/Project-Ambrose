@@ -109,7 +109,8 @@
     <button class="rounded-md border px-3 py-1.5 text-sm" onclick={() => (anchor = Date.now())}>Today</button>
     <button class="rounded-md border px-3 py-1.5 text-sm" onclick={() => shift(view === "week" ? 7 : 28)}>Next ›</button>
     <span class="ml-auto text-sm text-muted-foreground">
-        All times in {zone}{#if serverDiffers} · node runs at {serverLabel}{/if}
+        All times in {zone}{#if serverDiffers}
+            · node runs at {serverLabel}{/if}
     </span>
 </div>
 

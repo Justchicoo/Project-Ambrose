@@ -10,13 +10,7 @@ export type { OpsCalendarConflict, OpsCalendarEvent };
 export type { OpsCalendarAnswer };
 
 export function getCalendar(fromMs: number, toMs: number, signal?: AbortSignal): Promise<OpsCalendarAnswer> {
-    return request(
-        "GET",
-        `/api/ops/calendar?from=${fromMs}&to=${toMs}`,
-        OpsCalendarAnswer,
-        undefined,
-        signal,
-    );
+    return request("GET", `/api/ops/calendar?from=${fromMs}&to=${toMs}`, OpsCalendarAnswer, undefined, signal);
 }
 
 export function operatorTimeZone(): string {
@@ -106,10 +100,15 @@ export function conflictReasonFor(eventId: string, conflicts: OpsCalendarConflic
 
 export function sourceLabel(source: string): string {
     switch (source) {
-        case "schedules": return "Schedules";
-        case "game_events": return "Game events";
-        case "installation_maintenance": return "Installation maintenance";
-        case "realm_maintenance": return "Realm maintenance";
-        default: return source;
+        case "schedules":
+            return "Schedules";
+        case "game_events":
+            return "Game events";
+        case "installation_maintenance":
+            return "Installation maintenance";
+        case "realm_maintenance":
+            return "Realm maintenance";
+        default:
+            return source;
     }
 }
