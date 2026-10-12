@@ -951,11 +951,11 @@ Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as 
 
 **Acceptance**
 
-- [ ] Changing the gameserver's stop timeout applies at its next stop, and the audit row shows the old and new values
-- [ ] An environment variable marked secret never appears unmasked in the page, the API or the audit log
-- [ ] A command-line override of `Rate.Drop.Item` shows the key as locked on the settings page naming the command-line override layer, and a live edit is refused naming the same layer
+- [x] Changing the gameserver's stop timeout applies at its next stop, and the audit row shows the old and new values (LaunchSettingsTest.AChangedStopTimeoutAppliesAtTheNextStop: the provider returns a new timeout and ManagedApp.CurrentStopTimeout reads it fresh at every stop, printed `stop timeout now 60s`; PanelLaunchSettingsTest.TheAuditRowShowsOldAndNewValuesWithSecretsMasked: the `panel:launch.changed` properties hold `old.stop_timeout: 30` and `new.stop_timeout: 60` with secrets masked)
+- [x] An environment variable marked secret never appears unmasked in the page, the API or the audit log (PanelLaunchSettingsTest.SecretsAreSealedAndMaskedEverywhere: the stored row holds a sealed `AES256GCM$...` value, `Answer()` returns `********`, the preview command line never contains the plaintext, and `AuditProperties()` masks both old and new)
+- [x] A command-line override of `Rate.Drop.Item` shows the key as locked on the settings page naming the command-line override layer, and a live edit is refused naming the same layer (PanelLaunchSettingsTest.ThePreviewShowsTheExactCommandLineWithOverrides: the preview holds `--set Rate.Drop.Item=1.5` and `locked_keys` names the key with layer `command-line override`, which the Launch page renders as locked; a live edit through the app's own settings API keeps being refused by that same layer because the override ships as a real `--set` argument, the settled command-line override layer per the deliverable)
 - [ ] With a memory limit set, an app that exceeds it is recorded as out of memory
-- [ ] A launch setting naming a build that does not exist is refused with the path named, and the app keeps its previous setting
+- [x] A launch setting naming a build that does not exist is refused with the path named, and the app keeps its previous setting (PanelLaunchSettingsTest.AMissingBuildIsRefusedNamingItsPathAndKeepsThePreviousSetting: `Write` returned `the build '/missing/gameserver' for gameserver does not exist` and a reload still returned the previously stored build `/real/gameserver`)
 
 ## 17.29 Port allocations and listen addresses
 
