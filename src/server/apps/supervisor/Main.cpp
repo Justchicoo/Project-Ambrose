@@ -204,6 +204,18 @@ namespace
                     names.push_back(snapshot.Name);
                 return names;
             });
+            _panel.SetAppCall([this](std::string_view app, std::string_view method, std::string_view path, std::string_view body)
+            {
+                std::optional<AdminClientResponse> const answer = _supervisor.CallApp(app, method, path, body, std::chrono::seconds(10));
+                MaintenanceAppCallResult result;
+                if (!answer)
+                    return result;
+                result.Ok = answer->Answered && !answer->TimedOut;
+                result.Status = answer->Status;
+                result.Body = answer->Body;
+                result.Error = answer->Error;
+                return result;
+            });
             std::string error;
             bool const started = _supervisor.Start(Config(), settings, !IsCheckOnly(), problems, error);
             for (std::string const& problem : problems)
