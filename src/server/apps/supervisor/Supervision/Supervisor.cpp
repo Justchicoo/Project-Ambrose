@@ -189,6 +189,8 @@ bool Supervisor::Start(ConfigMgr const& config, SupervisorSettings const& settin
     {
         apps.push_back(std::make_unique<ManagedApp>(std::move(definition), *state, settings.OutputFolder, settings.MaxOutputBytes, settings.DataFolder, _sendBreak, _log));
         apps.back()->SetStatusObserver([this](AppSnapshot const& snapshot) { ForwardStatus(snapshot); });
+        if (_launchSettings)
+            apps.back()->SetLaunchSettingsProvider(_launchSettings);
     }
     {
         std::unique_lock<std::shared_mutex> const lock(_mutex);
@@ -523,6 +525,15 @@ void Supervisor::SetStatusObserver(AppStatusObserver observer)
 {
     std::lock_guard<std::mutex> const lock(_observerMutex);
     _statusObserver = std::move(observer);
+}
+
+void Supervisor::SetLaunchSettingsProvider(LaunchSettingsProvider provider)
+{
+    std::unique_lock<std::shared_mutex> const lock(_mutex);
+    _launchSettings = std::move(provider);
+    for (std::unique_ptr<ManagedApp> const& app : _apps)
+        if (_launchSettings)
+            app->SetLaunchSettingsProvider(_launchSettings);
 }
 
 void Supervisor::ForwardStatus(AppSnapshot const& snapshot)
