@@ -7,6 +7,7 @@
 #define AMBROSE_PANELROLES_H
 
 #include "Types.h"
+#include "PanelStore.h"
 
 #include <map>
 #include <mutex>
@@ -15,8 +16,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-class PanelStore;
 
 struct PanelRoleRow
 {

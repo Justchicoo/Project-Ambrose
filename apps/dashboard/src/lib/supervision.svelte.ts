@@ -4,6 +4,7 @@
  */
 
 import { ApiError, request } from "./api.svelte";
+import * as v from "valibot";
 import { filesQuery } from "./files";
 import { live } from "./status.svelte";
 import {

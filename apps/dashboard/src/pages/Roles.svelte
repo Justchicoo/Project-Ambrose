@@ -40,7 +40,10 @@
             await createPanelRole(
                 newName,
                 newDescription,
-                newKeys.split(",").map((key) => key.trim()).filter(Boolean),
+                newKeys
+                    .split(",")
+                    .map((key) => key.trim())
+                    .filter(Boolean),
             );
             newName = "";
             newDescription = "";
@@ -102,7 +105,7 @@
 
 <h2 class="text-lg font-semibold mt-4">Roles</h2>
 <ul>
-    {#each roles as role}
+    {#each roles as role (role.id)}
         <li>
             <strong>{role.name}</strong>{role.shipped ? " (shipped)" : ""}{role.ownerOnly ? " (owner-only)" : ""}
             — {role.keys.length} keys, {role.holders} holders
@@ -128,7 +131,15 @@
     </div>
     <div>
         <Label for="edit-keys">Keys (comma separated)</Label>
-        <Input id="edit-keys" value={editing.keys.join(", ")} oninput={(e) => (editing!.keys = e.currentTarget.value.split(",").map((k) => k.trim()).filter(Boolean))} />
+        <Input
+            id="edit-keys"
+            value={editing.keys.join(", ")}
+            oninput={(e) =>
+                (editing!.keys = e.currentTarget.value
+                    .split(",")
+                    .map((k) => k.trim())
+                    .filter(Boolean))}
+        />
     </div>
     <div class="flex gap-2 mt-2">
         <Button onclick={saveEdit} disabled={busy}>Save</Button>

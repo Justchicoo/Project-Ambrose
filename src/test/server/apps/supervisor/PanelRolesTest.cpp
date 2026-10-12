@@ -168,11 +168,11 @@ TEST_F(PanelUsersRolesGrantsTest, CustomRoleGrantsExactlyNamedKeysAndEditsApplyI
     int64 roleId = 0;
     ASSERT_EQ(_roles->Create("support", "Support desk", { "users.read" }, ownerId, held, &roleId, error), PanelRoleResult::Ok) << error;
     ASSERT_EQ(_roles->Assign(holderId, roleId, PanelStore::NowEpochMs(), error), PanelRoleResult::Ok) << error;
-    EXPECT_EQ(_roles->KeysOfUser(holderId, error), std::set<std::string, std::less<>>{ "users.read" });
+    EXPECT_EQ(_roles->KeysOfUser(holderId, error), (std::set<std::string, std::less<>>{ "users.read" }));
     auto const started = std::chrono::steady_clock::now();
     ASSERT_EQ(_roles->Update(roleId, "support", "Support desk", { "users.read", "users.update" }, ownerId, held, error), PanelRoleResult::Ok) << error;
     EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(1));
-    EXPECT_EQ(_roles->KeysOfUser(holderId, error), std::set<std::string, std::less<>>(held));
+    EXPECT_EQ(_roles->KeysOfUser(holderId, error), (std::set<std::string, std::less<>>(held)));
 }
 
 TEST_F(PanelUsersRolesGrantsTest, RoleCannotGetKeyItsEditorLacks)

@@ -10,7 +10,7 @@
 #include "PanelUsers.h"
 
 PanelAuthorization::PanelAuthorization(PanelGrants& grants, Finder finder, Recorder recorder, PanelRoles* roles)
-    : _grants(grants), _finder(std::move(finder)), _recorder(std::move(recorder)), _roles(roles)
+    : _grants(grants), _roles(roles), _finder(std::move(finder)), _recorder(std::move(recorder))
 {
 }
 

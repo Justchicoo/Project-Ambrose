@@ -69,7 +69,7 @@ bool PanelRoles::SeedShipped(std::string& error)
         insert->Bind(4, PanelStore::NowEpochMs());
         if (!insert->Run(error))
             return false;
-        int64 const id = _store.LastId(error);
+        int64 const id = _store.LastInsertId();
         if (id <= 0)
             return false;
         std::vector<std::string> keys;
@@ -186,7 +186,7 @@ PanelRoleResult PanelRoles::Create(std::string_view name, std::string_view descr
     insert->Bind(3, PanelStore::NowEpochMs());
     if (!insert->Run(error))
         return PanelRoleResult::StoreFailed;
-    int64 const roleId = _store.LastId(error);
+    int64 const roleId = _store.LastInsertId();
     if (roleId <= 0)
         return PanelRoleResult::StoreFailed;
     if (!WriteKeys(roleId, keys, error))

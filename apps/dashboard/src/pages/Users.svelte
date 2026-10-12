@@ -121,7 +121,7 @@
 
 <h2 class="text-lg font-semibold mt-4">Operators</h2>
 <ul>
-    {#each users as user}
+    {#each users as user (user.id)}
         <li>
             <button onclick={() => (selected = user)} class="underline">{user.username}</button>
             {user.disabled ? "(disabled)" : ""} — {user.role}{#if user.roles.length}, {user.roles.join(", ")}{/if}
