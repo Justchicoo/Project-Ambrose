@@ -400,7 +400,8 @@ bool PanelAudit::Record(PanelStore& store, AuditEvent& event, std::function<bool
         return false;
     if (event.EventId.empty())
         event.EventId = NewEventId();
-    event.CreatedEpochMs = PanelStore::NowEpochMs();
+    if (event.CreatedEpochMs == 0)
+        event.CreatedEpochMs = PanelStore::NowEpochMs();
     if (!Write(store, event, error))
     {
         store.Rollback();

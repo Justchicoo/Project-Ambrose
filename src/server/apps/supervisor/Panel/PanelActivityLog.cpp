@@ -133,10 +133,8 @@ namespace PanelActivityLog
         rows->Bind(index++, limit + 1);
 
         page.Rows.clear();
-        while (true)
+        while (rows->Step(error))
         {
-            if (!rows->Step(error))
-                return false;
             if (rows->IsNull(0))
                 break;
             Row row;
@@ -156,6 +154,8 @@ namespace PanelActivityLog
             row.Sentence = PanelActivityCatalog::Render(row.Name, ToEvent(row));
             page.Rows.push_back(std::move(row));
         }
+        if (!error.empty())
+            return false;
         page.HasMore = static_cast<int64>(page.Rows.size()) > limit;
         if (page.HasMore)
         {
