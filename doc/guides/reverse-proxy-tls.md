@@ -28,7 +28,7 @@ Keep the game, login, and patch listeners separate from the admin listener. A TL
 
 ## Configure Ambrose for the backend
 
-Start from the applicationâs shipped `.conf.dist` and set only the local admin values needed by the deployment:
+Start from the application’s shipped `.conf.dist` and set only the local admin values needed by the deployment:
 
 ```ini
 Admin.BindIP = 127.0.0.1
@@ -37,7 +37,7 @@ Admin.TokenFile = <private path outside the repository>
 Admin.AllowPlainHttpRemote = 0
 ```
 
-The exact default admin port differs by application; use that applicationâs configuration reference rather than copying the example blindly. Set `Admin.Port` to a local free port and confirm the process owns it after startup.
+The exact default admin port differs by application; use that application’s configuration reference rather than copying the example blindly. Set `Admin.Port` to a local free port and confirm the process owns it after startup.
 
 Prefer `Admin.TokenFile` or the documented environment variable over `Admin.Token`. The token file must be readable only by the account running Ambrose and must never be placed in a web root, repository, public backup, or proxy configuration committed to source control.
 
@@ -45,7 +45,7 @@ Do not set `Admin.BindIP` to `0.0.0.0` or a public interface. Do not enable `Adm
 
 ## Configure the proxy
 
-Use the reverse proxyâs own documented TLS configuration and write a minimal route that:
+Use the reverse proxy’s own documented TLS configuration and write a minimal route that:
 
 - listens on the intended HTTPS address;
 - redirects or refuses plain HTTP;
@@ -53,12 +53,12 @@ Use the reverse proxyâs own documented TLS configuration and write a minima
 - connects upstream to `http://127.0.0.1:<Admin.Port>`;
 - preserves the request method and body;
 - sets a bounded request and response timeout;
-- limits request size to the applicationâs documented maximum;
+- limits request size to the application’s documented maximum;
 - does not log the `Authorization` header or query-string secrets;
 - does not expose a directory or a second backend; and
 - sends a stable public health response only if the operator intentionally wants one.
 
-The project has not settled a universal proxy product, configuration syntax, or forwarded-header trust policy. Use the proxyâs current documentation for certificate loading, renewal, private-key permissions, header filtering, and WebSocket support if an admin endpoint needs it. Do not assume that `X-Forwarded-For`, `Forwarded`, or a proxy-added identity header is trusted by Ambrose unless the application documentation explicitly says so.
+The project has not settled a universal proxy product, configuration syntax, or forwarded-header trust policy. Use the proxy’s current documentation for certificate loading, renewal, private-key permissions, header filtering, and WebSocket support if an admin endpoint needs it. Do not assume that `X-Forwarded-For`, `Forwarded`, or a proxy-added identity header is trusted by Ambrose unless the application documentation explicitly says so.
 
 If the dashboard is served separately from the API, keep its origin and API route explicit. Do not use a wildcard CORS policy or forward arbitrary paths to the admin listener.
 
@@ -78,11 +78,11 @@ Do not put the Ambrose bearer token in the certificate, URL, access log, command
 
 ## Firewall and host boundaries
 
-The host firewall should allow the proxyâs HTTPS port only from the intended operator network. It should deny the Ambrose admin port from every remote address and allow the game-facing ports separately according to the deploymentâs actual needs.
+The host firewall should allow the proxy’s HTTPS port only from the intended operator network. It should deny the Ambrose admin port from every remote address and allow the game-facing ports separately according to the deployment’s actual needs.
 
-After starting both processes, inspect listening sockets from the host and from another machine. The public machine may show the proxyâs port; it must not show the Ambrose admin port on a non-loopback address.
+After starting both processes, inspect listening sockets from the host and from another machine. The public machine may show the proxy’s port; it must not show the Ambrose admin port on a non-loopback address.
 
-If the proxy runs under a separate account, ensure that it can connect to the loopback port without granting it access to the token file. The proxy should forward the browserâs `Authorization` header only when the operator intentionally uses the Ambrose token; never copy the token into a proxy-wide static header.
+If the proxy runs under a separate account, ensure that it can connect to the loopback port without granting it access to the token file. The proxy should forward the browser’s `Authorization` header only when the operator intentionally uses the Ambrose token; never copy the token into a proxy-wide static header.
 
 ## Verify the complete path
 
@@ -117,10 +117,8 @@ Rollback is:
 
 ## Cheapest disproof
 
-Before calling the deployment safe, connect from a second machine to the Ambrose admin port and to the proxyâs HTTPS port. The first must fail from the remote network, while the second must complete TLS and then require the admin token. If both ports are reachable, or if the backend accepts a request without the token, the topology is not the one this guide describes.
+Before calling the deployment safe, connect from a second machine to the Ambrose admin port and to the proxy’s HTTPS port. The first must fail from the remote network, while the second must complete TLS and then require the admin token. If both ports are reachable, or if the backend accepts a request without the token, the topology is not the one this guide describes.
 
 ## Verification and limitations
 
 This guide was checked against the current application configuration references, admin settings tests, and project architecture on 2026-09-19. It does not claim that Ambrose currently terminates TLS itself, that every admin route supports WebSockets, or that forwarded client-address headers are trusted. Confirm those details in the application version and proxy documentation before deployment.
-
-<!-- CI re-trigger after infra timeout: no content change -->
