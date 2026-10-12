@@ -269,6 +269,7 @@ TEST(PanelEventCatalogTest, EveryFrameTheServerWritesValidatesAgainstItsEntry)
         { "status", Supervisor::StatusData(Snapshot(AppState::Crashed)) },
         { "status", Supervisor::StatusData(Snapshot(AppState::Offline)) },
         { "pong", "{}" },
+        { "session.expiring", R"({"expires_in":42})" },
     };
     std::set<std::string> covered;
     for (auto const& [type, data] : written)
@@ -328,7 +329,8 @@ TEST(PanelEventCatalogTest, ClientDataIsHeldToItsShapeWithUnknownKeysRefused)
     EXPECT_FALSE(valid("resume", R"({"stream":"status","after":3})")) << "the resume point travels in the envelope's seq";
     EXPECT_TRUE(valid("ping", "{}")) << error;
     EXPECT_FALSE(valid("ping", R"({"now":1})"));
-    EXPECT_TRUE(valid("subscribe", R"({"streams":["logs"]})")) << "a message whose milestone has not built it yet takes an open object";
+    EXPECT_TRUE(valid("subscribe", R"({"stream":"status"})")) << error;
+    EXPECT_FALSE(valid("subscribe", R"({"streams":["logs"]})"));
     EXPECT_FALSE(valid("subscribe", "[]"));
     EXPECT_FALSE(valid("weather", "{}"));
     EXPECT_FALSE(valid("pong", "{}")) << "pong is a message the server sends";
