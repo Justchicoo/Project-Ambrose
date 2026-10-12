@@ -27,9 +27,7 @@
     let includePatchserver = $state(false);
     let rendered = $state<Rendered | null>(null);
     let check = $state<Check | null>(null);
-    let trustedProxies = $state("");
     let trustedLocked = $state(false);
-    let trustedLayer = $state("");
     let failure = $state("");
     let notice = $state("");
     let busy = $state(false);
@@ -49,16 +47,9 @@
     }
 
     async function loadTrusted() {
-        try {
-            const answer = await panelSettings();
-            const setting = answer.settings.find((entry) => entry.key === "Panel.TrustedProxies");
-            if (setting) {
-                trustedProxies = setting.value;
-                trustedLocked = setting.locked;
-                trustedLayer = setting.layer;
-            }
-        } catch {
-        }
+        const answer = await panelSettings().catch(() => null);
+        const setting = answer?.settings.find((entry) => entry.key === "Panel.TrustedProxies");
+        trustedLocked = setting?.locked ?? false;
     }
 
     $effect(() => {
@@ -131,7 +122,10 @@
     }
 </script>
 
-<PageHeader title="Reverse proxy" description="Run the panel behind Caddy, nginx, Apache, HAProxy, Traefik or IIS, and check that its forwarded headers are trusted." />
+<PageHeader
+    title="Reverse proxy"
+    description="Run the panel behind Caddy, nginx, Apache, HAProxy, Traefik or IIS, and check that its forwarded headers are trusted."
+/>
 
 {#if failure}
     <p class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{failure}</p>
@@ -150,26 +144,36 @@
             <Button onclick={() => void runCheck()} disabled={checking}>{checking ? "Checking…" : "Run the check"}</Button>
             {#if check}
                 <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-                    <dt class="text-muted-foreground">Peer</dt><dd class="font-mono">{check.peer}</dd>
-                    <dt class="text-muted-foreground">Peer trusted</dt><dd>{check.peer_trusted ? "yes" : "no"}</dd>
-                    <dt class="text-muted-foreground">Client address</dt><dd class="font-mono">{check.client_address}</dd>
-                    <dt class="text-muted-foreground">Scheme</dt><dd class="font-mono">{check.scheme}</dd>
-                    <dt class="text-muted-foreground">Host</dt><dd class="font-mono">{check.host}</dd>
-                    <dt class="text-muted-foreground">Public URL</dt><dd class="font-mono">{check.public_url || "not set"}</dd>
+                    <dt class="text-muted-foreground">Peer</dt>
+                    <dd class="font-mono">{check.peer}</dd>
+                    <dt class="text-muted-foreground">Peer trusted</dt>
+                    <dd>{check.peer_trusted ? "yes" : "no"}</dd>
+                    <dt class="text-muted-foreground">Client address</dt>
+                    <dd class="font-mono">{check.client_address}</dd>
+                    <dt class="text-muted-foreground">Scheme</dt>
+                    <dd class="font-mono">{check.scheme}</dd>
+                    <dt class="text-muted-foreground">Host</dt>
+                    <dd class="font-mono">{check.host}</dd>
+                    <dt class="text-muted-foreground">Public URL</dt>
+                    <dd class="font-mono">{check.public_url || "not set"}</dd>
                     <dt class="text-muted-foreground">Trusted list</dt>
-                    <dd class="font-mono">{check.trusted_proxies || "empty"}{check.trusted_proxies_locked ? ` (locked by ${check.trusted_proxies_layer})` : ""}</dd>
+                    <dd class="font-mono">
+                        {check.trusted_proxies || "empty"}{check.trusted_proxies_locked
+                            ? ` (locked by ${check.trusted_proxies_layer})`
+                            : ""}
+                    </dd>
                 </dl>
                 {#if Object.keys(check.forwarded_headers).length > 0}
                     <div>
                         <p class="text-muted-foreground">Forwarded headers received</p>
                         <ul class="mt-1 space-y-1">
-                            {#each Object.entries(check.forwarded_headers) as [name, value]}
+                            {#each Object.entries(check.forwarded_headers) as [name, value] (name)}
                                 <li class="font-mono text-xs">{name}: {String(value)}</li>
                             {/each}
                         </ul>
                     </div>
                 {/if}
-                {#each check.problems as problem}
+                {#each check.problems as problem (problem.message)}
                     <div class="rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
                         <p class="font-medium">{problem.message}</p>
                         <p class="mt-1 text-muted-foreground">Fix: {problem.fix}</p>
@@ -186,7 +190,9 @@
                         {socketProbe === "running" ? "Probing…" : "Probe the event socket"}
                     </Button>
                     {#if socketProbe === "ok"}<span class="text-healthy text-sm">The socket upgrade got through.</span>{/if}
-                    {#if socketProbe === "failed"}<span class="text-destructive text-sm">The socket did not connect; compare the proxy config with the generated one.</span>{/if}
+                    {#if socketProbe === "failed"}<span class="text-destructive text-sm"
+                            >The socket did not connect; compare the proxy config with the generated one.</span
+                        >{/if}
                 </div>
             {/if}
         </Card.Content>
@@ -201,7 +207,7 @@
             <div class="grid gap-2">
                 <Label for="proxy-product">Proxy product</Label>
                 <select id="proxy-product" class="rounded-md border bg-background p-2" bind:value={product}>
-                    {#each products as option}
+                    {#each products as option (option.id)}
                         <option value={option.id}>{option.label}</option>
                     {/each}
                 </select>
@@ -214,7 +220,9 @@
                 <input type="checkbox" bind:checked={includePatchserver} />
                 Also proxy the patchserver
             </label>
-            <Button onclick={() => void render()} disabled={busy || hostname.trim() === ""}>{busy ? "Rendering…" : "Render the config"}</Button>
+            <Button onclick={() => void render()} disabled={busy || hostname.trim() === ""}
+                >{busy ? "Rendering…" : "Render the config"}</Button
+            >
             {#if rendered}
                 <div class="flex items-center justify-between">
                     <p class="text-muted-foreground">For {rendered.product} at {rendered.hostname}</p>
