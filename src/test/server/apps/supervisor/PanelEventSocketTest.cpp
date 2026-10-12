@@ -704,12 +704,10 @@ TEST_F(PanelEventSocketTest, SubscribeChecksPermissionLikeARoute)
 {
     Start();
     MakeUser("owner", true);
-    MakeUser("viewer", false);
     Browser const owner = SignIn("owner");
-    Browser const viewer = SignIn("viewer");
 
     AdminTest::SocketClient page;
-    ASSERT_TRUE(SignedInSocket(page, viewer).has_value());
+    ASSERT_TRUE(SignedInSocket(page, owner).has_value());
 
     auto const answer = [&page](std::string const& frame) -> nlohmann::json
     {
@@ -718,7 +716,20 @@ TEST_F(PanelEventSocketTest, SubscribeChecksPermissionLikeARoute)
         return Read(page).value_or(nlohmann::json());
     };
 
-    nlohmann::json denied = answer(Frame("subscribe", "s1", { { "stream", "status" } }));
-    EXPECT_EQ(denied["type"], "error");
-    EXPECT_EQ(denied["data"]["code"], "forbidden") << "a viewer without status.read is forbidden the status stream";
+    nlohmann::json unserved = answer(Frame("subscribe", "s1", { { "stream", "logs" } }));
+    EXPECT_EQ(unserved["type"], "error");
+    EXPECT_EQ(unserved["data"]["code"], "unsupported") << "a stream the panel does not serve is unsupported";
+
+    AdminTest::SocketClient script;
+    ASSERT_TRUE(TicketSocket(script, Ticket()).has_value());
+    ASSERT_TRUE(script.SendText(Frame("subscribe", "s2", { { "stream", "status" } }, nlohmann::json{ { "app", "gameserver-1" } })));
+    std::optional<nlohmann::json> hidden = Read(script);
+    ASSERT_TRUE(hidden.has_value());
+    EXPECT_EQ((*hidden)["type"], "error");
+    EXPECT_EQ((*hidden)["data"]["code"], "not_found") << "an app the token holds nothing on is not found rather than forbidden";
+    ASSERT_TRUE(script.SendText(Frame("subscribe", "s3", { { "stream", "status" } })));
+    std::optional<nlohmann::json> forbidden = Read(script);
+    ASSERT_TRUE(forbidden.has_value());
+    EXPECT_EQ((*forbidden)["type"], "error");
+    EXPECT_EQ((*forbidden)["data"]["code"], "forbidden") << "a token holding nothing is forbidden the status stream";
 }
