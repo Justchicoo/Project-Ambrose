@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema with the updates still pending and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook; and backpack rows, read in the order they arrived with every field, an item trashed only by its owner, its backpack row going with it, and the highest item id kept after the item is gone; and worn items, which leave the backpack rows for equipment rows naming their slot, come back to the backpack when a slot gives them back or they are taken off, are never worn by a wizard that does not own them, and go with their item when it is trashed; and a quest log counted to 2 of 5 that reloads with the same quest and goal GIDs and count, completing it removing the active row and leaving its Complete entry, older saves landing late changing nothing, and a goal of no quest, a save with no revision and a missing wizard refused.
+ * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema with the updates still pending and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook; and backpack rows, read in the order they arrived with every field, an item trashed only by its owner, its backpack row going with it, and the highest item id kept after the item is gone; and worn items, which leave the backpack rows for equipment rows naming their slot, come back to the backpack when a slot gives them back or they are taken off, are never worn by a wizard that does not own them, and go with their item when it is trashed; and a quest log counted to 2 of 5 that reloads with the same quest and goal GIDs and count and the same Dynamods, completing it removing the active row and leaving its Complete entry and its mods, older saves landing late changing nothing, and a goal of no quest, two mods for one zone and tag, a save with no revision and a missing wizard refused.
  */
 
 #include "CharacterQuestRepository.h"
@@ -580,7 +580,10 @@ TEST_F(CharacterRepositoryDatabaseTest, AQuestLogCountedToTwoOfFiveReloadsWithTh
     log.SetQuestRegistry("KeptQuest", "Talked", 1.0);
     log.SetRegistry("Visited", 4.5);
     log.SetHidden("KeptQuest", true);
+    log.ApplyDynaMod("WizardCity/WC_Hub", "WC_GateCommons_ToUnicornWay", "IdleOpen", false, 601);
+    log.ApplyDynaMod("WizardCity/WC_Hub", "PetParkCollision", "", true, 601);
     CharacterQuests const accepted = log.ToStored(1);
+    ASSERT_EQ(accepted.DynaMods.size(), 2u);
     ASSERT_EQ(CharacterQuestRepository::Save(601, accepted), CharacterOpResult::Ok);
 
     CharacterQuestsLoad const reloaded = CharacterQuestRepository::Load(601);
@@ -605,6 +608,7 @@ TEST_F(CharacterRepositoryDatabaseTest, AQuestLogCountedToTwoOfFiveReloadsWithTh
     EXPECT_EQ(completed.Quests->Revision, 3u);
     EXPECT_TRUE(completed.Quests->Quests.empty()) << "the active row is gone, and the older saves landing after did not bring it back";
     EXPECT_TRUE(completed.Quests->Goals.empty());
+    EXPECT_EQ(completed.Quests->DynaMods, accepted.DynaMods) << "a wizard's Dynamods outlive the quest";
     QuestLog const done = QuestLog::FromStored(*completed.Quests, nullptr, warnings);
     EXPECT_EQ(done.GetQuestRegistry("KeptQuest", QuestLog::CompleteEntry), 1.0);
     EXPECT_TRUE(done.HasCompletedQuest("KeptQuest"));
@@ -614,6 +618,10 @@ TEST_F(CharacterRepositoryDatabaseTest, AQuestLogCountedToTwoOfFiveReloadsWithTh
     orphan.Revision = 4;
     orphan.Goals[0].QuestGid = questGid + 100;
     EXPECT_EQ(CharacterQuestRepository::Save(601, orphan), CharacterOpResult::InvalidData) << "a goal of no quest in the save";
+    CharacterQuests twice = accepted;
+    twice.Revision = 4;
+    twice.DynaMods[1].ClientTag = twice.DynaMods[0].ClientTag;
+    EXPECT_EQ(CharacterQuestRepository::Save(601, twice), CharacterOpResult::InvalidData) << "one mod for each zone and tag";
     EXPECT_EQ(CharacterQuestRepository::Save(601, log.ToStored(0)), CharacterOpResult::InvalidData) << "a save needs a revision";
     EXPECT_EQ(CharacterQuestRepository::Save(999, log.ToStored(5)), CharacterOpResult::DatabaseError) << "a quest log needs its wizard";
     EXPECT_EQ(CharacterQuestRepository::Load(601).Quests->Revision, 3u);

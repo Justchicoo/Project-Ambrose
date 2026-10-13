@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The quest group, for testing what a wizard's progress changes: 'quest add <quest>' gives the caller's wizard a quest with its start goals, 'quest goal <quest> <goal>' completes one of its goals, starting it first if the wizard lacks it, 'quest complete <quest>' finishes it, leaving 'Complete' = 1 in its registry, 'quest remove <quest>' drops it with nothing left behind, 'quest entry <entry> <value> [quest]' sets a registry entry, a quest's own when one is named, and 'quest list' shows the quests and goals the wizard holds. A quest the server holds no template for is given all the same, with a warning that loading the character again drops it, because spawn requirements name quests the world database may not hold yet. A change runs on the world thread, where the quest log is kept, is saved at once, and shows the wizard the objects its new progress lets it see at the next tick.
+ * The quest group, for testing what a wizard's progress changes: 'quest add <quest>' gives the caller's wizard a quest with its start goals, 'quest goal <quest> <goal>' completes one of its goals, starting it first if the wizard lacks it, 'quest complete <quest>' finishes it, leaving 'Complete' = 1 in its registry, 'quest remove <quest>' drops it with nothing left behind, 'quest entry <entry> <value> [quest]' sets a registry entry, a quest's own when one is named, and 'quest list' shows the quests and goals the wizard holds. A quest the server holds no template for is given all the same, with a warning that loading the character again drops it, because spawn requirements name quests the world database may not hold yet. A change runs on the world thread, where the quest log is kept, posts the GoalComplete event of each goal it completes into the wizard's zone triggers, so a gate the goal opens opens, is saved at once, and shows the wizard the objects its new progress lets it see at the next tick.
  */
 
 #include "AccountMgr.h"
@@ -64,6 +64,7 @@ namespace
                 return;
             }
             change(*log, *outcome);
+            session.PostQuestEvents();
             if (outcome->Done)
                 session.SaveQuestLogIfDirty();
         }, World::CommandTimeout);

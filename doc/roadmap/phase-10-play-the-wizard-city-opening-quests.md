@@ -43,7 +43,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 **Acceptance**
 
 - [ ] Result list runs in order; gated result skipped
-- [ ] Completing WC-MAIN-C01-003_Goal0 publishes 'GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0'
+- [x] Completing WC-MAIN-C01-003_Goal0 publishes 'GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0' (`QuestLogTest.ACompletedGoalPublishesItsEventOnceAndAWizardsDynamodsComeBackFromItsRows`: the goal hands out that event once, which the wizard's session posts into its zone's triggers, and `ZoneTriggerResultTest.AnAddDynaModResultReadsAsTheModItMakesAndAFiredTriggerHandsItBack` fires OpenGateToUW on it)
 - [ ] ResTeleport moves the player
 
 ### Detailed spec from QST-15: Results engine v1: registry, events and flow results
@@ -70,7 +70,7 @@ Quest start and end, goal activate and complete, tally and trigger results can c
 **Acceptance**
 
 - [ ] Unit test: the result list [ModifyEntry X=1, CompleteQuestGoal Q/G] runs in order and a gated result is skipped when its requirement fails.
-- [ ] Unit test: completing WC-MAIN-C01-003_Goal0 in a fixture publishes 'GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0'.
+- [x] Unit test: completing WC-MAIN-C01-003_Goal0 in a fixture publishes 'GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0'. (`QuestLogTest.ACompletedGoalPublishesItsEventOnceAndAWizardsDynamodsComeBackFromItsRows`)
 - [ ] Client: a quest whose goal completion runs ResTeleport moves the player to the destination zone and location.
 
 **Risks**
@@ -162,7 +162,7 @@ Objects show the right animation state, and the world changes a wizard has earne
 - [ ] Real client: in WC_Hub the Unicorn Way gate shows closed for a fresh character, and after the quest goal named in 'OpenGateToUW' it plays Open and rests 'IdleOpen' for that player only; player B without the quest still sees it closed
 - [ ] Real client: the gate is still 'IdleOpen' for that player after a relog and a zone change
 - [ ] Unit: a character's mods load and save; ResAddDynaMod adds, changes and removes by tag; a quest's mods leave with the quest unless m_existBeyondQuest
-- [ ] Unit: MSG_DYNAMODBEHAVIOR_UPDATEMODS carries the whole list at login and one Add or Remove per change
+- [x] Unit: MSG_DYNAMODBEHAVIOR_UPDATEMODS carries the whole list at login and one Add or Remove per change (`DynaModMessagesTest.TheFullSetReadsBackAsADynaModListOfEachMod` and `DynaModMessagesTest.AReplacedModDropsTheOldByIndexAndAddsTheNewWhileOthersTellNothing`: the full list reads back as a DynaModList, a replaced mod drops the old by index and adds the new, and a removal or another zone's mod sends nothing)
 
 **Risks**
 

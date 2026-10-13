@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests a wizard's quest log without a database: a quest taken, its goal started and counted to 2 of 5, turned into rows and read back keeps its GIDs and count; completing a quest takes it out of the log and leaves 'Complete' = 1 in its registry, so the wizard has completed it; and on load a quest whose template is gone, with its goals, and a goal its quest no longer has are dropped with a warning each, while a quest store that is not there drops nothing.
+ * Tests a wizard's quest log without a database: a quest taken, its goal started and counted to 2 of 5, turned into rows and read back keeps its GIDs and count; completing a quest takes it out of the log and leaves 'Complete' = 1 in its registry, so the wizard has completed it; and on load a quest whose template is gone, with its goals, and a goal its quest no longer has are dropped with a warning each, while a quest store that is not there drops nothing; a completed goal hands out its GoalComplete event once, and a wizard's Dynamods mark its progress changed and come back whole from its rows.
  */
 
 #include "ObjectGuid.h"
@@ -137,4 +137,35 @@ TEST(QuestLogTest, AnOrphanQuestAndAnOrphanGoalArePrunedOnLoadWithAWarningEach)
     QuestLog const unchecked = QuestLog::FromStored(stored, nullptr, none);
     EXPECT_TRUE(none.empty());
     EXPECT_EQ(unchecked.GetQuests().size(), 2u) << "with no quest store loaded, nothing can be called an orphan";
+}
+
+TEST(QuestLogTest, ACompletedGoalPublishesItsEventOnceAndAWizardsDynamodsComeBackFromItsRows)
+{
+    GuidGenerator gids(ObjectGuid::QuestBase);
+    QuestLog log;
+    ASSERT_NE(log.Add("WC-MAIN-C01-003", gids, Now), nullptr);
+    ASSERT_NE(log.StartGoal("WC-MAIN-C01-003", "WC-MAIN-C01-003_Goal0", gids), nullptr);
+    EXPECT_TRUE(log.TakeEvents().empty());
+    EXPECT_TRUE(log.CompleteGoal("WC-MAIN-C01-003", "WC-MAIN-C01-003_Goal0"));
+    EXPECT_FALSE(log.CompleteGoal("WC-MAIN-C01-003", "WC-MAIN-C01-003_Goal0"));
+    EXPECT_EQ(log.TakeEvents(), (std::vector<std::string>{ "GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0" })) << "the name the zone's OpenGateToUW trigger fires on";
+    EXPECT_TRUE(log.TakeEvents().empty()) << "an event is handed out once";
+
+    log.MarkSaved();
+    uint64 const before = log.GetChangeCount();
+    EXPECT_TRUE(log.ApplyDynaMod("WizardCity/WC_Hub", "WC_GateCommons_ToUnicornWay", "IdleOpen", false, 9).Changed());
+    EXPECT_TRUE(log.IsDirty());
+    EXPECT_GT(log.GetChangeCount(), before) << "a new mod moves the wizard's progress, so what it sees is asked again";
+    uint64 const after = log.GetChangeCount();
+    EXPECT_FALSE(log.ApplyDynaMod("WizardCity/WC_Hub", "WC_GateCommons_ToUnicornWay", "IdleOpen", false, 9).Changed());
+    EXPECT_EQ(log.GetChangeCount(), after);
+    log.ApplyDynaMod("WizardCity/WC_Hub", "PetParkCollision", "", true, 9);
+
+    CharacterQuests const stored = log.ToStored(3);
+    ASSERT_EQ(stored.DynaMods.size(), 2u);
+    std::vector<std::string> warnings;
+    QuestLog const loaded = QuestLog::FromStored(stored, nullptr, warnings);
+    EXPECT_TRUE(warnings.empty());
+    EXPECT_EQ(loaded.GetDynaMods().All(), log.GetDynaMods().All());
+    EXPECT_EQ(loaded.GetDynaMods().Visibility("WizardCity/WC_Hub", "PetParkCollision"), false);
 }
