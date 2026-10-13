@@ -161,7 +161,7 @@ public:
     void SetProblemLog(ProblemLog log);
     void SetMaxBodyBytes(std::size_t bytes);
     void SetSecure(bool secure);
-    void SetTrustedProxies(TrustedProxies proxies);
+    void SetCaptchaProvider(std::string_view provider);    void SetTrustedProxies(TrustedProxies proxies);
     std::string ResolveAddress(std::string_view peer, std::string_view forwardedFor) const;
     bool Has(std::string const& method, std::string const& path) const;
     std::vector<std::string> Describe() const;
@@ -223,6 +223,7 @@ private:
     std::vector<std::string> _allowedHosts;
     AdminBrowserAccess _browser;
     ProblemLog _problemLog;
+    std::string _contentSecurityPolicy{ SecurityPolicy };
 };
 
 #endif

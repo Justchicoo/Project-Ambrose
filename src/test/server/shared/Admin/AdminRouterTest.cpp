@@ -208,8 +208,7 @@ TEST(AdminRouterTest, AnswersOnlyForItsOwnHosts)
     EXPECT_EQ(router.Dispatch(request).Status, 400);
 }
 
-TEST(AdminRouterTest, StampsARequestIdAndTheSecurityHeaders)
-{
+TEST(AdminRouterTest, StampsARequestIdAndTheSecurityHeaders){
     AdminAuth auth(10, 1.0);
     auth.SetToken(Token);
     AdminRouter router(auth);
@@ -233,6 +232,28 @@ TEST(AdminRouterTest, StampsARequestIdAndTheSecurityHeaders)
     ASSERT_EQ(logged.size(), 1u);
     EXPECT_EQ(logged.front(), id + " 404");
     EXPECT_NE(HeaderValue(router.Dispatch(Get("/api/health")), "X-Request-Id"), HeaderValue(served, "X-Request-Id"));
+}
+
+TEST(AdminRouterTest, ACaptchaProviderOpensItsScriptAndFrameSources)
+{
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter router(auth);
+    router.Add("GET", "/api/health", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
+
+    std::string const plain = HeaderValue(router.Dispatch(Get("/api/health")), "Content-Security-Policy");
+    EXPECT_EQ(plain, std::string(AdminRouter::SecurityPolicy));
+    EXPECT_EQ(plain.find("frame-src"), std::string::npos);
+
+    router.SetCaptchaProvider("turnstile");
+    std::string const extended = HeaderValue(router.Dispatch(Get("/api/health")), "Content-Security-Policy");
+    EXPECT_NE(extended.find("script-src 'self' https://challenges.cloudflare.com"), std::string::npos);
+    EXPECT_NE(extended.find("frame-src https://challenges.cloudflare.com"), std::string::npos);
+    EXPECT_EQ(extended.find("https://www.google.com"), std::string::npos);
+
+    router.SetCaptchaProvider("off");
+    EXPECT_EQ(HeaderValue(router.Dispatch(Get("/api/health")), "Content-Security-Policy"),
+        std::string(AdminRouter::SecurityPolicy));
 }
 
 TEST(AdminRouterTest, AnInvalidAnswerNamesEachField)

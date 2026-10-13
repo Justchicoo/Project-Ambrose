@@ -198,16 +198,17 @@ private:
     std::optional<AdminResponse> HeldBack(PanelSignInThrottle& throttle, std::string_view username, std::string_view address, std::string_view counted);
     PanelSecondFactor CheckSecondFactor(PanelUser const& user, nlohmann::json const& body, std::string& method, std::string& error);
     void RecordRefused(std::string_view name, PanelUser const& user, AdminRequest const& request, std::string_view reason);
+    void SyncCaptchaContentPolicy();
 
     Log& _log;
     std::filesystem::path _dataFolder;
     PanelStore _store;
+    PanelKeyring _keyring;
     PanelSettings _settings;
     PanelUsers _users;
     PanelSessions _sessions;
     PanelErrors _errors;
     PanelGrants _grants;
-    PanelKeyring _keyring;
     PanelTwoFactor _twoFactor;
     PanelFileRules _fileRules;
     std::unique_ptr<PanelAuthorization> _authorization;
