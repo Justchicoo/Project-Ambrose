@@ -1992,12 +1992,13 @@ namespace
         }
         for (auto const& [name, value] : overrides)
             entries[name] = value;
-        std::vector<char*> environment;
+        storage.reserve(storage.size() + entries.size());
         for (auto const& [name, value] : entries)
-        {
             storage.push_back(name + "=" + value);
-            environment.push_back(storage.back().data());
-        }
+        std::vector<char*> environment;
+        environment.reserve(storage.size() + 1);
+        for (std::string& entry : storage)
+            environment.push_back(entry.data());
         environment.push_back(nullptr);
         return environment;
     }
