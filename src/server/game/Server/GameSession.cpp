@@ -42,6 +42,7 @@
 #include "StringHash.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
+#include "WizardRequirementContext.h"
 #include "ZoneMgr.h"
 #include "ZoneTeleportMgr.h"
 
@@ -1525,7 +1526,16 @@ VisibilityRange GameSession::SightRangeOf(Map const& map)
 VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& sight, std::map<uint64, GameSession const*> const& wizards)
 {
     PlayerPosition const& at = _movement.GetPosition();
-    VisibilityChanges changes = _sight.Update(sight.CandidatesFor(_worldGuid, { at.X, at.Y, at.Z }), sight.GetRange());
+    std::vector<VisibilityCandidate> candidates = sight.CandidatesFor(_worldGuid, { at.X, at.Y, at.Z });
+    if (_player)
+    {
+        static QuestLog const NoQuests;
+        std::shared_ptr<PlayerLevelSet const> const levels = sPlayerLevelMgr.GetLevels();
+        MagicSchool const* const school = levels ? levels->FindSchool(_player->GetStats().GetSchoolId()) : nullptr;
+        WizardRequirementContext const wizard(_questLog ? *_questLog : NoQuests, school ? school->Name : std::string(), _player->GetStats().GetLevel(), _zonePath);
+        candidates = _sightRequirements.Filter(std::move(candidates), map, wizard, GetSightProgress());
+    }
+    VisibilityChanges changes = _sight.Update(candidates, sight.GetRange());
     for (uint64 const id : changes.Removed)
     {
         HidePlayer(id);
@@ -1559,6 +1569,18 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
     for (uint64 const id : changes.Added)
         show(id);
     return changes;
+}
+
+uint64 GameSession::GetSightProgress()
+{
+    std::tuple<uint64, int32, uint32, uint32> const facts{ _questLog ? _questLog->GetChangeCount() : 0, _player ? _player->GetStats().GetLevel() : 0,
+        _player ? _player->GetStats().GetSchoolId() : 0, _mapId.value_or(0) };
+    if (facts != _sightFacts)
+    {
+        _sightFacts = facts;
+        ++_sightProgress;
+    }
+    return _sightProgress;
 }
 
 void GameSession::ForgetSight(uint64 id)
@@ -1935,10 +1957,12 @@ void GameSession::LeaveWorld()
     _wizBangId = 0;
     _pendingWizBang.reset();
     _sight.Clear();
+    _sightRequirements.Clear();
     _shownDuels.clear();
     if (_mapId && sDuelMgr.EndFor(_worldGuid, Duel::MonsterTeam))
         LOG_INFO("server.gamesession", "Session {}'s wizard {} left the world mid-duel, which ends it", GetSessionId(), _worldGuid);
     _npcRange.Clear();
+    _questOffers.Clear();
     _npcTemplates.clear();
     if (_player)
     {

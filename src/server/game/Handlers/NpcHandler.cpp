@@ -9,6 +9,10 @@
 #include "NpcServiceMemento.h"
 #include "ObjectTemplateMgr.h"
 #include "ObjectViews.h"
+#include "QuestLogContext.h"
+#include "QuestMgr.h"
+#include "QuestOfferProvider.h"
+#include "QuestOffers.h"
 #include "ScriptMgr.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
@@ -35,10 +39,12 @@ namespace
         NpcServiceMenu Menu;
     };
 
-    ServedMenu MenuFor(NpcServiceTarget const& target)
+    ServedMenu MenuFor(NpcServiceTarget const& target, std::unique_ptr<NpcServiceProvider> quests)
     {
         ServedMenu served;
         served.Providers = ProvidersFor(target.TemplateId);
+        if (quests)
+            served.Providers.push_back(std::move(quests));
         std::vector<NpcServiceProvider*> pointers;
         for (std::unique_ptr<NpcServiceProvider> const& provider : served.Providers)
             pointers.push_back(provider.get());
@@ -66,13 +72,15 @@ void GameSession::CheckNpcServices()
     if (!map)
         return;
     float const radius = NpcServiceRange::ResolveRadius(std::nullopt);
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
     std::vector<NpcServiceRange::Npc> npcs;
     for (MapObject const& object : map->GetObjects())
     {
         uint32 const templateId = static_cast<uint32>(object.Spawn.TemplateId);
         if (!_sight.IsVisible(object.GlobalId) || !IsNpcTemplate(templateId))
             continue;
-        bool const offers = !sScriptMgr.GetNpcScripts(templateId).empty() && !MenuFor({ _worldGuid, object.GlobalId, templateId }).Menu.GetEntries().empty();
+        bool const served = !sScriptMgr.GetNpcScripts(templateId).empty() || (quests && QuestOfferProvider::Serves(*quests, templateId));
+        bool const offers = served && !MenuFor({ _worldGuid, object.GlobalId, templateId }, QuestProviderFor(templateId)).Menu.GetEntries().empty();
         npcs.push_back({ object.GlobalId, { object.Spawn.Position.X, object.Spawn.Position.Y, object.Spawn.Position.Z }, radius, offers });
     }
     PlayerPosition const& at = _movement.GetPosition();
@@ -80,6 +88,7 @@ void GameSession::CheckNpcServices()
     for (uint64 const left : changes.Left)
     {
         SendDmlMessage(GameMessages::LeaveServiceRange{ left });
+        _questOffers.LeaveRange(left);
         auto const npc = std::ranges::find(npcs, left, &NpcServiceRange::Npc::GlobalId);
         if (npc == npcs.end())
         {
@@ -113,7 +122,7 @@ void GameSession::OfferNpcServices(MapObject const& npc)
             presentation.Icon = view->GetIcon();
         }
     NpcServiceTarget const target{ _worldGuid, npc.GlobalId, templateId };
-    ServedMenu const served = MenuFor(target);
+    ServedMenu const served = MenuFor(target, QuestProviderFor(target.TemplateId));
     NpcServiceMenu const& menu = served.Menu;
     QuestWireEncoder::BlobEncodeResult const encoded = NpcServiceMemento::Encode(sTypeRegistry.GetCatalog(), menu, presentation);
     if (!encoded.Ok())
@@ -144,7 +153,7 @@ void GameSession::HandleInteractNpc(GameMessages::InteractNpc& message)
         return;
     }
     NpcServiceTarget const target{ _worldGuid, npc->GlobalId, static_cast<uint32>(npc->Spawn.TemplateId) };
-    ServedMenu const served = MenuFor(target);
+    ServedMenu const served = MenuFor(target, QuestProviderFor(target.TemplateId));
     NpcServiceMenu const& menu = served.Menu;
     NpcServiceMenu::Entry const* const entry = menu.Find(message.ServiceIndex);
     if (!entry)
@@ -171,7 +180,7 @@ void GameSession::HandleInteractOption(GameMessages::InteractOption& message)
     if (npc)
     {
         NpcServiceTarget const target{ _worldGuid, npc->GlobalId, static_cast<uint32>(npc->Spawn.TemplateId) };
-        ServedMenu const served = MenuFor(target);
+        ServedMenu const served = MenuFor(target, QuestProviderFor(target.TemplateId));
         NpcServiceMenu const& menu = served.Menu;
         NpcServiceMenu::Entry const* const entry = message.OptionIndex >= 0 ? menu.Find(static_cast<uint32>(message.OptionIndex)) : nullptr;
         if (!entry)
@@ -186,4 +195,86 @@ void GameSession::HandleInteractOption(GameMessages::InteractOption& message)
         return;
     }
     LOG_INFO("server.gamesession", "Session {}'s wizard {} picked option {} of object {}, which offers no options yet", GetSessionId(), _worldGuid, message.OptionIndex, message.ObjectId);
+}
+
+std::unique_ptr<NpcServiceProvider> GameSession::QuestProviderFor(uint32 templateId)
+{
+    std::shared_ptr<QuestStore const> quests = sQuestMgr.GetQuests();
+    if (!_questLog || !quests || !QuestOfferProvider::Serves(*quests, templateId))
+        return nullptr;
+    return std::make_unique<QuestOfferProvider>(std::move(quests), *_questLog, [this](NpcServiceTarget const& target, QuestInfo const& quest) { OfferQuest(target, quest); });
+}
+
+void GameSession::OfferQuest(NpcServiceTarget const& target, QuestInfo const& quest)
+{
+    QuestOffers::Encoded const encoded = QuestOffers::Encode(sTypeRegistry.GetCatalog(), quest);
+    if (!encoded.Ok())
+    {
+        LOG_ERROR("server.gamesession", "Session {} could not offer wizard {} quest {} from NPC {}: {}", GetSessionId(), _worldGuid, quest.Row.Name, target.Npc, encoded.Error);
+        return;
+    }
+    GameMessages::ActorDialog dialog;
+    dialog.MobileId = target.Npc;
+    dialog.CompletionType = std::string(QuestOffers::CompletionType);
+    dialog.Dialog = encoded.Dialog;
+    dialog.RangeCheck = 1;
+    SendDmlMessage(dialog);
+    GameMessages::QuestOffer offer;
+    offer.MobileId = target.Npc;
+    offer.QuestName = quest.Row.Name;
+    offer.QuestTitle = quest.Row.TitleKey;
+    offer.QuestInfo = quest.Row.InfoKey;
+    offer.Level = static_cast<int32>(quest.Row.Level);
+    offer.Rewards = encoded.Rewards;
+    offer.GoalData = encoded.GoalData;
+    offer.Mainline = quest.Row.Mainline ? 1 : 0;
+    SendDmlMessage(offer);
+    _questOffers.Offer(quest.Row.Name, target.Npc);
+    LOG_INFO("server.gamesession", "Session {} offered wizard {} quest {} ({}, level {}) from NPC {} (template {}) with its Prep dialog of {} line(s) and {} start goal(s)", GetSessionId(),
+        _worldGuid, quest.Row.Name, Ambrose::ForLog(quest.Row.TitleKey, 64), quest.Row.Level, target.Npc, target.TemplateId, QuestOffers::BuildPrepDialog(quest).Entries.size(),
+        quest.StartGoals.size());
+}
+
+void GameSession::HandleInteractAvailableQuest(GameMessages::InteractAvailableQuest& message)
+{
+    Map const* const map = _mapId ? sMapMgr.Find(*_mapId) : nullptr;
+    MapObject const* const npc = map && _npcRange.IsInside(message.MobileId) ? map->FindObject(message.MobileId) : nullptr;
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    if (!npc || !quests || !_questLog)
+    {
+        LOG_INFO("server.gamesession", "HandleInteractAvailableQuest: session {}'s wizard {} asked NPC {} for quest {} out of its range; ignored", GetSessionId(), _worldGuid, message.MobileId,
+            Ambrose::ForLog(message.QuestName, 128));
+        return;
+    }
+    uint32 const templateId = static_cast<uint32>(npc->Spawn.TemplateId);
+    QuestLogContext const context(*_questLog);
+    std::vector<QuestInfo const*> const available = QuestOffers::Available(*quests, templateId, *_questLog, context);
+    auto const found = std::ranges::find_if(available, [&message](QuestInfo const* quest) { return quest->Row.Name == message.QuestName; });
+    if (found == available.end())
+    {
+        LOG_INFO("server.gamesession", "HandleInteractAvailableQuest: session {}'s wizard {} asked NPC {} (template {}) for quest {}, which it does not offer the wizard; ignored", GetSessionId(),
+            _worldGuid, message.MobileId, templateId, Ambrose::ForLog(message.QuestName, 128));
+        return;
+    }
+    OfferQuest({ _worldGuid, npc->GlobalId, templateId }, **found);
+}
+
+void GameSession::HandleDeclineQuest(GameMessages::DeclineQuest& message)
+{
+    bool const declined = _questOffers.Decline(message.QuestName);
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} declined quest {}{}", GetSessionId(), _worldGuid, Ambrose::ForLog(message.QuestName, 128),
+        declined ? "" : ", which no NPC was offering; nothing changes");
+}
+
+void GameSession::HandleAcceptQuest(GameMessages::AcceptQuest& message)
+{
+    QuestOfferVerdict const verdict = _questOffers.Check(message.QuestName, message.MobileId);
+    if (verdict != QuestOfferVerdict::Standing)
+    {
+        LOG_WARN("server.gamesession", "Session {}'s wizard {} tried to accept quest {} from NPC {}, an offer {}; refused and nothing changes", GetSessionId(), _worldGuid,
+            Ambrose::ForLog(message.QuestName, 128), message.MobileId, QuestOfferCache::GetVerdictName(verdict));
+        return;
+    }
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} accepted quest {} from NPC {}, an offer that stands", GetSessionId(), _worldGuid, Ambrose::ForLog(message.QuestName, 128),
+        message.MobileId);
 }

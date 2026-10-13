@@ -488,6 +488,7 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
         EXPECT_EQ(objects->at(0).Orientation, (PropertyTypes::Vector3D{ 0.0f, 0.0f, 0.5387f }));
         EXPECT_TRUE(objects->at(0).IsSentByServer());
         EXPECT_TRUE(objects->at(0).HasSpawnRequirements);
+        EXPECT_FALSE(objects->at(0).SpawnRequirements.empty()) << "the zone manager keeps the requirement bytes, so an instance can read them";
         EXPECT_EQ(objects->at(0).OverrideName, "Kiosk Keeper");
         EXPECT_TRUE(objects->at(0).GlobalDynamic);
         EXPECT_TRUE(objects->at(0).Undetectable);
