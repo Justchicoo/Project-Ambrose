@@ -14,7 +14,7 @@ PROJECT = "Justchicoo/Project-Ambrose"
 
 def steps(root):
     text = io.open(os.path.join(root, WORKFLOW), encoding="utf-8").read()
-    job = text.split("  checks:", 1)[1].split("\n  windows-cache:", 1)[0]
+    job = text.split("  checks:", 1)[1].split("\n  select:", 1)[0]
     return re.findall(r"- name: (.+?)\n(?:\s+if: .+\n)?(?:\s+env:\n(?:\s{10,}.+\n)+)?\s+run: (python apps/\S+(?: [^\n]*)?)", job)
 
 

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, then builds and tests, with every leg compiling through its own ccache cache and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a push that touches the code, the data the tests read or the build definition, by the schedule, a label, or a manual run.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run.
 name: core-build
 
 on:
@@ -39,10 +39,6 @@ jobs:
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       OUTSIDE_PULL_REQUEST: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || contains(github.event.pull_request.labels.*.name, 'contrib') || startsWith(github.head_ref, 'milestone/')) }}
-    outputs:
-      build: ${{ steps.select.outputs.build }}
-      matrix: ${{ steps.select.outputs.matrix }}
-      windows_keepalive: ${{ steps.select.outputs.windows_keepalive }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,21 +129,6 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
         run: python apps/ci/ci_commit_trailer.py --from-github-env
-      - name: Select build legs
-        id: select
-        if: ${{ !cancelled() }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          SCHEDULE: ${{ github.event.schedule }}
-          DISPATCH_LEGS: ${{ inputs.legs }}
-          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-          PR_BRANCH: ${{ github.head_ref }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD: ${{ github.event.pull_request.head.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
-          PUSH_AFTER: ${{ github.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python apps/ci/ci_select_legs.py --from-github-env
       - name: Refresh Linux vcpkg binary cache
         if: ${{ !cancelled() && github.event_name == 'schedule' }}
         timeout-minutes: 3
@@ -158,10 +139,42 @@ jobs:
           key: vcpkg-${{ runner.os }}-
           restore-keys: vcpkg-${{ runner.os }}-
 
+  select:
+    name: select
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || startsWith(github.event.label.name, 'ci:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    outputs:
+      build: ${{ steps.select.outputs.build }}
+      matrix: ${{ steps.select.outputs.matrix }}
+      windows_keepalive: ${{ steps.select.outputs.windows_keepalive }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select build legs
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          DISPATCH_LEGS: ${{ inputs.legs }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 apps/ci/ci_select_legs.py --from-github-env
+
   windows-cache:
     name: windows-cache
-    needs: checks
-    if: ${{ !cancelled() && github.event_name == 'schedule' && (github.event.schedule == '17 6 * * 0' || github.event.schedule == '17 6 * * 3') && (needs.checks.outputs.windows_keepalive == 'true' || needs.checks.outputs.build == '' || vars.AMBROSE_CI_BUILDS == 'off') }}
+    needs: select
+    if: ${{ !cancelled() && github.event_name == 'schedule' && (github.event.schedule == '17 6 * * 0' || github.event.schedule == '17 6 * * 3') && (needs.select.outputs.windows_keepalive == 'true' || needs.select.outputs.build == '' || vars.AMBROSE_CI_BUILDS == 'off') }}
     runs-on: windows-latest
     timeout-minutes: 5
     steps:
@@ -176,13 +189,13 @@ jobs:
 
   build:
     name: build (${{ matrix.leg }})
-    needs: checks
-    if: ${{ !cancelled() && needs.checks.outputs.build == 'true' && (github.event_name == 'schedule' || needs.checks.result == 'success') && (github.event_name == 'workflow_dispatch' || vars.AMBROSE_CI_BUILDS != 'off') }}
+    needs: select
+    if: ${{ !cancelled() && needs.select.outputs.build == 'true' && (github.event_name == 'workflow_dispatch' || vars.AMBROSE_CI_BUILDS != 'off') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.job_timeout }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.checks.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
