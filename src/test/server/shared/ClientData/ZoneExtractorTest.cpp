@@ -599,7 +599,7 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
     EXPECT_EQ(poi.Radius, 1034.5f);
     EXPECT_TRUE(poi.PlayerOnly);
     EXPECT_TRUE(poi.SpawnRequirements);
-    EXPECT_EQ(poi.EnterEvents, std::vector<std::string>{ "Enter_Ravenwood POI" });
+    EXPECT_EQ(poi.EnterEvents, (std::vector<std::string>{ "Enter_Ravenwood POI", "GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0" }));
     EXPECT_EQ(poi.ExitEvents, std::vector<std::string>{ "Exit_Ravenwood POI" });
     ASSERT_EQ(zone.QuestReferences.size(), 4u);
     EXPECT_EQ(zone.QuestReferences[0].SourceType, "volume");
