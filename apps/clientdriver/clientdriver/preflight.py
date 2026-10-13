@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Decides whether a run is possible on this machine, by taking the client run as asked for only when an install is named, asking the launcher which one it is, looking for the built programs, the scratch database, the capture and the reference crops that still fit the boxes they are used with, and naming in one line everything that is missing.
+# Decides whether a run is possible on this machine, saying first and with no probe when no client run was asked for, then by taking the client run as asked for only when an install is named, asking the launcher which one it is, looking for the built programs, the scratch database, the capture and the reference crops that still fit the boxes they are used with, and naming in one line everything that is missing.
 import importlib.util
 import os
 import re
@@ -131,11 +131,15 @@ def probe(scenario, references, options):
     return environment
 
 
-def missing(scenario, environment, options):
-    gaps = []
+def unasked(scenario, options):
     if scenario.needs_client and not options.get("client"):
-        gaps.append("no client run was asked for: set AMBROSE_CLIENT_DIR to your own install, as every client-labelled "
-                    "test does, or name it with --client")
+        return ("no client run was asked for: set AMBROSE_CLIENT_DIR to your own install, as every client-labelled "
+                "test does, or name it with --client")
+    return ""
+
+
+def missing(scenario, environment, options):
+    gaps = [gap for gap in (unasked(scenario, options),) if gap]
     if not environment.get("windows"):
         gaps.append(f"the retail client runs only on Windows, and this machine is {environment.get('platform')}")
     absent = environment.get("packages_missing") or []

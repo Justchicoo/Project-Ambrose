@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, list the scenarios, or start a play session that keeps its databases and stays up until told to stop, a run taking the first free driver slot so several can share the machine, holding the WSL distribution the scratch database runs in, named by --wsl-distro or AMBROSE_TEST_DB_WSL, for as long as the driver runs.
+# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, at once and without probing the machine when a run needs a client and none was asked for, rebuild the reference crops from a live client, list the scenarios, or start a play session that keeps its databases and stays up until told to stop, a run taking the first free driver slot so several can share the machine, holding the WSL distribution the scratch database runs in, named by --wsl-distro or AMBROSE_TEST_DB_WSL, for as long as the driver runs.
 import argparse
 import os
 import sys
@@ -130,6 +130,11 @@ def take_slot(args):
 
 
 def command_run(args):
+    scenario, _references, options = load(args)
+    gap = preflight.unasked(scenario, options)
+    if gap:
+        print("clientdriver: skipped: " + gap)
+        return SKIP
     slot = take_slot(args)
     scenario, references, options, environment, gaps = look(args)
     if gaps:
