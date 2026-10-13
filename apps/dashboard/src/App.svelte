@@ -23,6 +23,7 @@
     import { onMount } from "svelte";
     import { toast } from "svelte-sonner";
     import CommandPalette from "./components/CommandPalette.svelte";
+    import MaintenanceBanner from "./components/MaintenanceBanner.svelte";
     import StatusBadge from "./components/StatusBadge.svelte";
     import StepUp from "./components/StepUp.svelte";
     import { everything, navigation, resolve } from "./routes";
@@ -274,6 +275,7 @@
                 >
             </header>
             <main id="content" tabindex="-1" class="@container/main flex flex-1 flex-col gap-6 p-4 outline-none md:p-6">
+                <MaintenanceBanner />
                 {#if live.connection === "reconnecting"}
                     <div
                         class="flex flex-wrap items-center gap-3 rounded-lg border border-waiting/40 bg-waiting/10 px-4 py-3 text-sm"

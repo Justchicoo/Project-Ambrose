@@ -222,3 +222,55 @@ TEST_F(ValidateHandlerDatabaseTest, APasswordChangeOrABanRevokesTheKey)
     ASSERT_EQ(sAccountMgr.Ban(_accountId, std::chrono::seconds(0), "tests", "a test ban"), AccountOpResult::Ok);
     ExpectRefusedWith(sessionKey, Machine, AuthResult::ValidateFailed, "after a ban");
 }
+
+TEST_F(ValidateHandlerDatabaseTest, MaintenanceRefusesPlayersButAdmitsGameMasters)
+{
+    std::string sessionKey = LogIn();
+    ASSERT_FALSE(sessionKey.empty());
+
+    LoginSettings settings;
+    settings.Maintenance = true;
+    settings.MaintenanceReason = "Database upgrade";
+    settings.MaintenanceBypassLevel = 2;
+    sLoginMgr.SetSettings(settings);
+
+    LoginClient player = _server->Connect();
+    Send(player, Validate(_accountId, PassKey3::Compute(sessionKey, player.Salt)));
+    std::optional<LoginMessages::UserValidateRsp> const refused = ReadMessage<LoginMessages::UserValidateRsp>(player);
+    ASSERT_TRUE(refused) << "player refused during maintenance";
+    EXPECT_EQ(refused->Error, AuthResult::Maintenance) << "player refused during maintenance";
+    EXPECT_EQ(refused->Reason, "Database upgrade") << "player sees the maintenance reason";
+    EXPECT_EQ(refused->UserId, 0u);
+    EXPECT_TRUE(player.Socket->WaitForClose()) << "player refused during maintenance";
+    EXPECT_FALSE(sLoginMgr.FindAccountSession(_accountId)) << "a refused player holds no session";
+
+    settings.MaintenanceReason.clear();
+    sLoginMgr.SetSettings(settings);
+    LoginClient unexplained = _server->Connect();
+    Send(unexplained, Validate(_accountId, PassKey3::Compute(sessionKey, unexplained.Salt)));
+    std::optional<LoginMessages::UserValidateRsp> const plain = ReadMessage<LoginMessages::UserValidateRsp>(unexplained);
+    ASSERT_TRUE(plain);
+    EXPECT_EQ(plain->Error, AuthResult::Maintenance);
+    EXPECT_EQ(plain->Reason, "Maintenance") << "an empty reason sends Maintenance";
+
+    ASSERT_EQ(sAccountMgr.SetSecurityLevel(_accountId, 2), AccountOpResult::Ok);
+    sessionKey = LogIn();
+    ASSERT_FALSE(sessionKey.empty()) << "game master signs in during maintenance";
+    LoginClient gm = _server->Connect();
+    Send(gm, Validate(_accountId, PassKey3::Compute(sessionKey, gm.Salt)));
+    std::optional<LoginMessages::UserValidateRsp> const admitted = ReadMessage<LoginMessages::UserValidateRsp>(gm);
+    ASSERT_TRUE(admitted);
+    EXPECT_EQ(admitted->Error, AuthResult::Success) << "game master validates during maintenance";
+    std::optional<LoginMessages::UserAdmitInd> const admit = ReadMessage<LoginMessages::UserAdmitInd>(gm);
+    ASSERT_TRUE(admit);
+    EXPECT_EQ(admit->Status, 1);
+    ASSERT_EQ(sAccountMgr.SetSecurityLevel(_accountId, 0), AccountOpResult::Ok);
+
+    settings.Maintenance = false;
+    sLoginMgr.SetSettings(settings);
+    LoginClient after = _server->Connect();
+    Send(after, Validate(_accountId, PassKey3::Compute(sessionKey, after.Salt)));
+    std::optional<LoginMessages::UserValidateRsp> const ok = ReadMessage<LoginMessages::UserValidateRsp>(after);
+    ASSERT_TRUE(ok);
+    EXPECT_EQ(ok->Error, AuthResult::Success) << "player validates after maintenance ends";
+}

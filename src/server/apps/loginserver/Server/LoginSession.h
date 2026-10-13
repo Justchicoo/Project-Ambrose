@@ -78,7 +78,7 @@ private:
     void RefuseUnsupportedAuthentication(std::string_view tag);
     void ContinueValidation(std::shared_ptr<ValidateAttempt> const& attempt, PreparedQueryResult result);
     void CompleteValidation(std::shared_ptr<ValidateAttempt> const& attempt, bool committed);
-    void FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate = 0);
+    void FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate = 0, std::string_view reasonOverride = {});
     void StartCharacterList();
     void SelectCharacter(uint64 charId, std::string const& realmName, PreparedQueryResult result);
     void IssueCharacterSelected(LoginMessages::CharacterSelected reply, std::string realmName, uint32 realmId);

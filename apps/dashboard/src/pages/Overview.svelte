@@ -18,6 +18,7 @@
     import type { MetricFamily, MetricsAnswer, Problem } from "$lib/schemas.js";
     import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
     import PageHeader from "../components/PageHeader.svelte";
+    import MaintenanceCard from "../components/MaintenanceCard.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
 
     type Tone = "healthy" | "waiting" | "wrong" | "unknown";
@@ -258,6 +259,7 @@
 
 {#if runs}
     <div class="grid gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
+        <MaintenanceCard />
         {#each watched as entry (entry.name)}
             {@const supervision = entry.supervision}
             {@const alive = supervision?.state === "running"}
