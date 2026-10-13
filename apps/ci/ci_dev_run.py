@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Plans and runs a change's dev run, which boots what the change touches from the binaries a Linux leg just built: select maps a push's or pull request's changed paths to the targets to boot, the panel with its supervisor and patchserver, the login server and the game server, every target for a change to the build, the shared server code or this tool, and writes them as step outputs, and tells the leg selection whether a change has a target it boots so the Linux GCC leg is built for it, panel checks the built supervisor, patchserver and gameserver are there, builds the panel and runs the Playwright end-to-end specs against them, failing on a missing binary rather than letting every spec skip, and servers boots the built login server, and the game server attached to it, through the client driver's server runner with no client install against scratch databases on the AMBROSE_TEST_DB server, checks each reaches ready, updates its databases, answers its admin API's health and its console and offers a SessionOffer on its port, then stops each by its process and drops the databases.
+# Plans and runs a change's dev run, which boots what the change touches from the binaries a Linux leg just built: select maps a push's or pull request's changed paths to the targets to boot, the panel with its supervisor and patchserver, the login server and the game server, every target for a change to the build, the shared server code or this tool, and writes them as step outputs, and tells the leg selection whether a change has a target it boots so the Linux GCC leg is built for it, panel checks the built supervisor, patchserver and gameserver are there, builds the panel, rebuilds the supervisor in its build folder so the page its panel listener serves is that panel rather than the placeholder the leg compiled in before the panel existed, and runs the Playwright end-to-end specs against them, failing on a missing binary rather than letting every spec skip, and servers boots the built login server, and the game server attached to it, through the client driver's server runner with no client install against scratch databases on the AMBROSE_TEST_DB server, checks each reaches ready, updates its databases, answers its admin API's health and its console and offers a SessionOffer on its port, then stops each by its process and drops the databases.
 import argparse
 import os
 import secrets
@@ -38,6 +38,7 @@ TAIL_LINES = 40
 PANEL_PROGRAMS = ("supervisor", "patchserver", "gameserver")
 PANEL_ENVIRONMENT = {"supervisor": "AMBROSE_SUPERVISOR", "patchserver": "AMBROSE_PANEL_APP", "gameserver": "AMBROSE_GAMESERVER"}
 DASHBOARD = os.path.join("apps", "dashboard", "dist", "index.html")
+EMBEDDING = "supervisor"
 
 
 def matches(path, entry):
@@ -115,8 +116,9 @@ def panel_environment(binaries, environment):
     return prepared
 
 
-def panel_commands(npm, npx):
-    return [[npm, "run", "build", "--workspace", "apps/dashboard"], [npx, "playwright", "test", "--project", "e2e"]]
+def panel_commands(npm, npx, cmake, build_dir, config):
+    return [[npm, "run", "build", "--workspace", "apps/dashboard"], [cmake, "--build", build_dir, "--config", config, "--target", EMBEDDING],
+            [npx, "playwright", "test", "--project", "e2e"]]
 
 
 def panel(arguments, environment, runner=subprocess.run, which=shutil.which):
@@ -125,18 +127,22 @@ def panel(arguments, environment, runner=subprocess.run, which=shutil.which):
     if missing:
         print("the dev run needs the built " + ", ".join(missing) + "; build the leg first", file=sys.stderr)
         return 1
-    npm, npx = which("npm"), which("npx")
-    if not npm or not npx:
-        print("the dev run needs npm and npx on the PATH, with the workspace installed by npm ci", file=sys.stderr)
+    build_dir = os.path.join(ROOT, arguments.build_dir) if not os.path.isabs(arguments.build_dir) else arguments.build_dir
+    if not os.path.isdir(build_dir):
+        print(f"the dev run needs the configured build folder {build_dir} to compile the panel into the supervisor", file=sys.stderr)
+        return 1
+    npm, npx, cmake = which("npm"), which("npx"), which("cmake")
+    if not npm or not npx or not cmake:
+        print("the dev run needs npm and npx on the PATH, with the workspace installed by npm ci, and cmake", file=sys.stderr)
         return 1
     prepared = panel_environment(binaries, environment)
-    for command in panel_commands(npm, npx):
+    for command in panel_commands(npm, npx, cmake, build_dir, arguments.config):
+        if command[0] == cmake and not os.path.isfile(os.path.join(ROOT, DASHBOARD)):
+            print(f"the panel build left no {DASHBOARD}", file=sys.stderr)
+            return 1
         print("+ " + " ".join(command), flush=True)
         if runner(command, cwd=ROOT, env=prepared).returncode != 0:
             return 1
-    if not os.path.isfile(os.path.join(ROOT, DASHBOARD)):
-        print(f"the panel build left no {DASHBOARD}", file=sys.stderr)
-        return 1
     return 0
 
 
@@ -340,6 +346,8 @@ def main(argv=None, environment=None, git=None, runner=subprocess.run, which=shu
     chooser.add_argument("--after", default="", help="the range end, for a dry run")
     runner_parser = commands.add_parser("panel", help="run the panel's end-to-end specs against built binaries")
     runner_parser.add_argument("--binaries", required=True, help="the folder holding the built supervisor, patchserver and gameserver")
+    runner_parser.add_argument("--build-dir", required=True, help="the configured build folder those binaries came from, where the supervisor is relinked with the panel just built")
+    runner_parser.add_argument("--config", required=True, help="the build configuration those binaries came from, such as Debug")
     booter = commands.add_parser("servers", help="boot the built login and game servers with no client install and check they serve")
     booter.add_argument("--binaries", required=True, help="the folder holding the built loginserver and gameserver")
     booter.add_argument("--targets", default="loginserver gameserver", help="the targets select chose, space separated; the game server also boots the login server")
