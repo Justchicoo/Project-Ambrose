@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps a wizard's quests, goals, registry, hidden quests and Dynamods, and converts them to and from the stored rows; a goal that completes publishes its GoalComplete event, named as the zones' triggers spell it.
+ * Keeps a wizard's quests, goals, registry, hidden quests and Dynamods, and converts them to and from the stored rows; a goal that completes publishes its GoalComplete event, named as the zones' triggers spell it, and each goal and quest that completes is kept for its results to run.
  */
 
 #include "QuestLog.h"
@@ -124,6 +124,7 @@ bool QuestLog::CompleteGoal(std::string_view quest, std::string_view goal)
         return false;
     entry->Complete = true;
     _events.push_back(GoalCompleteEvent(quest, goal));
+    _completions.push_back(QuestCompletion{ std::string(quest), std::string(goal) });
     MarkChanged();
     return true;
 }
@@ -134,6 +135,7 @@ bool QuestLog::CompleteQuest(std::string_view quest)
     if (!Remove(name))
         return false;
     SetQuestRegistry(name, CompleteEntry, 1.0);
+    _completions.push_back(QuestCompletion{ name, {} });
     return true;
 }
 
@@ -237,6 +239,11 @@ DynaModChange QuestLog::ApplyDynaMod(std::string_view zone, std::string_view tag
 std::vector<std::string> QuestLog::TakeEvents()
 {
     return std::exchange(_events, {});
+}
+
+std::vector<QuestCompletion> QuestLog::TakeCompletions()
+{
+    return std::exchange(_completions, {});
 }
 
 QuestLogQuest* QuestLog::FindMutable(std::string_view quest)

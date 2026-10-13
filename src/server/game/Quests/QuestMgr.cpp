@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads every quest table and object_template's ids and names from the world database, or from the row source a test gives it, checks them with the quest validator, and either builds the quests that passed and counts the rest, at start, or swaps in a generation only when nothing failed, on a reload; both log how many quests and goals are serving and how many validation errors were found, and warn of each quest whose stored requirements cannot be read; a quest is offered only when its stored requirements and its requirement list both pass.
+ * Reads every quest table and object_template's ids and names from the world database, or from the row source a test gives it, checks them with the quest validator, and either builds the quests that passed and counts the rest, at start, or swaps in a generation only when nothing failed, on a reload; both log how many quests and goals are serving and how many validation errors were found, and warn of each quest whose stored requirements and each result that cannot be read; a quest is offered only when its stored requirements and its requirement list both pass.
  */
 
 #include "QuestMgr.h"
@@ -116,6 +116,10 @@ bool QuestMgr::ReadWorldRows(QuestRows& rows, std::vector<std::string>& errors)
         rows.Madlibs.push_back(QuestDialogMadlibRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<std::string>(), f[3].Get<std::string>(), f[4].Get<uint32>(),
             f[5].Get<std::string>(), f[6].Get<std::string>() });
     });
+    ok &= Select("quest_result", "SELECT `quest`, `goal_name`, `position`, `class_name`, `data` FROM `quest_result` ORDER BY `quest`, `goal_name`, `position`", errors, [&rows](Field const* f)
+    {
+        rows.Results.push_back(QuestResultRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<std::string>(), f[4].Get<std::vector<uint8>>() });
+    });
     ok &= Select("object_template", "SELECT `template_id`, `object_name` FROM `object_template`", errors, [&rows](Field const* f)
     {
         rows.Objects.push_back(QuestObjectRow{ f[0].Get<uint32>(), f[1].Get<std::string>() });
@@ -194,7 +198,7 @@ QuestLoadResult QuestMgr::LoadSkippingInvalid()
         result.Errors.push_back(problem.Message);
     }
     std::shared_ptr<QuestStore const> store = QuestStore::Build(rows, skipped, sTypeRegistry.GetCatalog());
-    for (std::string const& problem : store->GetRequirementProblems())
+    for (std::string const& problem : store->GetProblems())
         LOG_WARN(QuestLog, "{}", problem);
     result.Loaded = true;
     result.Quests = store->GetQuestCount();
@@ -217,7 +221,7 @@ bool QuestMgr::Load(std::vector<std::string>& errors)
         return false;
     }
     std::shared_ptr<QuestStore const> store = QuestStore::Build(rows, {}, sTypeRegistry.GetCatalog());
-    for (std::string const& problem : store->GetRequirementProblems())
+    for (std::string const& problem : store->GetProblems())
         LOG_WARN(QuestLog, "{}", problem);
     std::size_t const quests = store->GetQuestCount();
     std::size_t const goals = store->GetGoalCount();
