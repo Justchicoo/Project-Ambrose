@@ -871,6 +871,15 @@ Settled on 2026-10-07 in milestone 9.03, from the user's own r806919 install and
 - Effect templates are read from Root.wad's GameEffectData/*.xml at run time and keyed by the hash of their `m_effectName`, keeping the first of a name read twice, as the client does. A template makes the effect class its own class names, with Template removed or replaced by GameEffect, and carries every value both classes share. They are not stored in the world database, as for spells and sigils.
 - 9.03 is the shared effect framework alone. The WIZ-13 equipment stat checks its section first carried are 11.02's and 11.03's, which list them, because they need equipped gear (8.10) and the stat tables 9.03 does not depend on.
 
+### Results
+
+Settled on 2026-10-13 with the world and Dynamod sessions. One results runner, `sResultMgr` in src/server/game/Results, runs every result list the server holds: zone triggers' now, quest and goal results when they are stored.
+
+- A list's rows are read once at load through `ResultMgr::Read`, each the result class and the versionable bytes the data holds it in, so zone_trigger_result and any later table shaped like it decode the same way. A row whose class the server does not know is held without bytes and left out.
+- Each owning system registers a handler for its result classes with `ResultMgr::Register`. A list runs its results in order through them, and a class nobody handles is skipped, logged once and counted.
+- A wizard's lists run through `GameSession::RunResults`, which fills the context every handler gets: the session, the wizard, its map, its zone and the trigger or quest that holds the list. Doors and spawn results are gathered while a list runs and acted on once after it, so a door never moves the wizard before the rest of its list has run.
+- A trigger's requirements gate the whole trigger before its results run, per wizard, as 10.03 settled.
+
 ### Still open
 
 Decisions that block later milestones are listed under Decisions needed in doc/ROADMAP.md. Propose them to the maintainer when their milestone is next.

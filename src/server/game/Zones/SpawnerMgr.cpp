@@ -6,9 +6,9 @@
 #include "SpawnerMgr.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
-#include "ObjectSerializer.h"
 #include "PropertyObject.h"
 #include "ReloadMgr.h"
+#include "ResultMgr.h"
 #include "StringHash.h"
 #include "ZonePathMgr.h"
 
@@ -561,31 +561,17 @@ MapObject const* SpawnerMgr::FindNearest(Map const& map, PropertyTypes::Vector3D
 
 std::optional<ZoneSpawnResult> SpawnerMgr::ReadResult(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string& error)
 {
-    if (!catalog)
-    {
-        error = "no type catalog is loaded";
+    std::shared_ptr<PropertyObject const> const object = ResultMgr::Decode(catalog, data, error);
+    if (!object)
         return std::nullopt;
-    }
-    SerializerOptions options;
-    options.Versionable = true;
-    options.Flags = SerializerFlag::None;
-    options.Mask = 0;
-    options.AllowNullRoot = false;
-    options.AllowTrailingBytes = false;
-    DecodeResult const decoded = ObjectSerializer::Decode(catalog, data, options);
-    if (!decoded.Ok() || !decoded.Object)
-    {
-        error = decoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(decoded.Status)) : decoded.Detail;
-        return std::nullopt;
-    }
     ZoneSpawnResult result;
-    result.Despawn = decoded.Object->IsA(DespawnResultClass);
-    if (!result.Despawn && !decoded.Object->IsA(SpawnResultClass))
+    result.Despawn = object->IsA(DespawnResultClass);
+    if (!result.Despawn && !object->IsA(SpawnResultClass))
     {
-        error = fmt::format("it holds a {}", decoded.Object->GetClass().Name);
+        error = fmt::format("it holds a {}", object->GetClass().Name);
         return std::nullopt;
     }
-    PropertyValue const* const id = decoded.Object->Get("m_spawnID");
+    PropertyValue const* const id = object->Get("m_spawnID");
     uint64 const* const spawner = id ? id->GetIf<uint64>() : nullptr;
     if (!spawner)
     {
@@ -595,16 +581,16 @@ std::optional<ZoneSpawnResult> SpawnerMgr::ReadResult(TypeCatalogPtr const& cata
     result.SpawnerId = *spawner;
     if (result.Despawn)
     {
-        PropertyValue const* const templateId = decoded.Object->Get("m_templateID");
+        PropertyValue const* const templateId = object->Get("m_templateID");
         int32 const* const kind = templateId ? templateId->GetIf<int32>() : nullptr;
         result.TemplateId = kind && *kind > 0 ? static_cast<uint32>(*kind) : 0;
-        PropertyValue const* const effect = decoded.Object->Get("m_despawnEffect");
+        PropertyValue const* const effect = object->Get("m_despawnEffect");
         std::string const* const name = effect ? effect->GetIf<std::string>() : nullptr;
         result.Effect = name ? *name : std::string();
     }
     else
     {
-        PropertyValue const* const activate = decoded.Object->Get("m_activate");
+        PropertyValue const* const activate = object->Get("m_activate");
         bool const* const on = activate ? activate->GetIf<bool>() : nullptr;
         result.Activate = on && *on;
     }
