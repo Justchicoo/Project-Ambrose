@@ -448,6 +448,12 @@ int main(int argc, char** argv)
             Write(stdout, value + "\n");
             continue;
         }
+        if (command == "env")
+        {
+            char const* const variable = getenv(value.c_str());
+            Write(stdout, (variable ? variable : std::string()) + "\n");
+            continue;
+        }
         if (command == "err")
         {
             Write(stderr, value + "\n");

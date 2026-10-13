@@ -178,6 +178,29 @@ export const CommandHistoryAnswer = v.looseObject({
     commands: v.array(v.string()),
 });
 
+export const LaunchAnswer = v.looseObject({
+    schema: v.number(),
+    app: v.string(),
+    build: v.string(),
+    working_directory: v.string(),
+    start_timeout: v.nullable(v.number()),
+    stop_timeout: v.nullable(v.number()),
+    restart_policy: v.nullable(v.string()),
+    backoff_seconds: v.nullable(v.number()),
+    max_restarts: v.nullable(v.number()),
+    crash_window_seconds: v.nullable(v.number()),
+    autostart: v.nullable(v.boolean()),
+    priority: v.nullable(v.number()),
+    memory_limit_bytes: v.nullable(v.number()),
+    cpu_limit_percent: v.nullable(v.number()),
+    overrides: v.record(v.string(), v.string()),
+    environment: v.record(v.string(), v.string()),
+    secret_environment: v.array(v.string()),
+    preview_command_line: v.string(),
+    preview_environment: v.array(v.looseObject({ name: v.string(), value: v.string(), secret: v.boolean() })),
+    locked_keys: v.array(v.looseObject({ key: v.string(), locked: v.boolean(), layer: v.string() })),
+});
+
 export const Problem = v.looseObject({
     code: v.string(),
     message: v.string(),

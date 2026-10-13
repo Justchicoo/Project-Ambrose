@@ -6,9 +6,9 @@
     "percent": 33.9
   },
   "checks": {
-    "done": 1212,
+    "done": 1215,
     "total": 2884,
-    "percent": 42.0
+    "percent": 42.1
   },
   "game": {
     "label": "Game server",
@@ -52,9 +52,9 @@
       "percent": 12.4
     },
     "checks": {
-      "done": 182,
+      "done": 185,
       "total": 1113,
-      "percent": 16.4
+      "percent": 16.6
     }
   },
   "contributor_track": {
@@ -195,7 +195,7 @@
       "title": "Operations console admin api dashboard and metrics",
       "milestones_done": 23,
       "milestones_total": 186,
-      "checks_done": 182,
+      "checks_done": 185,
       "checks_total": 1113
     }
   ],

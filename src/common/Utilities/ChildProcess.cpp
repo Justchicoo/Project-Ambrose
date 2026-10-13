@@ -16,8 +16,10 @@
 #include <cerrno>
 #include <charconv>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <system_error>
 #include <thread>
@@ -36,6 +38,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <spawn.h>
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -1430,6 +1433,7 @@ struct ChildProcessHandle::State
     bool Adopted = false;
     std::mutex Mutex;
     std::optional<ChildExit> Exit;
+    uint64 MemoryLimitBytes = 0;
 };
 
 namespace
@@ -1477,6 +1481,68 @@ namespace
         if (!handle)
             error = fmt::format("{} could not be started because its {} file {} could not be opened: {}", programText, what, PathText(file), SystemMessage(GetLastError()));
         return handle;
+    }
+
+    std::vector<wchar_t> BuildEnvironmentBlock(std::vector<std::pair<std::string, std::string>> const& overrides)
+    {
+        if (overrides.empty())
+            return {};
+        std::map<std::u16string, std::u16string> entries;
+        if (LPWCH const current = GetEnvironmentStringsW())
+        {
+            for (LPWCH cursor = current; *cursor != L'\0';)
+            {
+                std::wstring_view const entry(cursor);
+                std::size_t const equals = entry.find(L'=');
+                if (equals != std::wstring_view::npos && equals > 0)
+                    entries[std::u16string(reinterpret_cast<char16_t const*>(entry.data()), equals)] =
+                        std::u16string(reinterpret_cast<char16_t const*>(entry.data() + equals + 1), entry.size() - equals - 1);
+                cursor += entry.size() + 1;
+            }
+            FreeEnvironmentStringsW(current);
+        }
+        for (auto const& [name, value] : overrides)
+        {
+            std::optional<std::u16string> const wideName = Utf::Utf8ToUtf16(name, Utf::InvalidPolicy::ReplaceWithU_FFFD);
+            std::optional<std::u16string> const wideValue = Utf::Utf8ToUtf16(value, Utf::InvalidPolicy::ReplaceWithU_FFFD);
+            if (wideName && wideValue)
+                entries[*wideName] = *wideValue;
+        }
+        std::vector<wchar_t> block;
+        for (auto const& [name, value] : entries)
+        {
+            for (char16_t c : name)
+                block.push_back(static_cast<wchar_t>(c));
+            block.push_back(L'=');
+            for (char16_t c : value)
+                block.push_back(static_cast<wchar_t>(c));
+            block.push_back(L'\0');
+        }
+        block.push_back(L'\0');
+        return block;
+    }
+
+    DWORD PriorityClassFor(int priority) noexcept
+    {
+        switch (std::clamp(priority, -2, 2))
+        {
+        case -2: return IDLE_PRIORITY_CLASS;
+        case -1: return BELOW_NORMAL_PRIORITY_CLASS;
+        case 1: return ABOVE_NORMAL_PRIORITY_CLASS;
+        case 2: return HIGH_PRIORITY_CLASS;
+        default: return NORMAL_PRIORITY_CLASS;
+        }
+    }
+
+    bool CheckJobOutOfMemory(HANDLE job, uint64 limit)
+    {
+        if (!job || limit == 0)
+            return false;
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
+        DWORD returned = 0;
+        if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &info, sizeof(info), &returned))
+            return false;
+        return info.PeakJobMemoryUsed >= limit;
     }
 
     std::unique_ptr<ChildProcessHandle::State> LaunchState(ChildLaunchOptions const& options, ChildProcessOptions const& run, std::string const& programText, std::string& error)
@@ -1550,14 +1616,16 @@ namespace
         DWORD const creation = CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT;
         LPCWSTR const application = command.Search ? nullptr : command.Program.c_str();
         LPCWSTR const directory = command.WorkingDirectory.empty() ? nullptr : command.WorkingDirectory.c_str();
+        std::vector<wchar_t> const environment = BuildEnvironmentBlock(options.Environment);
+        LPVOID const environmentBlock = environment.empty() ? nullptr : environment.data();
         PROCESS_INFORMATION information{};
         std::wstring commandBuffer = command.CommandBuffer;
-        BOOL created = CreateProcessW(application, commandBuffer.data(), nullptr, nullptr, TRUE, creation | CREATE_BREAKAWAY_FROM_JOB, nullptr, directory, &startup.StartupInfo, &information);
+        BOOL created = CreateProcessW(application, commandBuffer.data(), nullptr, nullptr, TRUE, creation | CREATE_BREAKAWAY_FROM_JOB | CREATE_UNICODE_ENVIRONMENT, environmentBlock, directory, &startup.StartupInfo, &information);
         DWORD createError = GetLastError();
         if (!created && createError == ERROR_ACCESS_DENIED)
         {
             commandBuffer = command.CommandBuffer;
-            created = CreateProcessW(application, commandBuffer.data(), nullptr, nullptr, TRUE, creation, nullptr, directory, &startup.StartupInfo, &information);
+            created = CreateProcessW(application, commandBuffer.data(), nullptr, nullptr, TRUE, creation | CREATE_UNICODE_ENVIRONMENT, environmentBlock, directory, &startup.StartupInfo, &information);
             createError = GetLastError();
         }
         input.Reset();
@@ -1583,14 +1651,41 @@ namespace
         {
             JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
             limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
+            if (options.MemoryLimitBytes > 0)
+            {
+                limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_JOB_MEMORY;
+                limits.JobMemoryLimit = options.MemoryLimitBytes;
+            }
             if (!SetInformationJobObject(job.Get(), JobObjectExtendedLimitInformation, &limits, sizeof(limits)) || !AssignProcessToJobObject(job.Get(), process.Get()))
+            {
+                if (options.MemoryLimitBytes > 0)
+                {
+                    error = fmt::format("{} could not be started because its memory limit could not be applied: {}", programText, SystemMessage(GetLastError()));
+                    TerminateProcess(process.Get(), 1);
+                    return nullptr;
+                }
                 job.Reset();
+            }
+        }
+        if (job && options.CpuLimitPercent > 0)
+        {
+            JOBOBJECT_CPU_RATE_CONTROL_INFORMATION cpu{};
+            cpu.ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+            cpu.CpuRate = static_cast<WORD>(std::clamp<uint32>(options.CpuLimitPercent, 1, 100) * 100);
+            if (!SetInformationJobObject(job.Get(), JobObjectCpuRateControlInformation, &cpu, sizeof(cpu)))
+            {
+                error = fmt::format("{} could not be started because its CPU limit could not be applied: {}", programText, SystemMessage(GetLastError()));
+                TerminateProcess(process.Get(), 1);
+                return nullptr;
+            }
         }
         if (job)
         {
             HANDLE kept = nullptr;
             DuplicateHandle(GetCurrentProcess(), job.Get(), process.Get(), &kept, JOB_OBJECT_QUERY, FALSE, 0);
         }
+        if (options.Priority != 0)
+            SetPriorityClass(process.Get(), PriorityClassFor(options.Priority));
         if (ResumeThread(thread.Get()) == static_cast<DWORD>(-1))
         {
             DWORD const resumeError = GetLastError();
@@ -1604,6 +1699,7 @@ namespace
         state->Job = std::move(job);
         state->Input = std::move(inputHeld);
         state->SendBreak = options.SendBreak;
+        state->MemoryLimitBytes = options.MemoryLimitBytes;
         return state;
     }
 
@@ -1681,6 +1777,7 @@ bool ChildProcessHandle::WaitForExit(std::chrono::milliseconds timeout)
         DWORD code = 0;
         if (GetExitCodeProcess(state.Process.Get(), &code))
             exit.Code = static_cast<int64>(code);
+        exit.OutOfMemory = CheckJobOutOfMemory(state.Job.Get(), state.MemoryLimitBytes);
         state.Exit = exit;
     }
     return true;
@@ -1784,6 +1881,7 @@ struct ChildProcessHandle::State
     bool Adopted = false;
     std::mutex Mutex;
     std::optional<ChildExit> Exit;
+    std::string CgroupPath;
 };
 
 namespace
@@ -1880,6 +1978,101 @@ namespace
             return errno;
         descriptor = Descriptor(moved);
         return 0;
+    }
+
+    std::vector<char*> BuildEnvironment(char** current, std::vector<std::pair<std::string, std::string>> const& overrides, std::vector<std::string>& storage)
+    {
+        std::map<std::string, std::string> entries;
+        for (char** cursor = current; cursor && *cursor; ++cursor)
+        {
+            std::string_view const entry(*cursor);
+            std::size_t const equals = entry.find('=');
+            if (equals != std::string_view::npos && equals > 0)
+                entries[std::string(entry.substr(0, equals))] = std::string(entry.substr(equals + 1));
+        }
+        for (auto const& [name, value] : overrides)
+            entries[name] = value;
+        std::vector<char*> environment;
+        for (auto const& [name, value] : entries)
+        {
+            storage.push_back(name + "=" + value);
+            environment.push_back(storage.back().data());
+        }
+        environment.push_back(nullptr);
+        return environment;
+    }
+
+    int NiceFor(int priority) noexcept
+    {
+        switch (std::clamp(priority, -2, 2))
+        {
+        case -2: return 10;
+        case -1: return 5;
+        case 1: return -5;
+        case 2: return -10;
+        default: return 0;
+        }
+    }
+
+    bool WriteCgroupFile(std::string const& path, std::string const& value)
+    {
+        std::ofstream stream(path);
+        if (!stream)
+            return false;
+        stream << value;
+        stream.flush();
+        return static_cast<bool>(stream);
+    }
+
+    std::string ApplyCgroupLimits(pid_t id, uint64 memoryLimitBytes, uint32 cpuLimitPercent, std::string& error)
+    {
+        std::string const group = fmt::format("/sys/fs/cgroup/ambrose-{}", static_cast<int64>(id));
+        std::error_code code;
+        std::filesystem::create_directory(group, code);
+        if (code)
+        {
+            error = fmt::format("its cgroup {} could not be created: {}", group, code.message());
+            return {};
+        }
+        if (memoryLimitBytes > 0 && !WriteCgroupFile(group + "/memory.max", std::to_string(memoryLimitBytes)))
+        {
+            error = fmt::format("its cgroup memory limit could not be set in {}", group);
+            return {};
+        }
+        if (cpuLimitPercent > 0)
+        {
+            uint32 const clamped = std::clamp<uint32>(cpuLimitPercent, 1, 100);
+            if (!WriteCgroupFile(group + "/cpu.max", fmt::format("{} 100000", clamped * 1000)))
+            {
+                error = fmt::format("its cgroup CPU limit could not be set in {}", group);
+                return {};
+            }
+        }
+        if (!WriteCgroupFile(group + "/cgroup.procs", std::to_string(static_cast<int64>(id))))
+        {
+            error = fmt::format("it could not be moved into its cgroup {}", group);
+            return {};
+        }
+        return group;
+    }
+
+    bool CheckCgroupOutOfMemory(std::string const& group)
+    {
+        if (group.empty())
+            return false;
+        std::ifstream stream(group + "/memory.events");
+        std::string line;
+        while (std::getline(stream, line))
+        {
+            std::string_view const view = line;
+            constexpr std::string_view prefix = "oom_kill ";
+            if (view.starts_with(prefix))
+            {
+                std::string_view const count = view.substr(prefix.size());
+                return !count.empty() && count != "0";
+            }
+        }
+        return false;
     }
 
     std::unique_ptr<ChildProcessHandle::State> LaunchState(ChildLaunchOptions const& options, ChildProcessOptions const&, std::string const& programText, std::string& error)
@@ -2005,10 +2198,12 @@ namespace
         arguments.Arguments = options.Arguments;
         std::vector<std::string> strings;
         std::vector<char*> argv = BuildArgv(program, arguments, strings);
+        std::vector<std::string> envStorage;
+        std::vector<char*> envp = BuildEnvironment(environ, options.Environment, envStorage);
         pid_t id = 0;
         int const spawned = search
-            ? posix_spawnp(&id, program.c_str(), setup.Actions(), setup.Attributes(), argv.data(), environ)
-            : posix_spawn(&id, program.c_str(), setup.Actions(), setup.Attributes(), argv.data(), environ);
+            ? posix_spawnp(&id, program.c_str(), setup.Actions(), setup.Attributes(), argv.data(), envp.data())
+            : posix_spawn(&id, program.c_str(), setup.Actions(), setup.Attributes(), argv.data(), envp.data());
         inputRead.Reset();
         output.Reset();
         errors.Reset();
@@ -2017,7 +2212,22 @@ namespace
             error = fmt::format("{} could not be started: {}", programText, ErrnoMessage(spawned));
             return nullptr;
         }
+        if (options.Priority != 0)
+            setpriority(PRIO_PROCESS, static_cast<id_t>(id), NiceFor(options.Priority));
+        std::string cgroup;
+        if (options.MemoryLimitBytes > 0 || options.CpuLimitPercent > 0)
+        {
+            std::string limitError;
+            cgroup = ApplyCgroupLimits(id, options.MemoryLimitBytes, options.CpuLimitPercent, limitError);
+            if (cgroup.empty())
+            {
+                error = fmt::format("{} could not be started because {}", programText, limitError);
+                kill(id, SIGKILL);
+                return nullptr;
+            }
+        }
         auto state = std::make_unique<ChildProcessHandle::State>();
+        state->CgroupPath = std::move(cgroup);
         std::optional<ChildProcessIdentity> identity = DescribeProcess(id);
 #ifdef __linux__
         std::error_code selfError;
@@ -2122,7 +2332,13 @@ bool ChildProcessHandle::WaitForExit(std::chrono::milliseconds timeout)
                         exit.Code = WEXITSTATUS(status);
                     else if (WIFSIGNALED(status))
                         exit.Signal = WTERMSIG(status);
+                    exit.OutOfMemory = CheckCgroupOutOfMemory(state.CgroupPath);
                     state.Exit = exit;
+                    if (!state.CgroupPath.empty())
+                    {
+                        std::error_code code;
+                        std::filesystem::remove(state.CgroupPath, code);
+                    }
                     return true;
                 }
                 if (reaped < 0 && errno != EINTR)

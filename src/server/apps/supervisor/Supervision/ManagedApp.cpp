@@ -78,6 +78,57 @@ ManagedApp::ManagedApp(AppDefinition definition, SupervisorState& state, std::fi
     _view.WantRunning = _definition.Autostart;
 }
 
+void ManagedApp::SetLaunchSettingsProvider(LaunchSettingsProvider provider)
+{
+    _launchSettings = std::move(provider);
+}
+
+ResolvedLaunch ManagedApp::ResolveLaunch() const
+{
+    ResolvedLaunch resolved;
+    resolved.Program = _definition.Program;
+    resolved.WorkingDirectory = _definition.WorkingDirectory;
+    resolved.StartTimeout = _definition.StartTimeout;
+    resolved.StopTimeout = _definition.StopTimeout;
+    resolved.Autostart = _definition.Autostart;
+    if (!_launchSettings)
+        return resolved;
+    LaunchSettings const settings = _launchSettings(_definition.Name);
+    if (!settings.Build.empty())
+        resolved.Program = settings.Build;
+    if (!settings.WorkingDirectory.empty())
+        resolved.WorkingDirectory = settings.WorkingDirectory;
+    if (settings.StartTimeoutSeconds)
+        resolved.StartTimeout = std::chrono::seconds(*settings.StartTimeoutSeconds);
+    if (settings.StopTimeoutSeconds)
+        resolved.StopTimeout = std::chrono::seconds(*settings.StopTimeoutSeconds);
+    if (settings.RestartPolicy)
+        resolved.RestartPolicy = *settings.RestartPolicy;
+    if (settings.BackoffSeconds)
+        resolved.Backoff = std::chrono::seconds(*settings.BackoffSeconds);
+    if (settings.MaxRestarts)
+        resolved.MaxRestarts = *settings.MaxRestarts;
+    if (settings.CrashWindowSeconds)
+        resolved.CrashWindow = std::chrono::seconds(*settings.CrashWindowSeconds);
+    if (settings.Autostart)
+        resolved.Autostart = *settings.Autostart;
+    if (settings.Priority)
+        resolved.Priority = std::clamp(*settings.Priority, LaunchSettings::MinPriority, LaunchSettings::MaxPriority);
+    if (settings.MemoryLimitBytes)
+        resolved.MemoryLimitBytes = *settings.MemoryLimitBytes;
+    if (settings.CpuLimitPercent)
+        resolved.CpuLimitPercent = *settings.CpuLimitPercent;
+    resolved.ExtraArguments = settings.OverrideArguments();
+    for (auto const& [name, value] : settings.Environment)
+        resolved.Environment.emplace_back(name, value);
+    return resolved;
+}
+
+std::chrono::seconds ManagedApp::CurrentStopTimeout() const
+{
+    return ResolveLaunch().StopTimeout;
+}
+
 ManagedApp::~ManagedApp()
 {
     Shutdown();
@@ -142,6 +193,8 @@ std::string ManagedApp::DescribeExit(std::string_view name, AppExit const& exit)
     else
         how = "exited, and its exit code could not be read because an earlier supervisor started it";
     std::string_view const why = exit.Requested ? "as asked" : exit.During == AppState::Starting ? "before it was ready" : "without being asked";
+    if (exit.OutOfMemory)
+        return fmt::format("{} {} {} after {} ms, out of memory past its limit", name, how, why, exit.UptimeMs);
     return fmt::format("{} {} {} after {} ms", name, how, why, exit.UptimeMs);
 }
 
@@ -366,17 +419,24 @@ void ManagedApp::LoadAdmin()
 void ManagedApp::Launch()
 {
     LoadAdmin();
+    ResolvedLaunch const launch = ResolveLaunch();
     std::string error;
     if (!_output.BeginRun(error))
         Note(fmt::format("The output of {} will not be kept: {}", _definition.Name, error), true);
     ChildLaunchOptions options;
-    options.Program = _definition.Program;
+    options.Program = launch.Program;
     options.Arguments = { "--config", ConfigMgr::PathToUtf8(_definition.Config) };
-    options.WorkingDirectory = _definition.WorkingDirectory;
+    for (std::string const& extra : launch.ExtraArguments)
+        options.Arguments.push_back(extra);
+    options.WorkingDirectory = launch.WorkingDirectory;
     options.OutputFile = _output.OutputFile();
     options.ErrorFile = _output.ErrorFile();
     options.KeepInput = true;
     options.SendBreak = _sendBreak;
+    options.Environment = launch.Environment;
+    options.MemoryLimitBytes = launch.MemoryLimitBytes;
+    options.CpuLimitPercent = launch.CpuLimitPercent;
+    options.Priority = launch.Priority;
     if (!_pendingNote.empty())
     {
         Note(_pendingNote, true);
@@ -388,7 +448,7 @@ void ManagedApp::Launch()
     {
         {
             std::lock_guard<std::mutex> const lock(_mutex);
-            _view.Exits.push_back(AppExit{ now, std::nullopt, std::nullopt, false, AppState::Starting, 0 });
+            _view.Exits.push_back(AppExit{ now, std::nullopt, std::nullopt, false, false, AppState::Starting, 0 });
             if (_view.Exits.size() > MaxExits)
                 _view.Exits.erase(_view.Exits.begin());
             ++_view.FailedStarts;
@@ -482,7 +542,8 @@ void ManagedApp::Handle(Command const& command)
     }
     _stopRequested = true;
     _ended = true;
-    _endAt = Clock::now() + _definition.StopTimeout;
+    _stopTimeout = CurrentStopTimeout();
+    _endAt = Clock::now() + _stopTimeout;
     {
         std::lock_guard<std::mutex> const lock(_mutex);
         _view.Stop = StopMethod::EndTree;
@@ -544,8 +605,9 @@ void ManagedApp::BeginStop(uint32 countdown)
             misses.push_back(error);
     }
     Clock::time_point const now = Clock::now();
-    _interruptAt = now + std::chrono::seconds(countdown) + _definition.StopTimeout / 2;
-    _endAt = now + std::chrono::seconds(countdown) + _definition.StopTimeout;
+    _stopTimeout = CurrentStopTimeout();
+    _interruptAt = now + std::chrono::seconds(countdown) + _stopTimeout / 2;
+    _endAt = now + std::chrono::seconds(countdown) + _stopTimeout;
     {
         std::lock_guard<std::mutex> const lock(_mutex);
         _view.Stop = method;
@@ -566,7 +628,7 @@ void ManagedApp::Escalate()
     {
         _interrupted = true;
         if (_process.Interrupt(error))
-            Note(fmt::format("{} has not stopped halfway through its stop timeout of {} s, so its process group was interrupted", _definition.Name, _definition.StopTimeout.count()), true);
+            Note(fmt::format("{} has not stopped halfway through its stop timeout of {} s, so its process group was interrupted", _definition.Name, _stopTimeout.count()), true);
         else
             Note(fmt::format("{} has not stopped halfway through its stop timeout, and its process group could not be interrupted: {}", _definition.Name, error), true);
     }
@@ -574,7 +636,7 @@ void ManagedApp::Escalate()
     {
         _ended = true;
         if (_process.EndTree(error))
-            Note(fmt::format("{} did not stop within its stop timeout of {} s, so its process tree was ended", _definition.Name, _definition.StopTimeout.count()), true);
+            Note(fmt::format("{} did not stop within its stop timeout of {} s, so its process tree was ended", _definition.Name, _stopTimeout.count()), true);
         else
             Note(fmt::format("{} did not stop within its stop timeout, and its process tree could not be ended: {}", _definition.Name, error), true);
     }
@@ -704,6 +766,7 @@ void ManagedApp::OnExit()
     {
         record.Code = exit->Code;
         record.Signal = exit->Signal;
+        record.OutOfMemory = exit->OutOfMemory;
     }
     record.Requested = _stopRequested;
     _process = ChildProcessHandle();
@@ -743,13 +806,35 @@ void ManagedApp::OnExit()
         return;
     }
     bool restart = false;
+    std::chrono::seconds backoff = RestartDelay;
     {
         std::lock_guard<std::mutex> const lock(_mutex);
         if (record.During == AppState::Running)
         {
             ++_view.Crashes;
-            restart = _view.WantRunning;
-            _view.Message = restart ? fmt::format("It exited without being asked and starts again in {} s", RestartDelay.count()) : "It exited without being asked";
+            ResolvedLaunch const launch = ResolveLaunch();
+            bool const crashed = !record.Requested && (!record.Code || *record.Code != 0);
+            restart = _view.WantRunning && launch.RestartPolicy != LaunchRestartPolicy::Never
+                && (launch.RestartPolicy == LaunchRestartPolicy::Always || crashed);
+            if (restart && launch.MaxRestarts > 0)
+            {
+                while (!_crashEpochMs.empty() && now - _crashEpochMs.front() > launch.CrashWindow.count() * 1000)
+                    _crashEpochMs.pop_front();
+                _crashEpochMs.push_back(now);
+                if (_crashEpochMs.size() > launch.MaxRestarts)
+                {
+                    restart = false;
+                    _view.Message = fmt::format("It crashed {} times within {} s, past its crash loop limit, so it stays down", _crashEpochMs.size(), launch.CrashWindow.count());
+                }
+            }
+            if (restart)
+            {
+                uint32 const shifts = static_cast<uint32>(std::min<std::size_t>(_crashEpochMs.size(), 8));
+                backoff = std::min<std::chrono::seconds>(launch.Backoff * (1u << shifts), std::chrono::seconds(300));
+                _view.Message = fmt::format("It exited without being asked and starts again in {} s", backoff.count());
+            }
+            else if (!_view.Message.starts_with("It crashed"))
+                _view.Message = "It exited without being asked";
         }
         else
         {
@@ -759,11 +844,11 @@ void ManagedApp::OnExit()
                 : fmt::format("It exited before it was ready{}{}; start it again once that is fixed", record.Code ? fmt::format(" with exit code {}", *record.Code) : std::string(),
                     cause.empty() ? std::string() : ": " + cause);
         }
-        _view.RestartEpochMs = restart ? now + std::chrono::duration_cast<std::chrono::milliseconds>(RestartDelay).count() : 0;
+        _view.RestartEpochMs = restart ? now + std::chrono::duration_cast<std::chrono::milliseconds>(backoff).count() : 0;
         EnterState(restart ? AppState::Backoff : AppState::Crashed);
     }
     _restartPending = restart;
-    _restartAt = Clock::now() + RestartDelay;
+    _restartAt = Clock::now() + backoff;
     Save();
 }
 

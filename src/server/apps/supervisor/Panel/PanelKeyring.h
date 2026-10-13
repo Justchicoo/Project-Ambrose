@@ -22,7 +22,8 @@
 enum class PanelKeyPurpose : uint8
 {
     TwoFactorSecret,
-    RecoveryCode
+    RecoveryCode,
+    LaunchSecret
 };
 
 struct PanelSealed
@@ -36,7 +37,7 @@ class PanelKeyring
 public:
     static constexpr int Schema = 1;
     static constexpr std::size_t KeyBytes = AES256GCM::KeySize;
-    static constexpr std::size_t PurposeCount = 2;
+    static constexpr std::size_t PurposeCount = 3;
 
     PanelKeyring() = default;
     ~PanelKeyring();

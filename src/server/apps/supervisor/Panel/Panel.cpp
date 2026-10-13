@@ -6,6 +6,7 @@
 #include "Panel.h"
 #include "AdminClient.h"
 #include "AdminConfigView.h"
+#include "AppDefinition.h"
 #include "PanelCaptcha.h"
 #include "PanelErrorReport.h"
 #include "PanelMail.h"
@@ -176,7 +177,7 @@ namespace
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
-    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
+    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _launch(_store, _keyring, _storeMutex, _dataFolder), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
       _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
@@ -762,6 +763,93 @@ AdminResponse Panel::CommandHistoryGet(AdminRequest const& request)
     return AdminResponse::Json(200, answer.dump());
 }
 
+void Panel::SetLaunchAppSource(std::function<std::vector<std::string>()> source)
+{
+    _launchAppSource = std::move(source);
+}
+
+std::string_view Panel::LaunchAppName(AdminRequest const& request, bool& wellFormed) const
+{
+    constexpr std::string_view Prefix = "/api/panel/apps/";
+    constexpr std::string_view Suffix = "/launch";
+    std::string_view path(request.Path);
+    wellFormed = path.starts_with(Prefix) && path.ends_with(Suffix);
+    if (!wellFormed)
+        return {};
+    path.remove_prefix(Prefix.size());
+    path.remove_suffix(Suffix.size());
+    wellFormed = !path.empty() && path.find('/') == std::string_view::npos && AppDefinition::IsValidName(path);
+    if (!wellFormed)
+        return {};
+    if (_launchAppSource)
+        for (std::string const& known : _launchAppSource())
+            if (known == path)
+                return path;
+    wellFormed = false;
+    return {};
+}
+
+AdminResponse Panel::LaunchGet(AdminRequest const& request)
+{
+    bool wellFormed = false;
+    std::string_view const app = LaunchAppName(request, wellFormed);
+    if (!wellFormed)
+        return AdminResponse::Problem(404, "not_found", "That app's launch settings do not exist");
+    std::string error;
+    nlohmann::json const answer = _launch.Answer(app, std::filesystem::path(), {}, error);
+    if (!error.empty())
+        return AdminResponse::Problem(503, "launch_unavailable", error);
+    nlohmann::json body{ { "schema", 1 }, { "app", app } };
+    body.update(answer);
+    return AdminResponse::Json(200, body.dump());
+}
+
+AdminResponse Panel::LaunchUpdate(AdminRequest const& request)
+{
+    std::optional<PanelUser> const user = UserOf(request);
+    if (!user)
+        return AdminResponse::Problem(401, "not_signed_in", "Changing launch settings needs a signed-in user");
+    bool wellFormed = false;
+    std::string_view const app = LaunchAppName(request, wellFormed);
+    if (!wellFormed)
+        return AdminResponse::Problem(404, "not_found", "That app's launch settings do not exist");
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (!body.is_object())
+        return AdminResponse::Invalid("Changing launch settings takes a settings object", { { "body", "Give the launch settings to apply" } });
+    std::string error;
+    LaunchSettings settings;
+    PanelLaunchSettings::ToSettings(body, settings, error);
+    if (!error.empty())
+        return AdminResponse::Problem(422, "launch_invalid", error);
+    LaunchSettings old;
+    if (!_launch.Load(app, old, error))
+        return AdminResponse::Problem(503, "launch_unavailable", error);
+    PanelLaunchSettings::KeepMaskedSecrets(settings, old);
+    std::string const reason = body.value("reason", std::string());
+    AuditEvent event;
+    event.Name = "panel:launch.changed";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(user->Id);
+    event.ActorName = user->Username;
+    event.Address = request.RemoteAddress;
+    event.Properties = PanelLaunchSettings::AuditProperties(app, old, settings, reason);
+    event.On("app", std::string(app), std::string(app));
+    event.On("panel_user", std::to_string(user->Id), user->Username);
+    SettingAuthor const author{ user->Username, static_cast<uint64>(user->Id), request.RemoteAddress };
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        if (_launch.Write(app, settings, author, failure, true))
+            return true;
+        recorded.Result = AuditResult::Refused;
+        recorded.Reason = failure;
+        return true;
+    }, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (event.Result == AuditResult::Refused)
+        return AdminResponse::Problem(422, "launch_refused", event.Reason);
+    return LaunchGet(request);
+}
+
 std::optional<AdminResponse> Panel::Throttle(AdminRequest const& request, uint32 cost)
 {
     if (cost == 0)
@@ -1056,10 +1144,35 @@ void Panel::RegisterTwoFactor()
 
 void Panel::RegisterCommandHistory()
 {
-    _listener.Routes().AddGuardedPrefix("GET", "/api/panel/apps/", "console.read", [this](AdminRequest const& request)
+    auto const permission = [](AdminRequest const& request)
     {
+        constexpr std::string_view Prefix = "/api/panel/apps/";
+        std::string_view const rest = std::string_view(request.Path).size() > Prefix.size()
+            ? std::string_view(request.Path).substr(Prefix.size()) : std::string_view();
+        std::size_t const slash = rest.find('/');
+        std::string_view const tail = slash == std::string_view::npos ? std::string_view() : rest.substr(slash);
+        if (tail == "/launch")
+            return std::string(request.Method == "GET" ? "launch.read" : "launch.edit");
+        return std::string("console.read");
+    };
+    for (char const* method : { "GET", "PUT" })
+        _listener.Routes().AddDynamicGuardedPrefix(method, "/api/panel/apps/", "console.read", permission,
+            [this](AdminRequest const& request) { return PanelAppsRoute(request); });
+}
+
+AdminResponse Panel::PanelAppsRoute(AdminRequest const& request)
+{
+    constexpr std::string_view Suffix = "/launch";
+    if (std::string_view(request.Path).ends_with(Suffix))
+    {
+        if (request.Method == "GET")
+            return LaunchGet(request);
+        if (request.Method == "PUT")
+            return LaunchUpdate(request);
+    }
+    if (request.Method == "GET")
         return CommandHistoryGet(request);
-    });
+    return AdminResponse::Problem(404, "not_found", "That panel app route does not exist");
 }
 
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)

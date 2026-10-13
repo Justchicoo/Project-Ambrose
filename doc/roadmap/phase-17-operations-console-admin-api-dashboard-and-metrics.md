@@ -951,11 +951,11 @@ Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as 
 
 **Acceptance**
 
-- [ ] Changing the gameserver's stop timeout applies at its next stop, and the audit row shows the old and new values
-- [ ] An environment variable marked secret never appears unmasked in the page, the API or the audit log
+- [x] Changing the gameserver's stop timeout applies at its next stop, and the audit row shows the old and new values (LaunchSettingsTest.AChangedStopTimeoutAppliesAtTheNextStop: a provider setting 90 s makes ManagedApp::CurrentStopTimeout and ResolveLaunch read 90 s, and both stop paths take _stopTimeout from CurrentStopTimeout; PanelLaunchSettingsTest.TheAuditRowShowsOldAndNewValuesWithSecretsMasked: the properties LaunchUpdate records on panel:launch.changed hold old.stop_timeout 30 and new.stop_timeout 60)
+- [x] An environment variable marked secret never appears unmasked in the page, the API or the audit log (PanelLaunchSettingsTest.SecretsAreSealedAndMaskedEverywhere: Answer and the preview environment show ******** and the audit properties never carry the value; Launch.browser.test.ts "shows a reader the preview, the masked secret and the locked override naming its layer")
 - [ ] A command-line override of `Rate.Drop.Item` shows the key as locked on the settings page naming the command-line override layer, and a live edit is refused naming the same layer
 - [ ] With a memory limit set, an app that exceeds it is recorded as out of memory
-- [ ] A launch setting naming a build that does not exist is refused with the path named, and the app keeps its previous setting
+- [x] A launch setting naming a build that does not exist is refused with the path named, and the app keeps its previous setting (PanelLaunchSettingsTest.AMissingBuildIsRefusedNamingItsPathAndKeepsThePreviousSetting)
 
 ## 17.29 Port allocations and listen addresses
 
