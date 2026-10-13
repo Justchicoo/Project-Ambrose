@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push or pull request that touches the code, the data the tests read, the build definition or anything ci_dev_run's dev run boots, whatever its branch, with that leg's job given the dev run's minutes, and the Windows leg too for a push to main that touches the code, the data the tests read, the build definition or vcpkg.json, and for a push that touches none of them while code has changed since that leg last built, so code that landed in a run whose checks failed is not left uncompiled, adding the legs a pull request's ci: labels name, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
+# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push or pull request that touches the code, the data the tests read, the build definition or anything ci_dev_run's dev run boots, whatever its branch, with that leg's job given the dev run's minutes, and the Windows leg too for a push to main that touches the code, the data the tests read, the build definition or vcpkg.json, and for a push that touches none of them while code has changed since that leg last built, so code that landed in a run whose checks failed is not left uncompiled, adding the legs a pull request's ci: labels name, building the ASan leg in every schedule slot so its compiler cache stays warm, and a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
 import argparse
 import datetime
 import json
@@ -119,11 +119,11 @@ def slot_time(date):
 
 
 def scheduled_legs(date):
-    legs = []
+    legs = ["linux-gcc-asan"]
     if date.weekday() in CRON_WEEKDAYS[WEDNESDAY_CRON] or date.weekday() in CRON_WEEKDAYS[SUNDAY_CRON]:
         legs.append("windows-msvc-x64")
     if date.weekday() in CRON_WEEKDAYS[SUNDAY_CRON]:
-        legs.extend(["linux-gcc-asan", "linux-clang-tsan"])
+        legs.append("linux-clang-tsan")
         if date.day <= 7:
             legs.extend(["linux-gcc", "linux-clang", "linux-clang-fuzz"])
     return ordered(legs)
@@ -253,13 +253,12 @@ def plan(event, inputs, now, git, actions=None):
         cron = inputs.get("schedule", "")
         date = slot_date(cron, now)
         legs = []
-        candidates = scheduled_legs(date) if cron != OTHER_CRON else []
+        candidates = scheduled_legs(date)
         built = {}
-        if candidates:
-            try:
-                built = (actions or Actions({})).last_built(candidates)
-            except ActionsError as error:
-                warnings.append(f"earlier builds could not be read, so every leg of this slot builds: {error}")
+        try:
+            built = (actions or Actions({})).last_built(candidates)
+        except ActionsError as error:
+            warnings.append(f"earlier builds could not be read, so every leg of this slot builds: {error}")
         for leg in candidates:
             sha = built.get(leg)
             if sha is None:
@@ -271,8 +270,6 @@ def plan(event, inputs, now, git, actions=None):
             else:
                 reasons.append(f"{leg}: skipped (no code change since its last build at {short(sha)})")
         keepalive = cron in (SUNDAY_CRON, WEDNESDAY_CRON) and "windows-msvc-x64" not in legs
-        if not candidates:
-            reasons.append(f"no legs: the {date.strftime('%A')} slot only runs the checks")
     else:
         legs = []
         reasons.append(f"no legs: event '{event}' builds nothing")
