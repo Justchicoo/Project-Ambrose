@@ -4,6 +4,7 @@
  */
 
 #include "ChildProcess.h"
+#include "Environment.h"
 
 #include <array>
 #include <atomic>
@@ -450,8 +451,7 @@ int main(int argc, char** argv)
         }
         if (command == "env")
         {
-            char const* const variable = getenv(value.c_str());
-            Write(stdout, (variable ? variable : std::string()) + "\n");
+            Write(stdout, Ambrose::GetEnv(value).value_or(std::string()) + "\n");
             continue;
         }
         if (command == "err")
