@@ -75,8 +75,8 @@ AdmissionQueueRequest AdmissionQueue::Request(Realm const& realm, std::shared_pt
     {
         std::erase_if(queue->second, [](Entry const& entry)
         {
-            std::shared_ptr<LoginSession> session = entry.Session.lock();
-            return !session || !session->IsOpen() || session->IsKicked();
+            std::shared_ptr<LoginSession> waiting = entry.Session.lock();
+            return !waiting || !waiting->IsOpen() || waiting->IsKicked();
         });
         if (queue->second.empty())
         {
