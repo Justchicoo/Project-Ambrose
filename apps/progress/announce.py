@@ -56,7 +56,7 @@ def stamp():
 def card_url(now):
     milestones = now["milestones"]
     checks = now["checks"]
-    return f'{CARD_URL}?v={milestones["done"]}-{checks["done"]}'
+    return f'{CARD_URL}?v={milestones["done"]}-{checks["done"]}-{now.get("card", "")}'
 
 
 def embed(now, before):

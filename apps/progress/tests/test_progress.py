@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the progress card and announcer: that the panel is counted apart from the game server with a badge each, that the card is linked from the work board rather than uploaded, so a message can never gather a second one, that the link changes when the figures do so Discord fetches it again, that a message id is remembered and reused, that a message Discord no longer has is posted again while any other refusal is raised, and that a refusal reports what Discord said rather than only its status code.
+# Self-tests for the progress card and announcer: that the panel is counted apart from the game server with a badge each, that the card is linked from the work board rather than uploaded, so a message can never gather a second one, that the link changes when the figures or the card's drawing do so Discord fetches it again, that a message id is remembered and reused, that a message Discord no longer has is posted again while any other refusal is raised, and that a refusal reports what Discord said rather than only its status code.
 import io
 import json
 import os
@@ -53,6 +53,8 @@ class CardTests(unittest.TestCase):
         later = announce.card_url(figures(done=53, checks_done=515))
         self.assertEqual(first, again)
         self.assertNotEqual(first, later)
+        redrawn = dict(figures(), card="0123456789")
+        self.assertNotEqual(first, announce.card_url(redrawn))
 
     def test_the_description_says_what_moved_without_repeating_the_card(self):
         drawn = announce.embed(figures(), figures(done=50, checks_done=500))["embeds"][0]
