@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, today the panel's end-to-end specs against its supervisor and patchserver.
 name: core-build
 
 on:
@@ -153,6 +153,7 @@ jobs:
       build: ${{ steps.select.outputs.build }}
       matrix: ${{ steps.select.outputs.matrix }}
       windows_keepalive: ${{ steps.select.outputs.windows_keepalive }}
+      dev_run_panel: ${{ steps.devrun.outputs.panel }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -170,6 +171,15 @@ jobs:
           PUSH_AFTER: ${{ github.sha }}
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 apps/ci/ci_select_legs.py --from-github-env
+      - name: Select the dev run
+        id: devrun
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: python3 apps/ci/ci_dev_run.py select --from-github-env
 
   windows-cache:
     name: windows-cache
@@ -283,3 +293,31 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache
           key: ccache-${{ matrix.configure }}-${{ github.sha }}
+      - name: Set up Node for the dev run
+        id: devrun-node
+        if: ${{ !cancelled() && steps.configure.outcome == 'success' && matrix.leg == 'linux-gcc' && needs.select.outputs.dev_run_panel == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install the panel workspace for the dev run
+        id: devrun-install
+        if: ${{ !cancelled() && steps.devrun-node.outcome == 'success' }}
+        timeout-minutes: 5
+        run: npm ci --ignore-scripts
+      - name: Restore the dev run's browser
+        id: devrun-browsers
+        if: ${{ !cancelled() && steps.devrun-install.outcome == 'success' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-1.63.0
+      - name: Install the dev run's browser
+        id: devrun-browser
+        if: ${{ !cancelled() && steps.devrun-install.outcome == 'success' }}
+        timeout-minutes: 5
+        run: npx playwright install --with-deps chromium
+      - name: Dev run of the panel, supervisor and patchserver
+        if: ${{ !cancelled() && steps.devrun-browser.outcome == 'success' }}
+        timeout-minutes: 10
+        run: python apps/ci/ci_dev_run.py panel --binaries build/linux-gcc/bin/Debug
