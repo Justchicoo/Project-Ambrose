@@ -1939,6 +1939,7 @@ void GameSession::LeaveWorld()
     if (_mapId && sDuelMgr.EndFor(_worldGuid, Duel::MonsterTeam))
         LOG_INFO("server.gamesession", "Session {}'s wizard {} left the world mid-duel, which ends it", GetSessionId(), _worldGuid);
     _npcRange.Clear();
+    _questOffers.Clear();
     _npcTemplates.clear();
     if (_player)
     {
