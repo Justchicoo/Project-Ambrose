@@ -857,14 +857,14 @@ void Panel::SetLaunchAppSource(std::function<std::vector<std::string>()> source)
 
 std::string_view Panel::LaunchAppName(AdminRequest const& request, bool& wellFormed) const
 {
-    constexpr std::string_view Prefix = "/api/panel/apps/";
-    constexpr std::string_view Suffix = "/launch";
+    constexpr std::string_view LaunchPrefix = "/api/panel/apps/";
+    constexpr std::string_view LaunchSuffix = "/launch";
     std::string_view path(request.Path);
-    wellFormed = path.starts_with(Prefix) && path.ends_with(Suffix);
+    wellFormed = path.starts_with(LaunchPrefix) && path.ends_with(LaunchSuffix);
     if (!wellFormed)
         return {};
-    path.remove_prefix(Prefix.size());
-    path.remove_suffix(Suffix.size());
+    path.remove_prefix(LaunchPrefix.size());
+    path.remove_suffix(LaunchSuffix.size());
     wellFormed = !path.empty() && path.find('/') == std::string_view::npos && AppDefinition::IsValidName(path);
     if (!wellFormed)
         return {};
@@ -2428,9 +2428,9 @@ void Panel::RegisterCommandHistory()
 {
     auto const permission = [](AdminRequest const& request)
     {
-        constexpr std::string_view Prefix = "/api/panel/apps/";
-        std::string_view const rest = std::string_view(request.Path).size() > Prefix.size()
-            ? std::string_view(request.Path).substr(Prefix.size()) : std::string_view();
+        constexpr std::string_view AppsPrefix = "/api/panel/apps/";
+        std::string_view const rest = std::string_view(request.Path).size() > AppsPrefix.size()
+            ? std::string_view(request.Path).substr(AppsPrefix.size()) : std::string_view();
         std::size_t const slash = rest.find('/');
         std::string_view const tail = slash == std::string_view::npos ? std::string_view() : rest.substr(slash);
         if (tail == "/launch")
