@@ -1497,8 +1497,8 @@ AdminResponse Panel::InviteList(AdminRequest const& request)
 
 AdminResponse Panel::InviteRevoke(AdminRequest const& request)
 {
-    constexpr std::string_view Prefix = "/api/panel/invites/";
-    std::string_view const tail = std::string_view(request.Path).substr(Prefix.size());
+    constexpr std::string_view RoutePrefix = "/api/panel/invites/";
+    std::string_view const tail = std::string_view(request.Path).substr(RoutePrefix.size());
     int64 id = 0;
     if (tail.empty() || !std::all_of(tail.begin(), tail.end(), [](char c) { return c >= '0' && c <= '9'; }))
         return AdminResponse::Problem(404, "invite_not_found", "No invite with that id is waiting to be used");
@@ -2276,16 +2276,16 @@ AdminResponse Panel::ApiKeyCreate(AdminRequest const& request)
     if (!body.is_object())
         return AdminResponse::Invalid("A key takes a JSON object", { { "body", "Give a JSON object" } });
     std::vector<std::pair<std::string, std::string>> fields;
-    auto stringsOf = [&fields](nlohmann::json const& body, char const* name, std::vector<std::string>& into)
+    auto stringsOf = [&fields](nlohmann::json const& source, char const* name, std::vector<std::string>& into)
     {
-        if (!body.contains(name))
+        if (!source.contains(name))
             return;
-        if (!body[name].is_array())
+        if (!source[name].is_array())
         {
             fields.emplace_back(name, "Give it as an array of text");
             return;
         }
-        for (nlohmann::json const& entry : body[name])
+        for (nlohmann::json const& entry : source[name])
         {
             if (!entry.is_string())
             {
@@ -3722,7 +3722,7 @@ nlohmann::json Panel::UserAnswer(PanelUser const& user)
         {
             nlohmann::json& at = grants[set.Scope];
             bool const known = std::any_of(at.begin(), at.end(),
-                [&permission](nlohmann::json const& held) { return held.is_string() && held.get<std::string>() == permission; });
+                [&permission](nlohmann::json const& entry) { return entry.is_string() && entry.get<std::string>() == permission; });
             if (!known)
                 at.push_back(permission);
         }
