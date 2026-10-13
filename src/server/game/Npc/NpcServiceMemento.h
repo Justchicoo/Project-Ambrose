@@ -24,6 +24,7 @@ namespace NpcServiceMemento
     inline constexpr std::string_view DefaultTextKey = "GUI_NPCInteractText";
 
     QuestWireEncoder::ServiceMementoBase Build(NpcServiceMenu const& menu, NpcPresentation const& npc);
+    uint32 GetWizBangId(NpcServiceMenu const& menu) noexcept;
     QuestWireEncoder::BlobEncodeResult Encode(TypeCatalogPtr const& catalog, NpcServiceMenu const& menu, NpcPresentation const& npc);
 }
 

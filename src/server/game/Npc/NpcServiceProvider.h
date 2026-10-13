@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * What an NPC offers a wizard standing near it: each provider names the options it has for that wizard and that NPC, hears which of its own options the wizard picked, counted from 0 within the provider, and may set the NPC's name, text and icon keys, its interaction radius and how early its options come in the menu; ScriptNpcProvider makes an NpcScript one, and a script that throws is reported by name and offers nothing.
+ * What an NPC offers a wizard standing near it: each provider names the options it has for that wizard and that NPC, its wizbang when it has options, hears which of its own options the wizard picked, counted from 0 within the provider, and may set the NPC's name, text and icon keys, its interaction radius and how early its options come in the menu; ScriptNpcProvider makes an NpcScript one, and a script that throws is reported by name and offers nothing.
  */
 
 #ifndef AMBROSE_NPCSERVICEPROVIDER_H
 #define AMBROSE_NPCSERVICEPROVIDER_H
 
 #include "Types.h"
+#include "WizBang.h"
 
 #include <optional>
 #include <string>
@@ -38,6 +39,7 @@ public:
     virtual std::vector<NpcServiceOption> GetServiceOptions(NpcServiceTarget const& target) const = 0;
     virtual void OnServiceInteraction(NpcServiceTarget const& target, uint32 index) = 0;
 
+    virtual NpcWizBang::Id GetWizBang(NpcServiceTarget const&) const { return NpcWizBang::Id::None; }
     virtual int32 GetPriority() const { return 0; }
     virtual std::optional<float> GetInteractionRadius() const { return std::nullopt; }
     virtual std::optional<std::string> GetNameKey() const { return std::nullopt; }

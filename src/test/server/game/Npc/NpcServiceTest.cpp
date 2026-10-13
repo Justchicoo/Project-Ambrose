@@ -31,6 +31,7 @@ namespace
 
         std::string_view GetName() const override { return _name; }
         int32 GetPriority() const override { return _priority; }
+        NpcWizBang::Id GetWizBang(NpcServiceTarget const&) const override { return Marker; }
 
         std::vector<NpcServiceOption> GetServiceOptions(NpcServiceTarget const& target) const override
         {
@@ -51,6 +52,7 @@ namespace
         std::optional<std::string> GetIcon() const override { return Icon; }
 
         std::vector<std::pair<uint64, uint32>> Picked;
+        NpcWizBang::Id Marker = NpcWizBang::Id::None;
         std::optional<float> Radius;
         std::optional<std::string> NameKey;
         std::optional<std::string> Icon;
@@ -260,4 +262,27 @@ TEST(NpcServiceMementoTest, OptionsCarryTheirFlatIndexAndTheNpcIsNamedByItsDispl
     QuestWireEncoder::ServiceMementoBase const custom = NpcServiceMemento::Build(NpcServiceMenu::Build(providers, Target), { "WC-NPCs_00000125", "GUI/Template.dds" });
     EXPECT_EQ(custom.NpcNameKey, "Custom_Name");
     EXPECT_EQ(custom.NpcIcon, "GUI/Custom.dds");
+}
+
+TEST(NpcServiceMementoTest, CompleteQuestGoalOutranksStartQuestAndProvidersWithoutOptionsHaveNoMarker)
+{
+    EXPECT_EQ(static_cast<uint32>(NpcWizBang::Id::CompleteQuestGoal), 432425611u);
+    EXPECT_EQ(static_cast<uint32>(NpcWizBang::Id::StartQuest), 660791182u);
+    EXPECT_EQ(static_cast<uint32>(NpcWizBang::Id::UnfinishedQuest), 747193091u);
+    RecordingProvider startQuest("start", { "OfferQuest" });
+    startQuest.Marker = NpcWizBang::Id::StartQuest;
+    RecordingProvider completeGoal("complete", { "CompleteGoal" });
+    completeGoal.Marker = NpcWizBang::Id::CompleteQuestGoal;
+    RecordingProvider noOptions("empty", {});
+    noOptions.Marker = NpcWizBang::Id::CompleteQuestGoal;
+
+    std::vector<NpcServiceProvider*> const providers{ &startQuest, &noOptions, &completeGoal };
+    EXPECT_EQ(NpcServiceMemento::GetWizBangId(NpcServiceMenu::Build(providers, Target)),
+        static_cast<uint32>(NpcWizBang::Id::CompleteQuestGoal));
+
+    std::vector<NpcServiceProvider*> const onlyStart{ &startQuest };
+    EXPECT_EQ(NpcServiceMemento::GetWizBangId(NpcServiceMenu::Build(onlyStart, Target)), static_cast<uint32>(NpcWizBang::Id::StartQuest));
+
+    std::vector<NpcServiceProvider*> const onlyEmpty{ &noOptions };
+    EXPECT_EQ(NpcServiceMemento::GetWizBangId(NpcServiceMenu::Build(onlyEmpty, Target)), static_cast<uint32>(NpcWizBang::Id::None));
 }

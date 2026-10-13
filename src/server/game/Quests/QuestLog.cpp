@@ -83,6 +83,7 @@ QuestLogQuest const* QuestLog::Add(std::string_view quest, GuidGenerator& gids, 
         return nullptr;
     _quests.push_back({ *gid, std::string(quest), now, {} });
     _dirty = true;
+    MarkChanged();
     return &_quests.back();
 }
 
@@ -96,6 +97,7 @@ QuestLogGoal const* QuestLog::StartGoal(std::string_view quest, std::string_view
         return nullptr;
     entry->Goals.push_back({ *gid, std::string(goal), false, 0 });
     _dirty = true;
+    MarkChanged();
     return &entry->Goals.back();
 }
 
@@ -107,6 +109,7 @@ std::optional<uint32> QuestLog::IncrementGoal(std::string_view quest, std::strin
     uint32 constexpr most = std::numeric_limits<uint32>::max();
     entry->Count = by > most - entry->Count ? most : entry->Count + by;
     _dirty = true;
+    MarkChanged();
     return entry->Count;
 }
 
@@ -117,6 +120,7 @@ bool QuestLog::CompleteGoal(std::string_view quest, std::string_view goal)
         return false;
     entry->Complete = true;
     _dirty = true;
+    MarkChanged();
     return true;
 }
 
@@ -136,6 +140,7 @@ bool QuestLog::Remove(std::string_view quest)
         return false;
     _quests.erase(found);
     _dirty = true;
+    MarkChanged();
     return true;
 }
 
@@ -184,6 +189,7 @@ void QuestLog::SetQuestRegistry(std::string_view quest, std::string_view entry, 
         return;
     entries->second.insert_or_assign(std::string(entry), value);
     _dirty = true;
+    MarkChanged();
 }
 
 std::optional<double> QuestLog::GetRegistry(std::string_view entry) const
@@ -199,6 +205,7 @@ void QuestLog::SetRegistry(std::string_view entry, double value)
         return;
     _registry.insert_or_assign(std::string(entry), value);
     _dirty = true;
+    MarkChanged();
 }
 
 void QuestLog::SetHidden(std::string_view quest, bool hidden)
@@ -211,6 +218,7 @@ void QuestLog::SetHidden(std::string_view quest, bool hidden)
     else
         _hidden.erase(found);
     _dirty = true;
+    MarkChanged();
 }
 
 QuestLogQuest* QuestLog::FindMutable(std::string_view quest)

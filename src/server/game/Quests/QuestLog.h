@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A wizard's quest log: its active quests in the order it took them, each with the GID it keeps for life and its goals by their own GIDs, status and count, its per-quest registry, where a completed quest leaves 'Complete' = 1, its other registry entries and the quests it hid. Built from the stored rows, dropping with a warning each quest whose template is gone and each goal its quest no longer has, and turned back into rows under a save's revision; any change marks it for saving.
+ * A wizard's quest log: its active quests in the order it took them, each with the GID it keeps for life and its goals by their own GIDs, status and count, its per-quest registry, where a completed quest leaves 'Complete' = 1, its other registry entries and the quests it hid. Built from the stored rows, dropping with a warning each quest whose template is gone and each goal its quest no longer has, and turned back into rows under a save's revision; each state change marks it for saving and advances the revision NPC indicators observe.
  */
 
 #ifndef AMBROSE_QUESTLOG_H
@@ -67,15 +67,18 @@ public:
 
     bool IsDirty() const noexcept { return _dirty; }
     void MarkSaved() noexcept { _dirty = false; }
+    uint64 GetStateRevision() const noexcept { return _stateRevision; }
 
 private:
     QuestLogQuest* FindMutable(std::string_view quest);
     QuestLogGoal* FindGoalMutable(std::string_view quest, std::string_view goal);
+    void MarkChanged() noexcept { ++_stateRevision; }
 
     std::vector<QuestLogQuest> _quests;
     std::map<std::string, std::map<std::string, double, std::less<>>, std::less<>> _questRegistry;
     std::map<std::string, double, std::less<>> _registry;
     std::set<std::string, std::less<>> _hidden;
+    uint64 _stateRevision = 0;
     bool _dirty = false;
 };
 

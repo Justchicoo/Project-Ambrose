@@ -335,6 +335,7 @@ private:
     void ShowGameEffectsOf(GameSession const& other);
     bool IsNpcTemplate(uint32 templateId);
     void OfferNpcServices(MapObject const& npc);
+    void UpdateNpcWizBangs(std::chrono::steady_clock::time_point now);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
@@ -348,6 +349,10 @@ private:
     std::vector<VolumePresence> _volumePresence;
     NpcServiceRange _npcRange;
     std::map<uint32, bool> _npcTemplates;
+    std::map<uint64, uint32> _npcWizBangs;
+    std::optional<uint32> _npcWizBangMapId;
+    std::chrono::steady_clock::time_point _lastNpcWizBangResend;
+    uint64 _npcWizBangQuestRevision = 0;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
     std::atomic<uint64> _unhandled{ 0 };
