@@ -12,7 +12,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 
 - `python apps/codestyle/codestyle.py`: branding header on every file, and no other comments.
 - `python apps/ci/ci_local.py` runs CI's checks job over the commits the push would send: self-tests, forbidden files, findings, roadmap summary, commit trailers, and the track path check when `--branch` is given.
-- Build and run the tests the change touches. Run the full `ctest --preset <preset>` before the push that should turn green, into a log as ambrose-lean says, or leave it to CI's `ci:` legs.
+- Build and run the tests the change touches. Run the full `ctest --preset <preset>` before the push that should turn green, into a log as ambrose-lean says, or leave it to CI's Linux GCC leg.
 - For front-end changes, `npm run verify`.
 - For a CI fix, reproduce the failure first, then show the same check passing.
 - Every commit carries the AI attribution trailer. `ci_commit_trailer.py` refuses a commit without one.
@@ -21,7 +21,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 
 - Work in this order: merge conflicts, then red CI, then review comments. A red or conflicted head is never "waiting on review".
 - Fix the root cause. Never skip, disable or quarantine a test, push an empty commit, or close and reopen just to rerun CI.
-- Main has a required `checks` status. A branch named `milestone/<id>-<name>` gets the Linux GCC leg by itself. Other legs need a `ci:` label (`ci:windows-msvc-x64`, `ci:all`), which the maintainer's side adds when the change deserves it. While iterating, label one leg (`ci:linux-gcc` or `ci:windows-msvc-x64`); add `ci:all` only right before landing, and take it off a pull request another one supersedes, because every push re-runs all seven jobs.
+- Main has a required `checks` status. Every pull request that touches code gets the Linux GCC build and tests by itself, whatever its branch, and that leg is the landing gate. Do not add `ci:all` for landing: Windows and the sanitizer legs run on their schedule on main. Label one of them (`ci:windows-msvc-x64`, `ci:linux-gcc-asan`, `ci:linux-clang-tsan`) only when the change is platform-specific, such as Windows-only code, threading or memory handling, and take it off a pull request another one supersedes, because every push re-runs it.
 
 ## Reviewing a contributor's pull request
 

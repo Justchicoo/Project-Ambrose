@@ -193,24 +193,26 @@ class SelectLegsTests(unittest.TestCase):
 
     def test_pull_requests_build_labeled_legs_from_the_merge_base(self):
         now = at("2026-10-01T00:00:00Z")
-        git = FakeGit(["src/main.cpp"])
+        git = FakeGit(["doc/PANEL.md"])
         labeled = ci_select_legs.plan("pull_request", {"labels": '["ci:weekly", "bug", "ci:nonsense"]'}, now, git)
         self.assertEqual(labeled["legs"], ["windows-msvc-x64", "linux-gcc-asan", "linux-clang-tsan"])
         self.assertEqual(len(labeled["warnings"]), 1)
         self.assertTrue(git.merge_base)
-        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": '["CI:Linux-Clang", "Ci: weekly"]'}, now, FakeGit(["src/main.cpp"]))["legs"], ["windows-msvc-x64", "linux-clang", "linux-gcc-asan", "linux-clang-tsan"])
-        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "null"}, now, FakeGit(["src/main.cpp"]))["legs"], [])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": '["CI:Linux-Clang", "Ci: weekly"]'}, now, FakeGit(["README.md"]))["legs"], ["windows-msvc-x64", "linux-clang", "linux-gcc-asan", "linux-clang-tsan"])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "null"}, now, FakeGit(["doc/PANEL.md"]))["legs"], [])
         self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(["apps/ci/ci_build.py"]))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(None))["legs"], ["linux-gcc"])
 
-    def test_a_milestone_branch_builds_without_waiting_for_a_label(self):
+    def test_a_pull_request_touching_code_builds_linux_gcc_without_a_label(self):
         now = at("2026-10-01T00:00:00Z")
-        milestone = ci_select_legs.plan("pull_request", {"labels": "[]", "branch": "milestone/4.04-world-wire-math"}, now, FakeGit(["src/main.cpp"]))
-        self.assertEqual(milestone["legs"], ["linux-gcc"])
-        self.assertEqual(milestone["warnings"], [])
-        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]", "branch": "contrib/C-60-watcher"}, now, FakeGit(["src/main.cpp"]))["legs"], [])
-        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(["src/main.cpp"]))["legs"], [])
-        both = ci_select_legs.plan("pull_request", {"labels": '["ci:windows-msvc-x64"]', "branch": "milestone/16.01-file-binary"}, now, FakeGit(["src/main.cpp"]))
+        for path in ("src/main.cpp", "data/sql/updates/db_login/2026_09_24_00.sql", "cmake/Ambrose.cmake", "CMakeLists.txt", "CMakePresets.json", "vcpkg.json", ".github/workflows/core-build.yml"):
+            planned = ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit([path]))
+            self.assertEqual(planned["legs"], ["linux-gcc"], path)
+            self.assertEqual(planned["warnings"], [])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(["doc/ROADMAP.md", "apps/site/build.py", "README.md"]))["legs"], [])
+        both = ci_select_legs.plan("pull_request", {"labels": '["ci:windows-msvc-x64", "ci:linux-gcc"]'}, now, FakeGit(["src/main.cpp"]))
         self.assertEqual(both["legs"], ["windows-msvc-x64", "linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": '["ci:linux-gcc-asan"]'}, now, FakeGit(["src/main.cpp"]))["legs"], ["linux-gcc", "linux-gcc-asan"])
 
     def test_slot_dates_follow_the_cron_weekday(self):
         self.assertEqual(ci_select_legs.slot_date(ci_select_legs.SUNDAY_CRON, at("2026-10-05T01:00:00Z")), datetime.date(2026, 10, 4))

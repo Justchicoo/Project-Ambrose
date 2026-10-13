@@ -201,7 +201,7 @@
       "execution": {
         "noTestsAction": "error",
         "jobs": 4,
-        "timeout": 600
+        "timeout": 300
       }
     },
     {
@@ -214,7 +214,7 @@
       "execution": {
         "noTestsAction": "error",
         "jobs": 4,
-        "timeout": 600
+        "timeout": 300
       }
     },
     {
@@ -227,7 +227,7 @@
       "execution": {
         "noTestsAction": "error",
         "jobs": 4,
-        "timeout": 600
+        "timeout": 300
       }
     },
     {
@@ -240,7 +240,7 @@
       "execution": {
         "noTestsAction": "error",
         "jobs": 4,
-        "timeout": 600
+        "timeout": 300
       }
     },
     {
