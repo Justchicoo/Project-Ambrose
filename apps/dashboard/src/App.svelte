@@ -222,6 +222,9 @@
                                     <DropdownMenu.Item onSelect={() => (window.location.hash = "#two-factor")}
                                         ><ShieldCheckIcon />Two-factor sign-in</DropdownMenu.Item
                                     >
+                                    <DropdownMenu.Item onSelect={() => (window.location.hash = "#api-keys")}
+                                        ><KeyRoundIcon class="size-4" />API keys</DropdownMenu.Item
+                                    >
                                 {/if}
                                 <DropdownMenu.Separator />
                                 <DropdownMenu.Label class="text-xs font-normal text-muted-foreground">Theme</DropdownMenu.Label>
