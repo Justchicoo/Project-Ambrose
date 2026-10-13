@@ -1,9 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog, and fills the lookups by template, object name, tag, adjective and zone.
+ * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's stored RequirementList with the type dump it is given, a list it cannot read closing the quest and naming why, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog, and fills the lookups by template, object name, tag, adjective and zone.
  */
 
 #include "QuestStore.h"
+#include "RequirementObjects.h"
+
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <array>
@@ -56,12 +59,21 @@ bool QuestStore::IsLogicKind(std::string_view kind)
     return kind == KindAnd || kind == KindOr || kind == KindAdd;
 }
 
-std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::set<std::string, std::less<>> const& skipped)
+std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::set<std::string, std::less<>> const& skipped, TypeCatalogPtr const& catalog)
 {
     auto store = std::make_shared<QuestStore>();
     for (QuestTemplateRow const& row : rows.Quests)
-        if (!row.Name.empty() && !skipped.contains(row.Name))
-            store->_quests.try_emplace(row.Name, QuestInfo{ row, {}, {}, {}, 0 });
+    {
+        if (row.Name.empty() || skipped.contains(row.Name))
+            continue;
+        auto const [added, inserted] = store->_quests.try_emplace(row.Name, QuestInfo{ row, {}, {}, {}, 0, nullptr });
+        if (!inserted || row.Requirements.empty())
+            continue;
+        std::string problem;
+        added->second.Requirements = std::make_shared<RequirementTree const>(RequirementObjects::Decode(catalog, row.Requirements, problem));
+        if (!problem.empty())
+            store->_requirementProblems.push_back(fmt::format("quest {} is offered to no wizard, since {}", row.Name, problem));
+    }
 
     auto quest = [&store](std::string const& name) -> QuestInfo*
     {
