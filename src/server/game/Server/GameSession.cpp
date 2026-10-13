@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the Dynamods the triggers its arrival, walk and finished quest goals fire make for it, loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors and spawns, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -1395,32 +1395,71 @@ void GameSession::ArriveInVolumes()
 
 std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now, bool walkDoors)
 {
-    std::vector<ZoneNotifyText> texts;
-    std::vector<std::string> doors;
-    std::vector<ZoneDynaMod> mods;
+    std::vector<ResultSource> results;
     std::optional<WizardRequirementContext> facts;
     if (_player && _questLog)
         facts.emplace(RequirementFacts(*_questLog));
-    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts, &doors, sSettings.Get<bool>("Zone.DoorsIgnoreRequirements"), &mods,
+    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &results, sSettings.Get<bool>("Zone.DoorsIgnoreRequirements"),
         facts ? &*facts : nullptr);
     for (std::string const& trigger : fired)
         sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
-    ApplyDynaMods(mods);
-    for (ZoneNotifyText const& text : texts)
-    {
-        GameMessages::ClientNotifyText message;
-        message.NotifyText = text.Text;
-        message.Type = text.Type;
-        SendDmlMessage(message);
-        LOG_INFO("server.gamesession", "Session {} showed wizard {} the notify text {} of type {}", GetSessionId(), _worldGuid, Ambrose::ForLog(text.Text, 128), text.Type);
-    }
-    if (!fired.empty())
-        if (Map* const map = sMapMgr.Find(*_mapId))
-            sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, fired, _worldGuid, now,
-                std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
-    if (walkDoors && !doors.empty() && event != ZoneTriggerMgr::EnterZoneEvent)
-        WalkThroughDoor(doors);
+    RunResults(results, now, walkDoors && event != ZoneTriggerMgr::EnterZoneEvent);
     return fired;
+}
+
+std::size_t GameSession::RunResults(std::vector<ResultSource> const& sources, std::chrono::steady_clock::time_point now, bool walkDoors)
+{
+    static std::once_flag registered;
+    std::call_once(registered, &GameSession::RegisterResultHandlers);
+    std::size_t ran = 0;
+    for (ResultSource const& source : sources)
+        ran += sResultMgr.Run(source.Results, ResultContext{ this, _worldGuid, _mapId.value_or(0), _zonePath, source.Name, now });
+    std::vector<std::string> const spawns = std::exchange(_resultSpawns, {});
+    std::vector<std::string> const doors = std::exchange(_resultDoors, {});
+    if (!spawns.empty() && _mapId)
+        if (Map* const map = sMapMgr.Find(*_mapId))
+            sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, spawns, _worldGuid, now, std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
+    if (walkDoors && !doors.empty())
+        WalkThroughDoor(doors);
+    return ran;
+}
+
+void GameSession::RegisterResultHandlers()
+{
+    sResultMgr.Register(ZoneTriggerMgr::NotifyTextClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::string error;
+        if (std::optional<ZoneNotifyText> const text = ZoneTriggerMgr::NotifyTextOf(result, error))
+            context.Session->ShowNotifyText(*text);
+    });
+    sResultMgr.Register(ZoneTriggerMgr::DynaModClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::string error;
+        std::optional<ZoneDynaMod> mod = ZoneTriggerMgr::DynaModOf(result, error);
+        if (!mod)
+            return;
+        if (mod->Zone.empty())
+            mod->Zone = context.Zone;
+        context.Session->ApplyDynaMods({ *mod });
+    });
+    sResultMgr.Register(ZoneTriggerMgr::TeleportClass, [](PropertyObject const&, ResultContext const& context) { context.Session->_resultDoors.push_back(context.Source); });
+    auto const spawn = [](PropertyObject const&, ResultContext const& context)
+    {
+        std::vector<std::string>& spawns = context.Session->_resultSpawns;
+        if (std::find(spawns.begin(), spawns.end(), context.Source) == spawns.end())
+            spawns.push_back(context.Source);
+    };
+    sResultMgr.Register(SpawnerMgr::SpawnResultClass, spawn);
+    sResultMgr.Register(SpawnerMgr::DespawnResultClass, spawn);
+}
+
+void GameSession::ShowNotifyText(ZoneNotifyText const& text)
+{
+    GameMessages::ClientNotifyText message;
+    message.NotifyText = text.Text;
+    message.Type = text.Type;
+    SendDmlMessage(message);
+    LOG_INFO("server.gamesession", "Session {} showed wizard {} the notify text {} of type {}", GetSessionId(), _worldGuid, Ambrose::ForLog(text.Text, 128), text.Type);
 }
 
 void GameSession::PostQuestEvents()

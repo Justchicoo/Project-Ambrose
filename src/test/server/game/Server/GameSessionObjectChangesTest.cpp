@@ -5,6 +5,7 @@
 
 #include "GameTestHarness.h"
 #include "PathWalkers.h"
+#include "ResultFixtures.h"
 #include "ZoneTriggerMgr.h"
 
 #include <gtest/gtest.h>
@@ -55,7 +56,7 @@ namespace
             trigger.Name = "Trigger Ghost Arrives";
             trigger.TriggerMax = 1;
             trigger.FireEvents = { "TEST1" };
-            trigger.NotifyTexts = { { "WizardPOI_00000001", 1 } };
+            trigger.Results = { ResultFixtures::NotifyText("WizardPOI_00000001", 1) };
             ZoneTriggerData data;
             data.Triggers.push_back(std::move(trigger));
             std::map<std::string, ZoneTriggerData, std::less<>> zones;

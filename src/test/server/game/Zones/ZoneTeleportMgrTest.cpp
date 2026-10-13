@@ -54,9 +54,9 @@ TEST(ZoneTeleportTest, TwoDoorsOnOneEventSendTheWizardThroughOnlyTheFirstWithADe
 
 TEST(ZoneTeleportTest, ADoorBehindRequirementsFiresOnlyWhileDoorsMayIgnoreThem)
 {
-    ZoneTrigger gate{ 28, "TeleportToRavenwoodTrigger", -1, 0.0f, true, { "Enter_Activator Volume (2)" }, {}, true, {} };
-    ZoneTrigger dialog{ 16, "Trigger OnDeathFirstTime", -1, 0.0f, true, { "Enter_Activator Volume (2)" }, {}, false, {} };
-    ZoneTrigger library{ 25, "TeleportToLibraryTrigger", -1, 0.0f, false, { "Enter_Activator Volume (5)" }, {}, true, {} };
+    ZoneTrigger gate{ 28, "TeleportToRavenwoodTrigger", -1, 0.0f, true, { "Enter_Activator Volume (2)" }, true, {} };
+    ZoneTrigger dialog{ 16, "Trigger OnDeathFirstTime", -1, 0.0f, true, { "Enter_Activator Volume (2)" }, false, {} };
+    ZoneTrigger library{ 25, "TeleportToLibraryTrigger", -1, 0.0f, false, { "Enter_Activator Volume (5)" }, true, {} };
     ZoneTriggers triggers({ gate, dialog, library });
     auto const now = ZoneTriggers::Clock::now();
 
