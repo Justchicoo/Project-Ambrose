@@ -231,7 +231,7 @@ Quest availability, goal activation, dialog entries, spawns and triggers can all
 
 - [ ] refs over WC_Ravenwood lists WC-STRM-C03-003 and KillColossus of WC-BAL-C02-001; WC_Hub lists WC-MAIN-C01-003_Goal0
 - [ ] validate exits nonzero on a misspelled persona and suggests closest object_name
-- [ ] import loads a CSR package's quests into a local world DB, each naming its source; no export into data/sql takes them
+- [x] import loads a CSR package's quests into a local world DB, each naming its source; no export into data/sql takes them (`client quests --import --wad <package> --world-db <db>`, the import taught to the client tool rather than a separate questtool: on a world database dbimport set up with object_template extracted from r806919, the maintainer's CSR package gave 2,548 clean quests, every row of all ten quest tables carrying source `package:CSR.wad` beside the one authored quest, a second run replaced them with the same counts, and a game server start then loaded 2,549 quests and 7,798 goals with 0 validation errors; `QuestPackageTest.TheScriptReplacesOnlyThePackagesRowsAndMarksEachWithItsSource` checks the script deletes only rows of that source and marks every inserted row with it. No tool exports world rows into data/sql yet, and the source column is what such an export filters on)
 
 ### Detailed spec from QST-22: Quest authoring toolchain and reference index
 
@@ -260,7 +260,7 @@ A contributor can write a new quest as a dated SQL update that uses only keys an
 - [ ] questtool refs over WizardCity-WC_Ravenwood.wad lists quest WC-STRM-C03-003 and goal KillColossus of WC-BAL-C02-001. Over WizardCity-WC_Hub.wad it lists WC-MAIN-C01-003 / WC-MAIN-C01-003_Goal0.
 - [ ] questtool validate exits nonzero on a fixture with a misspelled persona name and prints the closest object_name.
 - [ ] A contributor following doc/QuestAuthoring.md scaffolds, edits, validates, runs .reload quest_template and accepts the quest in the client, with no server restart.
-- [ ] questtool import over a CSR package loads its quests into a local world database, each row naming the package as its source, and no export into data/sql writes one of them.
+- [x] questtool import over a CSR package loads its quests into a local world database, each row naming the package as its source, and no export into data/sql writes one of them. (`client quests --import --wad <package> --world-db <db>`, the import taught to the client tool rather than a separate questtool: on a world database dbimport set up with object_template extracted from r806919, the maintainer's CSR package gave 2,548 clean quests, every row of all ten quest tables carrying source `package:CSR.wad` beside the one authored quest, a second run replaced them with the same counts, and a game server start then loaded 2,549 quests and 7,798 goals with 0 validation errors; `QuestPackageTest.TheScriptReplacesOnlyThePackagesRowsAndMarksEachWithItsSource` checks the script deletes only rows of that source and marks every inserted row with it. No tool exports world rows into data/sql yet, and the source column is what such an export filters on)
 
 **Risks**
 
