@@ -1472,9 +1472,40 @@ class FakeDevServer:
 UPDATED = ["No Wizard101 install is in use, so client messages are logged by service and order only"] + [f"INFO  [sql.updates] The {kind} database is up to date" for kind in ("login", "characters", "world")]
 
 
+FIXTURE_READ = ["INFO  [server.messages] Loaded message definitions generation 1: 3 protocols, 37 message ids, 30 declarations, 0 warning(s)",
+                "INFO  [server.types] Loaded type dump generation 1 from /run/fixture-install/r0.AmbroseFixture.json in 4 ms: 35 property classes, 24 typed views bound"]
+
+
 class FakeDevLogin(FakeDevServer):
     WHAT = "the login server"
+    READY_LINES = FIXTURE_READ + [f"INFO  [sql.updates] The {kind} database is up to date" for kind in ("login", "characters")] + ["Account devrun created with id 1"]
+
+
+class FakeHeadlessLogin(FakeDevLogin):
     READY_LINES = UPDATED + ["Account devrun created with id 1"]
+
+
+class FakeUnitTests:
+    def __init__(self, fixture=True, probe=True):
+        self.fixture, self.probe = fixture, probe
+        self.calls = []
+
+    def __call__(self, command, env=None, capture_output=False, text=False, timeout=None):
+        case = command[-1].split("=", 1)[1]
+        self.calls.append((command, case, dict(env), capture_output, text, timeout))
+        if case == ci_dev_run.FIXTURE_CASE:
+            root = env["AMBROSE_FIXTURE_INSTALL"]
+            if not self.fixture:
+                return SimpleNamespace(returncode=1, stdout="LoginProbeTest.cpp:1: Failure\ncannot create the fixture folder\n[  FAILED  ] 1 test\n", stderr="")
+            return SimpleNamespace(returncode=0, stdout=f"fixture install: {root}\nfixture revision: r0.AmbroseFixture\nfixture type dump: {root}/r0.AmbroseFixture.json\n[  PASSED  ] 1 test.\n",
+                                   stderr="")
+        steps = [f"login probe: ok connect in 1 ms: 127.0.0.1:{env['AMBROSE_PROBE_PORT']} accepted a connection", "login probe: ok handshake in 2 ms: accepted session 1",
+                 f"login probe: ok authenticate in 9 ms: {env['AMBROSE_PROBE_ACCOUNT']} signed in as user 1"]
+        if not self.probe:
+            steps.append("login probe: FAILED admit in 20000 ms: MSG_USER_ADMIT_IND did not arrive within 20000 ms")
+            return SimpleNamespace(returncode=1, stdout="\n".join(steps) + "\n[  FAILED  ] 1 test\n", stderr="")
+        steps += ["login probe: ok admit in 1 ms: admitted with status 0 at queue position 0", "login probe: ok character list in 3 ms: Ambrose listed 0 character(s) with 0 purchased slot(s)"]
+        return SimpleNamespace(returncode=0, stdout="\n".join(steps) + "\n[  PASSED  ] 1 test.\n", stderr="")
 
 
 class FakeDevGame(FakeDevServer):
@@ -1595,11 +1626,11 @@ class DevRunTests(unittest.TestCase):
         game = type("Game", (FakeDevGame,), {"ready": game_ready})
         return SimpleNamespace(LoginServer=FakeDevLogin, GameServer=game, Scratch=FakeScratch, paths=SimpleNamespace(program=lambda name: name))
 
-    def boot(self, folder, targets, driver, environment=None):
+    def boot(self, folder, targets, driver, environment=None, runner=None):
         environment = {"AMBROSE_TEST_DB": "127.0.0.1;3306;root;root;ambrose_test", "AMBROSE_CLIENT_DIR": "C:/Wizard101"} if environment is None else environment
         arguments = SimpleNamespace(binaries=folder, targets=targets)
         with mock.patch("os.path.isfile", side_effect=lambda path: True), mock.patch("sys.stdout", io.StringIO()) as printed:
-            code = ci_dev_run.servers(arguments, environment, driver, work=folder)
+            code = ci_dev_run.servers(arguments, environment, driver, work=folder, runner=runner or FakeUnitTests())
         return code, printed.getvalue()
 
     def test_the_server_targets_boot_the_login_server_under_the_game_server(self):
@@ -1633,34 +1664,91 @@ class DevRunTests(unittest.TestCase):
         self.assertNotIn("FAIL", printed)
         self.assertEqual(FakeDevServer.log, [("databases", "drop"), ("the login server", "made"), ("the login server", "start"), ("the game server", "made"),
                                              ("the game server", "start"), ("the game server", "stop"), ("the login server", "stop"), ("databases", "drop")])
-        for wanted in ("the login server ready", "the login server updated the world database", "the login server's admin API health", "the login server offers a session",
-                       "the login server's console", "the game server's console: The world has ticked 12", "the game server attached to the login database",
+        for wanted in ("ok   the fixture install", "the login server ready", "ok   the login server serves the fixture install: it reads the fixture install of r0.AmbroseFixture",
+                       "24 typed views bound", "the login server updated the characters database", "the game server updated the world database", "the login server's admin API health",
+                       "the login server offers a session", "the login server's console", "the game server's console: The world has ticked 12",
+                       "the game server attached to the login database", "ok   the login probe signed in and listed the characters", "Ambrose listed 0 character(s)",
                        "the game server stopped", "the scratch databases dropped"):
             self.assertIn(wanted, printed)
+        self.assertNotIn("the login server updated the world database", printed)
         self.assertIn("### Dev run of the servers", written)
 
-    def test_the_servers_are_given_no_install_their_own_ports_and_their_own_data_folder(self):
+    def test_the_login_server_reads_the_fixture_install_and_the_game_server_none_each_on_its_own_ports_and_data_folder(self):
         made = []
         driver = self.driver()
 
-        class Login(FakeDevLogin):
-            def __init__(self, *arguments, **options):
-                super().__init__(*arguments, **options)
-                made.append(self)
+        def recorded(base):
+            class Recorded(base):
+                def __init__(self, *arguments, **options):
+                    super().__init__(*arguments, **options)
+                    made.append(self)
+            return Recorded
 
-        driver.LoginServer = Login
+        driver.LoginServer = recorded(FakeDevLogin)
+        driver.GameServer = recorded(driver.GameServer)
+        runner = FakeUnitTests()
         with tempfile.TemporaryDirectory() as folder:
-            code, printed = self.boot(folder, "loginserver", driver)
+            code, printed = self.boot(folder, "gameserver", driver, runner=runner)
         self.assertEqual(code, 0, printed)
-        login = made[0]
+        login, game = made
+        fixture = os.path.join(folder, "fixture-install")
         self.assertEqual(login.program, os.path.join(folder, "loginserver"))
         self.assertEqual(login.defaults, os.path.join(folder, "loginserver.conf.dist"))
+        self.assertEqual(login.settings, [f"ClientDir={fixture}", f"TypeDumpPath={fixture}/r0.AmbroseFixture.json", "Setup.Mode=off", "WorldDatabaseInfo="])
         for wanted in ("ClientDir=", "TypeDumpPath=", "Setup.Mode=off"):
-            self.assertIn(wanted, login.settings)
+            self.assertIn(wanted, game.settings)
         self.assertNotEqual(login.port, login.admin_port)
         self.assertNotIn("AMBROSE_CLIENT_DIR", login.environment)
         self.assertEqual(login.environment["XDG_DATA_HOME"], os.path.join(folder, "data"))
-        self.assertNotIn(("the game server", "made"), FakeDevServer.log)
+        unit_tests = os.path.join(folder, "unit_tests")
+        (write, written_case, write_env, captured, text, timeout), (probe, probe_case, probe_env, *_) = runner.calls
+        self.assertEqual(write, [unit_tests, "--gtest_also_run_disabled_tests", f"--gtest_filter={ci_dev_run.FIXTURE_CASE}"])
+        self.assertTrue(captured and text)
+        self.assertEqual(timeout, ci_dev_run.CASE_TIMEOUT)
+        self.assertEqual(write_env["AMBROSE_FIXTURE_INSTALL"], fixture)
+        self.assertEqual(probe, [unit_tests, "--gtest_also_run_disabled_tests", f"--gtest_filter={ci_dev_run.PROBE_CASE}"])
+        self.assertEqual(probe_env["AMBROSE_PROBE_PORT"], str(login.port))
+        self.assertEqual(probe_env["AMBROSE_PROBE_ACCOUNT"], ci_dev_run.ACCOUNT)
+        self.assertGreaterEqual(len(probe_env["AMBROSE_PROBE_PASSWORD"]), 12)
+        self.assertNotIn(probe_env["AMBROSE_PROBE_PASSWORD"], printed)
+
+    def test_a_fixture_install_that_cannot_be_written_boots_the_login_server_headless_skips_the_probe_and_fails(self):
+        driver = self.driver()
+        driver.LoginServer = FakeHeadlessLogin
+        runner = FakeUnitTests(fixture=False)
+        with tempfile.TemporaryDirectory() as folder:
+            code, printed = self.boot(folder, "loginserver", driver, runner=runner)
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL the fixture install: LoginProbeLive.DISABLED_WriteFixtureInstall exited 1: LoginProbeTest.cpp:1: Failure", printed)
+        self.assertIn("ok   the login server runs headless", printed)
+        self.assertIn("ok   the login server updated the world database", printed)
+        self.assertNotIn("login probe", printed)
+        self.assertEqual([case for _, case, *_ in runner.calls], [ci_dev_run.FIXTURE_CASE])
+        self.assertEqual(FakeDevServer.log[-2:], [("the login server", "stop"), ("databases", "drop")])
+
+    def test_a_probe_that_stops_part_way_fails_the_run_naming_its_steps(self):
+        with tempfile.TemporaryDirectory() as folder:
+            code, printed = self.boot(folder, "loginserver", self.driver(), runner=FakeUnitTests(probe=False))
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL the login probe signed in and listed the characters: LoginProbeLive.DISABLED_SignInAndListCharacters exited 1: ", printed)
+        self.assertIn("login probe: FAILED admit in 20000 ms: MSG_USER_ADMIT_IND did not arrive", printed)
+        self.assertEqual(FakeDevServer.log[-2:], [("the login server", "stop"), ("databases", "drop")])
+
+    def test_the_fixture_reports_and_the_login_servers_reading_of_it_are_checked(self):
+        with self.assertRaisesRegex(RuntimeError, "type dump was not reported"):
+            ci_dev_run.written_fixture("fixture install: /x\nfixture revision: r0.AmbroseFixture\n")
+        fixture = ci_dev_run.written_fixture("noise\nfixture install: /x\nfixture revision: r0.AmbroseFixture\nfixture type dump: /x/r0.AmbroseFixture.json\n")
+        self.assertEqual((fixture.root, fixture.revision, fixture.dump), ("/x", "r0.AmbroseFixture", "/x/r0.AmbroseFixture.json"))
+        server = SimpleNamespace(WHAT="the login server", console=FakeConsole(["No Wizard101 install is in use, so client messages are logged by service and order only"]))
+        with self.assertRaisesRegex(RuntimeError, "runs without an install"):
+            ci_dev_run.serves_fixture(server, fixture)
+        server.console = FakeConsole(FIXTURE_READ[:1])
+        with self.assertRaisesRegex(RuntimeError, "did not say it loaded the fixture's type dump"):
+            ci_dev_run.serves_fixture(server, fixture)
+        server.console = FakeConsole(FIXTURE_READ)
+        self.assertIn("24 typed views bound", ci_dev_run.serves_fixture(server, fixture))
+        with self.assertRaisesRegex(RuntimeError, "did not pass"):
+            ci_dev_run.run_case(lambda *a, **k: SimpleNamespace(returncode=0, stdout="[  PASSED  ] 0 tests.\n", stderr=""), "unit_tests", ci_dev_run.PROBE_CASE, {})
 
     def test_a_server_that_never_gets_ready_fails_the_run_and_everything_is_still_stopped_and_dropped(self):
         with tempfile.TemporaryDirectory() as folder:
