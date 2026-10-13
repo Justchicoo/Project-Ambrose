@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache, which pull requests restore and only pushes to main, the schedule and manual runs save, each build banking its vcpkg and compiler caches even when a newer push cancels it, and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, the panel's end-to-end specs against its supervisor and patchserver, and the login and game servers booted with no client install against scratch databases.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache, which pull requests restore and only pushes to main, the schedule and manual runs save, each build banking its vcpkg and compiler caches even when a newer push cancels it, and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, the panel's end-to-end specs against its supervisor, relinked with the panel just built, and patchserver, keeping a failed run's Playwright results as an artifact, and the login and game servers booted with no client install against scratch databases.
 name: core-build
 
 on:
@@ -329,9 +329,19 @@ jobs:
         timeout-minutes: 5
         run: npx playwright install --with-deps chromium
       - name: Dev run of the panel, supervisor and patchserver
+        id: devrun-panel
         if: ${{ !cancelled() && steps.devrun-browser.outcome == 'success' }}
         timeout-minutes: 10
-        run: python apps/ci/ci_dev_run.py panel --binaries build/linux-gcc/bin/Debug
+        run: python apps/ci/ci_dev_run.py panel --binaries build/linux-gcc/bin/Debug --build-dir build/linux-gcc --config Debug
+      - name: Keep the dev run's failed specs
+        if: ${{ !cancelled() && steps.devrun-panel.outcome == 'failure' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-run-panel-results
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Install the dev run's database driver
         id: devrun-servers-setup
         if: ${{ !cancelled() && steps.configure.outcome == 'success' && matrix.leg == 'linux-gcc' && (needs.select.outputs.dev_run_loginserver == 'true' || needs.select.outputs.dev_run_gameserver == 'true') }}

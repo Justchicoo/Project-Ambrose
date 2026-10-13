@@ -1505,10 +1505,26 @@ class DevRunTests(unittest.TestCase):
     def test_the_panel_run_refuses_missing_binaries_instead_of_skipping_every_spec(self):
         ran = []
         with tempfile.TemporaryDirectory() as folder, mock.patch("sys.stderr", io.StringIO()) as errors:
-            code = ci_dev_run.main(["panel", "--binaries", folder], {}, runner=lambda *a, **k: ran.append(a), which=lambda name: name)
+            code = ci_dev_run.main(["panel", "--binaries", folder, "--build-dir", folder, "--config", "Debug"], {}, runner=lambda *a, **k: ran.append(a),
+                                   which=lambda name: name)
         self.assertEqual(code, 1)
         self.assertEqual(ran, [])
         self.assertIn("supervisor", errors.getvalue())
+
+    def test_the_panel_run_compiles_no_supervisor_from_a_panel_build_that_left_no_page(self):
+        calls = []
+
+        def runner(command, cwd, env):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory() as folder, mock.patch("sys.stdout", io.StringIO()), mock.patch("sys.stderr", io.StringIO()) as errors:
+            with mock.patch("os.path.isfile", side_effect=lambda path: not path.endswith("index.html")):
+                code = ci_dev_run.main(["panel", "--binaries", folder, "--build-dir", folder, "--config", "Debug"], {}, runner=runner,
+                                       which=lambda name: "/usr/bin/" + name)
+        self.assertEqual(code, 1)
+        self.assertEqual([command[1:] for command in calls], [["run", "build", "--workspace", "apps/dashboard"]])
+        self.assertIn("index.html", errors.getvalue())
 
     def test_the_panel_run_points_the_specs_at_the_built_binaries(self):
         calls = []
@@ -1519,9 +1535,12 @@ class DevRunTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as folder:
             with mock.patch("os.path.isfile", side_effect=lambda path: True), mock.patch("sys.stdout", io.StringIO()):
-                code = ci_dev_run.main(["panel", "--binaries", folder], {"PATH": "/bin"}, runner=runner, which=lambda name: "/usr/bin/" + name)
+                code = ci_dev_run.main(["panel", "--binaries", folder, "--build-dir", folder, "--config", "Debug"], {"PATH": "/bin"}, runner=runner,
+                                       which=lambda name: "/usr/bin/" + name)
         self.assertEqual(code, 0)
-        self.assertEqual([command[1:] for command, _ in calls], [["run", "build", "--workspace", "apps/dashboard"], ["playwright", "test", "--project", "e2e"]])
+        self.assertEqual([command[1:] for command, _ in calls], [["run", "build", "--workspace", "apps/dashboard"],
+                                                                 ["--build", folder, "--config", "Debug", "--target", "supervisor"],
+                                                                 ["playwright", "test", "--project", "e2e"]])
         environment = calls[-1][1]
         self.assertEqual(environment["AMBROSE_SUPERVISOR"], ci_dev_run.program(folder, "supervisor"))
         self.assertEqual(environment["AMBROSE_PANEL_APP"], ci_dev_run.program(folder, "patchserver"))
@@ -1632,7 +1651,8 @@ class DevRunTests(unittest.TestCase):
             presets = {preset["name"]: preset for preset in json.load(handle)["buildPresets"]}
         leg = ci_select_legs.LEGS["linux-gcc"]
         binaries = f"build/{leg['configure']}/bin/{presets[leg['build']]['configuration']}"
-        self.assertIn(f"run: python apps/ci/ci_dev_run.py panel --binaries {binaries}", workflow)
+        self.assertIn(f"run: python apps/ci/ci_dev_run.py panel --binaries {binaries} --build-dir build/{leg['configure']} --config {presets[leg['build']]['configuration']}",
+                      workflow)
         self.assertIn("dev_run_panel: ${{ steps.devrun.outputs.panel }}", workflow)
         self.assertIn("run: python3 apps/ci/ci_dev_run.py select --from-github-env", workflow)
         self.assertIn("matrix.leg == 'linux-gcc' && needs.select.outputs.dev_run_panel == 'true'", workflow)
