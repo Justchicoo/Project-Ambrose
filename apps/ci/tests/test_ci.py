@@ -539,6 +539,16 @@ class BuildStageTests(unittest.TestCase):
             self.assertEqual(ci_build.main(["--configure-preset", "linux-gcc", "--build-preset", "linux-gcc-debug", "--stage", "build-test", "--test-jobs", "1"]), 0)
         self.assertEqual(ran, [["cmake", "--build", "--preset", "linux-gcc-debug"], ["ctest", "--preset", "linux-gcc-debug"]])
 
+    def test_failed_tests_run_once_more_at_the_end_with_their_output(self):
+        ran = []
+        def runner(command, **_):
+            ran.append(command)
+            if command[0] == "ctest":
+                raise subprocess.CalledProcessError(8, command)
+        with mock.patch.dict(os.environ, {"VCPKG_ROOT": "vcpkg"}), mock.patch.object(ci_build, "run", side_effect=runner):
+            self.assertEqual(ci_build.main(["--configure-preset", "linux-gcc", "--build-preset", "linux-gcc-debug", "--stage", "build-test", "--test-jobs", "4"]), 8)
+        self.assertEqual(ran[1:], [["ctest", "--preset", "linux-gcc-debug", "--parallel", "4"], ["ctest", "--preset", "linux-gcc-debug", "--rerun-failed", "--output-on-failure"]])
+
     def test_tests_run_on_every_core_unless_told_otherwise(self):
         ran = []
         with mock.patch.dict(os.environ, {"VCPKG_ROOT": "vcpkg"}), mock.patch.object(ci_build, "run", side_effect=lambda command, **_: ran.append(command)),                 mock.patch.object(ci_build.os, "cpu_count", return_value=12):

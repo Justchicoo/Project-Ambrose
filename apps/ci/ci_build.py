@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Sets up pinned vcpkg when asked, then configures, builds, and tests one preset, in one go or one stage at a time, for CI or local verification, configuring once more when vcpkg could not download a port's source, running the tests in parallel on every core unless told otherwise; or brings a long-lived clone to a commit of another repository, keeping its build trees so each build is incremental, and runs several presets one after another as legs, going on past a failed leg and ending with how long each leg spent configuring, building and testing; or builds one target of an already configured tree and runs only the tests its own program holds, at the job counts a quick bus job sets; or profiles a tree already built, from Ninja's log and CTest's cost data, printing where its build and test time went.
+# Sets up pinned vcpkg when asked, then configures, builds, and tests one preset, in one go or one stage at a time, for CI or local verification, configuring once more when vcpkg could not download a port's source, running the tests in parallel on every core unless told otherwise and the failed ones once more at the end so their output closes the log; or brings a long-lived clone to a commit of another repository, keeping its build trees so each build is incremental, and runs several presets one after another as legs, going on past a failed leg and ending with how long each leg spent configuring, building and testing; or builds one target of an already configured tree and runs only the tests its own program holds, at the job counts a quick bus job sets; or profiles a tree already built, from Ninja's log and CTest's cost data, printing where its build and test time went.
 import argparse
 import json
 import os
@@ -60,6 +60,15 @@ def run_step(command, environment, runner=None, failed=None):
             raise
         print("vcpkg could not download a port's source; configuring afresh once more, restoring every port already built from the binary cache", flush=True)
         runner(command + ["--fresh"], environment=environment)
+
+
+def repeat_failed(command, environment, runner=None):
+    runner = runner or run
+    print("the failed tests once more, so their output ends the log:", flush=True)
+    try:
+        runner(command[:3] + ["--rerun-failed", "--output-on-failure"], environment=environment)
+    except subprocess.CalledProcessError:
+        pass
 
 
 def prepare_binary_cache(environment):
@@ -341,7 +350,12 @@ def main(argv=None):
 
     try:
         for command in commands(args):
-            run_step(command, environment)
+            try:
+                run_step(command, environment)
+            except subprocess.CalledProcessError:
+                if command[0] == "ctest":
+                    repeat_failed(command, environment)
+                raise
     except subprocess.CalledProcessError as error:
         return error.returncode or 1
     return 0
