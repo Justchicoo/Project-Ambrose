@@ -1555,6 +1555,20 @@ class DevRunTests(unittest.TestCase):
         self.assertEqual([command[1:] for command in calls], [["run", "build", "--workspace", "apps/dashboard"]])
         self.assertIn("index.html", errors.getvalue())
 
+    def test_a_failed_spec_run_prints_each_failure_page_into_the_log(self):
+        with tempfile.TemporaryDirectory() as folder:
+            page = os.path.join(folder, "panel-signing-in-e2e")
+            os.makedirs(page)
+            with open(os.path.join(page, "error-context.md"), "w", encoding="utf-8") as handle:
+                handle.write("- heading \"Overview\"\n- text: Not answering\n")
+            with open(os.path.join(page, "trace.zip"), "w", encoding="utf-8") as handle:
+                handle.write("binary")
+            with mock.patch("sys.stdout", io.StringIO()) as printed:
+                ci_dev_run.print_failure_pages(folder)
+        self.assertIn(os.path.join("panel-signing-in-e2e", "error-context.md"), printed.getvalue())
+        self.assertIn("text: Not answering", printed.getvalue())
+        self.assertNotIn("binary", printed.getvalue())
+
     def test_the_panel_run_points_the_specs_at_the_built_binaries(self):
         calls = []
 
