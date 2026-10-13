@@ -1616,7 +1616,7 @@ namespace
         DWORD const creation = CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT;
         LPCWSTR const application = command.Search ? nullptr : command.Program.c_str();
         LPCWSTR const directory = command.WorkingDirectory.empty() ? nullptr : command.WorkingDirectory.c_str();
-        std::vector<wchar_t> const environment = BuildEnvironmentBlock(options.Environment);
+        std::vector<wchar_t> environment = BuildEnvironmentBlock(options.Environment);
         LPVOID const environmentBlock = environment.empty() ? nullptr : environment.data();
         PROCESS_INFORMATION information{};
         std::wstring commandBuffer = command.CommandBuffer;
