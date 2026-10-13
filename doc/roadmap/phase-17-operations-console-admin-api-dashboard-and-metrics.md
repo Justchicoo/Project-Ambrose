@@ -974,11 +974,11 @@ Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as 
 
 **Acceptance**
 
-- [ ] Adding a port another program holds is refused with the port named
+- [x] Adding a port another program holds is refused with the port named (PortAllocationTest.AddingAPortAnotherProgramHoldsIsRefusedWithThePortNamed)
 - [ ] Moving gameserver to a free port rebinds it without a restart, and a port that fails to bind leaves the old listener serving
-- [ ] Bulk-deleting a selection that includes an assigned allocation deletes nothing and names the assigned one
+- [x] Bulk-deleting a selection that includes an assigned allocation deletes nothing and names the assigned one (PortAllocationTest.BulkDeleteWithAnAssignedAllocationDeletesNothingAndNamesIt)
 - [ ] An IPv6 bind address is saved and used
-- [ ] A range of 1000 ports is accepted and one of 1001 is refused, with every added port proven free
+- [x] A range of 1000 ports is accepted and one of 1001 is refused, with every added port proven free (PortAllocationTest.RangeOf1000PortsIsAcceptedAnd1001IsRefused)
 
 ## 17.30 Database hosts and credential rotation
 

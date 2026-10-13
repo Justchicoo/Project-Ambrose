@@ -95,6 +95,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
 | `Attach.Timeout` | unsigned | 30 s | from 1 to 3600 s | next connection or operation | gameserver | normal | How long a new game connection may go without MSG_ATTACH before it is closed. |
+| `BindIP` | string | 0.0.0.0 | at most 45 bytes | live | gameserver, loginserver, patchserver | normal | The address the app's client listener binds to; changing it rebinds the listener live, and a bind the operating system refuses keeps the old listener serving. |
+| `LoginServerPort` | unsigned | 12000 | from 1 to 65535 | live | loginserver | normal | The port the login server listens on for game clients; changing it rebinds the listener live, and a port another program holds is refused with the port named. |
 | `Network.AcceptRatePerSecond` | unsigned | 50 | from 1 to 100000 | live | gameserver, loginserver | normal | How many new client connections one IP address may establish per second. |
 | `Network.DroppedMessageBurst` | unsigned | 64 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How many messages a connection may send that are dropped unread before a drop counts as a strike. |
 | `Network.DroppedMessagesPerSecond` | unsigned | 16 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How fast that allowance of dropped messages refills, per second. |
@@ -112,6 +114,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Network.RateLimit.PerSecond` | unsigned | 50 | from 1 to 100000 | live | gameserver, loginserver | normal | How fast a session's inbound frame allowance refills, per second. |
 | `Network.SendQueueHighWater` | unsigned | 16777216 bytes | from 1048576 to 1073741824 bytes | live | gameserver, loginserver | normal | How many bytes one connection may have waiting to be sent before it is closed; applies to existing connections immediately. |
 | `Network.SessionAcceptTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a new connection may take to finish its handshake. |
+| `PatchServerPort` | unsigned | 12500 | from 1 to 65535 | live | patchserver | normal | The port the patch server listens on for patch clients; changing it rebinds the listener live, and a port another program holds is refused with the port named. |
+| `WorldServerPort` | unsigned | 12333 | from 1 to 65535 | live | gameserver | normal | The port the game server listens on for game clients; changing it rebinds the listener live, and a port another program holds is refused with the port named. |
 
 ## Patching
 
