@@ -20,7 +20,7 @@ std::vector<NpcServiceOption> ScriptNpcProvider::GetServiceOptions(NpcServiceTar
     try
     {
         for (NpcServiceChoice& choice : _script.GetServiceOptions(target.Wizard, target.Npc))
-            options.push_back({ std::move(choice.ServiceName), std::move(choice.IconKey), std::move(choice.DisplayKey) });
+            options.push_back({ std::move(choice.ServiceName), std::move(choice.IconKey), std::move(choice.DisplayKey), std::nullopt });
     }
     catch (std::exception const& failure)
     {

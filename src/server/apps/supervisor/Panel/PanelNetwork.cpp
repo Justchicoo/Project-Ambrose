@@ -130,8 +130,8 @@ void Panel::RegisterNetwork()
 
 AdminResponse Panel::NetworkNode(AdminRequest const& request)
 {
-    constexpr std::string_view Prefix = "/api/panel/network/node/";
-    std::string const node = std::string(std::string_view(request.Path).substr(Prefix.size()));
+    constexpr std::string_view RoutePrefix = "/api/panel/network/node/";
+    std::string const node = std::string(std::string_view(request.Path).substr(RoutePrefix.size()));
     if (!PortAllocations::IsKnownNode(node))
         return AdminResponse::Problem(404, "unknown_node", fmt::format("the panel knows no node '{}'", node));
     nlohmann::json answer;
@@ -168,8 +168,8 @@ AdminResponse Panel::NetworkNode(AdminRequest const& request)
 
 AdminResponse Panel::NetworkApp(AdminRequest const& request)
 {
-    constexpr std::string_view Prefix = "/api/panel/network/app/";
-    std::string const app = std::string(std::string_view(request.Path).substr(Prefix.size()));
+    constexpr std::string_view RoutePrefix = "/api/panel/network/app/";
+    std::string const app = std::string(std::string_view(request.Path).substr(RoutePrefix.size()));
     if (!PortAllocations::IsKnownApp(app))
         return AdminResponse::Problem(404, "unknown_app", fmt::format("the panel knows no app '{}'", app));
     nlohmann::json answer;
@@ -246,14 +246,14 @@ AdminResponse Panel::NetworkAudited(AdminRequest const& request, std::string_vie
     event.On("node", std::string(PortAllocations::LocalNode), std::string(PortAllocations::LocalNode));
     std::string failure;
     AdminResponse answer = AdminResponse::Problem(503, "store_unavailable", "the panel store did not answer");
-    bool const recorded = Record(event, [&](AuditEvent& recorded, std::string& error) -> bool
+    bool const recorded = Record(event, [&](AuditEvent& entry, std::string& error) -> bool
     {
         std::string refusal;
         answer = operation(refusal, error);
         if (!refusal.empty())
         {
-            recorded.Result = AuditResult::Refused;
-            recorded.Reason = refusal;
+            entry.Result = AuditResult::Refused;
+            entry.Reason = refusal;
         }
         return error.empty();
     }, failure);
@@ -315,8 +315,8 @@ AdminResponse Panel::NetworkAllocationAddRange(AdminRequest const& request)
 
 AdminResponse Panel::NetworkAllocationPost(AdminRequest const& request)
 {
-    constexpr std::string_view Prefix = "/api/panel/network/allocations/";
-    std::string_view rest = std::string_view(request.Path).substr(Prefix.size());
+    constexpr std::string_view RoutePrefix = "/api/panel/network/allocations/";
+    std::string_view rest = std::string_view(request.Path).substr(RoutePrefix.size());
     std::size_t const slash = rest.find('/');
     std::string const idText = std::string(slash == std::string_view::npos ? rest : rest.substr(0, slash));
     std::string_view const action = slash == std::string_view::npos ? std::string_view() : rest.substr(slash + 1);
@@ -338,8 +338,8 @@ AdminResponse Panel::NetworkAllocationPost(AdminRequest const& request)
 
 AdminResponse Panel::NetworkAllocationDelete(AdminRequest const& request)
 {
-    constexpr std::string_view Prefix = "/api/panel/network/allocations/";
-    std::string const idText = std::string(std::string_view(request.Path).substr(Prefix.size()));
+    constexpr std::string_view RoutePrefix = "/api/panel/network/allocations/";
+    std::string const idText = std::string(std::string_view(request.Path).substr(RoutePrefix.size()));
     int64 id = 0;
     try
     {

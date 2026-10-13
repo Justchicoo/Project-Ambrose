@@ -227,6 +227,8 @@ ZoneObjects ZoneMgr::ReadObjects(PreparedResultSet* result, ZoneTemplates const&
         object.Loading = static_cast<ZoneObjectLoading>(loading);
         object.HasSpawnRequirements = row[18].Get<uint8>() != 0;
         object.SigilTemplate = row[19].Get<std::string>();
+        if (object.HasSpawnRequirements)
+            object.SpawnRequirements = row[20].Get<std::vector<uint8>>();
         byZone[zone].push_back(std::move(object));
     } while (result->NextRow());
     return ZoneObjects(std::move(byZone));

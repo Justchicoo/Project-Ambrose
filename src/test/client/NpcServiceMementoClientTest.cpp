@@ -28,7 +28,7 @@ namespace
         std::vector<NpcServiceOption> GetServiceOptions(NpcServiceTarget const& target) const override
         {
             (void)target;
-            return { { "Talk", "", "Talk_Key" } };
+            return { { "Talk", "", "Talk_Key", std::nullopt } };
         }
 
         void OnServiceInteraction(NpcServiceTarget const& target, uint32 index) override

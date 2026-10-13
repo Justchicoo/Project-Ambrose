@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads an EquipmentTemplate's m_baseSlots by name, each EquipSlot's name, category, item count and AND, OR and NOT adjective lists, matched against an item's adjectives whatever their case, and its m_slotRequirements list, where a requirement the decode could not name becomes a row of no known type, which the evaluator counts as unmet; a requirement's type is its class name without the class prefix, its m_applyNOT, value, comparison and school are read where its class has them, and a list's operator 1 is ROP_OR and any other ROP_AND, as the type dump gives Requirement::Operator.
+ * Reads an EquipmentTemplate's m_baseSlots by name, each EquipSlot's name, category, item count and AND, OR and NOT adjective lists, matched against an item's adjectives whatever their case, and its m_slotRequirements list, read as rows the way every requirement object is.
  */
 
 #include "EquipmentSlots.h"
 #include "PropertyObject.h"
+#include "RequirementObjects.h"
 #include "StringUtil.h"
 
 #include <fmt/format.h>
@@ -14,17 +15,6 @@
 
 namespace
 {
-    constexpr std::string_view ClassPrefix = "class ";
-    constexpr std::string_view UnnamedRequirement = "unnamed requirement";
-    constexpr int64 OperatorOr = 1;
-
-    std::string TypeOf(std::string_view className)
-    {
-        if (className.starts_with(ClassPrefix))
-            className.remove_prefix(ClassPrefix.size());
-        return std::string(className);
-    }
-
     std::optional<int64> IntegerOf(PropertyObject const& object, std::string_view name)
     {
         PropertyValue const* const value = object.Get(name);
@@ -78,34 +68,6 @@ namespace
     {
         return std::any_of(adjectives.begin(), adjectives.end(), [wanted](std::string const& adjective) { return Ambrose::EqualsIgnoreCase(adjective, wanted); });
     }
-
-    RequirementRow RowOf(PropertyObject const* requirement)
-    {
-        RequirementRow row;
-        if (!requirement)
-        {
-            row.Type = std::string(UnnamedRequirement);
-            return row;
-        }
-        row.Type = TypeOf(requirement->GetClass().Name);
-        row.ApplyNot = FlagOf(*requirement, "m_applyNOT");
-        row.MagicSchool = TextOf(*requirement, "m_magicSchool");
-        if (PropertyValue const* const value = requirement->Get("m_numericValue"))
-        {
-            if (float const* const single = value->GetIf<float>())
-                row.NumericValue = double{ *single };
-            else if (double const* const twice = value->GetIf<double>())
-                row.NumericValue = *twice;
-        }
-        if (std::optional<int64> const comparison = IntegerOf(*requirement, "m_operatorType"); comparison && *comparison >= 0)
-            row.OperatorType = static_cast<uint32>(*comparison);
-        return row;
-    }
-
-    std::string OperatorName(int64 listOperator)
-    {
-        return listOperator == OperatorOr ? "OR" : "AND";
-    }
 }
 
 bool EquipSlot::Accepts(std::vector<std::string> const& adjectives) const
@@ -152,11 +114,11 @@ std::optional<EquipmentSlots> EquipmentSlots::Read(PropertyObject const& equipme
         {
             EquipRequirements rules;
             rules.List.ApplyNot = FlagOf(*requirementList, "m_applyNOT");
-            rules.List.Operator = OperatorName(IntegerOf(*requirementList, "m_operator").value_or(0));
+            rules.List.Operator = RequirementObjects::OperatorName(IntegerOf(*requirementList, "m_operator").value_or(0));
             PropertyValue const* const rows = requirementList->Get("m_requirements");
             if (PropertyValue::List const* const entries = rows ? rows->GetList() : nullptr)
                 for (PropertyValue const& requirement : *entries)
-                    rules.Requirements.push_back(RowOf(requirement.AsObject()));
+                    rules.Requirements.push_back(RequirementObjects::RowOf(requirement.AsObject()));
             if (!rules.Requirements.empty())
                 slot.Requirements = std::move(rules);
         }
@@ -178,12 +140,12 @@ std::optional<EquipRequirements> EquipmentSlots::RequirementsOf(ItemRequirementL
         return std::nullopt;
     EquipRequirements rules;
     rules.List.ApplyNot = list.ApplyNot;
-    rules.List.Operator = OperatorName(list.Operator);
+    rules.List.Operator = RequirementObjects::OperatorName(list.Operator);
     for (ItemTemplatePart const& part : list.Requirements)
     {
-        RequirementRow row = RowOf(part.Object.get());
+        RequirementRow row = RequirementObjects::RowOf(part.Object.get());
         if (!part.Object)
-            row.Type = TypeOf(part.ClassName);
+            row.Type = RequirementObjects::TypeOf(part.ClassName);
         if (part.MagicSchool && row.MagicSchool.empty())
             row.MagicSchool = *part.MagicSchool;
         if (part.NumericValue && !row.NumericValue)

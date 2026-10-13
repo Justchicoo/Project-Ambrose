@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Typed quest, goal, loot, dialog and service wire models plus builders that use the loaded client schema and wrap encoded ObjectProperty data in SerializerBinary blobs.
+ * Typed quest, goal, loot, dialog and service wire models plus builders that use the loaded client schema and wrap encoded ObjectProperty data in SerializerBinary blobs, or leave it bare for the messages whose client handler reads the class hash first, MSG_SENDNPCOPTIONS, MSG_ACTORDIALOG and MSG_QUESTOFFER.
  */
 
 #ifndef AMBROSE_QUESTWIREENCODER_H
@@ -159,6 +159,7 @@ namespace QuestWireEncoder
     ObjectBuildResult BuildServiceMementoBase(TypeCatalogPtr const& catalog, ServiceMementoBase const& memento);
 
     BlobEncodeResult Encode(PropertyObject const& object, uint32 mask, BlobEnvelope::Packing packing = BlobEnvelope::Packing::Store);
+    BlobEncodeResult EncodeBare(PropertyObject const& object, uint32 mask);
 }
 
 #endif

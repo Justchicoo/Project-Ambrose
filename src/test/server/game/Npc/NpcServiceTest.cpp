@@ -38,7 +38,7 @@ namespace
             (void)target;
             std::vector<NpcServiceOption> options;
             for (std::string const& service : _services)
-                options.push_back({ service, "", service + "_Key" });
+                options.push_back({ service, "", service + "_Key", std::nullopt });
             return options;
         }
 

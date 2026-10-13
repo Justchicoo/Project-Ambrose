@@ -82,7 +82,6 @@ QuestLogQuest const* QuestLog::Add(std::string_view quest, GuidGenerator& gids, 
     if (!gid)
         return nullptr;
     _quests.push_back({ *gid, std::string(quest), now, {} });
-    _dirty = true;
     MarkChanged();
     return &_quests.back();
 }
@@ -96,7 +95,6 @@ QuestLogGoal const* QuestLog::StartGoal(std::string_view quest, std::string_view
     if (!gid)
         return nullptr;
     entry->Goals.push_back({ *gid, std::string(goal), false, 0 });
-    _dirty = true;
     MarkChanged();
     return &entry->Goals.back();
 }
@@ -108,7 +106,6 @@ std::optional<uint32> QuestLog::IncrementGoal(std::string_view quest, std::strin
         return std::nullopt;
     uint32 constexpr most = std::numeric_limits<uint32>::max();
     entry->Count = by > most - entry->Count ? most : entry->Count + by;
-    _dirty = true;
     MarkChanged();
     return entry->Count;
 }
@@ -119,7 +116,6 @@ bool QuestLog::CompleteGoal(std::string_view quest, std::string_view goal)
     if (!entry || entry->Complete)
         return false;
     entry->Complete = true;
-    _dirty = true;
     MarkChanged();
     return true;
 }
@@ -139,7 +135,6 @@ bool QuestLog::Remove(std::string_view quest)
     if (found == _quests.end())
         return false;
     _quests.erase(found);
-    _dirty = true;
     MarkChanged();
     return true;
 }
@@ -188,7 +183,6 @@ void QuestLog::SetQuestRegistry(std::string_view quest, std::string_view entry, 
     if (found != entries->second.end() && found->second == value)
         return;
     entries->second.insert_or_assign(std::string(entry), value);
-    _dirty = true;
     MarkChanged();
 }
 
@@ -204,7 +198,6 @@ void QuestLog::SetRegistry(std::string_view entry, double value)
     if (found != _registry.end() && found->second == value)
         return;
     _registry.insert_or_assign(std::string(entry), value);
-    _dirty = true;
     MarkChanged();
 }
 
@@ -217,7 +210,6 @@ void QuestLog::SetHidden(std::string_view quest, bool hidden)
         _hidden.emplace(quest);
     else
         _hidden.erase(found);
-    _dirty = true;
     MarkChanged();
 }
 
@@ -234,4 +226,10 @@ QuestLogGoal* QuestLog::FindGoalMutable(std::string_view quest, std::string_view
         return nullptr;
     auto const found = std::ranges::find(entry->Goals, goal, &QuestLogGoal::Name);
     return found == entry->Goals.end() ? nullptr : &*found;
+}
+
+void QuestLog::MarkChanged() noexcept
+{
+    _dirty = true;
+    ++_changes;
 }
