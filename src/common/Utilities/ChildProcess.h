@@ -62,12 +62,17 @@ struct ChildLaunchOptions
     std::filesystem::path ErrorFile;
     bool KeepInput = false;
     ChildBreakSender SendBreak;
+    std::vector<std::pair<std::string, std::string>> Environment;
+    uint64 MemoryLimitBytes = 0;
+    uint32 CpuLimitPercent = 0;
+    int Priority = 0;
 };
 
 struct ChildExit
 {
     std::optional<int64> Code;
     std::optional<int> Signal;
+    bool OutOfMemory = false;
 };
 
 class ChildProcessHandle
