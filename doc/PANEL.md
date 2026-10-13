@@ -185,7 +185,7 @@ The catalog is one C++ table of groups, keys, descriptions, a structured danger 
 |---|---|---|
 | status | `status.read` (implicit for any member of a scope) | all |
 | console | `console.read`, `console.write`, `console.raw` (danger, owner-only by default: write to an app's standard input when its admin API is down) | app, realm, node, panel |
-| power | `power.start`, `power.stop`, `power.restart`, `power.kill` (danger: can lose unsaved character state) | app, realm, node, panel |
+| power | `power.start`, `power.stop`, `power.restart`, `power.kill` (danger: can lose unsaved character state), `power.request`, `power.read`, `power.disable` | app, realm, node, panel |
 | launch | `launch.read`, `launch.edit` | app, node, panel |
 | network | `network.read`, `network.edit` (port allocations and listen addresses) | app, node, panel |
 | settings | `settings.read`, `settings.edit`, `settings.edit.restricted` (danger), `settings.secrets.read` (danger) | app, realm, cluster, panel |

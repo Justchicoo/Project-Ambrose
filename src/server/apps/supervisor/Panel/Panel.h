@@ -20,6 +20,7 @@
 #include "PanelEventTickets.h"
 #include "PanelKeyring.h"
 #include "PanelLinks.h"
+#include "PanelPower.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
 #include "PanelTwoFactor.h"
@@ -94,6 +95,7 @@ public:
     PanelUsers& Users() { return _users; }
     PanelSessions& Sessions() { return _sessions; }
     PanelErrors& Errors() { return _errors; }
+    PanelPower& Power() { return _power; }
     PanelGrants& Grants() { return _grants; }
     PanelKeyring& Keyring() { return _keyring; }
     PanelTwoFactor& TwoFactor() { return _twoFactor; }
@@ -166,6 +168,10 @@ private:
     AdminResponse Reset(AdminRequest const& request);
     AdminResponse TradeLink(AdminRequest const& request);
     AdminResponse MintLinkRoute(AdminRequest const& request);
+    AdminResponse PowerRoute(AdminRequest const& request);
+    AdminResponse PowerOperationsRoute(AdminRequest const& request);
+    AdminResponse PowerDisableRoute(AdminRequest const& request);
+    AdminResponse PowerEnableRoute(AdminRequest const& request);
     AdminResponse OpenFor(PanelUser const& user, AdminRequest const& request, std::string_view how, nlohmann::json const* properties = nullptr, LinkUsed const* link = nullptr);
     AdminResponse Challenged(PanelUser const& user, AdminRequest const& request, std::string_view how, LinkUsed const* link = nullptr);
     bool Transact(std::function<bool(std::string& error)> const& change, std::string& error);
@@ -206,6 +212,7 @@ private:
     PanelUsers _users;
     PanelSessions _sessions;
     PanelErrors _errors;
+    PanelPower _power;
     PanelGrants _grants;
     PanelKeyring _keyring;
     PanelTwoFactor _twoFactor;
