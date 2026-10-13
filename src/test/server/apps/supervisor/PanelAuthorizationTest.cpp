@@ -96,8 +96,8 @@ namespace
             _decide = std::make_unique<PanelAuthorization>(*_grants, *_sets,
                 [this](AdminRequest const&)
                 {
-                    std::string error;
-                    return _users->FindById(_helper, error);
+                    std::string findError;
+                    return _users->FindById(_helper, findError);
                 },
                 [this](AdminRequest const&, std::string_view permission, std::string_view app, PermissionVerdict verdict)
                 {
