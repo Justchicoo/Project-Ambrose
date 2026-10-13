@@ -139,6 +139,8 @@ namespace
         std::vector<std::string> const plain{ "class PropertyClass" };
         AddClass(classes, "class Requirement", plain, {});
         AddClass(classes, "class RequirementList", plain, { { "class Requirement*", "m_requirements" } }, { "m_requirements" });
+        AddClass(classes, "class ReqHasQuest", { "class Requirement", "class PropertyClass" }, { { "std::string", "m_questName" } });
+        AddClass(classes, "class ReqHasGoal", { "class Requirement", "class PropertyClass" }, { { "std::string", "m_questName" }, { "std::string", "m_goalName" } });
         AddClass(classes, "class Result", plain, {});
         AddClass(classes, "class ResTeleport", { "class Result", "class PropertyClass" }, {});
         if (withMissingResult)
@@ -536,6 +538,13 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
     ASSERT_EQ(volume->Set("m_playerOnly", true), PropertySetResult::Ok);
     ASSERT_EQ(volume->Set("m_enterEvents", texts({ "Enter_Ravenwood POI" })), PropertySetResult::Ok);
     ASSERT_EQ(volume->Set("m_exitEvents", texts({ "Exit_Ravenwood POI" })), PropertySetResult::Ok);
+    PropertyObjectPtr volumeRequirements = create("class RequirementList");
+    PropertyObjectPtr volumeQuest = create("class ReqHasQuest");
+    ASSERT_EQ(volumeQuest->Set("m_questName", std::string("WC-VOL-C01-001")), PropertySetResult::Ok);
+    PropertyValue::List volumeRequirementList;
+    volumeRequirementList.emplace_back(std::move(volumeQuest));
+    ASSERT_EQ(volumeRequirements->Set("m_requirements", std::move(volumeRequirementList)), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_spawnRequirements", std::move(volumeRequirements)), PropertySetResult::Ok);
     PropertyObjectPtr volumes = create("class TriggerVolumeList");
     PropertyValue::List allVolumes;
     allVolumes.emplace_back(std::move(volume));
@@ -552,6 +561,17 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
     ASSERT_EQ(trigger->Set("m_activateEvents", texts({ "StartZone" })), PropertySetResult::Ok);
     ASSERT_EQ(trigger->Set("m_fireEvents", texts({ "Enter_Activator Volume (4)" })), PropertySetResult::Ok);
     ASSERT_EQ(trigger->Set("#1549045087", std::string("kept")), PropertySetResult::Ok);
+    PropertyObjectPtr triggerRequirements = create("class RequirementList");
+    PropertyObjectPtr questRequirement = create("class ReqHasQuest");
+    ASSERT_EQ(questRequirement->Set("m_questName", std::string("WC-STRM-C03-003")), PropertySetResult::Ok);
+    PropertyObjectPtr goalRequirement = create("class ReqHasGoal");
+    ASSERT_EQ(goalRequirement->Set("m_questName", std::string("WC-BAL-C02-001")), PropertySetResult::Ok);
+    ASSERT_EQ(goalRequirement->Set("m_goalName", std::string("KillColossus")), PropertySetResult::Ok);
+    PropertyValue::List triggerRequirementList;
+    triggerRequirementList.emplace_back(std::move(questRequirement));
+    triggerRequirementList.emplace_back(std::move(goalRequirement));
+    ASSERT_EQ(triggerRequirements->Set("m_requirements", std::move(triggerRequirementList)), PropertySetResult::Ok);
+    ASSERT_EQ(trigger->Set("m_requirements", std::move(triggerRequirements)), PropertySetResult::Ok);
     ASSERT_EQ(trigger->Set("m_results", std::move(results)), PropertySetResult::Ok);
     PropertyObjectPtr triggers = create("class TriggerList");
     PropertyValue::List allTriggers;
@@ -578,9 +598,15 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
     EXPECT_EQ(poi.Position, (PropertyTypes::Vector3D{ -47.75f, 1772.25f, 0.0f })) << "the position is m_locationX, Y and Z";
     EXPECT_EQ(poi.Radius, 1034.5f);
     EXPECT_TRUE(poi.PlayerOnly);
-    EXPECT_FALSE(poi.SpawnRequirements);
+    EXPECT_TRUE(poi.SpawnRequirements);
     EXPECT_EQ(poi.EnterEvents, std::vector<std::string>{ "Enter_Ravenwood POI" });
     EXPECT_EQ(poi.ExitEvents, std::vector<std::string>{ "Exit_Ravenwood POI" });
+    ASSERT_EQ(zone.QuestReferences.size(), 3u);
+    EXPECT_EQ(zone.QuestReferences[0].SourceType, "volume");
+    EXPECT_EQ(zone.QuestReferences[0].SourceName, "Ravenwood POI");
+    EXPECT_EQ(zone.QuestReferences[0].RequirementClass, "class ReqHasQuest");
+    EXPECT_EQ(zone.QuestReferences[0].QuestName, "WC-VOL-C01-001");
+    EXPECT_TRUE(zone.QuestReferences[0].GoalName.empty());
 
     ASSERT_EQ(zone.Triggers.size(), 1u);
     ExtractedTrigger const& teleport = zone.Triggers[0];
@@ -589,6 +615,14 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
     EXPECT_EQ(teleport.TriggerMax, -1);
     EXPECT_EQ(teleport.Unnamed1549045087, "kept") << "a field no name fits is kept under its hash";
     EXPECT_EQ(teleport.FireEvents, std::vector<std::string>{ "Enter_Activator Volume (4)" });
+    EXPECT_EQ(zone.QuestReferences[1].SourceType, "trigger");
+    EXPECT_EQ(zone.QuestReferences[1].SourceName, "TeleportToShoppingDistrict");
+    EXPECT_EQ(zone.QuestReferences[1].RequirementClass, "class ReqHasQuest");
+    EXPECT_EQ(zone.QuestReferences[1].QuestName, "WC-STRM-C03-003");
+    EXPECT_TRUE(zone.QuestReferences[1].GoalName.empty());
+    EXPECT_EQ(zone.QuestReferences[2].RequirementClass, "class ReqHasGoal");
+    EXPECT_EQ(zone.QuestReferences[2].QuestName, "WC-BAL-C02-001");
+    EXPECT_EQ(zone.QuestReferences[2].GoalName, "KillColossus");
     EXPECT_FALSE(teleport.State);
     ASSERT_EQ(teleport.Results.size(), 2u);
     EXPECT_EQ(teleport.Results[0].ClassName, std::optional<std::string>("class ResTeleport"));

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens every GameData archive in name order and reads the gamedata.bin of each that holds one as a versionable object, the form the client keeps zone data in. The decoder names every part of a class the dump does not list by its path, so an object list entry that came back empty is matched to the part it was and reported as a skipped object, while an entry of one of the sigil classes the dump does not list is read as the CoreObjectInfo it derives from, its inherited fields filled by their hashes and its own left out, and written with its own class name, which its hash proves, a part deeper inside an entry is reported as a skipped part of a row that is still written, and any other problem the decoder names is an error, because it means the dump and the data disagree. A zone is known by its own m_zoneName, which is how the client is told where it is and how it finds the archive, so a name whose archive is not the one it was read from is an error rather than a second guess. Spawn requirements are kept as the versionable bytes the zone data holds them in, written again from the decoded object, so a stored client object stays in the client's own form. A zone's volumes.xml and triggers.xml are BINd files whose classes the dump does not list, so each field is read by its name, and by its hash where no name fits yet, and a field that is missing or of another type fails the file rather than giving a row a default, where a null pointer is a value and a list entry of a class nothing describes, or any issue other than an unknown class, fails it too; a result of a class nothing describes keeps its place with the hash the file gives it, and a part deeper inside a kept entry is reported as a skipped part as in gamedata.bin. A zone's spawnData.xml is a BINd of classes the dump does list, so it is read through the spawn views, each spawner's requirements and each item's spawn requirements kept as versionable bytes the same way, and an item that is not a SpawnItem placing a SpawnObjectInfo fails the file. A sigil entry's m_templateName, which the dump does not list, is kept as the text its skipped value holds, naming the sigil record the placement uses.
+ * Opens every GameData archive in name order and reads the gamedata.bin of each that holds one as a versionable object, the form the client keeps zone data in. The decoder names every part of a class the dump does not list by its path, so an object list entry that came back empty is matched to the part it was and reported as a skipped object, while an entry of one of the sigil classes the dump does not list is read as the CoreObjectInfo it derives from, its inherited fields filled by their hashes and its own left out, and written with its own class name, which its hash proves, a part deeper inside an entry is reported as a skipped part of a row that is still written, and any other problem the decoder names is an error, because it means the dump and the data disagree. A zone is known by its own m_zoneName, which is how the client is told where it is and how it finds the archive, so a name whose archive is not the one it was read from is an error rather than a second guess. Spawn requirements are kept as the versionable bytes the zone data holds them in, written again from the decoded object, so a stored client object stays in the client's own form; ReqHasQuest and ReqHasGoal nodes are also indexed with their zone and source. A zone's volumes.xml and triggers.xml are BINd files whose classes the dump does not list, so each field is read by its name, and by its hash where no name fits yet, and a field that is missing or of another type fails the file rather than giving a row a default, where a null pointer is a value and a list entry of a class nothing describes, or any issue other than an unknown class, fails it too; a result of a class nothing describes keeps its place with the hash the file gives it, and a part deeper inside a kept entry is reported as a skipped part as in gamedata.bin. A zone's spawnData.xml is a BINd of classes the dump does list, so it is read through the spawn views, each spawner's requirements and each item's spawn requirements kept as versionable bytes the same way, and an item that is not a SpawnItem placing a SpawnObjectInfo fails the file. A sigil entry's m_templateName, which the dump does not list, is kept as the text its skipped value holds, naming the sigil record the placement uses.
  */
 
 #include "ZoneExtractor.h"
@@ -76,7 +76,52 @@ namespace
         return std::string(*found);
     }
 
-    std::optional<ExtractedObject> ObjectValues(CoreObjectInfoView const& info, std::string& error)
+    void CollectQuestReferences(PropertyValue const& value, std::string_view sourceType, std::string_view sourceName, ExtractedZone& zone);
+
+    void CollectQuestReferences(PropertyObject const* object, std::string_view sourceType, std::string_view sourceName, ExtractedZone& zone)
+    {
+        if (!object)
+            return;
+        std::string_view const className = object->GetClass().Name;
+        if (className == "class ReqHasQuest" || className == "class ReqHasGoal")
+        {
+            PropertyValue const* const questValue = object->Get("m_questName");
+            std::string const* const questName = questValue ? questValue->GetIf<std::string>() : nullptr;
+            if (questName && !questName->empty())
+            {
+                std::string goalName;
+                if (className == "class ReqHasGoal")
+                {
+                    PropertyValue const* const goalValue = object->Get("m_goalName");
+                    std::string const* const goal = goalValue ? goalValue->GetIf<std::string>() : nullptr;
+                    if (goal)
+                        goalName = *goal;
+                }
+                zone.QuestReferences.push_back({ std::string(sourceType), std::string(sourceName), std::string(className), *questName, std::move(goalName) });
+            }
+        }
+        for (std::size_t ordinal = 0; ordinal < object->GetClass().Properties.size(); ++ordinal)
+        {
+            if (!object->IsPresent(ordinal))
+                continue;
+            if (PropertyValue const* const child = object->GetAt(ordinal))
+                CollectQuestReferences(*child, sourceType, sourceName, zone);
+        }
+    }
+
+    void CollectQuestReferences(PropertyValue const& value, std::string_view sourceType, std::string_view sourceName, ExtractedZone& zone)
+    {
+        if (PropertyObject const* const object = value.AsObject())
+        {
+            CollectQuestReferences(object, sourceType, sourceName, zone);
+            return;
+        }
+        if (PropertyValue::List const* const list = value.GetList())
+            for (PropertyValue const& child : *list)
+                CollectQuestReferences(child, sourceType, sourceName, zone);
+    }
+
+    std::optional<ExtractedObject> ObjectValues(CoreObjectInfoView const& info, ExtractedZone& zone, std::string_view sourceType, std::string sourceName, std::string& error)
     {
         ExtractedObject row;
         row.ClassName = info.Target().GetClass().Name;
@@ -99,6 +144,7 @@ namespace
                 return std::nullopt;
             }
             row.SpawnRequirements = std::move(encoded.Bytes);
+            CollectQuestReferences(requirements, sourceType, sourceName, zone);
         }
         row.LoadingType = info.GetLoadingType();
         return row;
@@ -519,7 +565,7 @@ void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view arc
             continue;
         }
         std::string error;
-        std::optional<ExtractedObject> row = ObjectValues(*info, error);
+        std::optional<ExtractedObject> row = ObjectValues(*info, zone, "object", fmt::format("template {} object {}", info->GetTemplateId(), info->GetObjectId()), error);
         if (!row)
         {
             extraction.AddError(fmt::format("{}: the spawn requirements of object list entry {} do not encode: {}", path, index, error));
@@ -574,7 +620,8 @@ void ZoneExtractor::ReadVolumes(TypeCatalogPtr const& catalog, ExtractedZone& zo
         volume.QuestEvents = fields.Flag("m_questEvents");
         volume.PlayerOnly = fields.Flag("m_playerOnly");
         volume.LoadingType = fields.Whole("m_loadingType");
-        volume.SpawnRequirements = Encoded(fields.Object("m_spawnRequirements"), "m_spawnRequirements", fields);
+        PropertyObject const* const requirements = fields.Object("m_spawnRequirements");
+        volume.SpawnRequirements = Encoded(requirements, "m_spawnRequirements", fields);
         volume.EnterEvents = fields.Texts("m_enterEvents");
         volume.ExitEvents = fields.Texts("m_exitEvents");
         if (!fields.GetMissing().empty())
@@ -582,6 +629,7 @@ void ZoneExtractor::ReadVolumes(TypeCatalogPtr const& catalog, ExtractedZone& zo
             root.Fail(fmt::format("{}{}]: {}", listPath, index, fields.GetMissing()));
             break;
         }
+        CollectQuestReferences(requirements, "volume", volume.Name, zone);
         volumes.push_back(std::move(volume));
     }
     if (!issues.Failure.empty() || !root.GetMissing().empty())
@@ -629,7 +677,8 @@ void ZoneExtractor::ReadTriggers(TypeCatalogPtr const& catalog, ExtractedZone& z
         trigger.Unnamed847435658 = fields.Flag(847435658u);
         trigger.Unnamed1549045087 = fields.Text(1549045087u);
         trigger.Unnamed2293879431 = fields.Text(2293879431u);
-        trigger.Requirements = Encoded(fields.Object("m_requirements"), "m_requirements", fields);
+        PropertyObject const* const requirements = fields.Object("m_requirements");
+        trigger.Requirements = Encoded(requirements, "m_requirements", fields);
         trigger.ObjectInfo = Encoded(fields.Object("m_triggerObjectInfo"), "m_triggerObjectInfo", fields);
         trigger.ActivateEvents = fields.Texts("m_activateEvents");
         trigger.FireEvents = fields.Texts("m_fireEvents");
@@ -655,6 +704,9 @@ void ZoneExtractor::ReadTriggers(TypeCatalogPtr const& catalog, ExtractedZone& z
             root.Fail(fmt::format("{}: {}", at, fields.GetMissing()));
             break;
         }
+        CollectQuestReferences(requirements, "trigger", trigger.Name, zone);
+        if (trigger.State && !trigger.State->RequiredQuest.empty())
+            zone.QuestReferences.push_back({ "state_trigger", trigger.Name, trigger.ClassName, trigger.State->RequiredQuest, {} });
         triggers.push_back(std::move(trigger));
     }
     if (!issues.Failure.empty() || !root.GetMissing().empty())
@@ -716,6 +768,7 @@ void ZoneExtractor::ReadSpawns(TypeCatalogPtr const& catalog, ExtractedZone& zon
                 failure = fmt::format("{}.m_globalDynamicReqs does not encode: {}", at, error);
                 break;
             }
+            CollectQuestReferences(requirements, "spawner", row.Name, zone);
         }
         PropertyValue::List const& items = spawner->GetSpawnList();
         for (std::size_t position = 0; failure.empty() && position < items.size(); ++position)
@@ -731,7 +784,7 @@ void ZoneExtractor::ReadSpawns(TypeCatalogPtr const& catalog, ExtractedZone& zon
                 break;
             }
             std::string error;
-            std::optional<ExtractedObject> object = ObjectValues(*info, error);
+            std::optional<ExtractedObject> object = ObjectValues(*info, zone, "spawn_item", fmt::format("{} item {}", row.Name, position), error);
             if (!object)
             {
                 failure = fmt::format("the spawn requirements of {} do not encode: {}", itemAt, error);
