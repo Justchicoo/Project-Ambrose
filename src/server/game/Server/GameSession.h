@@ -357,7 +357,7 @@ private:
     std::shared_ptr<ZoneTriggerData const> _volumeData;
     VisibilitySet _sight;
     SightRequirements _sightRequirements;
-    std::tuple<uint64, int32, uint32, uint32> _sightFacts{};
+    std::tuple<uint64, int32, uint32, uint32, std::size_t> _sightFacts{};
     uint64 _sightProgress = 0;
     std::set<uint64> _shownDuels;
     std::vector<VolumePresence> _volumePresence;

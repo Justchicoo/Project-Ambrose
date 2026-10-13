@@ -90,6 +90,8 @@ namespace
                 "How near an object must come to a wizard to be shown to it, read at each visibility update; 0 takes the zone's own far clip, and a zone with none shows everything."),
             Float("Visibility.Hysteresis", "20", "0", "10000", "world units", "Zones", Game, Live,
                 "How far past the visibility distance an object already shown may go before it is taken away, read at each visibility update, so one standing at the edge is not shown and taken away over and over."),
+            Text("Events.ClassProjects", "", "4096", "Zones", Game, Live,
+                "The class projects this realm runs, by name and separated by commas, read each time a requirement asks, so a change shows or hides objects at the next visibility update; an object or trigger whose ReqClassProjectActive names a project not listed stays hidden or closed."),
             Float("Npc.InteractRadiusDefault", "300", "0", "100000", "world units", "Zones", Game, Live,
                 "How near a wizard must come to an NPC to be offered its services, unless one of the NPC's providers sets its own radius, read at each move; a wizard is taken out of range 25 world units past it."),
             Flag("Npc.TestGreeter", "false", "Zones", Game, Live,
