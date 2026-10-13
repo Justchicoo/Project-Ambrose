@@ -286,6 +286,7 @@ private:
     friend struct GameSessionEquipmentTestAccess;
     friend struct SocialMgrTestAccess;
     friend struct ChatHandlerTestAccess;
+    friend struct GameSessionObjectChangesTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
     bool PatchDownloadsEnabled(std::string_view tag) const;
@@ -339,7 +340,7 @@ private:
     void MarkOffline();
     void TransferWorldStateTo(GameSession& replacement);
     bool TakeCommandLine(std::string_view packed);
-    std::vector<std::string> PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now);
+    std::vector<std::string> PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now, bool walkDoors = true);
     void FollowReloadedVolumes();
     void WalkThroughDoor(std::vector<std::string> const& doors);
     void ShowGameEffectsOf(GameSession const& other);

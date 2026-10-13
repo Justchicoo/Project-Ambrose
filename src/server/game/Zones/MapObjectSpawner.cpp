@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <utility>
@@ -149,6 +150,8 @@ void MapObjectChanges::Absorb(MapObjectChanges other)
     Deleted.insert(Deleted.end(), other.Deleted.begin(), other.Deleted.end());
     Problems.insert(Problems.end(), std::make_move_iterator(other.Problems.begin()), std::make_move_iterator(other.Problems.end()));
     Moved.insert(Moved.end(), other.Moved.begin(), other.Moved.end());
+    States.insert(States.end(), std::make_move_iterator(other.States.begin()), std::make_move_iterator(other.States.end()));
+    ZoneEvents.insert(ZoneEvents.end(), std::make_move_iterator(other.ZoneEvents.begin()), std::make_move_iterator(other.ZoneEvents.end()));
 }
 
 std::optional<uint64> MapObjectSpawner::Place(Map& map, ZoneObjectSpawn const& row, MapObjectOrigin origin, uint32 spawnerIndex, MapObjectSources const& sources,

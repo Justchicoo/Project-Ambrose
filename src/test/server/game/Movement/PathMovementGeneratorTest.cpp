@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests path validation, speed-scaled travel, loop and ping-pong endpoints, leftover tick time, node waits and a long tick folding whole route cycles.
+ * Tests path validation, speed-scaled travel, loop and ping-pong endpoints, leftover tick time, node waits and a long tick folding whole route cycles, and stopping on each node reached with the time left over, holding, turning back and jumping to another node.
  */
 
 #include "PathMovementGenerator.h"
@@ -176,4 +176,47 @@ TEST(PathMovementGeneratorTest, RefusesAMovingPathThatNeverLeavesOnePoint)
     std::vector<PathMovementNode> waiting = nodes;
     waiting[1].Wait = 1s;
     EXPECT_TRUE(PathMovementGenerator::Create(waiting, 0, 1.0f, 1.0f, PathTraversalMode::Loop, PathInitialDirection::Forward, error)) << error;
+}
+
+TEST(PathMovementGeneratorTest, StopsOnEachNodeItReachesAndHandsBackTheTimeLeftOver)
+{
+    PathMovementGenerator generator = MakeGenerator(ThreeNodes(), 10.0f, 1.0f, PathTraversalMode::Loop);
+    std::string error;
+
+    std::optional<PathMovementStep> const first = generator.Advance(1500ms, error, true);
+    ASSERT_TRUE(first) << error;
+    EXPECT_EQ(first->Arrived, std::optional<uint32>(20u));
+    EXPECT_NEAR(first->Leftover.count(), 0.5, 1e-9);
+    EXPECT_DOUBLE_EQ(first->Position.X, 10.0);
+
+    std::optional<PathMovementStep> const rest = generator.Advance(first->Leftover, error, true);
+    ASSERT_TRUE(rest) << error;
+    EXPECT_FALSE(rest->Arrived);
+    EXPECT_DOUBLE_EQ(rest->Position.X, 15.0);
+}
+
+TEST(PathMovementGeneratorTest, HoldsTurnsBackAndJumpsToAnotherNode)
+{
+    PathMovementGenerator generator = MakeGenerator(ThreeNodes(), 10.0f, 1.0f, PathTraversalMode::Loop);
+    std::string error;
+    ASSERT_TRUE(generator.Advance(1s, error));
+    EXPECT_EQ(generator.GetCurrentNodeId(), 20u);
+
+    generator.Hold(2s);
+    std::optional<PathMovementStep> const held = generator.Advance(1500ms, error);
+    ASSERT_TRUE(held) << error;
+    EXPECT_DOUBLE_EQ(held->Position.X, 10.0);
+    EXPECT_FALSE(held->Moving);
+
+    generator.Reverse();
+    EXPECT_EQ(generator.GetDirection(), PathInitialDirection::Reverse);
+    std::optional<PathMovementStep> const back = generator.Advance(1s, error);
+    ASSERT_TRUE(back) << error;
+    EXPECT_DOUBLE_EQ(back->Position.X, 5.0) << "half a second of hold is left, then half a second back toward node 10";
+    EXPECT_EQ(back->NextNodeId, 10u);
+
+    ASSERT_TRUE(generator.JumpTo(30));
+    EXPECT_DOUBLE_EQ(generator.GetPosition().X, 20.0);
+    EXPECT_EQ(generator.GetCurrentNodeId(), 30u);
+    EXPECT_FALSE(generator.JumpTo(99)) << "a node the path does not hold is refused";
 }
