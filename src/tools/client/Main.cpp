@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `field` reads a message field's object from a file, as its own rules say. `hash` gives the hash the client gives a class or school name, or a property's hash from its type and name, with no install. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and a behavior's handler goes in under a key such as RidableBehavior_MSG_RidersList, found the same way with its plain name read after the key, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe; for a name it registers nothing under, it says whether the program holds that name at all, since a name the program never holds is one it cannot key a factory by, which is how a behavior only the server runs is told from one the tool cannot follow yet. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `catalog` writes every template id the manifest lists, sorted by its class and the behaviors that mark it a mob, an NPC, a piece of equipment, furniture, a pet or a mount into one category file each and grouped by the folder that holds it, with its English name, and every zone with its locations and the templates it places, so people and the panel can find an id without asking the install one at a time. `wizbangs` prints the markers WizBangs.xml gives the client, each under the id a MSG_WIZBANG names it by, the string hash of its name, which the client's SetWizBang looks the template up by, and the model it draws, and says of a name or id no marker has that it draws nothing, which is how 6.02 found the client has no spellbook marker. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `name` names a property hash the way the property oracle does, from every type and name the dump lists, every property name the client program holds or prints and every one the install's text files spell out, `--wide` adding every class the dump lists as a type, plain, pointed to and shared, and it says how often a random hash is named by the same sources, so a lone answer from a wide search is read as the chance it is. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a core type, a template type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads which class each core type builds from the world database's core_object_type when it is given the world database, and when a core type builds a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --core-type or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there; without it, the classes the install holds that its dump does not describe join the dump from the class file schemaprobe builds for the install's revision in the Ambrose data folder, when there is one, so a template shows every behavior it holds as the game server reads it. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `field` reads a message field's object from a file, as its own rules say. `hash` gives the hash the client gives a class or school name, or a property's hash from its type and name, with no install. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and a behavior's handler goes in under a key such as RidableBehavior_MSG_RidersList, found the same way with its plain name read after the key, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe; for a name it registers nothing under, it says whether the program holds that name at all, since a name the program never holds is one it cannot key a factory by, which is how a behavior only the server runs is told from one the tool cannot follow yet. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `requirements` counts the requirement classes placed objects gate their spawning on, so the server knows which ones it must understand first. `catalog` writes every template id the manifest lists, sorted by its class and the behaviors that mark it a mob, an NPC, a piece of equipment, furniture, a pet or a mount into one category file each and grouped by the folder that holds it, with its English name, and every zone with its locations and the templates it places, so people and the panel can find an id without asking the install one at a time. `wizbangs` prints the markers WizBangs.xml gives the client, each under the id a MSG_WIZBANG names it by, the string hash of its name, which the client's SetWizBang looks the template up by, and the model it draws, and says of a name or id no marker has that it draws nothing, which is how 6.02 found the client has no spellbook marker. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `name` names a property hash the way the property oracle does, from every type and name the dump lists, every property name the client program holds or prints and every one the install's text files spell out, `--wide` adding every class the dump lists as a type, plain, pointed to and shared, and it says how often a random hash is named by the same sources, so a lone answer from a wide search is read as the chance it is. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a core type, a template type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads which class each core type builds from the world database's core_object_type when it is given the world database, and when a core type builds a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --core-type or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there; without it, the classes the install holds that its dump does not describe join the dump from the class file schemaprobe builds for the install's revision in the Ambrose data folder, when there is one, so a template shows every behavior it holds as the game server reads it. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
 #include "ArchiveText.h"
@@ -40,6 +40,7 @@
 #include "PropertyWordSearch.h"
 #include "ServerClassCache.h"
 #include "SkippedValue.h"
+#include "SpawnRequirementCensus.h"
 #include "TemplateExtractor.h"
 #include "StringUtil.h"
 #include "TypeDumpLoader.h"
@@ -120,6 +121,11 @@ Commands:
                          class, behaviors and --locale display name, and every zone with
                          its locations and the templates it places, into <folder>/<revision>
                          (default folder: catalog in the Ambrose data folder)
+  requirements [type]... print every requirement class the placed objects of every zone
+                         gate their spawning on, nested lists included, with how many
+                         placements and zones use it; given types, such as ReqHasQuest,
+                         also print the placements whose requirements use only those,
+                         with zone and template
   wizbangs <name>...     print the wizbang markers WizBangs.xml gives the client, each with
                          the id MSG_WIZBANG names it by, the hash of its name, and the
                          model it draws; a name or id it has not is said to draw nothing
@@ -191,6 +197,7 @@ Options:
   --type <type>        with --words, a type to try instead of the scalar ones; repeatable
   --anchor <word>      with --words, also try three words with this one in any place;
                        repeatable, and each makes a match by chance more likely
+  --spawners           with requirements, also count the items of each zone's spawners
   --derived            with types, print every class derived from each class named
   --flag <name>        with types, print only the properties that carry a property flag,
                        such as ObjectName, of the classes found
@@ -230,6 +237,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         bool All = false;
         bool Trailing = false;
         bool Derived = false;
+        bool Spawners = false;
         bool Wide = false;
         bool Words = false;
         std::vector<std::string> Types;
@@ -293,6 +301,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     return std::nullopt;
                 (arg == "--type" ? parsed.Types : parsed.Anchors).push_back(*given);
             }
+            else if (arg == "--spawners")
+                parsed.Spawners = true;
             else if (arg == "--derived")
                 parsed.Derived = true;
             else if (arg == "--flag" || arg == "--ghidra" || arg == "--ghidra-project")
@@ -2008,6 +2018,49 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return Success;
     }
 
+    int RunRequirements(Arguments const& arguments, std::filesystem::path const& install, TypeCatalogPtr const& catalog)
+    {
+        ZoneExtraction const zones = ZoneExtractor::Extract(install / "Data" / "GameData", catalog);
+        std::cerr << fmt::format("client: {} zones are read from {} archives\n", zones.Zones.size(), zones.Archives);
+        for (std::string const& problem : zones.Errors)
+            std::cerr << fmt::format("client: {}\n", problem);
+        if (zones.Zones.empty())
+            return Failure;
+
+        SpawnRequirementCensus const census = SpawnRequirementCensus::Take(zones, catalog, arguments.Spawners);
+        std::cout << fmt::format("{:<40}  {:>10}  {:>5}\n", "requirement", "placements", "zones");
+        for (RequirementUsage const& usage : census.GetUsage())
+            std::cout << fmt::format("{:<40}  {:>10}  {:>5}\n", usage.Type, usage.Placements, usage.Zones);
+        std::cout << fmt::format("{} of {} {} in {} of {} zones carry spawn requirements; {} do not decode and {} hold an empty list\n", census.GetGated().size(),
+            census.GetPlacementCount(), arguments.Spawners ? "placements and spawn items" : "placements", census.GetGatedZoneCount(), census.GetZoneCount(),
+            census.GetUndecodedCount(), census.GetEmptyCount());
+        if (arguments.Subjects.empty())
+            return Success;
+
+        std::set<std::string, std::less<>> const allowed(arguments.Subjects.begin(), arguments.Subjects.end());
+        std::vector<GatedPlacement const*> const found = census.UsingOnly(allowed);
+        ObjectTemplateMgr store;
+        store.SetInstall(install);
+        std::vector<std::string> errors;
+        bool const manifest = store.LoadManifest(errors);
+        std::size_t const shown = arguments.All ? found.size() : std::min(found.size(), ListedByDefault);
+        std::cout << fmt::format("\n{} placement(s) use only {}:\n", found.size(), fmt::join(arguments.Subjects, ", "));
+        for (std::size_t index = 0; index < shown; ++index)
+        {
+            GatedPlacement const& placement = *found[index];
+            std::string name = "an unknown template";
+            if (manifest && placement.TemplateId <= std::numeric_limits<uint32>::max())
+                if (TemplateLookup const looked = store.Lookup(static_cast<uint32>(placement.TemplateId)); looked.Template)
+                    name = looked.Template->ObjectName.empty() ? looked.Template->File : looked.Template->ObjectName;
+            std::string const where = placement.Spawner.empty() ? fmt::format("object {}", placement.ObjectId) : fmt::format("spawner {}", placement.Spawner);
+            std::cout << fmt::format("{}  {}  template {} ({})  {}  uses {}\n", placement.Zone, where, placement.TemplateId, name, placement.ClassName,
+                fmt::join(placement.Types, ", "));
+        }
+        if (shown < found.size())
+            std::cout << fmt::format("... and {} more; --all prints them\n", found.size() - shown);
+        return Success;
+    }
+
     int RunTemplate(Arguments const& arguments, std::filesystem::path const& install, KiwadArchive const& archive, TypeCatalogPtr const& catalog)
     {
         ObjectTemplateMgr store;
@@ -2237,20 +2290,20 @@ int main(int argc, char** argv)
     }
 
     if (command != "hex" && command != "types" && command != "name" && command != "messages" && command != "handlers" && command != "behaviors" && command != "template" && command != "wad" && command != "lang"
-        && command != "wizbangs" && command != "catalog"
+        && command != "wizbangs" && command != "catalog" && command != "requirements"
         && command != "core" && command != "field" && command != "strings" && command != "xrefs" && command != "disasm" && command != "decompile" && command != "functions" && command != "vtable")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
         return BadUsage;
     }
 
-    if (arguments->Subjects.empty() && !arguments->List && command != "catalog")
+    if (arguments->Subjects.empty() && !arguments->List && command != "catalog" && command != "requirements")
     {
         std::cerr << fmt::format("client {} needs something to look for; pass one, or --list to see what there is\n{}", command, Usage);
         return BadUsage;
     }
 
-    bool const needsDump = command == "types" || command == "wad" || command == "core" || command == "field" || command == "template" || command == "behaviors" || command == "name" || command == "wizbangs" || command == "catalog";
+    bool const needsDump = command == "types" || command == "wad" || command == "core" || command == "field" || command == "template" || command == "behaviors" || command == "name" || command == "wizbangs" || command == "catalog" || command == "requirements";
     LocalClientSystem const system;
     SetupMode const mode = ClientSetup::ModeForTool(system, std::cerr, "client");
     std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout, mode);
@@ -2279,7 +2332,7 @@ int main(int argc, char** argv)
         }
     }
 
-    if (command == "catalog")
+    if (command == "catalog" || command == "requirements")
         ZoneViews::RegisterAll(sTypedViewRegistry);
     TypeCatalogPtr catalog;
     if (arguments->TypeDump && !arguments->TypeDump->empty())
@@ -2483,13 +2536,15 @@ int main(int argc, char** argv)
     if (std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(*arguments->Client)))
         revision = install->Revision;
 
-    if (command == "catalog")
+    if (command == "catalog" || command == "requirements")
     {
         if (catalog == nullptr)
         {
-            std::cerr << "client catalog needs a type dump; name one with --type-dump\n";
+            std::cerr << fmt::format("client {} needs a type dump; name one with --type-dump\n", command);
             return Failure;
         }
+        if (command == "requirements")
+            return RunRequirements(*arguments, LogConfig::Utf8Path(*arguments->Client), catalog);
         return RunCatalog(*arguments, LogConfig::Utf8Path(*arguments->Client), revision, catalog, system);
     }
 
