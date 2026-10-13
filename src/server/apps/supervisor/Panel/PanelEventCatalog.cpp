@@ -190,7 +190,11 @@ namespace
             Later("node.move", "nodes", PanelEventGate::Permission, "nodes.read"),
             Later("alert", "alerts", PanelEventGate::Permission, "alerts.read"),
             Later("audit", "audit", PanelEventGate::Permission, "activity.read"),
-            Later("permissions.changed", "", PanelEventGate::User, ""),
+            Sends("permissions.changed", "", PanelEventGate::User, "", true, ObjectOf({
+                Field("user_id", WholeShape()),
+                Field("scope", TextShape()),
+                Field("permissions", ListOf(TextShape())),
+            })),
             Later("throttled", "", PanelEventGate::Sender, ""),
             Sends("error", "", PanelEventGate::Sender, "", true, ObjectOf({
                 Field("request", NullableOf(TextShape())),

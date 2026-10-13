@@ -15,6 +15,8 @@
 #include "PanelErrors.h"
 #include "PanelFileRules.h"
 #include "PanelGrants.h"
+#include "PanelGrantSets.h"
+#include "PanelInvites.h"
 #include "PanelAuthorization.h"
 #include "PanelEventSocket.h"
 #include "PanelEventStreams.h"
@@ -105,6 +107,7 @@ public:
     PanelSessions& Sessions() { return _sessions; }
     PanelErrors& Errors() { return _errors; }
     PanelGrants& Grants() { return _grants; }
+    PanelInvites& Invites() { return _invites; }
     PanelKeyring& Keyring() { return _keyring; }
     PanelLaunchSettings& LaunchStore() { return _launch; }
     PanelTwoFactor& TwoFactor() { return _twoFactor; }
@@ -185,6 +188,7 @@ private:
     AdminResponse MaintenanceExit(AdminRequest const& request);
     void RegisterOpsCalendar();
     AdminResponse OpsCalendarGet(AdminRequest const& request);
+    void RegisterInvites();
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
@@ -236,6 +240,14 @@ private:
     std::optional<AdminResponse> CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username);
     AdminResponse ClearError(AdminRequest const& request);
     AdminResponse ErrorReport(AdminRequest const& request, bool create);
+    AdminResponse InviteCreate(AdminRequest const& request);
+    AdminResponse InviteList(AdminRequest const& request);
+    AdminResponse InviteRevoke(AdminRequest const& request);
+    AdminResponse InvitePeek(AdminRequest const& request);
+    AdminResponse InviteClaim(AdminRequest const& request);
+    AdminResponse GrantSetGet(AdminRequest const& request);
+    AdminResponse GrantSetSave(AdminRequest const& request);
+    void NotifyGrantsChanged(int64 userId, std::string const& scope, std::vector<std::string> const& permissions);
     std::optional<PanelUser> UserOf(AdminRequest const& request);
     nlohmann::json UserAnswer(PanelUser const& user);
     std::string Issuer() const;
@@ -256,6 +268,8 @@ private:
     PanelSessions _sessions;
     PanelErrors _errors;
     PanelGrants _grants;
+    PanelGrantSets _grantSets;
+    PanelInvites _invites;
     PanelTwoFactor _twoFactor;
     PanelFileRules _fileRules;
     std::unique_ptr<PanelAuthorization> _authorization;

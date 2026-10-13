@@ -5,9 +5,13 @@
 
 import * as v from "valibot";
 import {
+    InviteCreatedAnswer,
+    InviteListAnswer,
+    InvitePeekAnswer,
     PanelSessionAnswer,
     PanelSignedIn,
     PanelSignInAnswer,
+    PermissionCatalogAnswer,
     PlayerActionAccepted,
     PlayerRegistrationInfoAnswer,
     PlayerRegistrationsAnswer,
@@ -259,6 +263,39 @@ export async function answerSecondFactor(factor: SecondFactor) {
 
 export async function claimOwner(token: string, username: string, password: string) {
     adoptSignedIn(await request("POST", "api/panel/claim", PanelSignedIn, { token, username, password }));
+}
+
+export type InviteDraft = {
+    scope: string;
+    role?: string;
+    grants: string[];
+    target_username?: string;
+    ttl_hours?: number;
+    note?: string;
+};
+
+export async function listInvites(signal?: AbortSignal) {
+    return request("GET", "api/panel/invites", InviteListAnswer, undefined, signal);
+}
+
+export async function createInvite(draft: InviteDraft) {
+    return request("POST", "api/panel/invites", InviteCreatedAnswer, draft);
+}
+
+export async function revokeInvite(id: number) {
+    return request("DELETE", `api/panel/invites/${id}`, null);
+}
+
+export async function peekInvite(token: string) {
+    return request("POST", "api/panel/invites/peek", InvitePeekAnswer, { token });
+}
+
+export async function claimInvite(token: string, username: string, password: string) {
+    adoptSignedIn(await request("POST", "api/panel/invites/claim", PanelSignedIn, { token, username, password }));
+}
+
+export async function permissionCatalog(signal?: AbortSignal) {
+    return request("GET", "api/panel/permissions", PermissionCatalogAnswer, undefined, signal);
 }
 
 export async function openLink(token: string) {

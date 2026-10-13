@@ -8,6 +8,7 @@
 #include "Log.h"
 #include "PanelEventCatalog.h"
 #include "PanelGrants.h"
+#include "PanelGrantSets.h"
 #include "PanelPermissions.h"
 #include "PanelUsers.h"
 #include "StringUtil.h"
@@ -162,8 +163,8 @@ void PanelEventSocket::Call::Fail(std::string const& text) const
     _socket.Report(*_connection, _frame.Id, "failed", text, true);
 }
 
-PanelEventSocket::PanelEventSocket(Log& log, PanelEventStreams& streams, PanelEventTickets& tickets, SessionSource& sessions, PanelUsers& users, PanelGrants& grants, AdminRouter& routes)
-    : _log(log), _streams(streams), _tickets(tickets), _sessions(sessions), _users(users), _grants(grants), _routes(routes)
+PanelEventSocket::PanelEventSocket(Log& log, PanelEventStreams& streams, PanelEventTickets& tickets, SessionSource& sessions, PanelUsers& users, PanelGrants& grants, PanelGrantSets& sets, AdminRouter& routes)
+    : _log(log), _streams(streams), _tickets(tickets), _sessions(sessions), _users(users), _grants(grants), _sets(sets), _routes(routes)
 {
     Handle("ping", [](Call const& call) { call.Answer("pong", "{}"); });
     Handle("resume", [this](Call const& call) { Resume(call); });
@@ -362,6 +363,22 @@ std::size_t PanelEventSocket::GetConnectionCount() const
     return _connections.size();
 }
 
+void PanelEventSocket::NotifyUser(int64 userId, std::string_view type, std::string const& data)
+{
+    std::vector<std::shared_ptr<Connection>> targets;
+    {
+        std::lock_guard const lock(_mutex);
+        for (auto const& [socket, connection] : _connections)
+        {
+            std::lock_guard const held(connection->Mutex);
+            if (connection->Ready && !connection->Closing && connection->Caller.Asking && connection->Caller.Asking->UserId == userId)
+                targets.push_back(connection);
+        }
+    }
+    for (std::shared_ptr<Connection> const& connection : targets)
+        Send(*connection, type, std::nullopt, data);
+}
+
 std::string PanelEventSocket::CloseReason(std::string_view text)
 {
     std::string reason;
@@ -474,6 +491,19 @@ std::optional<PanelEventCaller> PanelEventSocket::CallerOf(std::string const& pr
     }
     for (PanelGrant const& grant : grants)
         caller.Apps[grant.App].push_back(grant.Permission);
+    std::vector<PanelGrantSet> const sets = _sets.OfUser(user->Id, error);
+    if (!error.empty())
+    {
+        failure = error;
+        return std::nullopt;
+    }
+    for (PanelGrantSet const& set : sets)
+        for (std::string const& permission : set.Permissions)
+        {
+            std::vector<std::string>& held = caller.Apps[set.Scope];
+            if (std::find(held.begin(), held.end(), permission) == held.end())
+                held.push_back(permission);
+        }
     return caller;
 }
 

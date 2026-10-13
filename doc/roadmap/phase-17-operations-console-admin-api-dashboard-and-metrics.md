@@ -1168,11 +1168,11 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] An invite link works once, and a second use or a use after expiry is refused
-- [ ] An operator holding `power.restart` but not `power.kill` can grant the first and not the second, and saving a user who already holds `power.kill` leaves it in place
-- [ ] An operator cannot remove an admin's grants or edit their own
-- [ ] Two invites for the same user and scope sent at once create one grant
-- [ ] A grant change reaches the target's open session within one second, and a stale `If-Match` answers 409
+- [x] An invite link works once, and a second use or a use after expiry is refused (PanelInvitesTest.AnInviteLinkWorksOnce, PanelInvitesTest.AnInvitePastItsExpiryIsRefused, PanelInvitesTest.ARevokedInviteIsRefused)
+- [x] An operator holding `power.restart` but not `power.kill` can grant the first and not the second, and saving a user who already holds `power.kill` leaves it in place (PanelGrantPolicyTest.AnEditAddsWhatTheCallerHoldsAndKeepsWhatTheyLack, PanelGrantEditorTest.AnOperatorGrantsOnlyWhatTheyHold)
+- [x] An operator cannot remove an admin's grants or edit their own (PanelGrantEditorTest.AnOperatorCannotTouchAnAdministratorsGrantsOrTheirOwn)
+- [x] Two invites for the same user and scope sent at once create one grant (PanelInvitesTest.TwoInvitesForTheSameUserAndScopeMakeOneGrant)
+- [x] A grant change reaches the target's open session within one second, and a stale `If-Match` answers 409 (PanelGrantEditorTest.AGrantChangeEndsTheTargetsOpenSessionAtOnce, PanelGrantEditorTest.SavingTakesTheVersionReadAndAStaleOneConflicts)
 
 ## 17.38 Account page: profile, security, sessions and game account link
 

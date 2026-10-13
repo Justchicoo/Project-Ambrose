@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 160,
+    "done": 161,
     "total": 469,
-    "percent": 34.1
+    "percent": 34.3
   },
   "checks": {
-    "done": 1224,
+    "done": 1229,
     "total": 2884,
-    "percent": 42.4
+    "percent": 42.6
   },
   "game": {
     "label": "Game server",
@@ -47,14 +47,14 @@
       17
     ],
     "milestones": {
-      "done": 24,
+      "done": 25,
       "total": 186,
-      "percent": 12.9
+      "percent": 13.4
     },
     "checks": {
-      "done": 194,
+      "done": 199,
       "total": 1113,
-      "percent": 17.4
+      "percent": 17.9
     }
   },
   "contributor_track": {
@@ -193,11 +193,11 @@
     {
       "phase": 17,
       "title": "Operations console admin api dashboard and metrics",
-      "milestones_done": 24,
+      "milestones_done": 25,
       "milestones_total": 186,
-      "checks_done": 194,
+      "checks_done": 199,
       "checks_total": 1113
     }
   ],
-  "card": "17a5942684"
+  "card": "f7e4d2b0f7"
 }

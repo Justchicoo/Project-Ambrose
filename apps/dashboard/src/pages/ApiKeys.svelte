@@ -8,23 +8,15 @@
     import { Label } from "$lib/components/ui/label/index.js";
     import { Textarea } from "$lib/components/ui/textarea/index.js";
     import { Badge } from "$lib/components/ui/badge/index.js";
-    import { ApiError, session } from "$lib/api.svelte.js";
-    import {
-        createApiKey,
-        listApiKeys,
-        permissionCatalog,
-        revokeApiKey,
-        rotateApiKey,
-        type ApiKey,
-        type ApiKeyCreated,
-        type CatalogPermission,
-    } from "$lib/apikeys.js";
+    import { ApiError, permissionCatalog, session } from "$lib/api.svelte.js";
+    import { createApiKey, listApiKeys, revokeApiKey, rotateApiKey, type ApiKey, type ApiKeyCreated } from "$lib/apikeys.js";
+    import type { PermissionCatalogEntry } from "$lib/schemas.js";
     import { onMount } from "svelte";
     import { SvelteMap } from "svelte/reactivity";
     import PageHeader from "../components/PageHeader.svelte";
 
     let keys = $state<ApiKey[]>([]);
-    let catalog = $state<CatalogPermission[]>([]);
+    let catalog = $state<PermissionCatalogEntry[]>([]);
     let loading = $state(true);
     let failure = $state("");
     let notice = $state("");
@@ -50,7 +42,7 @@
 
     const held = $derived(new Set(session.user?.permissions ?? []));
     const grouped = $derived.by(() => {
-        const groups = new SvelteMap<string, CatalogPermission[]>();
+        const groups = new SvelteMap<string, PermissionCatalogEntry[]>();
         for (const permission of catalog) {
             if (!held.has("*") && !held.has(permission.key)) continue;
             const list = groups.get(permission.group) ?? [];

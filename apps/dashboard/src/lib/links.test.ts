@@ -12,6 +12,7 @@ describe("reading a link from an address", () => {
         expect(readLink("#/link?token=abc")).toEqual({ page: "link", token: "abc", pin: "" });
         expect(readLink("#claim?token=owner-token")).toEqual({ page: "claim", token: "owner-token", pin: "" });
         expect(readLink("#password?token=reset-token&sha256=AA")).toEqual({ page: "password", token: "reset-token", pin: "" });
+        expect(readLink("#invite?token=invite-token")).toEqual({ page: "invite", token: "invite-token", pin: "" });
         for (const other of [
             "",
             "#",

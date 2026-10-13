@@ -29,22 +29,6 @@ const ApiKeyList = v.array(ApiKey);
 const ApiKeyCreated = v.intersect([ApiKey, v.looseObject({ key: v.string() })]);
 export type ApiKeyCreated = v.InferOutput<typeof ApiKeyCreated>;
 
-export const CatalogPermission = v.looseObject({
-    group: v.string(),
-    key: v.string(),
-    description: v.string(),
-    danger: v.boolean(),
-    owner_only: v.boolean(),
-    opt_in: v.boolean(),
-});
-export type CatalogPermission = v.InferOutput<typeof CatalogPermission>;
-
-const PermissionCatalog = v.looseObject({
-    schema: v.number(),
-    permissions: v.array(CatalogPermission),
-});
-export type PermissionCatalog = v.InferOutput<typeof PermissionCatalog>;
-
 export type ApiKeyDraft = {
     name: string;
     permissions: string[];
@@ -76,10 +60,6 @@ export function listAllApiKeys(signal?: AbortSignal) {
 
 export function revokeAnyApiKey(publicId: string) {
     return request("DELETE", `api/panel/admin/apikeys/${publicId}`, v.looseObject({ revoked: v.boolean() }));
-}
-
-export function permissionCatalog(signal?: AbortSignal) {
-    return request("GET", "api/panel/permissions", PermissionCatalog, undefined, signal);
 }
 
 export function isKeyText(text: string): boolean {

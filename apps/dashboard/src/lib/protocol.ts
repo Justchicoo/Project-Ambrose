@@ -47,7 +47,7 @@ export type ServerType = (typeof serverTypes)[number];
 export const handledTypes = ["hello", "subscribe", "unsubscribe", "resume", "ping"] as const;
 export type HandledType = (typeof handledTypes)[number];
 
-export const sentTypes = ["ready", "status", "dropped", "error", "session.expiring", "pong"] as const;
+export const sentTypes = ["ready", "status", "dropped", "permissions.changed", "error", "session.expiring", "pong"] as const;
 export type SentType = (typeof sentTypes)[number];
 
 export const streamOfType = {
@@ -278,7 +278,11 @@ export type AlertData = v.InferOutput<typeof AlertData>;
 export const AuditData = v.looseObject({});
 export type AuditData = v.InferOutput<typeof AuditData>;
 
-export const PermissionsChangedData = v.looseObject({});
+export const PermissionsChangedData = v.looseObject({
+    user_id: v.pipe(v.number(), v.integer()),
+    scope: v.string(),
+    permissions: v.array(v.string()),
+});
 export type PermissionsChangedData = v.InferOutput<typeof PermissionsChangedData>;
 
 export const ThrottledData = v.looseObject({});

@@ -17,6 +17,7 @@
 
 struct PanelUser;
 class PanelGrants;
+class PanelGrantSets;
 
 struct PanelAsking
 {
@@ -31,7 +32,7 @@ public:
     using Finder = std::function<std::optional<PanelUser>(AdminRequest const&)>;
     using Recorder = std::function<void(AdminRequest const&, std::string_view permission, std::string_view app, PermissionVerdict verdict)>;
 
-    PanelAuthorization(PanelGrants& grants, Finder finder, Recorder recorder);
+    PanelAuthorization(PanelGrants& grants, PanelGrantSets& sets, Finder finder, Recorder recorder);
 
     PanelAuthorization(PanelAuthorization const&) = delete;
     PanelAuthorization& operator=(PanelAuthorization const&) = delete;
@@ -44,6 +45,7 @@ public:
 
 private:
     PanelGrants& _grants;
+    PanelGrantSets& _sets;
     Finder _finder;
     Recorder _recorder;
 };
