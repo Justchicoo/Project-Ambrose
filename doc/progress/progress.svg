@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="880" height="612" viewBox="0 0 880 612" role="img" aria-label="Project Ambrose progress: game server 136 of 283 milestones, 48.1 percent; panel 24 of 186 milestones, 12.9 percent">
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="612" viewBox="0 0 880 612" role="img" aria-label="Project Ambrose progress: game server 136 of 283 milestones, 48.1 percent; panel 25 of 186 milestones, 13.4 percent">
 <defs>
 <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B1020"/><stop offset="1" stop-color="#131B31"/></linearGradient>
 <linearGradient id="fill" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5FD3C4"/><stop offset="1" stop-color="#E4B457"/></linearGradient>
@@ -13,10 +13,10 @@
 <text x="40" y="172" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13.5" fill="#F2E8D5"><tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-weight="700">136</tspan> of <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">283</tspan> milestones finished</text>
 <text x="840" y="172" text-anchor="end" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13.5" fill="#A8B6D4"><tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" fill="#5FD3C4">1030</tspan> of <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">1771</tspan> acceptance checks passed</text>
 <text x="40" y="210" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#F2E8D5">Panel<tspan font-weight="400" font-size="13" fill="#A8B6D4">  the web panel that runs it, phase 17</tspan></text>
-<text x="840" y="212" text-anchor="end" font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="26" font-weight="700" fill="#F2E8D5">12.9%</text>
-<rect x="40" y="222" width="800" height="14" rx="7.0" fill="#0E1527"/><rect x="40" y="222" width="103.2" height="14" rx="7.0" fill="#5FD3C4"/>
-<text x="40" y="256" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13.5" fill="#F2E8D5"><tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-weight="700">24</tspan> of <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">186</tspan> milestones finished</text>
-<text x="840" y="256" text-anchor="end" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13.5" fill="#A8B6D4"><tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" fill="#5FD3C4">194</tspan> of <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">1113</tspan> acceptance checks passed</text>
+<text x="840" y="212" text-anchor="end" font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="26" font-weight="700" fill="#F2E8D5">13.4%</text>
+<rect x="40" y="222" width="800" height="14" rx="7.0" fill="#0E1527"/><rect x="40" y="222" width="107.5" height="14" rx="7.0" fill="#5FD3C4"/>
+<text x="40" y="256" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13.5" fill="#F2E8D5"><tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-weight="700">25</tspan> of <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">186</tspan> milestones finished</text>
+<text x="840" y="256" text-anchor="end" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13.5" fill="#A8B6D4"><tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" fill="#5FD3C4">199</tspan> of <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">1113</tspan> acceptance checks passed</text>
 <text x="40" y="286" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" fill="#A8B6D4" letter-spacing="1.5">PHASES</text>
 <text x="40" y="318" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#F2E8D5">01 Foundations to first hands…</text>
 <rect x="286" y="308" width="96" height="8" rx="4.0" fill="#0E1527"/><rect x="286" y="308" width="96.0" height="8" rx="4.0" fill="#5FD3C4"/>
@@ -67,8 +67,8 @@
 <rect x="690" y="518" width="96" height="8" rx="4.0" fill="#0E1527"/><rect x="690" y="518" width="36.9" height="8" rx="4.0" fill="#E4B457"/>
 <text x="796" y="527" font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="11.5" fill="#A8B6D4">5/13</text>
 <text x="40" y="558" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#F2E8D5">17 Operations console admin a…</text>
-<rect x="286" y="548" width="96" height="8" rx="4.0" fill="#0E1527"/><rect x="286" y="548" width="12.4" height="8" rx="4.0" fill="#E4B457"/>
-<text x="392" y="557" font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="11.5" fill="#A8B6D4">24/186</text>
+<rect x="286" y="548" width="96" height="8" rx="4.0" fill="#0E1527"/><rect x="286" y="548" width="12.9" height="8" rx="4.0" fill="#E4B457"/>
+<text x="392" y="557" font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="11.5" fill="#A8B6D4">25/186</text>
 <text x="40" y="586" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#A8B6D4">Contributors: <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" fill="#5FD3C4">94</tspan> items merged, <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">56</tspan> open</text>
 <text x="840" y="586" text-anchor="end" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#A8B6D4">Counted from the roadmap itself</text>
 </svg>

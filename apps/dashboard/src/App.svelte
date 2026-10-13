@@ -29,11 +29,18 @@
     import { everything, navigation, resolve } from "./routes";
     import Denied from "./pages/Denied.svelte";
     import Enroll from "./pages/Enroll.svelte";
+    import InviteClaim from "./pages/InviteClaim.svelte";
     import SignIn from "./pages/SignIn.svelte";
     import PlayerAccounts from "./pages/PlayerAccounts.svelte";
     import Unavailable from "./pages/Unavailable.svelte";
 
     const granted = $derived(session.panel ? new Set(session.user?.permissions ?? []) : everything);
+    let inviteToken = $state(arrivedWith.link?.page === "invite" ? (arrivedWith.link.token ?? null) : null);
+
+    function leaveInvite() {
+        arrivedWith.link = null;
+        inviteToken = null;
+    }
 
     function readPath(): string {
         const path = window.location.hash.replace(/^#\/?/, "").split("?")[0];
@@ -116,7 +123,9 @@
         <Button variant="outline" onclick={() => void probeSession()}><RotateCcwIcon />Try again</Button>
     </main>
 {:else if session.state === "signed-out"}
-    {#if session.panel && path.startsWith("player/")}
+    {#if inviteToken !== null}
+        <InviteClaim token={inviteToken} onDone={leaveInvite} />
+    {:else if session.panel && path.startsWith("player/")}
         <PlayerAccounts page={path} />
     {:else}
         <SignIn />

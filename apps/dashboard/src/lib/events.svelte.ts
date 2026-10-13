@@ -6,7 +6,8 @@
 import ReconnectingWebSocket, { type CloseEvent } from "partysocket/ws";
 import { untrack } from "svelte";
 import * as v from "valibot";
-import { session } from "./api.svelte";
+import { toast } from "svelte-sonner";
+import { probeSession, session } from "./api.svelte";
 import {
     closeCodes,
     protocolVersion,
@@ -198,6 +199,10 @@ type Handler<T extends SentType> = (frame: ServerFrame, data: ServerData<T>) => 
 export type Handlers = { [T in SentType]: Handler<T> };
 
 export const handlers: Handlers = {
+    "permissions.changed": (_frame, data) => {
+        void probeSession();
+        toast.info(`Your grants at ${data.scope} changed. The pages you may use were updated.`);
+    },
     ready: (_frame, data) => {
         if (events.instance !== data.instance) {
             for (const entry of followed) entry.seq = 0;

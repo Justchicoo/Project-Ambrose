@@ -210,6 +210,15 @@ export const routes: Route[] = [
         view: { kind: "arrives", milestone: "17.50", preview: list },
     },
     {
+        path: "invites",
+        title: "Invites",
+        icon: UsersIcon,
+        permission: "users.invite",
+        nav: true,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/Invites.svelte") },
+    },
+    {
         path: "settings",
         title: "Settings",
         icon: SettingsIcon,

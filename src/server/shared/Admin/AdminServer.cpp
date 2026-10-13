@@ -201,6 +201,7 @@ namespace
         incoming.Cookie = request.get_header_value("Cookie");
         incoming.Csrf = request.get_header_value("X-CSRF-Token");
         incoming.Range = request.get_header_value("Range");
+        incoming.IfMatch = request.get_header_value("If-Match");
         for (std::string const& key : request.url_params.keys())
             if (char const* const value = request.url_params.get(key))
                 incoming.QueryValues.emplace(key, value);
