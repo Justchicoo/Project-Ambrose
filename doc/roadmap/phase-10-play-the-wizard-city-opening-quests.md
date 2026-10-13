@@ -24,6 +24,7 @@
 | 10.16 | Wizard City chain authoring and automated test (QST-23 part 1) | M | 7.05, 7.13, 10.02, 10.05, 10.06, 10.08 |
 | 10.17 | Wizard City chain real-client playthrough (QST-23 part 2) | M | 10.16, 10.03 |
 | 10.18 | Quest helper extras (QST-24) | M | 7.11, 7.06 |
+| 10.19 | Path actions (WLD-17 part 2) | M | 10.14 |
 
 ## Review notes for this phase
 
@@ -42,7 +43,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 **Acceptance**
 
 - [ ] Result list runs in order; gated result skipped
-- [ ] Completing WC-MAIN-C01-003_Goal0 publishes 'GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0'
+- [x] Completing WC-MAIN-C01-003_Goal0 publishes 'GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0' (`QuestLogTest.ACompletedGoalPublishesItsEventOnceAndAWizardsDynamodsComeBackFromItsRows`: the goal hands out that event once, which the wizard's session posts into its zone's triggers, and `ZoneTriggerResultTest.AnAddDynaModResultReadsAsTheModItMakesAndAFiredTriggerHandsItBack` fires OpenGateToUW on it)
 - [ ] ResTeleport moves the player
 
 ### Detailed spec from QST-15: Results engine v1: registry, events and flow results
@@ -69,7 +70,7 @@ Quest start and end, goal activate and complete, tally and trigger results can c
 **Acceptance**
 
 - [ ] Unit test: the result list [ModifyEntry X=1, CompleteQuestGoal Q/G] runs in order and a gated result is skipped when its requirement fails.
-- [ ] Unit test: completing WC-MAIN-C01-003_Goal0 in a fixture publishes 'GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0'.
+- [x] Unit test: completing WC-MAIN-C01-003_Goal0 in a fixture publishes 'GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0'. (`QuestLogTest.ACompletedGoalPublishesItsEventOnceAndAWizardsDynamodsComeBackFromItsRows`)
 - [ ] Client: a quest whose goal completion runs ResTeleport moves the player to the destination zone and location.
 
 **Risks**
@@ -161,7 +162,7 @@ Objects show the right animation state, and the world changes a wizard has earne
 - [ ] Real client: in WC_Hub the Unicorn Way gate shows closed for a fresh character, and after the quest goal named in 'OpenGateToUW' it plays Open and rests 'IdleOpen' for that player only; player B without the quest still sees it closed
 - [ ] Real client: the gate is still 'IdleOpen' for that player after a relog and a zone change
 - [ ] Unit: a character's mods load and save; ResAddDynaMod adds, changes and removes by tag; a quest's mods leave with the quest unless m_existBeyondQuest
-- [ ] Unit: MSG_DYNAMODBEHAVIOR_UPDATEMODS carries the whole list at login and one Add or Remove per change
+- [x] Unit: MSG_DYNAMODBEHAVIOR_UPDATEMODS carries the whole list at login and one Add or Remove per change (`DynaModMessagesTest.TheFullSetReadsBackAsADynaModListOfEachMod` and `DynaModMessagesTest.AReplacedModDropsTheOldByIndexAndAddsTheNewWhileOthersTellNothing`: the full list reads back as a DynaModList, a replaced mod drops the old by index and adds the new, and a removal or another zone's mod sends nothing)
 
 **Risks**
 
@@ -1073,3 +1074,47 @@ The quest book's secondary features work: turn-in markers, hiding quests, active
 **Risks**
 
 - Blob formats for the hidden-quests Data and active-map replies are unverified.
+
+## 10.19 Path actions (WLD-17 part 2)
+
+**Goal:** Walkers pause, emote, despawn, turn, change path and post zone events at their nodes.
+
+**Size:** M. **Depends on:** 10.14
+
+**Client messages:** MSG_ENTERSTATE, MSG_SERVERTELEPORT, MSG_MOVESTATE, MSG_CLIENTNOTIFYTEXT
+
+**Acceptance**
+
+- [x] Every path action class the server runs is read from the template (PathActionsTest.ReadsEveryActionClassTheServerRunsAndSkipsTheRest, PathActionsTest.AWalkingTemplateCarriesItsActionsAndItsChanceAndTimeToPause)
+- [x] Each action runs on its node and chance (PathWalkersTest.APauseHoldsAWalkerAtItsNodeAndThenItWalksOn and the eight tests after it)
+- [x] Wizards in sight are sent the snap and the emote, and a zone event fires each wizard's triggers (GameSessionObjectChangesTest.ASnappedWalkerItsStatesAndItsZoneEventsReachTheWizardWhoSeesIt, GameSessionObjectChangesTest.AZoneEventWaitsForAWizardStandingInTheWorld)
+- [ ] Real client: a walker with an emote action plays it at its node and walks on
+
+### Detailed spec: Path actions
+
+PathBehaviorTemplate carries m_actionList, m_pauseChance and m_timeToPause, which 10.14 left unread. Of the 7,385 r806919 templates the catalog lists with a PathBehavior, 106 carry actions, 167 in all, which `client template --holding <class>` counts class by class: PathActionZoneEvent (46), PathActionDespawn (41), PauseAction (29, m_fMinPauseTime and m_fMaxPauseTime), PathActionEmote (18, m_sEmoteName, m_fMinTime, m_fMaxTime), TeleportToNode (15, m_nDestinationNodeID, m_bContinuePathing), PathActionChangeDirection (14), PathActionChangePath (3, m_nDestinationPathID, m_nDestinationNodeID) and PathActionEnterState (1, with an empty m_sStateName). No template ships PathActionStop. Every action names the path (m_nPathID) and node (m_nNodeID) it fires on, a priority (m_nPriority, 100 on every shipped action) and a percent chance (m_nChance). 377 of the 7,375 PathBehaviorTemplates give a nonzero m_pauseChance and m_timeToPause.
+
+**Deliverables**
+
+- `client template --holding <class> [text]` prints every template that holds an object of a class, with how many.
+- src/server/game/Zones/PathActions.h/.cpp: reads the action list and finds the actions keyed to a node, highest priority first. PathActionEnterState is not run: its one shipped action names no state.
+- PathMovementGenerator stops on each node reached when asked and hands back the time left over, and can hold, reverse and jump to a node.
+- PathWalkers runs a node's actions as a walker reaches it, each on its chance: pause and the template's chance to pause hold it; an emote holds it in the Emoting state of NPCMobileStates with the EmoteStateOverrideInfo that names the animation, refused for an animation the install's list lacks, and returns it to Idle as it walks on; a zone event goes to the instance; a despawn hands the object back to its spawner, which brings it back on its respawn time; a turn reverses it; a path change carries it onto another path; a jump snaps it to a node and stands it there unless m_bContinuePathing.
+- GameSession sends a snapped walker with MSG_SERVERTELEPORT and a walker's state with MSG_ENTERSTATE to the wizards who see it, and posts a walker's zone event into each in-world wizard's own triggers through ZoneTriggerMgr, without walking it through a door.
+
+**Data sources**
+
+- ObjectData PathBehaviorTemplate m_actionList, m_pauseChance, m_timeToPause
+- StateData/NPCMobileStates.xml: the Primary category's Idle and Emoting (an EmoteGameState that returns to Idle)
+
+**Acceptance**
+
+- [x] Unit: each action class the server runs is read with its path, node, priority, chance and own fields, PathActionEnterState is skipped, and a walking template carries its actions and pause chance (PathActionsTest.ReadsEveryActionClassTheServerRunsAndSkipsTheRest, PathActionsTest.AWalkingTemplateCarriesItsActionsAndItsChanceAndTimeToPause)
+- [x] Unit: a pause and the template's chance to pause hold a walker at the node, an emote enters Emoting with its data and returns to Idle, an emote the client cannot play is skipped, a zone event is posted only when its chance is rolled, a despawn is asked for, a turn walks it back, a path change carries it onto another path, and a jump snaps it to a node and stands it there or walks it on (PathWalkersTest.APauseHoldsAWalkerAtItsNodeAndThenItWalksOn, TheTemplatesChanceToPauseHoldsAWalkerOnAnyNode, AnEmotePlaysInEmotingAndEndsInIdleAsTheWalkerWalksOn, AnEmoteTheClientCannotPlayIsSkipped, AZoneEventGoesToTheInstanceOnlyWhenItsChanceIsRolled, ADespawnIsAskedForAndTheWalkerStops, ATurnSendsAWalkerBackTheWayItCame, APathChangeCarriesAWalkerOntoAnotherPath, AJumpSnapsAWalkerToAnotherNodeAndStandsItThereWhenItIsNotToWalkOn, AJumpThatWalksOnCarriesOnFromTheNodeItSnappedTo; PathMovementGeneratorTest.StopsOnEachNodeItReachesAndHandsBackTheTimeLeftOver, HoldsTurnsBackAndJumpsToAnotherNode)
+- [x] Unit: a wizard is sent MSG_SERVERTELEPORT, MSG_MOVESTATE and MSG_ENTERSTATE only for walkers it sees, and a walker's zone event fires the wizard's trigger and shows its notify text once the wizard stands in the world (GameSessionObjectChangesTest.ASnappedWalkerItsStatesAndItsZoneEventsReachTheWizardWhoSeesIt, GameSessionObjectChangesTest.AZoneEventWaitsForAWizardStandingInTheWorld)
+- [ ] Real client: a walker with a PathActionEmote, such as KT-Shopkepper-Ambient-Walker, plays its emote at its node, holds for the emote's time and walks on, seen the same on two clients
+
+**Risks**
+
+- An action's m_nNodeID is matched to the node's m_id, as a spawn's specific start node is; the real-client check confirms it.
+- Priority is taken as order only; every shipped action has priority 100.

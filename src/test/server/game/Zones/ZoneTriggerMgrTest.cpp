@@ -1,14 +1,20 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load. Without a database, Ravenwood POI's result as the client data holds it reads as the WizardPOI_00000001 notify text of type 1, and a cut one does not.
+ * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a trigger's results load in order, one of a class the server does not know left out and one that does not read failing the load; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load. Without a database, Ravenwood POI's result as the client data holds it reads as the WizardPOI_00000001 notify text of type 1, and a cut one does not; an AddDynaMod result reads as the tag and state it names, one with no tag or of another class does not, and a trigger that fires hands back the results it runs, one with requirements firing only for a wizard whose facts meet them.
  */
 
+#include "CharacterTypeFixtures.h"
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
+#include "ObjectSerializer.h"
+#include "PropertyObject.h"
 #include "ReloadMgr.h"
+#include "ResultFixtures.h"
+#include "ResultMgr.h"
 #include "StringHash.h"
 #include "TypeRegistry.h"
+#include "TypedView.h"
 #include "ZoneTriggerMgr.h"
 
 #include <fmt/format.h>
@@ -18,12 +24,21 @@
 
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <vector>
 
 namespace
 {
     constexpr std::string_view Hub = "WizardCity/WC_Hub";
+
+    class HeldQuests : public RequirementContext
+    {
+    public:
+        std::set<std::string, std::less<>> Quests;
+
+        std::optional<bool> HasQuest(std::string_view questName) const override { return Quests.contains(questName); }
+    };
 
     class ZoneTriggerMgrDatabaseTest : public testing::Test
     {
@@ -56,6 +71,8 @@ namespace
         {
             sZoneTriggerMgr.Clear();
             sReloadMgr.Clear();
+            sTypeRegistry.Clear();
+            sTypeRegistry.SetViews(&sTypedViewRegistry);
             if (_open)
                 WorldDatabase.Close();
             if (_info.Database.empty())
@@ -74,6 +91,7 @@ namespace
 
         MySQLConnectionInfo _info;
         bool _open = false;
+        TypedViewRegistry _views;
     };
 }
 
@@ -104,6 +122,40 @@ TEST_F(ZoneTriggerMgrDatabaseTest, AnEditedTriggerTakesHoldAtTheReloadAndABadRow
     ASSERT_EQ(errors.size(), 1u);
     EXPECT_NE(errors.front().find("volume 1 (Odd) has the shape TORUS"), std::string::npos) << errors.front();
     EXPECT_EQ(sZoneTriggerMgr.Post(1, Hub, "Enter_Something Else", 9, now), std::vector<std::string>{ "Trigger POI Ravenwood" }) << "a failed reload keeps the set it had";
+}
+
+TEST_F(ZoneTriggerMgrDatabaseTest, ATriggersResultsLoadInOrderAndOneThatDoesNotReadFailsTheLoad)
+{
+    sTypeRegistry.Clear();
+    sTypeRegistry.SetViews(&_views);
+    ASSERT_TRUE(sTypeRegistry.LoadFromText(ResultFixtures::Dump(), "results.json")) << sTypeRegistry.GetErrors().front();
+    auto const hex = [](std::vector<uint8> const& bytes)
+    {
+        std::string text;
+        for (uint8 const byte : bytes)
+            text += fmt::format("{:02X}", byte);
+        return text;
+    };
+    Insert(fmt::format("INSERT INTO `zone_trigger_result` (`zone_path`, `trigger_index`, `list`, `position`, `class_hash`, `class_name`, `data`) VALUES "
+        "('{0}', 0, 'results', 0, 1, '{1}', X'{2}'), ('{0}', 0, 'results', 1, 412163800, NULL, NULL), ('{0}', 0, 'results', 2, 2, '{3}', X'{4}')", Hub,
+        ZoneTriggerMgr::NotifyTextClass, hex(ResultFixtures::Encode(ResultFixtures::NotifyText("WizardPOI_00000001", 1))), ResultFixtures::FirstTestClass,
+        hex(ResultFixtures::Encode(ResultFixtures::Make(ResultFixtures::FirstTestClass, "after")))));
+    std::vector<std::string> errors;
+    ASSERT_TRUE(sZoneTriggerMgr.Load(errors)) << (errors.empty() ? std::string() : errors.front());
+    std::vector<ResultSource> fired;
+    sZoneTriggerMgr.Post(1, Hub, "Enter_Ravenwood POI", 7, ZoneTriggers::Clock::now(), &fired);
+    ASSERT_EQ(fired.size(), 1u);
+    ASSERT_EQ(fired.front().Results.size(), 2u) << "a result of a class the server does not know is held without bytes and left out";
+    EXPECT_EQ(fired.front().Results[0].Class, ZoneTriggerMgr::NotifyTextClass);
+    EXPECT_EQ(fired.front().Results[1].Class, ResultFixtures::FirstTestClass);
+    EXPECT_EQ(fired.front().Results[1].Position, 2u);
+
+    Insert(fmt::format("INSERT INTO `zone_trigger_result` (`zone_path`, `trigger_index`, `list`, `position`, `class_hash`, `class_name`, `data`) VALUES "
+        "('{}', 0, 'results', 3, 1, '{}', X'{}')", Hub, ZoneTriggerMgr::NotifyTextClass, hex(ResultFixtures::Encode(ResultFixtures::NotifyText("", 0)))));
+    errors.clear();
+    EXPECT_FALSE(sZoneTriggerMgr.Load(errors));
+    ASSERT_EQ(errors.size(), 1u);
+    EXPECT_NE(errors.front().find("notify text result at 3 that does not read: its m_text is empty"), std::string::npos) << errors.front();
 }
 
 TEST_F(ZoneTriggerMgrDatabaseTest, ClientsMayPostOnlyTheEventsTheirZoneListsAndNeverAVolumesOwn)
@@ -156,12 +208,94 @@ TEST(ZoneTriggerResultTest, RavenwoodsPoiResultReadsAsTheNotifyTextItShows)
         bytes.push_back(static_cast<uint8>(std::stoi(hex.substr(at, 2), nullptr, 16)));
 
     std::string error;
-    std::optional<ZoneNotifyText> const text = ZoneTriggerMgr::ReadNotifyText(registry.GetCatalog(), bytes, error);
+    std::shared_ptr<PropertyObject const> const result = ResultMgr::Decode(registry.GetCatalog(), bytes, error);
+    ASSERT_TRUE(result) << error;
+    std::optional<ZoneNotifyText> const text = ZoneTriggerMgr::NotifyTextOf(*result, error);
     ASSERT_TRUE(text) << error;
     EXPECT_EQ(text->Text, "WizardPOI_00000001");
     EXPECT_EQ(text->Type, 1);
 
+    std::vector<uint8> const whole = bytes;
     bytes.resize(bytes.size() / 2);
-    EXPECT_FALSE(ZoneTriggerMgr::ReadNotifyText(registry.GetCatalog(), bytes, error)) << "a cut result must not read";
-    EXPECT_FALSE(ZoneTriggerMgr::ReadNotifyText(nullptr, bytes, error));
+    EXPECT_FALSE(ResultMgr::Decode(registry.GetCatalog(), bytes, error)) << "a cut result must not read";
+    EXPECT_FALSE(ResultMgr::Decode(nullptr, whole, error));
+}
+
+TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTriggerHandsItBack)
+{
+    using CharacterTypeFixtures::Detail::AddClass;
+    using CharacterTypeFixtures::Detail::Json;
+    using CharacterTypeFixtures::Detail::Property;
+    Json classes = Json::object();
+    AddClass(classes, "class PropertyClass", Json::array(), {});
+    AddClass(classes, "class ResAddDynaMod", Json::array({ "PropertyClass" }), { { "m_dynaModClientTag", Property("std::string", "m_dynaModClientTag", 0, 7) },
+        { "m_dynaModRemove", Property("bool", "m_dynaModRemove", 1, 7) }, { "m_dynaModState", Property("std::string", "m_dynaModState", 2, 7) },
+        { "m_zoneName", Property("std::string", "m_zoneName", 3, 7) } });
+    AddClass(classes, "class ResClientNotifyText", Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
+    TypeRegistry registry;
+    ASSERT_TRUE(registry.LoadFromText(Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump(), "dynamod.json")) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
+    TypeCatalogPtr const catalog = registry.GetCatalog();
+
+    SerializerOptions options;
+    options.Versionable = true;
+    options.Mask = 0;
+    auto const encode = [&](std::string_view className, std::string const& tag)
+    {
+        PropertyObjectPtr const result = PropertyObject::Create(catalog, className);
+        EXPECT_TRUE(result);
+        if (className == ZoneTriggerMgr::DynaModClass)
+        {
+            EXPECT_EQ(result->Set("m_dynaModClientTag", std::string(tag)), PropertySetResult::Ok);
+            EXPECT_EQ(result->Set("m_dynaModState", std::string("IdleOpen")), PropertySetResult::Ok);
+        }
+        EncodeResult const encoded = ObjectSerializer::Encode(result.get(), options);
+        EXPECT_TRUE(encoded.Ok()) << encoded.Detail;
+        return encoded.Bytes;
+    };
+
+    auto const read = [&](std::string_view className, std::string const& tag)
+    {
+        std::string problem;
+        std::shared_ptr<PropertyObject const> result = ResultMgr::Decode(catalog, encode(className, tag), problem);
+        EXPECT_TRUE(result) << problem;
+        return ResultEntry{ std::string(className), std::move(result), 0 };
+    };
+    std::string error;
+    ResultEntry const gate = read(ZoneTriggerMgr::DynaModClass, "WC_GateCommons_ToUnicornWay");
+    std::optional<ZoneDynaMod> const mod = ZoneTriggerMgr::DynaModOf(*gate.Object, error);
+    ASSERT_TRUE(mod) << error;
+    EXPECT_EQ(*mod, (ZoneDynaMod{ "WC_GateCommons_ToUnicornWay", "IdleOpen", false, "" }));
+    EXPECT_FALSE(ZoneTriggerMgr::DynaModOf(*read(ZoneTriggerMgr::DynaModClass, "").Object, error)) << "a mod must name a tag";
+    EXPECT_FALSE(ZoneTriggerMgr::DynaModOf(*read(ZoneTriggerMgr::NotifyTextClass, "").Object, error));
+    EXPECT_NE(error.find("ResClientNotifyText"), std::string::npos) << error;
+
+    ZoneTriggerData data;
+    data.Triggers.push_back({ 3, "Trigger OpenGateToUW", -1, 0.0f, false, { "GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0" }, false, { gate } });
+    data.Triggers.push_back({ 4, "Trigger-OpenPetPark", -1, 0.0f, true, { "EnterZone" }, false, { read(ZoneTriggerMgr::DynaModClass, "PetParkCollision") } });
+    RequirementTree petQuest;
+    RequirementRow holds;
+    holds.Type = "ReqHasQuest";
+    holds.QuestName = "WC-PET-C08-001";
+    petQuest.Requirements.push_back(std::move(holds));
+    data.Requirements.emplace(4, std::make_shared<RequirementTree const>(std::move(petQuest)));
+    std::map<std::string, ZoneTriggerData, std::less<>> zones;
+    zones.emplace(std::string(Hub), std::move(data));
+    sZoneTriggerMgr.Replace(std::move(zones));
+    std::vector<ResultSource> fired;
+    EXPECT_EQ(sZoneTriggerMgr.Post(1, Hub, "GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0", 7, ZoneTriggers::Clock::now(), &fired),
+        std::vector<std::string>{ "Trigger OpenGateToUW" });
+    ASSERT_EQ(fired.size(), 1u);
+    EXPECT_EQ(fired.front().Name, "Trigger OpenGateToUW");
+    ASSERT_EQ(fired.front().Results.size(), 1u);
+    EXPECT_EQ(ZoneTriggerMgr::DynaModOf(*fired.front().Results.front().Object, error)->Tag, "WC_GateCommons_ToUnicornWay");
+
+    HeldQuests wizard;
+    fired.clear();
+    EXPECT_TRUE(sZoneTriggerMgr.Post(1, Hub, "EnterZone", 7, ZoneTriggers::Clock::now(), &fired).empty()) << "requirements fail closed with no facts to check";
+    EXPECT_TRUE(sZoneTriggerMgr.Post(1, Hub, "EnterZone", 7, ZoneTriggers::Clock::now(), &fired, false, &wizard).empty()) << "the wizard lacks the quest";
+    wizard.Quests.insert("WC-PET-C08-001");
+    EXPECT_EQ(sZoneTriggerMgr.Post(1, Hub, "EnterZone", 7, ZoneTriggers::Clock::now(), &fired, false, &wizard), std::vector<std::string>{ "Trigger-OpenPetPark" });
+    ASSERT_EQ(fired.size(), 1u);
+    EXPECT_EQ(ZoneTriggerMgr::DynaModOf(*fired.front().Results.front().Object, error)->Tag, "PetParkCollision");
+    sZoneTriggerMgr.Clear();
 }

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers the requirement engine for a wizard in the world: its quest log's quests, goals and registry, its level as its magic level in every school, its school as its school of focus, and the zone it stands in.
+ * Answers the requirement engine for a wizard in the world: its quest log's quests, goals and registry, its level as its magic level in every school, its school as its school of focus, the zone it stands in, and whether a class project is one the realm runs.
  */
 
 #ifndef AMBROSE_WIZARDREQUIREMENTCONTEXT_H
@@ -21,6 +21,7 @@ public:
     std::optional<double> GetMagicLevel(std::string_view school) const override;
     std::optional<bool> HasSchoolOfFocus(std::string_view school) const override;
     std::optional<bool> IsInZone(std::string_view zoneName) const override;
+    std::optional<bool> IsClassProjectActive(std::string_view projectName) const override;
 
 private:
     std::string _school;

@@ -100,6 +100,10 @@ namespace
         hasBadge.BadgeName = "Badge1";
         rows.Requirements.push_back(hasBadge);
 
+        RequirementRow classProject = Requirement("ReqClassProjectActive", 11);
+        classProject.ClassProjectName = "DuelArena";
+        rows.Requirements.push_back(classProject);
+
         return rows;
     }
 
@@ -184,6 +188,12 @@ namespace
             return Badge;
         }
 
+        std::optional<bool> IsClassProjectActive(std::string_view projectName) const override
+        {
+            LastClassProject = projectName;
+            return ClassProject;
+        }
+
         std::map<std::string, bool, std::less<>> Quests;
         std::optional<RequirementGoalStatus> GoalStatus = RequirementGoalStatus::Complete;
         std::optional<bool> RegistryEntry = true;
@@ -193,6 +203,7 @@ namespace
         std::optional<bool> InZone = true;
         std::optional<bool> Gender = true;
         std::optional<bool> Badge = true;
+        std::optional<bool> ClassProject = true;
         mutable std::string LastQuest;
         mutable std::string LastGoal;
         mutable std::string LastEntry;
@@ -204,6 +215,7 @@ namespace
         mutable std::string LastZone;
         mutable std::string LastGender;
         mutable std::string LastBadge;
+        mutable std::string LastClassProject;
         mutable std::uint8_t LastTargetType = 255;
         mutable bool LastIsQuestRegistry = false;
         mutable bool LastHasEntryIsQuestRegistry = false;
@@ -281,6 +293,7 @@ TEST_F(RequirementTest, EveryBuiltInTypeUsesItsMatchingWizardFact)
     EXPECT_EQ(context.LastZone, "WizardCity/WC_Hub");
     EXPECT_EQ(context.LastGender, "Female");
     EXPECT_EQ(context.LastBadge, "Badge1");
+    EXPECT_EQ(context.LastClassProject, "DuelArena");
 }
 
 TEST_F(RequirementTest, EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold)
@@ -298,6 +311,7 @@ TEST_F(RequirementTest, EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold)
         { "ReqInZone", [](FakeRequirementContext& context) { context.InZone = false; } },
         { "ReqIsGender", [](FakeRequirementContext& context) { context.Gender = false; } },
         { "ReqHasBadge", [](FakeRequirementContext& context) { context.Badge = false; } },
+        { "ReqClassProjectActive", [](FakeRequirementContext& context) { context.ClassProject = false; } },
         { "an unanswered fact", [](FakeRequirementContext& context) { context.Badge = std::nullopt; } }
     };
     for (auto const& [name, breakFact] : breaks)

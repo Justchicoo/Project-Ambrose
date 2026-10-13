@@ -282,35 +282,35 @@ void SocialMgr::LoadLists(GameSession& session, uint64 characterId, std::functio
         completion(true);
         return;
     }
-    Statement friends = Prepare(CHAR_SEL_SOCIAL_FRIENDS);
-    if (!friends || !CharacterDatabase.IsOpen())
+    Statement friendsQuery = Prepare(CHAR_SEL_SOCIAL_FRIENDS);
+    if (!friendsQuery || !CharacterDatabase.IsOpen())
     {
         LOG_ERROR("server.social", "Could not prepare loading the friend list for wizard {}", characterId);
         completion(false);
         return;
     }
-    friends->SetData(0, characterId);
+    friendsQuery->SetData(0, characterId);
     GameSession* const owner = &session;
-    QueueQuery(session, CharacterDatabase.AsyncQuery(std::move(friends), session.MakeCompletionHandler())
+    QueueQuery(session, CharacterDatabase.AsyncQuery(std::move(friendsQuery), session.MakeCompletionHandler())
         .WithPreparedCallback([this, owner, characterId, completion = std::move(completion)](PreparedQueryResult result) mutable
     {
         std::map<uint64, SocialFriend> friends = ReadFriends(std::move(result));
-        QueueWorldWork(*owner, [this, characterId, friends = std::move(friends), completion = std::move(completion)](GameSession& session) mutable
+        QueueWorldWork(*owner, [this, characterId, friends = std::move(friends), completion = std::move(completion)](GameSession& worldSession) mutable
         {
-            Statement ignores = Prepare(CHAR_SEL_SOCIAL_IGNORES);
-            if (!ignores || !CharacterDatabase.IsOpen())
+            Statement ignoresQuery = Prepare(CHAR_SEL_SOCIAL_IGNORES);
+            if (!ignoresQuery || !CharacterDatabase.IsOpen())
             {
                 LOG_ERROR("server.social", "Could not prepare loading the ignore list for wizard {}", characterId);
                 completion(false);
                 return;
             }
-            ignores->SetData(0, characterId);
-            GameSession* const owner = &session;
-            QueueQuery(session, CharacterDatabase.AsyncQuery(std::move(ignores), session.MakeCompletionHandler())
-                .WithPreparedCallback([this, owner, characterId, friends = std::move(friends), completion = std::move(completion)](PreparedQueryResult ignoreResult) mutable
+            ignoresQuery->SetData(0, characterId);
+            GameSession* const worldOwner = &worldSession;
+            QueueQuery(worldSession, CharacterDatabase.AsyncQuery(std::move(ignoresQuery), worldSession.MakeCompletionHandler())
+                .WithPreparedCallback([this, worldOwner, characterId, friends = std::move(friends), completion = std::move(completion)](PreparedQueryResult ignoreResult) mutable
             {
                 std::map<uint64, SocialIgnore> ignores = ReadIgnores(std::move(ignoreResult));
-                QueueWorldWork(*owner, [this, characterId, friends = std::move(friends), ignores = std::move(ignores),
+                QueueWorldWork(*worldOwner, [this, characterId, friends = std::move(friends), ignores = std::move(ignores),
                     completion = std::move(completion)](GameSession&) mutable
                 {
                     if (!_loaded.contains(characterId))
@@ -468,7 +468,7 @@ void SocialMgr::SendPendingRequests(GameSession& session, std::function<void()> 
         .WithPreparedCallback([this, owner, ownerId, completion = std::move(completion)](PreparedQueryResult result) mutable
     {
         std::vector<RequestRow> requests = ReadRequests(std::move(result));
-        QueueWorldWork(*owner, [this, ownerId, requests = std::move(requests), completion = std::move(completion)](GameSession& session) mutable
+        QueueWorldWork(*owner, [this, ownerId, requests = std::move(requests), completion = std::move(completion)](GameSession& worldSession) mutable
         {
             for (RequestRow const& request : requests)
             {
@@ -478,7 +478,7 @@ void SocialMgr::SendPendingRequests(GameSession& session, std::function<void()> 
                 message.EntryGid = ownerId;
                 message.OwnerName = request.PackedName;
                 message.OwnerLevel = static_cast<uint8>(std::clamp(request.Level, 0, static_cast<int32>(std::numeric_limits<uint8>::max())));
-                session.SendDmlMessage(message);
+                worldSession.SendDmlMessage(message);
             }
             completion();
         });

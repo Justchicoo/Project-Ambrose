@@ -7,16 +7,17 @@
 #include "Log.h"
 #include "ObjectFields.h"
 #include "ObjectGuid.h"
+#include "ObjectSerializer.h"
 #include "ObjectViews.h"
 #include "PropertyFiller.h"
 #include "RequirementObjects.h"
 #include "TypeRegistry.h"
-#include "ZoneExtractor.h"
 #include "ZoneObjectBuilder.h"
 
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <utility>
@@ -99,25 +100,14 @@ namespace
     {
         if (!row.HasSpawnRequirements)
             return nullptr;
-        std::optional<RequirementTree> tree;
         if (row.SpawnRequirements.empty())
+        {
             problem = "its spawn requirements were not read from the world database";
-        else if (!sources.Catalog)
-            problem = "no type dump is loaded to read its spawn requirements";
-        else
-        {
-            DecodeResult const decoded = ObjectSerializer::Decode(sources.Catalog, row.SpawnRequirements, ZoneExtractor::DataOptions());
-            if (!decoded.Ok())
-                problem = fmt::format("its spawn requirements do not decode: {}", decoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(decoded.Status)) : decoded.Detail);
-            else if (!(tree = RequirementObjects::TreeOf(decoded.Object.get())))
-                problem = fmt::format("its spawn requirements are a {}, not a RequirementList", decoded.Object ? decoded.Object->GetClass().Name : std::string("null"));
+            RequirementTree closed;
+            closed.Requirements.push_back(RequirementObjects::RowOf(nullptr));
+            return std::make_shared<RequirementTree const>(std::move(closed));
         }
-        if (!tree)
-        {
-            tree.emplace();
-            tree->Requirements.push_back(RequirementObjects::RowOf(nullptr));
-        }
-        return std::make_shared<RequirementTree const>(std::move(*tree));
+        return std::make_shared<RequirementTree const>(RequirementObjects::Decode(sources.Catalog, row.SpawnRequirements, problem));
     }
 
     bool BuildsAlike(Map const& map, MapObject const& object, MapObjectSources const& sources)
@@ -149,6 +139,8 @@ void MapObjectChanges::Absorb(MapObjectChanges other)
     Deleted.insert(Deleted.end(), other.Deleted.begin(), other.Deleted.end());
     Problems.insert(Problems.end(), std::make_move_iterator(other.Problems.begin()), std::make_move_iterator(other.Problems.end()));
     Moved.insert(Moved.end(), other.Moved.begin(), other.Moved.end());
+    States.insert(States.end(), std::make_move_iterator(other.States.begin()), std::make_move_iterator(other.States.end()));
+    ZoneEvents.insert(ZoneEvents.end(), std::make_move_iterator(other.ZoneEvents.begin()), std::make_move_iterator(other.ZoneEvents.end()));
 }
 
 std::optional<uint64> MapObjectSpawner::Place(Map& map, ZoneObjectSpawn const& row, MapObjectOrigin origin, uint32 spawnerIndex, MapObjectSources const& sources,

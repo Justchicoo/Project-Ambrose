@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `field` reads a message field's object from a file, as its own rules say. `hash` gives the hash the client gives a class or school name, or a property's hash from its type and name, with no install. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and a behavior's handler goes in under a key such as RidableBehavior_MSG_RidersList, found the same way with its plain name read after the key, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe; for a name it registers nothing under, it says whether the program holds that name at all, since a name the program never holds is one it cannot key a factory by, which is how a behavior only the server runs is told from one the tool cannot follow yet. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `requirements` counts the requirement classes placed objects gate their spawning on, so the server knows which ones it must understand first. `catalog` writes every template id the manifest lists, sorted by its class and the behaviors that mark it a mob, an NPC, a piece of equipment, furniture, a pet or a mount into one category file each and grouped by the folder that holds it, with its English name, and every zone with its locations and the templates it places, so people and the panel can find an id without asking the install one at a time. `wizbangs` prints the markers WizBangs.xml gives the client, each under the id a MSG_WIZBANG names it by, the string hash of its name, which the client's SetWizBang looks the template up by, and the model it draws, and says of a name or id no marker has that it draws nothing, which is how 6.02 found the client has no spellbook marker. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `name` names a property hash the way the property oracle does, from every type and name the dump lists, every property name the client program holds or prints and every one the install's text files spell out, `--wide` adding every class the dump lists as a type, plain, pointed to and shared, and it says how often a random hash is named by the same sources, so a lone answer from a wide search is read as the chance it is. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a core type, a template type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads which class each core type builds from the world database's core_object_type when it is given the world database, and when a core type builds a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --core-type or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there; without it, the classes the install holds that its dump does not describe join the dump from the class file schemaprobe builds for the install's revision in the Ambrose data folder, when there is one, so a template shows every behavior it holds as the game server reads it. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `field` reads a message field's object from a file, as its own rules say. `hash` gives the hash the client gives a class or school name, or a property's hash from its type and name, with no install. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and a behavior's handler goes in under a key such as RidableBehavior_MSG_RidersList, found the same way with its plain name read after the key, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe; for a name it registers nothing under, it says whether the program holds that name at all, since a name the program never holds is one it cannot key a factory by, which is how a behavior only the server runs is told from one the tool cannot follow yet. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `requirements` counts the requirement classes placed objects gate their spawning on, so the server knows which ones it must understand first. `template --holding` prints every template that holds an object of a class anywhere inside it with how many, which is how 10.19 found the path actions the shipped walkers carry. `catalog` writes every template id the manifest lists, sorted by its class and the behaviors that mark it a mob, an NPC, a piece of equipment, furniture, a pet or a mount into one category file each and grouped by the folder that holds it, with its English name, and every zone with its locations and the templates it places, so people and the panel can find an id without asking the install one at a time. `wizbangs` prints the markers WizBangs.xml gives the client, each under the id a MSG_WIZBANG names it by, the string hash of its name, which the client's SetWizBang looks the template up by, and the model it draws, and says of a name or id no marker has that it draws nothing, which is how 6.02 found the client has no spellbook marker. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `name` names a property hash the way the property oracle does, from every type and name the dump lists, every property name the client program holds or prints and every one the install's text files spell out, `--wide` adding every class the dump lists as a type, plain, pointed to and shared, and it says how often a random hash is named by the same sources, so a lone answer from a wide search is read as the chance it is. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `quests` reads the quest templates of a CSR package the user kept from an older client into the world database's quest tables, checks them against the install and the quest validator, counts why the rest do not import and what the tables have no place for, and with --import writes the clean ones into the user's own world database under the package's name as their source. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a core type, a template type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads which class each core type builds from the world database's core_object_type when it is given the world database, and when a core type builds a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --core-type or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there; without it, the classes the install holds that its dump does not describe join the dump from the class file schemaprobe builds for the install's revision in the Ambrose data folder, when there is one, so a template shows every behavior it holds as the game server reads it. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
 #include "ArchiveText.h"
@@ -38,6 +38,7 @@
 #include "PropertyJson.h"
 #include "PropertyOracle.h"
 #include "PropertyWordSearch.h"
+#include "QuestPackage.h"
 #include "ServerClassCache.h"
 #include "SkippedValue.h"
 #include "SpawnRequirementCensus.h"
@@ -115,6 +116,10 @@ Commands:
                          TemplateManifest.xml, with its archive, file, name and behaviors
   template --list [text] print every template id the manifest lists with its archive and
                          entry, or those holding the text, marking each the install lacks
+  template --holding <class> [text]
+                         print every template, or those whose entry holds the text, that
+                         holds an object of the class anywhere inside it, such as
+                         PathActionEmote, with how many it holds
   catalog [folder]       write every template id the manifest lists, sorted by its class
                          and behaviors into categories such as Mobs, NPCs, Equipment,
                          Housing and Spells, one JSON file each, with its folder, name,
@@ -166,6 +171,15 @@ Commands:
                          without, read as the field's own rules say, such as MSG_BADGES BadgeInfo
   hex <file>...          print a file's bytes with their offsets, from --from for --count,
                          or with --wad an archive entry's, such as one no class reads yet
+  quests --wad <package> read the QuestData quest templates of a CSR package you kept from
+                         an older client into the world database's quest tables, checked
+                         against the install's templates and --locale text and the quest
+                         validator, and print how many read and import cleanly, why the rest
+                         do not, what the tables have no place for, the requirement and
+                         unknown classes they use and the locale keys they name; --list also
+                         prints each quest and why it does not import, and --import writes
+                         the clean ones into --world-db, each row naming the package as its
+                         source, replacing what an earlier import of it wrote
 
 Options:
   --client <dir>       the install to read (default: AMBROSE_CLIENT_DIR)
@@ -208,8 +222,10 @@ Options:
                        folder by importing and analyzing the client program, once)
   --world-db <info>    the world database, host;port;user;password;database, whose
                        server_class, core_object_type and core_template_type rows join
-                       what the dump says
+                       what the dump says, and whose object_template quests checks
+                       actors and personas against and --import writes
                        (default: AMBROSE_WORLD_DATABASE_INFO)
+  --import             with quests, write the quests that read cleanly into --world-db
   --flags <n>          read core with exactly these serializer flags rather than trying
                        the plain form and then a stream that opens with its own flags
   --from <n>, --count <n>
@@ -235,6 +251,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::size_t Count = 0;
         bool List = false;
         bool All = false;
+        bool Import = false;
         bool Trailing = false;
         bool Derived = false;
         bool Spawners = false;
@@ -242,6 +259,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         bool Words = false;
         std::vector<std::string> Types;
         std::vector<std::string> Anchors;
+        std::optional<std::string> Holding;
         std::optional<std::string> Flag;
         std::optional<std::string> Ghidra;
         std::optional<std::string> GhidraProject;
@@ -305,6 +323,13 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 parsed.Spawners = true;
             else if (arg == "--derived")
                 parsed.Derived = true;
+            else if (arg == "--holding")
+            {
+                std::optional<std::string> const given = value(arg);
+                if (!given)
+                    return std::nullopt;
+                parsed.Holding = given->starts_with("class ") ? *given : "class " + *given;
+            }
             else if (arg == "--flag" || arg == "--ghidra" || arg == "--ghidra-project")
             {
                 std::optional<std::string> const given = value(arg);
@@ -336,6 +361,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             }
             else if (arg == "--all")
                 parsed.All = true;
+            else if (arg == "--import")
+                parsed.Import = true;
             else if (arg == "--locale")
             {
                 if (index + 1 >= args.size())
@@ -1972,6 +1999,61 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return shown == 0 ? Failure : Success;
     }
 
+    std::size_t CountHeld(PropertyValue const& value, std::string_view className);
+
+    std::size_t CountHeld(PropertyObject const& object, std::string_view className)
+    {
+        std::size_t count = object.GetClass().Name == className ? 1 : 0;
+        for (std::size_t ordinal = 0; ordinal < object.GetClass().Properties.size(); ++ordinal)
+            if (PropertyValue const* const value = object.GetAt(ordinal))
+                count += CountHeld(*value, className);
+        return count;
+    }
+
+    std::size_t CountHeld(PropertyValue const& value, std::string_view className)
+    {
+        if (PropertyObject const* const object = value.AsObject())
+            return CountHeld(*object, className);
+        std::size_t count = 0;
+        if (PropertyValue::List const* const list = value.GetList())
+            for (PropertyValue const& entry : *list)
+                count += CountHeld(entry, className);
+        return count;
+    }
+
+    int ListHolding(Arguments const& arguments, ObjectTemplateMgr& store)
+    {
+        std::shared_ptr<TemplateManifest const> const manifest = store.GetManifest();
+        std::vector<std::pair<uint32, std::string>> sorted;
+        sorted.reserve(manifest->Size());
+        std::string const pattern = arguments.Subjects.empty() ? std::string() : Ambrose::ToLower(arguments.Subjects.front());
+        for (auto const& [id, location] : manifest->GetLocations())
+            if (pattern.empty() || Ambrose::ToLower(location.Path).find(pattern) != std::string::npos)
+                sorted.emplace_back(id, location.Path);
+        std::sort(sorted.begin(), sorted.end());
+        std::size_t holding = 0;
+        std::size_t held = 0;
+        std::size_t unread = 0;
+        for (auto const& [id, path] : sorted)
+        {
+            TemplateLookup const found = store.Lookup(id);
+            if (!found.Template || !found.Template->Object)
+            {
+                ++unread;
+                continue;
+            }
+            std::size_t const count = CountHeld(*found.Template->Object, *arguments.Holding);
+            if (count == 0)
+                continue;
+            std::cout << fmt::format("{}  {}  {}\n", id, path, count);
+            ++holding;
+            held += count;
+        }
+        std::cerr << fmt::format("client: {} of the {} templates read hold {} {} object(s); {} could not be read\n", holding, sorted.size() - unread, held, *arguments.Holding,
+            unread);
+        return holding == 0 ? Failure : Success;
+    }
+
     int RunCatalog(Arguments const& arguments, std::filesystem::path const& install, std::string const& revision, TypeCatalogPtr const& catalog, ClientSystem const& system)
     {
         if (revision.empty())
@@ -2075,6 +2157,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::filesystem::path const gameData = install / "Data" / "GameData";
         if (arguments.List)
             return ListTemplates(arguments, *store.GetManifest(), gameData);
+        if (arguments.Holding)
+            return ListHolding(arguments, store);
 
         int status = Success;
         for (std::string const& subject : arguments.Subjects)
@@ -2244,6 +2328,121 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
     }
 }
 
+namespace
+{
+    void PrintCounts(std::string_view title, QuestPackageRead::Counts const& counts)
+    {
+        if (counts.empty())
+            return;
+        std::vector<std::pair<std::string, std::size_t>> sorted(counts.begin(), counts.end());
+        std::stable_sort(sorted.begin(), sorted.end(), [](auto const& left, auto const& right) { return left.second > right.second; });
+        std::cout << fmt::format("{}:\n", title);
+        for (auto const& [name, count] : sorted)
+            std::cout << fmt::format("  {:>6}  {}\n", count, name);
+    }
+
+    int RunQuests(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog, std::filesystem::path const& client)
+    {
+        std::vector<QuestPackageEntry> entries;
+        for (std::string const& name : QuestPackage::GetQuestEntries(archive))
+        {
+            KiwadReadResult const read = archive.Read(name);
+            if (!read.Succeeded())
+            {
+                std::cerr << fmt::format("{}: {}\n", name, read.Error);
+                continue;
+            }
+            entries.push_back(QuestPackageEntry{ name, std::string(read.Data.begin(), read.Data.end()) });
+        }
+        if (entries.empty())
+        {
+            std::cerr << fmt::format("{} holds no {}*.xml quest file\n", ConfigMgr::PathToUtf8(archive.GetPath()), QuestPackage::QuestFolder);
+            return Failure;
+        }
+        QuestPackageRead read = QuestPackage::Read(catalog, entries);
+
+        std::string localeError;
+        QuestValidator::KeyLookup hasKey;
+        if (sLocaleStore.Load(client / "Data" / "GameData" / "Root.wad", arguments.Locale, localeError))
+            hasKey = [locale = arguments.Locale](std::string_view key) { return sLocaleStore.HasKey(key, locale); };
+        else
+            std::cerr << fmt::format("client: the {} locale cannot be read, so no key is checked: {}\n", arguments.Locale, localeError);
+
+        std::string const source = QuestPackage::SourceOf(archive.GetPath().filename().generic_string());
+        std::vector<QuestObjectRow> objects;
+        std::set<std::string, std::less<>> heldElsewhere;
+        std::optional<MySQLConnectionInfo> database;
+        std::unique_ptr<MySQLConnection> connection;
+        if (arguments.WorldDatabase && !arguments.WorldDatabase->empty())
+        {
+            std::string error;
+            database = MySQLConnectionInfo::Parse(*arguments.WorldDatabase, &error);
+            if (!database)
+            {
+                std::cerr << fmt::format("client: --world-db cannot be read: {}\n", error);
+                return BadUsage;
+            }
+            MySQLConnectionSettings settings;
+            settings.Flags = ConnectionFlags::Sync;
+            connection = std::make_unique<MySQLConnection>(*database, settings);
+            if (connection->Open() != 0)
+            {
+                std::cerr << fmt::format("client: cannot connect to {}: {}\n", database->ToLogString(), connection->GetLastErrorText());
+                return Failure;
+            }
+            if (QueryResult const result = connection->Query("SELECT `template_id`, `object_name` FROM `object_template`"))
+                do
+                    objects.push_back(QuestObjectRow{ result->Fetch()[0].Get<uint32>(), result->Fetch()[1].Get<std::string>() });
+                while (result->NextRow());
+            if (!connection->Execute("SELECT `source` FROM `quest_template` LIMIT 0"))
+            {
+                std::cerr << fmt::format("client: {} has no quest_template.source; start a server on it or run dbimport so its updates apply\n", database->ToLogString());
+                return Failure;
+            }
+            if (QueryResult const result = connection->Query(fmt::format("SELECT `name` FROM `quest_template` WHERE `source` <> {}", WorldSqlScript::Literal(source))))
+                do
+                    heldElsewhere.insert(result->Fetch()[0].Get<std::string>());
+                while (result->NextRow());
+            if (objects.empty())
+                std::cerr << "client: object_template is empty, so no actor or persona is checked; run extractor templates on this world database first\n";
+        }
+        else if (arguments.Import)
+        {
+            std::cerr << "client quests --import needs the world database; name it with --world-db or AMBROSE_WORLD_DATABASE_INFO\n";
+            return BadUsage;
+        }
+        QuestPackage::Check(read, QuestValidator::Context::From(objects, hasKey), heldElsewhere);
+
+        if (arguments.List)
+            for (QuestPackageQuest const& quest : read.Quests)
+                std::cout << fmt::format("{}\t{}\t{}\n", quest.Entry, quest.Name, quest.IsClean() ? std::string("clean") : quest.Problems.front());
+
+        std::size_t const clean = read.GetCleanCount();
+        std::cout << fmt::format("{}: {} quest files, {} quests read, {} import cleanly, {} do not\n", ConfigMgr::PathToUtf8(archive.GetPath()), read.Files, read.Quests.size(), clean,
+            read.Quests.size() - clean);
+        std::cout << fmt::format("locale keys named: {} distinct, {} missing from the {} locale\n", read.Keys.size(), QuestPackage::CountMissingKeys(read, hasKey), arguments.Locale);
+        PrintCounts("files not read", read.Unread);
+        PrintCounts("why quests do not import", read.GetCategories());
+        PrintCounts("root classes", read.RootClasses);
+        PrintCounts("requirement classes", read.RequirementClasses);
+        PrintCounts("classes the type dump does not list", read.UnknownClasses);
+        PrintCounts("what the quest tables have no place for, by occurrence", read.NotCarried);
+        PrintCounts("what was read another way, by occurrence", read.Adjusted);
+
+        if (!arguments.Import)
+            return Success;
+        connection.reset();
+        std::string error;
+        if (!QuestPackage::BuildScript(read, source).Apply(*database, error))
+        {
+            std::cerr << fmt::format("client: {}\n", error);
+            return Failure;
+        }
+        std::cout << fmt::format("imported {} quests into {} as source {}\n", clean, database->ToLogString(), source);
+        return Success;
+    }
+}
+
 int main(int argc, char** argv)
 {
     sLog.SetLoggerLevel("root", LogLevel::Disabled);
@@ -2290,20 +2489,20 @@ int main(int argc, char** argv)
     }
 
     if (command != "hex" && command != "types" && command != "name" && command != "messages" && command != "handlers" && command != "behaviors" && command != "template" && command != "wad" && command != "lang"
-        && command != "wizbangs" && command != "catalog" && command != "requirements"
+        && command != "wizbangs" && command != "catalog" && command != "requirements" && command != "quests"
         && command != "core" && command != "field" && command != "strings" && command != "xrefs" && command != "disasm" && command != "decompile" && command != "functions" && command != "vtable")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
         return BadUsage;
     }
 
-    if (arguments->Subjects.empty() && !arguments->List && command != "catalog" && command != "requirements")
+    if (arguments->Subjects.empty() && !arguments->List && command != "catalog" && command != "requirements" && command != "quests" && !(command == "template" && arguments->Holding))
     {
         std::cerr << fmt::format("client {} needs something to look for; pass one, or --list to see what there is\n{}", command, Usage);
         return BadUsage;
     }
 
-    bool const needsDump = command == "types" || command == "wad" || command == "core" || command == "field" || command == "template" || command == "behaviors" || command == "name" || command == "wizbangs" || command == "catalog" || command == "requirements";
+    bool const needsDump = command == "types" || command == "wad" || command == "core" || command == "field" || command == "template" || command == "behaviors" || command == "name" || command == "wizbangs" || command == "catalog" || command == "requirements" || command == "quests";
     LocalClientSystem const system;
     SetupMode const mode = ClientSetup::ModeForTool(system, std::cerr, "client");
     std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout, mode);
@@ -2635,6 +2834,15 @@ int main(int argc, char** argv)
             return Failure;
         }
         return RunWizBangs(*arguments, *archive, catalog);
+    }
+    if (command == "quests")
+    {
+        if (catalog == nullptr)
+        {
+            std::cerr << "client quests needs a type dump; name one with --type-dump\n";
+            return Failure;
+        }
+        return RunQuests(*arguments, *archive, catalog, LogConfig::Utf8Path(*arguments->Client));
     }
     if (command == "template")
     {

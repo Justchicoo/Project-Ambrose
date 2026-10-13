@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads every quest table and object_template's ids and names from the world database, or from the row source a test gives it, checks them with the quest validator, and either builds the quests that passed and counts the rest, at start, or swaps in a generation only when nothing failed, on a reload; both log how many quests and goals are serving and how many validation errors were found.
+ * Reads every quest table and object_template's ids and names from the world database, or from the row source a test gives it, checks them with the quest validator, and either builds the quests that passed and counts the rest, at start, or swaps in a generation only when nothing failed, on a reload; both log how many quests and goals are serving and how many validation errors were found, and warn of each quest whose stored requirements cannot be read; a quest is offered only when its stored requirements and its requirement list both pass.
  */
 
 #include "QuestMgr.h"
@@ -9,6 +9,7 @@
 #include "LocaleStore.h"
 #include "Log.h"
 #include "ReloadMgr.h"
+#include "TypeRegistry.h"
 
 #include <fmt/format.h>
 
@@ -58,13 +59,15 @@ bool QuestMgr::ReadWorldRows(QuestRows& rows, std::vector<std::string>& errors)
     }
     bool ok = true;
     ok &= Select("quest_template", "SELECT `name`, `name_id`, `title_key`, `info_key`, `prep_key`, `underway_key`, `complete_key`, `level`, `repeat`, `mainline`, `no_quest_helper`, "
-        "`skip_qh_autoselect`, `pet_only`, `activity_type`, `prep_always`, `is_hidden`, `requirement_list_id` FROM `quest_template` ORDER BY `name`", errors, [&rows](Field const* f)
+        "`skip_qh_autoselect`, `pet_only`, `activity_type`, `prep_always`, `is_hidden`, `requirement_list_id`, `requirements` FROM `quest_template` ORDER BY `name`", errors, [&rows](Field const* f)
     {
         QuestTemplateRow row{ f[0].Get<std::string>(), f[1].Get<uint32>(), f[2].Get<std::string>(), f[3].Get<std::string>(), f[4].Get<std::string>(),
             f[5].Get<std::string>(), f[6].Get<std::string>(), f[7].Get<uint32>(), f[8].Get<uint32>(), f[9].Get<bool>(), f[10].Get<bool>(), f[11].Get<bool>(), f[12].Get<bool>(),
-            f[13].Get<uint32>(), f[14].Get<bool>(), f[15].Get<bool>(), {} };
+            f[13].Get<uint32>(), f[14].Get<bool>(), f[15].Get<bool>(), {}, {} };
         if (!f[16].IsNull())
             row.RequirementListId = f[16].Get<std::string>();
+        if (!f[17].IsNull())
+            row.Requirements = f[17].Get<std::vector<uint8>>();
         rows.Quests.push_back(std::move(row));
     });
     ok &= Select("quest_start_goal", "SELECT `quest`, `goal_name` FROM `quest_start_goal` ORDER BY `quest`, `goal_name`", errors, [&rows](Field const* f)
@@ -143,6 +146,8 @@ bool QuestMgr::CanOffer(std::string_view questName, RequirementContext const& co
     QuestInfo const* quest = quests->Find(questName);
     if (!quest)
         return false;
+    if (quest->Requirements && !sRequirementMgr.EvaluateTree(*quest->Requirements, context))
+        return false;
     return quest->Row.RequirementListId.empty() || sRequirementMgr.Evaluate(quest->Row.RequirementListId, context);
 }
 
@@ -188,7 +193,9 @@ QuestLoadResult QuestMgr::LoadSkippingInvalid()
         skipped.insert(problem.Quest);
         result.Errors.push_back(problem.Message);
     }
-    std::shared_ptr<QuestStore const> store = QuestStore::Build(rows, skipped);
+    std::shared_ptr<QuestStore const> store = QuestStore::Build(rows, skipped, sTypeRegistry.GetCatalog());
+    for (std::string const& problem : store->GetRequirementProblems())
+        LOG_WARN(QuestLog, "{}", problem);
     result.Loaded = true;
     result.Quests = store->GetQuestCount();
     result.Goals = store->GetGoalCount();
@@ -209,7 +216,9 @@ bool QuestMgr::Load(std::vector<std::string>& errors)
             errors.push_back(problem.Message);
         return false;
     }
-    std::shared_ptr<QuestStore const> store = QuestStore::Build(rows);
+    std::shared_ptr<QuestStore const> store = QuestStore::Build(rows, {}, sTypeRegistry.GetCatalog());
+    for (std::string const& problem : store->GetRequirementProblems())
+        LOG_WARN(QuestLog, "{}", problem);
     std::size_t const quests = store->GetQuestCount();
     std::size_t const goals = store->GetGoalCount();
     _quests.Replace(std::move(store));

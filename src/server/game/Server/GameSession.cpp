@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors and spawns, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -8,6 +8,7 @@
 #include "CharacterNameMgr.h"
 #include "CharacterQuestRepository.h"
 #include "CharacterRepository.h"
+#include "DynaModMessages.h"
 #include "QuestMgr.h"
 #include "CoreObjectSerializer.h"
 #include "DuelMgr.h"
@@ -42,7 +43,6 @@
 #include "StringHash.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
-#include "WizardRequirementContext.h"
 #include "ZoneMgr.h"
 #include "ZoneTeleportMgr.h"
 
@@ -52,6 +52,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -871,7 +872,6 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _relay.Reset(_movement);
         _characterRevision = entering.StateRevision;
     }
-    ArriveInVolumes();
     _zoneDisplay = entering.ZoneDisplay.empty() ? entering.Zone : entering.ZoneDisplay;
     if (resumedPlayer)
         _player = std::move(resumedPlayer);
@@ -897,6 +897,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
             LOG_WARN("server.gamesession", "Session {} pruned wizard {}'s quest log: {}", GetSessionId(), character.Guid, warning);
         SaveQuestLogIfDirty();
     }
+    ArriveInVolumes();
     if (resumed)
     {
         _movement = std::move(movement);
@@ -909,6 +910,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     if (_muteUntil != 0)
         SendMuteNotice();
     SendBadges();
+    SendDynaMods();
     std::size_t const objectsInSight = UpdateSight(*map, InstanceSight(*map, SightRangeOf(*map)), {}).New.size();
     ShowGameEffectsOf(*this);
     SendCustomEmotes();
@@ -1392,28 +1394,140 @@ void GameSession::ArriveInVolumes()
         Ambrose::ForLog(_zonePath, 128), inside, _volumePresence.size(), fired.size());
 }
 
-std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now)
+std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now, bool walkDoors)
 {
-    std::vector<ZoneNotifyText> texts;
-    std::vector<std::string> doors;
-    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts, &doors, sSettings.Get<bool>("Zone.DoorsIgnoreRequirements"));
+    std::vector<ResultSource> results;
+    std::optional<WizardRequirementContext> facts;
+    if (_player && _questLog)
+        facts.emplace(RequirementFacts(*_questLog));
+    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &results, sSettings.Get<bool>("Zone.DoorsIgnoreRequirements"),
+        facts ? &*facts : nullptr);
     for (std::string const& trigger : fired)
         sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
-    for (ZoneNotifyText const& text : texts)
-    {
-        GameMessages::ClientNotifyText message;
-        message.NotifyText = text.Text;
-        message.Type = text.Type;
-        SendDmlMessage(message);
-        LOG_INFO("server.gamesession", "Session {} showed wizard {} the notify text {} of type {}", GetSessionId(), _worldGuid, Ambrose::ForLog(text.Text, 128), text.Type);
-    }
-    if (!fired.empty())
-        if (Map* const map = sMapMgr.Find(*_mapId))
-            sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, fired, _worldGuid, now,
-                std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
-    if (!doors.empty() && event != ZoneTriggerMgr::EnterZoneEvent)
-        WalkThroughDoor(doors);
+    RunResults(results, now, walkDoors && event != ZoneTriggerMgr::EnterZoneEvent);
     return fired;
+}
+
+std::size_t GameSession::RunResults(std::vector<ResultSource> const& sources, std::chrono::steady_clock::time_point now, bool walkDoors)
+{
+    static std::once_flag registered;
+    std::call_once(registered, &GameSession::RegisterResultHandlers);
+    std::size_t ran = 0;
+    for (ResultSource const& source : sources)
+        ran += sResultMgr.Run(source.Results, ResultContext{ this, _worldGuid, _mapId.value_or(0), _zonePath, source.Name, now });
+    std::vector<std::string> const spawns = std::exchange(_resultSpawns, {});
+    std::vector<std::string> const doors = std::exchange(_resultDoors, {});
+    if (!spawns.empty() && _mapId)
+        if (Map* const map = sMapMgr.Find(*_mapId))
+            sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, spawns, _worldGuid, now, std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
+    if (walkDoors && !doors.empty())
+        WalkThroughDoor(doors);
+    return ran;
+}
+
+void GameSession::RegisterResultHandlers()
+{
+    sResultMgr.Register(ZoneTriggerMgr::NotifyTextClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::string error;
+        if (std::optional<ZoneNotifyText> const text = ZoneTriggerMgr::NotifyTextOf(result, error))
+            context.Session->ShowNotifyText(*text);
+    });
+    sResultMgr.Register(ZoneTriggerMgr::DynaModClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::string error;
+        std::optional<ZoneDynaMod> mod = ZoneTriggerMgr::DynaModOf(result, error);
+        if (!mod)
+            return;
+        if (mod->Zone.empty())
+            mod->Zone = context.Zone;
+        context.Session->ApplyDynaMods({ *mod });
+    });
+    sResultMgr.Register(ZoneTriggerMgr::TeleportClass, [](PropertyObject const&, ResultContext const& context) { context.Session->_resultDoors.push_back(context.Source); });
+    auto const spawn = [](PropertyObject const&, ResultContext const& context)
+    {
+        std::vector<std::string>& spawns = context.Session->_resultSpawns;
+        if (std::find(spawns.begin(), spawns.end(), context.Source) == spawns.end())
+            spawns.push_back(context.Source);
+    };
+    sResultMgr.Register(SpawnerMgr::SpawnResultClass, spawn);
+    sResultMgr.Register(SpawnerMgr::DespawnResultClass, spawn);
+}
+
+void GameSession::ShowNotifyText(ZoneNotifyText const& text)
+{
+    GameMessages::ClientNotifyText message;
+    message.NotifyText = text.Text;
+    message.Type = text.Type;
+    SendDmlMessage(message);
+    LOG_INFO("server.gamesession", "Session {} showed wizard {} the notify text {} of type {}", GetSessionId(), _worldGuid, Ambrose::ForLog(text.Text, 128), text.Type);
+}
+
+void GameSession::PostQuestEvents()
+{
+    if (!_questLog)
+        return;
+    for (std::string const& event : _questLog->TakeEvents())
+    {
+        if (!_mapId)
+            continue;
+        std::vector<std::string> const fired = PostZoneEvent(event, std::chrono::steady_clock::now());
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} posted {} in {}, which fired {}", GetSessionId(), _worldGuid, Ambrose::ForLog(event, 128), Ambrose::ForLog(_zonePath, 128),
+            fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
+    }
+}
+
+void GameSession::ApplyDynaMods(std::vector<ZoneDynaMod> const& mods)
+{
+    if (!_questLog || mods.empty())
+        return;
+    for (ZoneDynaMod const& mod : mods)
+    {
+        DynaModChange const change = _questLog->ApplyDynaMod(mod.Zone, mod.Tag, mod.State, mod.Remove, GetCharacterId());
+        if (!change.Changed())
+            continue;
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} {} the Dynamod {} in {}{}", GetSessionId(), _worldGuid, mod.Remove ? "removed" : "added", Ambrose::ForLog(mod.Tag, 128),
+            Ambrose::ForLog(mod.Zone, 128), mod.State.empty() ? std::string() : fmt::format(" in state {}", Ambrose::ForLog(mod.State, 64)));
+        if (!_dynaModsShown)
+            continue;
+        std::string problem;
+        if (std::optional<GameMessages::DynaModBehaviorUpdateMods> const message = DynaModMessages::Change(sTypeRegistry.GetCatalog(), _worldGuid, _zonePath, change, problem))
+            SendDmlMessage(*message);
+        else if (!problem.empty())
+            LOG_WARN("server.gamesession", "Session {} cannot tell wizard {} of its Dynamod {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(mod.Tag, 128), problem);
+        if (change.Added && change.Added->Zone == _zonePath && _mapId)
+            if (Map const* const map = sMapMgr.Find(*_mapId))
+                for (MapObject const& object : map->GetObjects())
+                    if (object.Spawn.Tag == change.Added->Tag && _sight.IsVisible(object.GlobalId))
+                        ShowDynaModState(object.GlobalId, object.Spawn.Tag);
+    }
+    SaveQuestLogIfDirty();
+}
+
+void GameSession::SendDynaMods()
+{
+    if (!_questLog)
+        return;
+    std::string problem;
+    std::vector<DynaMod> const armed = _questLog->GetDynaMods().Armed(_zonePath);
+    std::optional<GameMessages::DynaModBehaviorUpdateMods> const message = DynaModMessages::All(sTypeRegistry.GetCatalog(), _worldGuid, armed, problem);
+    if (!message)
+    {
+        LOG_WARN("server.gamesession", "Session {} sends wizard {} none of its Dynamods: {}", GetSessionId(), _worldGuid, problem);
+        return;
+    }
+    SendDmlMessage(*message);
+    _dynaModsShown = true;
+    LOG_DEBUG("server.gamesession", "Session {} sent wizard {} its {} Dynamod(s) in {}", GetSessionId(), _worldGuid, armed.size(), Ambrose::ForLog(_zonePath, 128));
+}
+
+void GameSession::ShowDynaModState(uint64 id, std::string_view tag)
+{
+    if (!_questLog || tag.empty())
+        return;
+    DynaMod const* const mod = _questLog->GetDynaMods().Find(_zonePath, tag);
+    if (std::optional<GameMessages::EnterState> const message = mod ? DynaModMessages::State(id, *mod) : std::nullopt)
+        SendDmlMessage(*message);
 }
 
 void GameSession::WalkThroughDoor(std::vector<std::string> const& doors)
@@ -1531,10 +1645,8 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
     if (_player)
     {
         static QuestLog const NoQuests;
-        std::shared_ptr<PlayerLevelSet const> const levels = sPlayerLevelMgr.GetLevels();
-        MagicSchool const* const school = levels ? levels->FindSchool(_player->GetStats().GetSchoolId()) : nullptr;
-        WizardRequirementContext const wizard(_questLog ? *_questLog : NoQuests, school ? school->Name : std::string(), _player->GetStats().GetLevel(), _zonePath);
-        candidates = _sightRequirements.Filter(std::move(candidates), map, wizard, GetSightProgress());
+        WizardRequirementContext const wizard = RequirementFacts(_questLog ? *_questLog : NoQuests);
+        candidates = _sightRequirements.Filter(std::move(candidates), map, wizard, _questLog ? _questLog->GetDynaMods() : NoQuests.GetDynaMods(), GetSightProgress());
     }
     VisibilityChanges changes = _sight.Update(candidates, sight.GetRange());
     for (uint64 const id : changes.Removed)
@@ -1550,6 +1662,7 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
             GameMessages::NewObject message;
             message.Data.assign(object->Data.begin(), object->Data.end());
             SendDmlMessage(message);
+            ShowDynaModState(id, object->Spawn.Tag);
             if (map.GetWalkers().contains(id))
             {
                 MapObjectChanges walked;
@@ -1572,10 +1685,17 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
     return changes;
 }
 
+WizardRequirementContext GameSession::RequirementFacts(QuestLog const& log) const
+{
+    std::shared_ptr<PlayerLevelSet const> const levels = sPlayerLevelMgr.GetLevels();
+    MagicSchool const* const school = levels ? levels->FindSchool(_player->GetStats().GetSchoolId()) : nullptr;
+    return WizardRequirementContext(log, school ? school->Name : std::string(), _player->GetStats().GetLevel(), _zonePath);
+}
+
 uint64 GameSession::GetSightProgress()
 {
-    std::tuple<uint64, int32, uint32, uint32> const facts{ _questLog ? _questLog->GetChangeCount() : 0, _player ? _player->GetStats().GetLevel() : 0,
-        _player ? _player->GetStats().GetSchoolId() : 0, _mapId.value_or(0) };
+    std::tuple<uint64, int32, uint32, uint32, std::size_t> const facts{ _questLog ? _questLog->GetChangeCount() : 0, _player ? _player->GetStats().GetLevel() : 0,
+        _player ? _player->GetStats().GetSchoolId() : 0, _mapId.value_or(0), std::hash<std::string>{}(sSettings.Get<std::string>("Events.ClassProjects")) };
     if (facts != _sightFacts)
     {
         _sightFacts = facts;
@@ -1636,7 +1756,17 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
         std::optional<int16> const x = MovementPacking::TryPackLocation(moved.Position.X);
         std::optional<int16> const y = MovementPacking::TryPackLocation(moved.Position.Y);
         std::optional<int16> const z = MovementPacking::TryPackLocation(moved.Position.Z);
-        if (x && y && z)
+        if (x && y && z && moved.Teleport)
+        {
+            GameMessages::ServerTeleport teleport;
+            teleport.LocationX = static_cast<uint16>(*x);
+            teleport.LocationY = static_cast<uint16>(*y);
+            teleport.LocationZ = static_cast<uint16>(*z);
+            teleport.Direction = MovementPacking::PackYaw(moved.Yaw);
+            teleport.MobileId = moved.MobileId;
+            SendDmlMessage(teleport);
+        }
+        else if (x && y && z)
         {
             GameMessages::ServerMove move;
             move.LocationX = static_cast<uint16>(*x);
@@ -1653,6 +1783,25 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
             state.NewState = *moved.State;
             SendDmlMessage(state);
         }
+    }
+    for (MapObjectState const& entered : changes.States)
+    {
+        if (!_sight.IsVisible(entered.GlobalId))
+            continue;
+        GameMessages::EnterState message;
+        message.GameObjectId = entered.GlobalId;
+        message.State = entered.State;
+        message.Data = entered.Data;
+        SendDmlMessage(message);
+    }
+    if (changes.ZoneEvents.empty() || GetStatus() != SessionStatus::InWorld)
+        return;
+    std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
+    for (std::string const& event : changes.ZoneEvents)
+    {
+        std::vector<std::string> const fired = PostZoneEvent(event, now, false);
+        LOG_DEBUG("server.gamesession", "Session {}'s wizard {} was posted the zone event {} in {}, firing {} trigger(s)", GetSessionId(), _worldGuid, Ambrose::ForLog(event, 128),
+            Ambrose::ForLog(_zonePath, 128), fired.size());
     }
 }
 
@@ -1977,6 +2126,7 @@ void GameSession::LeaveWorld()
     _playerObject.reset();
     SaveQuestLogIfDirty();
     _questLog.reset();
+    _dynaModsShown = false;
     _effects.Clear();
     _effectChanges.clear();
     if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())

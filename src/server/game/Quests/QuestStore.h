@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * One generation of the authored quests, keyed by quest name, each with its start goals, its goals and their adjectives, client tags and completion logic, and the dialogs of the quest and of each goal in line order, together with the indexes the world asks: which quests a template offers through the first line of the quest's Prep dialog, which persona goals name an object, which usage goals carry a client tag or adjective, which bounty goals an adjective counts toward and which waypoint goals lead to a zone.
+ * One generation of the authored quests, keyed by quest name, each with the requirement tree decoded from its stored RequirementList, its start goals, its goals and their adjectives, client tags and completion logic, and the dialogs of the quest and of each goal in line order, together with the indexes the world asks: which quests a template offers through the first line of the quest's Prep dialog, which persona goals name an object, which usage goals carry a client tag or adjective, which bounty goals an adjective counts toward and which waypoint goals lead to a zone.
  */
 
 #ifndef AMBROSE_QUESTSTORE_H
 #define AMBROSE_QUESTSTORE_H
 
 #include "QuestRows.h"
+#include "RequirementMgr.h"
+#include "TypeRegistry.h"
 #include "Types.h"
 
 #include <cstddef>
@@ -82,6 +84,7 @@ struct QuestInfo
     std::map<std::string, QuestGoal, std::less<>> Goals;
     std::map<std::string, QuestDialog, std::less<>> Dialogs;
     uint32 Starter = 0;
+    std::shared_ptr<RequirementTree const> Requirements;
 };
 
 class QuestStore
@@ -99,7 +102,7 @@ public:
     QuestStore(QuestStore const&) = delete;
     QuestStore& operator=(QuestStore const&) = delete;
 
-    static std::shared_ptr<QuestStore const> Build(QuestRows const& rows, std::set<std::string, std::less<>> const& skipped = {});
+    static std::shared_ptr<QuestStore const> Build(QuestRows const& rows, std::set<std::string, std::less<>> const& skipped = {}, TypeCatalogPtr const& catalog = nullptr);
 
     static std::optional<QuestGoalType> ParseGoalType(std::string_view text);
     static bool IsDialogTag(std::string_view tag);
@@ -109,6 +112,7 @@ public:
     std::size_t GetQuestCount() const noexcept { return _quests.size(); }
     std::size_t GetGoalCount() const noexcept { return _goals; }
     std::map<std::string, QuestInfo, std::less<>> const& GetAll() const noexcept { return _quests; }
+    std::vector<std::string> const& GetRequirementProblems() const noexcept { return _requirementProblems; }
 
     std::vector<std::string> GetQuestsOfferedBy(uint32 templateId) const;
     std::vector<QuestGoalRef> GetPersonaGoals(std::string_view objectName) const;
@@ -125,6 +129,7 @@ private:
 
     std::map<std::string, QuestInfo, std::less<>> _quests;
     std::size_t _goals = 0;
+    std::vector<std::string> _requirementProblems;
     std::unordered_map<uint32, std::vector<std::string>> _starterByTemplateId;
     GoalIndex _personaGoalsByObjectName;
     GoalIndex _usageGoalsByTag;
