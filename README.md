@@ -12,7 +12,8 @@
 [![Build](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/core-build.yml/badge.svg)](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/core-build.yml)
 [![Front end](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/front-end.yml/badge.svg)](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/front-end.yml)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-8798BC?labelColor=131B31)](#building)
-[![Progress](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FJustchicoo%2FProject-Ambrose%2Fmain%2Fdoc%2Fprogress%2Fbadge.json)](doc/progress/)
+[![Game server](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FJustchicoo%2FProject-Ambrose%2Fmain%2Fdoc%2Fprogress%2Fbadge.json)](doc/progress/)
+[![Panel](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FJustchicoo%2FProject-Ambrose%2Fmain%2Fdoc%2Fprogress%2Fpanel-badge.json)](doc/progress/)
 [![Contributor track](https://img.shields.io/badge/open%20items-56-5FD3C4?labelColor=131B31)](doc/CONTRIBUTOR-TRACK.md)
 
 **[Roadmap](doc/ROADMAP.md)** &nbsp;·&nbsp; **[Architecture](doc/ARCHITECTURE.md)** &nbsp;·&nbsp; **[Panel](doc/PANEL.md)** &nbsp;·&nbsp; **[Work board](https://justchicoo.github.io/Project-Ambrose/)** &nbsp;·&nbsp; **[Contribute](doc/CONTRIBUTOR-TRACK.md)** &nbsp;·&nbsp; **[Milestones](doc/MILESTONE-TRACK.md)** &nbsp;·&nbsp; **[Start with your AI](contrib/AI-MILESTONES-HERE.md)** &nbsp;·&nbsp; **[Discord](https://discord.gg/Dx6ACDUj6N)**
@@ -34,7 +35,7 @@ The experiment is simple: see how far AI-driven development can take a complete 
 
 </div>
 
-The card is generated from the roadmap itself by `apps/progress/progress.py`, so it cannot drift from what is built: a milestone counts when every one of its acceptance checks is ticked. [doc/progress/progress.json](doc/progress/progress.json) holds the same numbers for anything that wants to read them, and the panel and the Discord announcement both use it.
+The card is generated from the roadmap itself by `apps/progress/progress.py`, so it cannot drift from what is built: a milestone counts when every one of its acceptance checks is ticked. The game server, phases 1 to 16, and the panel, phase 17, are counted apart, each with its own bar and badge, so one never hides how far the other has come. [doc/progress/progress.json](doc/progress/progress.json) holds the same numbers for anything that wants to read them, and the panel and the Discord announcement both use it.
 
 ## What runs today
 
@@ -63,7 +64,7 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 
 [doc/ROADMAP.md](doc/ROADMAP.md)'s **Where we are** says exactly which milestones are done, and the [work board](https://justchicoo.github.io/Project-Ambrose/) says what is being built right now and by whom. The plan runs in **17 phases**, each milestone ending in something visible in the real client or the panel.
 
-159 of the 469 milestones are finished. Phases 1, 2, 4, 5 and 6 are complete, phase 3 waits only on the launcher as its own app, a wizard now wears its gear and sees its spells, a game master can start a duel that puts a wizard and a creature on their circles, and quests and the rest of combat have their groundwork in. Outside contributors have had a hand in thirty-five finished milestones and landed part of eight more. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
+The game server has 136 of its 283 milestones finished and the panel 23 of its 186. Phases 1, 2, 4, 5 and 6 are complete, phase 3 waits only on the launcher as its own app, a wizard now wears its gear and sees its spells, a game master can start a duel that puts a wizard and a creature on their circles, and quests and the rest of combat have their groundwork in. Outside contributors have had a hand in thirty-five finished milestones and landed part of eight more. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
 
 ## Building
 

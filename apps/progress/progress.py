@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Reads the roadmap phases and the contributor track and writes the project's progress as a card anyone can read at a glance, the numbers behind it, and a badge endpoint, with a check mode that fails when any of them is out of date. None of them carries a commit or a date, because a generated file that names the commit it came from is stale the moment it is committed.
+# Reads the roadmap phases and the contributor track and writes the project's progress as a card anyone can read at a glance, with the game server and the panel counted apart, the numbers behind it, and a badge endpoint for each, with a check mode that fails when any of them is out of date. None of them carries a commit or a date, because a generated file that names the commit it came from is stale the moment it is committed.
 
 import argparse
 import json
@@ -15,6 +15,8 @@ OUT_DIR = os.path.join("doc", "progress")
 CARD = os.path.join(OUT_DIR, "progress.svg")
 DATA = os.path.join(OUT_DIR, "progress.json")
 BADGE = os.path.join(OUT_DIR, "badge.json")
+PANEL_BADGE = os.path.join(OUT_DIR, "panel-badge.json")
+PANEL_PHASES = (17,)
 
 def read(root, relative):
     with open(os.path.join(root, relative), "r", encoding="utf-8") as handle:
@@ -41,6 +43,20 @@ def phase_title(name):
     words[-1] = words[-1].removesuffix(".md")
     title = " ".join(words)
     return title[:1].upper() + title[1:]
+
+
+def figures(done, total):
+    return {"done": done, "total": total, "percent": round(100 * done / total, 1) if total else 0.0}
+
+
+def part(phases, label, numbers):
+    chosen = [phase for phase in phases if phase["phase"] in numbers]
+    return {
+        "label": label,
+        "phases": [phase["phase"] for phase in chosen],
+        "milestones": figures(sum(p["milestones_done"] for p in chosen), sum(p["milestones_total"] for p in chosen)),
+        "checks": figures(sum(p["checks_done"] for p in chosen), sum(p["checks_total"] for p in chosen)),
+    }
 
 
 def measure(root):
@@ -79,12 +95,13 @@ def measure(root):
     open_rows = len(re.findall(r"^\| [FC]-\d+ \|", track.split("### Merged so far")[0], flags=re.M))
     merged_rows = len(re.findall(r"^\| [FC]-\d+ \|", track.split("### Merged so far")[1], flags=re.M)) if "### Merged so far" in track else 0
 
+    numbers = [phase["phase"] for phase in phases]
     return {
         "schema": 1,
-        "milestones": {"done": milestones_done, "total": milestones_total,
-                       "percent": round(100 * milestones_done / milestones_total, 1)},
-        "checks": {"done": checks_done, "total": checks_total,
-                   "percent": round(100 * checks_done / checks_total, 1)},
+        "milestones": figures(milestones_done, milestones_total),
+        "checks": figures(checks_done, checks_total),
+        "game": part(phases, "Game server", [n for n in numbers if n not in PANEL_PHASES]),
+        "panel": part(phases, "Panel", [n for n in numbers if n in PANEL_PHASES]),
         "contributor_track": {"merged": merged_rows, "open": open_rows},
         "phases": phases,
     }
@@ -105,7 +122,7 @@ def escape(text):
 
 def card(data, palette):
     page = palette.get("surface-page", "#0B1020")
-    panel = palette.get("surface-card", "#131B31")
+    panel_colour = palette.get("surface-card", "#131B31")
     sunken = palette.get("surface-sunken", "#0E1527")
     gold = palette.get("action", "#E4B457")
     teal = palette.get("state-healthy", "#5FD3C4")
@@ -113,43 +130,52 @@ def card(data, palette):
     muted = palette.get("fg-muted", "#8798BC")
     edge = palette.get("edge-quiet", "#1B2540")
 
-    milestones = data["milestones"]
-    checks = data["checks"]
+    game = data["game"]
+    panel = data["panel"]
     track = data["contributor_track"]
     phases = data["phases"]
 
     rows = (len(phases) + 1) // 2
-    width, height = 880, 250 + rows * 30 + 34
+    top = 286
+    width, height = 880, top + 22 + rows * 30 + 34
     serif = "'Cormorant Garamond', Georgia, 'Times New Roman', serif"
     sans = "Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
     mono = "'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace"
 
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" '
-           f'aria-label="Project Ambrose progress: {milestones["done"]} of {milestones["total"]} milestones complete, {milestones["percent"]} percent">',
+           f'aria-label="Project Ambrose progress: game server {game["milestones"]["done"]} of {game["milestones"]["total"]} milestones, {game["milestones"]["percent"]} percent; '
+           f'panel {panel["milestones"]["done"]} of {panel["milestones"]["total"]} milestones, {panel["milestones"]["percent"]} percent">',
            '<defs>',
-           f'<linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{page}"/><stop offset="1" stop-color="{panel}"/></linearGradient>',
+           f'<linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{page}"/><stop offset="1" stop-color="{panel_colour}"/></linearGradient>',
            f'<linearGradient id="fill" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="{teal}"/><stop offset="1" stop-color="{gold}"/></linearGradient>',
            '</defs>',
            f'<rect width="{width}" height="{height}" rx="18" fill="url(#sky)"/>',
            f'<rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="18" fill="none" stroke="{edge}"/>',
            f'<text x="40" y="62" font-family="{serif}" font-size="34" font-weight="600" fill="{gold}">Project Ambrose</text>',
-           f'<text x="40" y="88" font-family="{sans}" font-size="15" fill="{muted}">A Wizard101 server written from scratch, built in the open</text>',
-           f'<text x="{width - 40}" y="62" text-anchor="end" font-family="{mono}" font-size="46" font-weight="700" fill="{body}">{milestones["percent"]:.1f}%</text>',
-           f'<text x="{width - 40}" y="86" text-anchor="end" font-family="{sans}" font-size="14" fill="{muted}">of the plan built</text>',
-           bar(40, 112, width - 80, 18, milestones["done"] / milestones["total"], sunken, "url(#fill)"),
-           f'<text x="40" y="152" font-family="{sans}" font-size="14" fill="{body}">'
-           f'<tspan font-family="{mono}" font-weight="700">{milestones["done"]}</tspan> of '
-           f'<tspan font-family="{mono}">{milestones["total"]}</tspan> milestones finished</text>',
-           f'<text x="{width - 40}" y="152" text-anchor="end" font-family="{sans}" font-size="14" fill="{muted}">'
-           f'<tspan font-family="{mono}" fill="{teal}">{checks["done"]}</tspan> of '
-           f'<tspan font-family="{mono}">{checks["total"]}</tspan> acceptance checks passed</text>']
+           f'<text x="40" y="88" font-family="{sans}" font-size="15" fill="{muted}">A Wizard101 server written from scratch, built in the open</text>']
 
-    out.append(f'<text x="40" y="192" font-family="{sans}" font-size="13" fill="{muted}" letter-spacing="1.5">PHASES</text>')
+    for index, (group, fill, note) in enumerate(((game, "url(#fill)", "the game a player sees"), (panel, teal, "the web panel that runs it"))):
+        y = 112 + index * 84
+        milestones, checks = group["milestones"], group["checks"]
+        first, last = group["phases"][0], group["phases"][-1]
+        span = f"phase {first}" if first == last else f"phases {first} to {last}"
+        out.append(f'<text x="40" y="{y + 14}" font-family="{sans}" font-size="16" font-weight="700" fill="{body}">{escape(group["label"])}'
+                   f'<tspan font-weight="400" font-size="13" fill="{muted}">  {note}, {span}</tspan></text>')
+        out.append(f'<text x="{width - 40}" y="{y + 16}" text-anchor="end" font-family="{mono}" font-size="26" font-weight="700" fill="{body}">{milestones["percent"]:.1f}%</text>')
+        out.append(bar(40, y + 26, width - 80, 14, milestones["done"] / milestones["total"] if milestones["total"] else 0, sunken, fill))
+        out.append(f'<text x="40" y="{y + 60}" font-family="{sans}" font-size="13.5" fill="{body}">'
+                   f'<tspan font-family="{mono}" font-weight="700">{milestones["done"]}</tspan> of '
+                   f'<tspan font-family="{mono}">{milestones["total"]}</tspan> milestones finished</text>')
+        out.append(f'<text x="{width - 40}" y="{y + 60}" text-anchor="end" font-family="{sans}" font-size="13.5" fill="{muted}">'
+                   f'<tspan font-family="{mono}" fill="{teal}">{checks["done"]}</tspan> of '
+                   f'<tspan font-family="{mono}">{checks["total"]}</tspan> acceptance checks passed</text>')
+
+    out.append(f'<text x="40" y="{top}" font-family="{sans}" font-size="13" fill="{muted}" letter-spacing="1.5">PHASES</text>')
     columns, column_width, row_height = 2, 404, 30
     for index, phase in enumerate(phases):
         column, row = index % columns, index // columns
         x = 40 + column * column_width
-        y = 214 + row * row_height
+        y = top + 22 + row * row_height
         fraction = phase["milestones_done"] / phase["milestones_total"]
         label = f'{phase["phase"]:02d} {phase["title"]}'
         if len(label) > 30:
@@ -168,13 +194,14 @@ def card(data, palette):
     return "\n".join(out) + "\n"
 
 
-def badge(data):
-    percent = data["milestones"]["percent"]
+def badge(group, label):
+    milestones = group["milestones"]
+    percent = milestones["percent"]
     colour = "5FD3C4" if percent >= 50 else "E4B457"
     return json.dumps({
         "schemaVersion": 1,
-        "label": "progress",
-        "message": f'{percent}% · {data["milestones"]["done"]}/{data["milestones"]["total"]} milestones',
+        "label": label,
+        "message": f'{percent}% · {milestones["done"]}/{milestones["total"]} milestones',
         "color": colour,
         "labelColor": "0B1020",
     }, indent=2) + "\n"
@@ -185,7 +212,8 @@ def outputs(root):
     return {
         DATA: json.dumps(data, indent=2) + "\n",
         CARD: card(data, colours(root)),
-        BADGE: badge(data),
+        BADGE: badge(data["game"], "game server"),
+        PANEL_BADGE: badge(data["panel"], "panel"),
     }
 
 

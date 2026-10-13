@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the progress announcer: that the card is linked from the work board rather than uploaded, so a message can never gather a second one, that the link changes when the figures do so Discord fetches it again, that a message id is remembered and reused, that a message Discord no longer has is posted again while any other refusal is raised, and that a refusal reports what Discord said rather than only its status code.
+# Self-tests for the progress card and announcer: that the panel is counted apart from the game server with a badge each, that the card is linked from the work board rather than uploaded, so a message can never gather a second one, that the link changes when the figures do so Discord fetches it again, that a message id is remembered and reused, that a message Discord no longer has is posted again while any other refusal is raised, and that a refusal reports what Discord said rather than only its status code.
 import io
 import json
 import os
@@ -14,6 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.a
 
 import announce
 import openings
+import progress
 
 
 class FakePost:
@@ -32,6 +33,10 @@ class FakePost:
 def figures(done=52, checks_done=512):
     return {"milestones": {"done": done, "total": 393, "percent": 13.2},
             "checks": {"done": checks_done, "total": 2387, "percent": 21.4},
+            "game": {"label": "Game server", "phases": [1], "milestones": {"done": done, "total": 207, "percent": 25.1},
+                     "checks": {"done": checks_done, "total": 1274, "percent": 40.2}},
+            "panel": {"label": "Panel", "phases": [17], "milestones": {"done": 0, "total": 186, "percent": 0.0},
+                      "checks": {"done": 0, "total": 1113, "percent": 0.0}},
             "contributor_track": {"merged": 71, "open": 59},
             "phases": [{"phase": 1, "title": "Foundations", "milestones_done": done, "milestones_total": 22}]}
 
@@ -53,7 +58,25 @@ class CardTests(unittest.TestCase):
         drawn = announce.embed(figures(), figures(done=50, checks_done=500))["embeds"][0]
         self.assertIn("2 milestones finished since the last update.", drawn["description"])
         self.assertNotIn("fields", drawn)
-        self.assertIn("13.2% of the plan built", drawn["description"])
+        self.assertIn("Game server: 25.1% built", drawn["description"])
+        self.assertIn("Panel: 0.0% built", drawn["description"])
+
+
+class SplitTests(unittest.TestCase):
+    def test_the_panel_is_counted_apart_from_the_game_server(self):
+        data = progress.measure(ROOT)
+        self.assertEqual(data["panel"]["phases"], [17])
+        self.assertNotIn(17, data["game"]["phases"])
+        for key in ("milestones", "checks"):
+            self.assertEqual(data["game"][key]["done"] + data["panel"][key]["done"], data[key]["done"])
+            self.assertEqual(data["game"][key]["total"] + data["panel"][key]["total"], data[key]["total"])
+
+    def test_each_part_has_its_own_badge_and_the_card_names_both(self):
+        written = progress.outputs(ROOT)
+        self.assertEqual(json.loads(written[progress.BADGE])["label"], "game server")
+        self.assertEqual(json.loads(written[progress.PANEL_BADGE])["label"], "panel")
+        self.assertIn(">Game server<", written[progress.CARD])
+        self.assertIn(">Panel<", written[progress.CARD])
 
 
 class AnnouncerTests(unittest.TestCase):
