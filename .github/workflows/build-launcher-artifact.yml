@@ -27,18 +27,18 @@ jobs:
       - name: Install Ninja
         run: choco install ninja -y --no-progress
 
-      - name: Setup vcpkg and configure
-        run: python apps/ci/ci_build.py --setup-vcpkg "$env:RUNNER_TEMP/vcpkg" --configure-preset windows-msvc-x64 --build-preset windows-release --stage configure
+      - name: Setup vcpkg and configure (Ninja preset, like the repo CI)
+        run: python apps/ci/ci_build.py --setup-vcpkg "$env:RUNNER_TEMP/vcpkg" --configure-preset windows-msvc-ninja --stage configure
 
       - name: Build launcher target
         env:
           VCPKG_ROOT: ${{ runner.temp }}/vcpkg
-        run: cmake --build build/windows-msvc-x64 --config Release --target launcher
+        run: cmake --build build/windows-msvc-ninja --config Debug --target launcher
 
       - name: Upload launcher.exe
         uses: actions/upload-artifact@v4
         with:
           name: launcher-windows-x64
-          path: build/windows-msvc-x64/**/launcher.exe
+          path: build/windows-msvc-ninja/**/launcher.exe
           if-no-files-found: error
           retention-days: 7
