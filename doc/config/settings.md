@@ -32,6 +32,16 @@ Access says who may see and change a setting over the admin API and the panel. A
 |---|---|---|---|---|---|---|---|
 | `Chat.SayRange` | float | 0 world units | from 0 to 100000 world units | live | gameserver | normal | How far a wizard's typed chat, quick chat and emotes reach the other wizards in its instance, read at each tick; 0 reaches the whole instance. |
 
+## Combat
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Combat.MaxPips` | unsigned | 7 pips | from 0 to 14 pips | live | gameserver | normal | The most pips a duel participant may hold; the round's gain stops there. |
+| `Combat.PipsPerRound` | unsigned | 1 pips | from 0 to 7 pips | live | gameserver | normal | How many pips every living duel participant gains as each round begins. |
+| `Combat.PlanningSeconds` | unsigned | 30 s | from 1 to 600 s | live | gameserver | normal | How long a duel's planning phase lasts before every participant without a move passes; read as each round begins, so a change applies from the next round. |
+| `Combat.PrePlanningSeconds` | unsigned | 2 s | from 0 to 60 s | live | gameserver | normal | How long each round shows who is up first before its planning phase opens; read as each round begins. |
+| `Combat.StartGraceSeconds` | unsigned | 3 s | from 0 to 60 s | live | gameserver | normal | How long a new duel waits, with its participants on their circles, before its first round begins. |
+
 ## Commands
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |

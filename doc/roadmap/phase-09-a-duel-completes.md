@@ -291,9 +291,9 @@ A GM can start a duel at a combat sigil, and the real client shows the player an
 
 **Acceptance**
 
-- [ ] 3 passing rounds give phases 1,2,4,5 repeated, pips 1..3
-- [ ] Execution starts within 1 tick of the last move
-- [ ] Changing Combat.PlanningSeconds mid-duel applies from the next round without a restart
+- [x] 3 passing rounds give phases 1,2,4,5 repeated, pips 1..3 [DuelRoundTest.ThreePassingRoundsRepeatThePhasesAndGainAPipEach]
+- [x] Execution starts within 1 tick of the last move [DuelRoundTest.ExecutionStartsInTheTickOfTheLastMove: Execution begins in the tick of the last pass]
+- [x] Changing Combat.PlanningSeconds mid-duel applies from the next round without a restart [DuelRoundSettingsTest.APlanningSecondsChangeAppliesFromTheNextRound: round 1 plans 30 s, round 2 10 s]
 - [ ] Real client: up-first arrow, HUD, countdown, pips; Pass advances
 
 ### Detailed spec from CMB-4: Round state machine with pass-only turns
@@ -313,9 +313,9 @@ A duel loops through PrePlanning, Planning, Execution and Resolution with a work
 
 **Acceptance**
 
-- [ ] Sim test: 3 rounds of both sides passing produce phases 1,2,4,5 repeated, round number 1..3, pips 1..3
-- [ ] Sim test: when all participants queue before the timer ends, Execution starts within 1 tick of the last move
-- [ ] Sim test: `.settings set Combat.PlanningSeconds 10` during round 1 leaves round 1's timer unchanged and gives round 2 a 10 s planning timer, without a restart
+- [x] Sim test: 3 rounds of both sides passing produce phases 1,2,4,5 repeated, round number 1..3, pips 1..3 [DuelRoundTest.ThreePassingRoundsRepeatThePhasesAndGainAPipEach, through DuelSimHarness]
+- [x] Sim test: when all participants queue before the timer ends, Execution starts within 1 tick of the last move [DuelRoundTest.ExecutionStartsInTheTickOfTheLastMove: two wizards pass at random ticks, and Execution begins in the tick of the later pass]
+- [x] Sim test: `.settings set Combat.PlanningSeconds 10` during round 1 leaves round 1's timer unchanged and gives round 2 a 10 s planning timer, without a restart [DuelRoundSettingsTest.APlanningSecondsChangeAppliesFromTheNextRound: the live setting changed through sSettings.Set mid round 1]
 - [ ] Real client: after the grace delay the up-first arrow points at the right team (MSG_COMBATUPFIRST, MSG_COMBATPHASE with UpFirstData), the card HUD and countdown appear (MSG_SHOWCOMBATUI, MSG_SETPLANNINGPHASETIMER), the pip count rises by one each round (MSG_COMBATPIPS), and health globes show the right values (MSG_COMBATHEALTH, MSG_COMBATSTATS)
 - [ ] Real client: clicking Pass shows the pass marker on the teammate display (MSG_COMBATMOVESELECTION echoed to the player team) and the round advances; letting the timer run out also advances
 

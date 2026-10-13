@@ -163,9 +163,12 @@ namespace
 
     void RelayDuels(std::vector<std::shared_ptr<GameSession>> const& sessions)
     {
+        uint64 const nowMs = static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+        sDuelMgr.Update(nowMs, DuelRoundRules::FromSettings());
         for (std::shared_ptr<GameSession> const& session : sessions)
             if (session->IsOpen())
                 session->UpdateDuels();
+        sDuelMgr.ClearEvents();
         std::vector<Duel> const ended = sDuelMgr.TakeEnded();
         if (ended.empty())
             return;

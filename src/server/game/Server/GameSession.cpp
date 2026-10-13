@@ -1086,6 +1086,95 @@ void GameSession::ShowStateOf(uint64 worldGuid, uint32 state)
     SendDmlMessage(message);
 }
 
+void GameSession::ShowDuelEvents(Duel const& duel)
+{
+    uint64 const id = duel.GetId();
+    DuelParticipant const* const own = duel.FindParticipant(_worldGuid);
+    TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+    auto const encoded = [&](std::optional<std::string> data, std::string_view what, std::string const& problem)
+    {
+        if (!data)
+            LOG_WARN("server.combat", "Duel {}'s {} could not be encoded for session {}: {}", id, what, GetSessionId(), problem);
+        return data.value_or(std::string());
+    };
+    for (DuelEvent const& event : duel.GetRoundState().GetEvents())
+    {
+        std::string problem;
+        switch (event.Kind)
+        {
+            case DuelEventKind::RoundStarted:
+            {
+                GameMessages::CombatUpFirst upFirst;
+                upFirst.DuelId = id;
+                upFirst.UpFirst = static_cast<uint8>(event.Team);
+                upFirst.RoundNum = static_cast<uint16>(event.Round);
+                upFirst.PlayerId = _worldGuid;
+                upFirst.FirstTeamToAct = event.Team;
+                SendDmlMessage(upFirst);
+                GameMessages::CombatHealth health;
+                health.DuelId = id;
+                health.HealthData = encoded(duel.EncodeHealth(catalog, problem), "health", problem);
+                SendDmlMessage(health);
+                break;
+            }
+            case DuelEventKind::PhaseChanged:
+            {
+                GameMessages::CombatPhase phase;
+                phase.DuelId = id;
+                phase.NewPhase = static_cast<uint8>(event.Phase);
+                phase.PlayerId = _worldGuid;
+                if (event.Phase == DuelPhase::PrePlanning)
+                    phase.Data = encoded(duel.EncodeUpFirst(catalog, problem), "up-first data", problem);
+                SendDmlMessage(phase);
+                if (event.Phase == DuelPhase::Planning && own)
+                {
+                    GameMessages::ShowCombatUI show;
+                    show.DuelId = id;
+                    SendDmlMessage(show);
+                }
+                if (event.Phase == DuelPhase::Execution)
+                {
+                    GameMessages::CombatActions actions;
+                    actions.DuelId = id;
+                    actions.ActionData = encoded(duel.EncodeActions(catalog, problem), "actions", problem);
+                    SendDmlMessage(actions);
+                }
+                break;
+            }
+            case DuelEventKind::PipsChanged:
+            {
+                GameMessages::CombatPips pips;
+                pips.DuelId = id;
+                pips.PipData = encoded(duel.EncodePips(catalog, problem), "pips", problem);
+                SendDmlMessage(pips);
+                break;
+            }
+            case DuelEventKind::PlanningTimer:
+            {
+                if (!own)
+                    break;
+                GameMessages::SetPlanningPhaseTimer timer;
+                timer.DuelId = id;
+                timer.Time = static_cast<int32>(event.Seconds);
+                timer.TimeData = encoded(duel.EncodePlanningTimer(catalog, problem), "planning timer", problem);
+                SendDmlMessage(timer);
+                break;
+            }
+            case DuelEventKind::MoveChosen:
+            {
+                if (!own || own->Team != event.Team)
+                    break;
+                GameMessages::CombatMoveSelection selection;
+                selection.DuelId = id;
+                selection.ParticipantId = event.OwnerId;
+                selection.MoveType = static_cast<uint8>(event.Move);
+                SendDmlMessage(selection);
+                break;
+            }
+        }
+    }
+}
+
 void GameSession::UpdateDuels()
 {
     if (!_mapId)
@@ -1118,7 +1207,12 @@ void GameSession::UpdateDuels()
             LOG_INFO("server.gamesession", "Session {}'s wizard {} was shown duel {} end", GetSessionId(), _worldGuid, id);
             continue;
         }
-        if (_shownDuels.contains(id) || !Sees(id))
+        if (_shownDuels.contains(id))
+        {
+            ShowDuelEvents(*duel);
+            continue;
+        }
+        if (!Sees(id))
             continue;
         std::vector<DuelParticipant> const& participants = duel->GetParticipants();
         std::vector<std::string> const& encoded = duel->GetEncodedParticipants();

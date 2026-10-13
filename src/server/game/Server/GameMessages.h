@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the forced teleport that snaps a wizard to a place in its zone, packed the same way, the zone transfer request a wizard's client acknowledges or refuses, the transfer that sends it to reconnect for another zone with a single-use key, and the client's request to send that transfer again, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits; the item a wizard's backpack gains, carried as a serialized game object, and the one it loses, by the item's global id, each under the wizard's own global id, the item a client asks to trash, by its global id and its template's id, the note that an item could not be given because the backpack is full, and the loot a wizard is shown it received; and what a wizard says for the others around it to see: a typed line, whose Message holds the text as a wide string packed into the byte field, a quick chat phrase by id, a phrase in the extended form and an emote a wizard plays, each with the reply that shows it but the emote, which is shown as a state, which names the speaker by the name the client's name codec packs and by global id. It also declares MSG_QUERY_LOGOUT, which the server answers, MSG_CLIENT_DISCONNECT and MSG_NOT_AFK, and the MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN notices it sends when a wizard drops, idles or the server stops, and the wizbang state a wizard's client names with the wizbang the server shows the wizards around it, and the fifteen GAME messages of the friends and ignore lists: the list request answered by each entry and the list's end, a friend request with its acceptance, denial and withdrawal, a dropped friend, a friend's presence, the best-friend mark, the friend cap, an ignored wizard added, dropped and listed, and the chat error a refused social action gets, and the WIZARD live vitals, gold, potion and pip updates with MSG_USEPOTION, and the game effect the server adds to an object, carried as the effect object itself, with the one it takes away, which the client finds by its internal id, and MSG_CLIENTNOTIFYTEXT, the zone-entry text a fired trigger's result shows its wizard's client, and the QUEST service's NPC service menu: MSG_SENDNPCOPTIONS, carrying the ServiceMementoBase blob a wizard entering an NPC's range is shown, MSG_LEAVESERVICERANGE when it leaves, and the MSG_INTERACTNPC its click sends, with GAME's interactable counterparts MSG_SENDINTERACTOPTIONS, MSG_INTERACTOBJECT and MSG_INTERACTOPTION, and the GAME equip request a client sends to put an item on or, with IsEquip 0, take one off, with the item it puts on, the item it takes off and the public item changes other wizards see, and what a duel sends: MSG_AGGRO, which walks a wizard onto its circle by the sigil's place and yaw, MSG_COMBATADD with a participant serialized into its data, MSG_COMBATPHASE, MSG_COMBATMATCHRESULT with the winning team, and MSG_ENDDUEL, which frees the wizard.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the forced teleport that snaps a wizard to a place in its zone, packed the same way, the zone transfer request a wizard's client acknowledges or refuses, the transfer that sends it to reconnect for another zone with a single-use key, and the client's request to send that transfer again, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits; the item a wizard's backpack gains, carried as a serialized game object, and the one it loses, by the item's global id, each under the wizard's own global id, the item a client asks to trash, by its global id and its template's id, the note that an item could not be given because the backpack is full, and the loot a wizard is shown it received; and what a wizard says for the others around it to see: a typed line, whose Message holds the text as a wide string packed into the byte field, a quick chat phrase by id, a phrase in the extended form and an emote a wizard plays, each with the reply that shows it but the emote, which is shown as a state, which names the speaker by the name the client's name codec packs and by global id. It also declares MSG_QUERY_LOGOUT, which the server answers, MSG_CLIENT_DISCONNECT and MSG_NOT_AFK, and the MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN notices it sends when a wizard drops, idles or the server stops, and the wizbang state a wizard's client names with the wizbang the server shows the wizards around it, and the fifteen GAME messages of the friends and ignore lists: the list request answered by each entry and the list's end, a friend request with its acceptance, denial and withdrawal, a dropped friend, a friend's presence, the best-friend mark, the friend cap, an ignored wizard added, dropped and listed, and the chat error a refused social action gets, and the WIZARD live vitals, gold, potion and pip updates with MSG_USEPOTION, and the game effect the server adds to an object, carried as the effect object itself, with the one it takes away, which the client finds by its internal id, and MSG_CLIENTNOTIFYTEXT, the zone-entry text a fired trigger's result shows its wizard's client, and the QUEST service's NPC service menu: MSG_SENDNPCOPTIONS, carrying the ServiceMementoBase blob a wizard entering an NPC's range is shown, MSG_LEAVESERVICERANGE when it leaves, and the MSG_INTERACTNPC its click sends, with GAME's interactable counterparts MSG_SENDINTERACTOPTIONS, MSG_INTERACTOBJECT and MSG_INTERACTOPTION, and the GAME equip request a client sends to put an item on or, with IsEquip 0, take one off, with the item it puts on, the item it takes off and the public item changes other wizards see, and what a duel sends: MSG_AGGRO, which walks a wizard onto its circle by the sigil's place and yaw, MSG_COMBATADD with a participant serialized into its data, MSG_COMBATPHASE, MSG_COMBATMATCHRESULT with the winning team, and MSG_ENDDUEL, which frees the wizard, and what each round sends: MSG_COMBATUPFIRST, MSG_SHOWCOMBATUI, MSG_SETPLANNINGPHASETIMER, MSG_COMBATPIPS, MSG_COMBATHEALTH, MSG_COMBATACTIONS and MSG_COMBATMOVESELECTION, the move a teammate chose.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -1010,6 +1010,125 @@ namespace GameMessages
         {
             return std::tuple{ DmlField("DuelID", &CombatPhase::DuelId), DmlField("NewPhase", &CombatPhase::NewPhase), DmlField("Data", &CombatPhase::Data),
                 DmlField("PlayerID", &CombatPhase::PlayerId) };
+        }
+    };
+
+    struct CombatUpFirst
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATUPFIRST";
+
+        uint64 DuelId = 0;
+        uint8 UpFirst = 0;
+        uint16 RoundNum = 0;
+        uint64 PlayerId = 0;
+        int32 FirstTeamToAct = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &CombatUpFirst::DuelId), DmlField("UpFirst", &CombatUpFirst::UpFirst), DmlField("RoundNum", &CombatUpFirst::RoundNum),
+                DmlField("PlayerID", &CombatUpFirst::PlayerId), DmlField("FirstTeamToAct", &CombatUpFirst::FirstTeamToAct) };
+        }
+    };
+
+    struct ShowCombatUI
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_SHOWCOMBATUI";
+
+        uint64 DuelId = 0;
+        int32 AltTurn = 0;
+        int32 AltTurnTeam = 0;
+        uint32 DynamicTurnFlags = 0;
+        uint32 DynamicSubcircles = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &ShowCombatUI::DuelId), DmlField("AltTurn", &ShowCombatUI::AltTurn), DmlField("AltTurnTeam", &ShowCombatUI::AltTurnTeam),
+                DmlField("DynamicTurnFlags", &ShowCombatUI::DynamicTurnFlags), DmlField("DynamicSubcircles", &ShowCombatUI::DynamicSubcircles) };
+        }
+    };
+
+    struct SetPlanningPhaseTimer
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_SETPLANNINGPHASETIMER";
+
+        uint64 DuelId = 0;
+        int32 Time = 0;
+        std::string TimeData;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &SetPlanningPhaseTimer::DuelId), DmlField("Time", &SetPlanningPhaseTimer::Time), DmlField("TimeData", &SetPlanningPhaseTimer::TimeData) };
+        }
+    };
+
+    struct CombatPips
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATPIPS";
+
+        uint64 DuelId = 0;
+        std::string PipData;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &CombatPips::DuelId), DmlField("PipData", &CombatPips::PipData) };
+        }
+    };
+
+    struct CombatHealth
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATHEALTH";
+
+        uint64 DuelId = 0;
+        std::string HealthData;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &CombatHealth::DuelId), DmlField("HealthData", &CombatHealth::HealthData) };
+        }
+    };
+
+    struct CombatActions
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATACTIONS";
+
+        uint64 DuelId = 0;
+        std::string ActionData;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &CombatActions::DuelId), DmlField("ActionData", &CombatActions::ActionData) };
+        }
+    };
+
+    struct CombatMoveSelection
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATMOVESELECTION";
+
+        uint64 DuelId = 0;
+        uint64 ParticipantId = 0;
+        uint8 MoveType = 0;
+        int32 SpellId = 0;
+        uint32 SpellTargetIndex = 0;
+        int32 EnchantmentId = 0;
+        uint8 IsItemCard = 0;
+        uint8 IsTreasureCard = 0;
+        uint8 IsBattleCard = 0;
+        int32 ShadowPactTarget = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &CombatMoveSelection::DuelId), DmlField("ParticipantID", &CombatMoveSelection::ParticipantId),
+                DmlField("MoveType", &CombatMoveSelection::MoveType), DmlField("SpellID", &CombatMoveSelection::SpellId),
+                DmlField("SpellTargetIndex", &CombatMoveSelection::SpellTargetIndex), DmlField("EnchantmentID", &CombatMoveSelection::EnchantmentId),
+                DmlField("IsItemCard", &CombatMoveSelection::IsItemCard), DmlField("IsTreasureCard", &CombatMoveSelection::IsTreasureCard),
+                DmlField("IsBattleCard", &CombatMoveSelection::IsBattleCard), DmlField("ShadowPactTarget", &CombatMoveSelection::ShadowPactTarget) };
         }
     };
 

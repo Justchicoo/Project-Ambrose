@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Holds the duels by id, finds one by participant or sigil by looking through the few that run, and hands the ended ones back once, leaving the running ones in place.
+ * Holds the duels by id, finds one by participant or sigil by looking through the few that run, and hands the ended ones back once, leaving the running ones in place; it steps every running duel's round, puts a participant's move to the duel it is in and clears the events every session has been shown.
  */
 
 #include "DuelMgr.h"
@@ -83,6 +83,27 @@ std::vector<Duel> DuelMgr::TakeEnded()
         at = _duels.erase(at);
     }
     return ended;
+}
+
+void DuelMgr::Update(uint64 nowMs, DuelRoundRules const& rules)
+{
+    for (auto& [id, duel] : _duels)
+        if (!duel.IsEnded())
+            duel.Update(nowMs, rules);
+}
+
+std::optional<std::pair<uint64, DuelMoveResult>> DuelMgr::Choose(uint64 ownerId, uint8 moveType)
+{
+    for (auto& [id, duel] : _duels)
+        if (!duel.IsEnded() && duel.FindParticipant(ownerId))
+            return std::pair{ id, duel.Choose(ownerId, moveType) };
+    return std::nullopt;
+}
+
+void DuelMgr::ClearEvents() noexcept
+{
+    for (auto& [id, duel] : _duels)
+        duel.ClearEvents();
 }
 
 void DuelMgr::Clear()
