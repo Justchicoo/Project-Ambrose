@@ -72,7 +72,6 @@ public:
 
     bool Write(std::filesystem::path const& folder, std::string& error) const;
 
-    std::string const& GetRevision() const noexcept { return _revision; }
     std::string const& GetLocale() const noexcept { return _locale; }
     std::vector<CatalogCategory> const& GetCategories() const noexcept { return _categories; }
     std::vector<CatalogZone> const& GetZones() const noexcept { return _zones; }

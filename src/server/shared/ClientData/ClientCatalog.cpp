@@ -117,8 +117,6 @@ std::string_view ClientCatalog::CategoryOf(std::string_view className, std::vect
         if (has("FurnitureInfoBehavior") || hasAny({ "HousingTextureBehavior", "HousingMusicBehavior", "HousingMusicPlayerBehavior", "HousingSigilBehavior", "HousingTeleporterBehavior",
             "HousingSignBehavior", "ExtraHousingZoneBehavior", "HousingGameProximityBehavior", "HousingPetBehavior", "HousingHallOfFameBehavior" }))
             return "Housing";
-        if (has("SeedBehavior"))
-            return "Seeds";
         if (has("PetItemBehavior"))
             return "Pets";
         if (has("PetJewelBehavior") || isGroup("Jewels"))

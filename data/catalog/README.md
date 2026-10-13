@@ -27,10 +27,10 @@ The category comes from a template's class, and for game objects and items from 
 | Equipment | Items with jewel sockets: hats, robes, boots, wands, athames, amulets, rings |
 | Decks | Deck items and deck templates |
 | Jewels | Jewels and pet jewels |
-| Housing | Furniture, wallpaper, music, house guests and other housing items |
+| Housing | Furniture, wallpaper, music, garden plants, house guests and other housing items |
 | Pets | Pet items and pet actors |
 | Mounts | Mount items |
-| Seeds, Elixirs, Reagents, PetSnacks | Items of those kinds |
+| Elixirs, Reagents, PetSnacks | Items of those kinds |
 | Items | Every other item |
 | Spells | Spells, treasure cards, tiered, castle magic, cantrips, gardening, fishing and fusion spells |
 | Recipes | Crafting recipes |
