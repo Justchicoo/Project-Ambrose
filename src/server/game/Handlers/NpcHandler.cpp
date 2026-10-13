@@ -1,8 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * The NPC service menu: after each move the NPCs a wizard sees, objects whose template carries NPCBehavior, are checked against their service range, only an NPC some provider gives an option counting, as only a quest, a shop or a script's option earns a prompt, and a wizard entering one is sent MSG_SENDNPCOPTIONS with the NPC's global id, as the client finds an NPC by it, and the ServiceMementoBase of its menu, the options every NpcScript serving its template offers, and one leaving is sent MSG_LEAVESERVICERANGE, once per crossing. MSG_INTERACTNPC, a click on a menu, is routed by its flat service index to the provider that owns that option, rebuilt as it was offered with its providers, which the menu's entries point at and so live as long as it does; an empty service name closes a shop, and an NPC the wizard is not in range of, or an index past its menu, is logged and ignored. MSG_INTERACTOPTION on an NPC the wizard is in range of is how the client answers its prompt, its options being InteractableOptions, and is routed the same way by option index; on any other object it, and MSG_INTERACTOBJECT, are logged until a provider offers interactables.
+ * The NPC service menu: after each move the NPCs a wizard sees, objects whose template carries NPCBehavior, are checked against their service range, only an NPC some provider gives an option counting, as only a quest, a shop or a script's option earns a prompt, and a wizard entering one is sent MSG_SENDNPCOPTIONS with the NPC's global id, as the client finds an NPC by it, and the ServiceMementoBase of its menu, the options every NpcScript serving its template offers, and one leaving is sent MSG_LEAVESERVICERANGE, once per crossing. MSG_INTERACTNPC, a click on a menu, is routed by its flat service index to the provider that owns that option, rebuilt as it was offered with its providers, which the menu's entries point at and so live as long as it does; an empty service name closes a shop, and an NPC the wizard is not in range of, or an index past its menu, is logged and ignored. MSG_INTERACTOPTION on an NPC the wizard is in range of is how the client answers its prompt, its options being InteractableOptions, and is routed the same way by option index; on any other object it, and MSG_INTERACTOBJECT, are logged until a provider offers interactables, but MSG_INTERACTOBJECT on the bank object is how the bank opens, answering MSG_OPENBANK, the personal count and the account's shared count, in that order.
  */
 
+#include "AccountBankMgr.h"
+#include "BankMgr.h"
 #include "GameSession.h"
 #include "Log.h"
 #include "MapMgr.h"
@@ -10,6 +12,7 @@
 #include "ObjectTemplateMgr.h"
 #include "ObjectViews.h"
 #include "ScriptMgr.h"
+#include "Settings.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
 
@@ -160,6 +163,19 @@ void GameSession::HandleInteractNpc(GameMessages::InteractNpc& message)
 
 void GameSession::HandleInteractObject(GameMessages::InteractObject& message)
 {
+    if (sSettings.Get<uint32>("Bank.ObjectTemplate") != 0 && message.TemplateId == sSettings.Get<uint32>("Bank.ObjectTemplate"))
+    {
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} interacted with the bank object {} and was sent MSG_OPENBANK", GetSessionId(), _worldGuid, message.GlobalId);
+        GameMessages::OpenBank open;
+        open.GlobalID = message.GlobalId;
+        SendDmlMessage(open);
+        sBankMgr.SendBankContents(*this, [this](bool loaded) mutable
+        {
+            if (loaded)
+                sAccountBankMgr.SendSharedBankContents(*this);
+        });
+        return;
+    }
     LOG_INFO("server.gamesession", "Session {}'s wizard {} interacted with object {} (template {}), which offers no options yet", GetSessionId(), _worldGuid, message.GlobalId,
         message.TemplateId);
 }

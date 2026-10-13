@@ -17,6 +17,14 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Account.VerifierActiveKey` | unsigned | 0 | from 0 to 255 | next connection or operation | gameserver, loginserver | restricted | The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed. |
 | `Account.VerifierKeys` | string | empty | at most 65535 bytes | next connection or operation | gameserver, loginserver | secret, restricted | The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier. |
 
+## Bank
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Bank.Capacity` | unsigned | 100 items | from 0 to 10000 items | live | gameserver | normal | How many items one wizard's personal bank holds, read at each move, so raising it lets the next deposit into a full bank succeed; online wizards are told the new limit with UPDATEBANKLIMIT, and items stored above a lowered cap are kept. |
+| `Bank.ObjectTemplate` | unsigned | 0 | from 0 to 4294967295 | live | gameserver | normal | The template id of the object a wizard's interaction opens the bank with, read at each interaction; 0 offers none, since a template id is each install's own. |
+| `Bank.SharedCapacity` | unsigned | 100 items | from 0 to 10000 items | live | gameserver | normal | How many items one account's shared bank holds, read at each move, so raising it lets the next deposit into a full shared bank succeed; online wizards are told the new limit with UPDATEBANKLIMIT, and items stored above a lowered cap are kept. |
+
 ## Characters
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |

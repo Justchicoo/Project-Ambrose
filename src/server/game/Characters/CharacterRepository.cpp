@@ -703,6 +703,95 @@ CharacterRepository::Statement CharacterRepository::PrepareLockItem(uint64 guid,
     return statement;
 }
 
+CharacterRepository::Statement CharacterRepository::PrepareLoadBank(uint64 guid)
+{
+    Statement statement = Prepare(CHAR_SEL_CHARACTER_BANK);
+    if (statement)
+        statement->SetData(0, guid);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareBankItem(uint64 guid, uint64 itemGuid, uint32 slot)
+{
+    Statement statement = Prepare(CHAR_INS_CHARACTER_BANK);
+    if (!statement)
+        return statement;
+    statement->SetData(0, guid);
+    statement->SetData(1, itemGuid);
+    statement->SetData(2, slot);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareUnbankItem(uint64 guid, uint64 itemGuid)
+{
+    Statement statement = Prepare(CHAR_DEL_CHARACTER_BANK);
+    if (!statement)
+        return statement;
+    statement->SetData(0, guid);
+    statement->SetData(1, itemGuid);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareLoadSharedBank(uint64 account)
+{
+    Statement statement = Prepare(CHAR_SEL_ACCOUNT_SHARED_BANK);
+    if (statement)
+        statement->SetData(0, account);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareShareItem(uint64 account, uint64 itemGuid, uint32 slot)
+{
+    Statement statement = Prepare(CHAR_INS_ACCOUNT_SHARED_BANK);
+    if (!statement)
+        return statement;
+    statement->SetData(0, account);
+    statement->SetData(1, itemGuid);
+    statement->SetData(2, slot);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareUnshareItem(uint64 account, uint64 itemGuid)
+{
+    Statement statement = Prepare(CHAR_DEL_ACCOUNT_SHARED_BANK);
+    if (!statement)
+        return statement;
+    statement->SetData(0, account);
+    statement->SetData(1, itemGuid);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareRestoreItem(uint64 guid, CharacterItem const& item)
+{
+    Statement statement = Prepare(CHAR_INS_CHARACTER_INVENTORY);
+    if (!statement)
+        return statement;
+    statement->SetData(0, guid);
+    statement->SetData(1, item.Guid);
+    statement->SetData(2, item.Slot);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareUnholdItem(uint64 guid, uint64 itemGuid)
+{
+    Statement statement = Prepare(CHAR_DEL_CHARACTER_INVENTORY);
+    if (!statement)
+        return statement;
+    statement->SetData(0, guid);
+    statement->SetData(1, itemGuid);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareTransferItem(uint64 newOwner, uint64 itemGuid)
+{
+    Statement statement = Prepare(CHAR_UPD_ITEM_OWNER);
+    if (!statement)
+        return statement;
+    statement->SetData(0, newOwner);
+    statement->SetData(1, itemGuid);
+    return statement;
+}
+
 std::vector<CharacterItem> CharacterRepository::ReadInventory(PreparedResultSet& result)
 {
     std::vector<CharacterItem> items;
