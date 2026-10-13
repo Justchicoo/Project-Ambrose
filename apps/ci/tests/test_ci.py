@@ -552,6 +552,35 @@ class BuildStageTests(unittest.TestCase):
             ci_build.main(["--leg", "linux-gcc-asan", "--test-jobs", "1", "--exclude-label", "render", "--exclude-label", "slow"])
         self.assertEqual(ran[-1], ["ctest", "--preset", "linux-gcc-asan", "--label-exclude", "^(render|slow)$"])
 
+    def test_a_configure_that_could_not_download_a_port_runs_once_more_afresh(self):
+        ran = []
+        def runner(command, **_):
+            ran.append(command)
+            if len(ran) == 1:
+                raise subprocess.CalledProcessError(1, command)
+        ci_build.run_step(["cmake", "--preset", "windows-msvc-ninja"], {}, runner, lambda command: True)
+        self.assertEqual(ran, [["cmake", "--preset", "windows-msvc-ninja"], ["cmake", "--preset", "windows-msvc-ninja", "--fresh"]])
+
+    def test_any_other_failure_is_not_retried(self):
+        ran = []
+        def runner(command, **_):
+            ran.append(command)
+            raise subprocess.CalledProcessError(2, command)
+        with self.assertRaises(subprocess.CalledProcessError):
+            ci_build.run_step(["cmake", "--preset", "linux-gcc"], {}, runner, lambda command: False)
+        self.assertEqual(len(ran), 1)
+
+    def test_only_a_vcpkg_download_failure_in_the_presets_log_counts(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(ci_build, "ROOT", root):
+            log = Path(root, "build", "windows-msvc-ninja", "vcpkg-manifest-install.log")
+            self.assertFalse(ci_build.download_failed(["cmake", "--preset", "windows-msvc-ninja"]))
+            log.parent.mkdir(parents=True)
+            log.write_text("error: building fmt:x64-windows failed with: BUILD_FAILED\n", encoding="utf-8")
+            self.assertFalse(ci_build.download_failed(["cmake", "--preset", "windows-msvc-ninja"]))
+            log.write_text("error: Download timed out.\nCMake Error at scripts/cmake/vcpkg_download_distfile.cmake:136 (message):\n  Download failed, halting portfile.\n", encoding="utf-8")
+            self.assertTrue(ci_build.download_failed(["cmake", "--preset", "windows-msvc-ninja"]))
+            self.assertFalse(ci_build.download_failed(["cmake", "--build", "--preset", "windows-msvc-ninja"]))
+
 
 class BuildProfileTests(unittest.TestCase):
     def test_profile_reads_each_steps_latest_run_and_the_test_costs(self):
