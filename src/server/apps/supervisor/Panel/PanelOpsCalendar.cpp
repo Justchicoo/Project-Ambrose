@@ -173,12 +173,12 @@ namespace PanelOpsCalendar
 
     int ServerUtcOffsetMinutes()
     {
-        std::time_t now = std::time(nullptr);
 #if defined(_WIN32)
         long biasSeconds = 0;
         _get_timezone(&biasSeconds);
         return static_cast<int>(-biasSeconds / 60);
 #else
+        std::time_t now = std::time(nullptr);
         std::tm broken{};
         localtime_r(&now, &broken);
         return static_cast<int>(broken.tm_gmtoff / 60);
