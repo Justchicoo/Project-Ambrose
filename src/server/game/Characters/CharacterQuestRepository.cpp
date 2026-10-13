@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads and writes the quest log tables: five reads through the wizard, one per table, and a save that sets the revision first and then deletes and inserts only under it.
+ * Reads and writes the quest log tables: six reads through the wizard, one per table, and a save that sets the revision first and then deletes and inserts only under it.
  */
 
 #include "CharacterQuestRepository.h"
@@ -19,11 +19,12 @@ namespace
         QuestRegistrySlot,
         RegistrySlot,
         HiddenSlot,
+        DynaModSlot,
         SlotCount
     };
 
     constexpr CharacterDatabaseStatements LoadStatements[SlotCount] = { CHAR_SEL_CHARACTER_QUESTS, CHAR_SEL_CHARACTER_QUEST_GOALS, CHAR_SEL_CHARACTER_QUEST_REGISTRY,
-        CHAR_SEL_CHARACTER_REGISTRY, CHAR_SEL_CHARACTER_QUEST_HIDDEN };
+        CHAR_SEL_CHARACTER_REGISTRY, CHAR_SEL_CHARACTER_QUEST_HIDDEN, CHAR_SEL_CHARACTER_DYNAMODS };
 
     CharacterRepository::Statement Prepare(CharacterDatabaseStatements id)
     {
@@ -92,6 +93,18 @@ namespace
         } while (result.NextRow());
     }
 
+    void ReadDynaMods(PreparedResultSet& result, CharacterQuests& quests)
+    {
+        do
+        {
+            Field const* const row = result.Fetch();
+            if (row[0].Get<uint32>() == 0)
+                continue;
+            quests.DynaMods.push_back({ row[1].Get<std::string>(), row[2].Get<std::string>(), row[3].Get<std::string>(), row[4].Get<uint32>() != 0, row[5].Get<int32>(),
+                row[6].Get<uint64>() });
+        } while (result.NextRow());
+    }
+
     void ReadSlot(std::size_t slot, PreparedResultSet& result, CharacterQuests& quests)
     {
         switch (slot)
@@ -100,7 +113,8 @@ namespace
             case GoalSlot: ReadGoals(result, quests); break;
             case QuestRegistrySlot: ReadQuestRegistry(result, quests); break;
             case RegistrySlot: ReadRegistry(result, quests); break;
-            default: ReadHidden(result, quests); break;
+            case HiddenSlot: ReadHidden(result, quests); break;
+            default: ReadDynaMods(result, quests); break;
         }
     }
 }
@@ -191,7 +205,8 @@ CharacterRepository::CreateTransaction CharacterQuestRepository::PrepareSave(uin
         revision->SetData(0, guid);
         revision->SetData(1, quests.Revision);
     }
-    for (CharacterDatabaseStatements const id : { CHAR_DEL_CHARACTER_QUESTS, CHAR_DEL_CHARACTER_QUEST_REGISTRY, CHAR_DEL_CHARACTER_REGISTRY, CHAR_DEL_CHARACTER_QUEST_HIDDEN })
+    for (CharacterDatabaseStatements const id : { CHAR_DEL_CHARACTER_QUESTS, CHAR_DEL_CHARACTER_QUEST_REGISTRY, CHAR_DEL_CHARACTER_REGISTRY, CHAR_DEL_CHARACTER_QUEST_HIDDEN,
+             CHAR_DEL_CHARACTER_DYNAMODS })
         if (auto* const remove = add(id))
         {
             remove->SetData(0, guid);
@@ -244,6 +259,18 @@ CharacterRepository::CreateTransaction CharacterQuestRepository::PrepareSave(uin
             insert->SetData(1, guid);
             insert->SetData(2, quests.Revision);
         }
+    for (CharacterDynaModRow const& mod : quests.DynaMods)
+        if (auto* const insert = add(CHAR_INS_CHARACTER_DYNAMOD))
+        {
+            insert->SetData(0, mod.ZoneName);
+            insert->SetData(1, mod.ClientTag);
+            insert->SetData(2, mod.State);
+            insert->SetData(3, static_cast<uint8>(mod.Remove ? 1 : 0));
+            insert->SetData(4, mod.Index);
+            insert->SetData(5, mod.Originator);
+            insert->SetData(6, guid);
+            insert->SetData(7, quests.Revision);
+        }
     if (highest != 0)
         if (auto* const sequence = add(CHAR_INS_ID_SEQUENCE))
         {
@@ -278,5 +305,11 @@ bool CharacterQuestRepository::IsValid(CharacterQuests const& quests) noexcept
     for (CharacterRegistryRow const& entry : quests.Registry)
         if (!ValidName(entry.Entry))
             return false;
-    return std::ranges::all_of(quests.Hidden, ValidName);
+    if (!std::ranges::all_of(quests.Hidden, ValidName))
+        return false;
+    std::set<std::pair<std::string, std::string>> tags;
+    for (CharacterDynaModRow const& mod : quests.DynaMods)
+        if (!ValidName(mod.ZoneName) || !ValidName(mod.ClientTag) || mod.State.size() > MaxNameBytes || !tags.emplace(mod.ZoneName, mod.ClientTag).second)
+            return false;
+    return true;
 }

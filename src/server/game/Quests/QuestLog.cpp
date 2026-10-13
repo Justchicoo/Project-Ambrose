@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps a wizard's quests, goals, registry and hidden quests, and converts them to and from the stored rows.
+ * Keeps a wizard's quests, goals, registry, hidden quests and Dynamods, and converts them to and from the stored rows; a goal that completes publishes its GoalComplete event, named as the zones' triggers spell it.
  */
 
 #include "QuestLog.h"
@@ -52,6 +52,11 @@ QuestLog QuestLog::FromStored(CharacterQuests const& stored, QuestStore const* t
     for (CharacterRegistryRow const& row : stored.Registry)
         log._registry[row.Entry] = row.Value;
     log._hidden.insert(stored.Hidden.begin(), stored.Hidden.end());
+    std::vector<DynaMod> mods;
+    mods.reserve(stored.DynaMods.size());
+    for (CharacterDynaModRow const& row : stored.DynaMods)
+        mods.push_back({ row.ZoneName, row.ClientTag, row.State, row.Remove, row.Index, row.Originator });
+    log._dynaMods = WizardDynaMods(std::move(mods));
     return log;
 }
 
@@ -71,6 +76,8 @@ CharacterQuests QuestLog::ToStored(uint64 revision) const
     for (auto const& [entry, value] : _registry)
         stored.Registry.push_back({ {}, entry, value });
     stored.Hidden.assign(_hidden.begin(), _hidden.end());
+    for (DynaMod const& mod : _dynaMods.All())
+        stored.DynaMods.push_back({ mod.Zone, mod.Tag, mod.State, mod.Remove, mod.Index, mod.Originator });
     return stored;
 }
 
@@ -116,6 +123,7 @@ bool QuestLog::CompleteGoal(std::string_view quest, std::string_view goal)
     if (!entry || entry->Complete)
         return false;
     entry->Complete = true;
+    _events.push_back(GoalCompleteEvent(quest, goal));
     MarkChanged();
     return true;
 }
@@ -211,6 +219,24 @@ void QuestLog::SetHidden(std::string_view quest, bool hidden)
     else
         _hidden.erase(found);
     MarkChanged();
+}
+
+std::string QuestLog::GoalCompleteEvent(std::string_view quest, std::string_view goal)
+{
+    return fmt::format("GoalComplete_{}_{}", quest, goal);
+}
+
+DynaModChange QuestLog::ApplyDynaMod(std::string_view zone, std::string_view tag, std::string_view state, bool remove, uint64 originator)
+{
+    DynaModChange change = _dynaMods.Apply(zone, tag, state, remove, originator);
+    if (change.Changed())
+        MarkChanged();
+    return change;
+}
+
+std::vector<std::string> QuestLog::TakeEvents()
+{
+    return std::exchange(_events, {});
 }
 
 QuestLogQuest* QuestLog::FindMutable(std::string_view quest)

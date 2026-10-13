@@ -7,4 +7,5 @@ target_link_libraries(quests
     PUBLIC
         database
         entities
-        conditions)
+        conditions
+        zones)
