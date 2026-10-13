@@ -267,7 +267,7 @@ class SelectLegsTests(unittest.TestCase):
         self.assertEqual([entry["leg"] for entry in matrix["include"]], ["windows-msvc-x64", "linux-gcc"])
         self.assertEqual([entry["configure"] for entry in matrix["include"]], ["windows-msvc-ninja", "linux-gcc"])
         for entry in matrix["include"]:
-            self.assertEqual(entry["job_timeout"], entry["configure_timeout"] + entry["build_timeout"] + ci_select_legs.JOB_TIMEOUT_MARGIN)
+            self.assertEqual(entry["job_timeout"], entry["configure_timeout"] + entry["build_timeout"] + ci_select_legs.LEGS[entry["leg"]].get("dev_run_timeout", 0) + ci_select_legs.JOB_TIMEOUT_MARGIN)
         lines = ci_select_legs.output_lines({"legs": [], "windows_keepalive": True})
         self.assertEqual(lines, ["build=false", 'matrix={"include":[]}', "windows_keepalive=true"])
 
@@ -1424,6 +1424,20 @@ class DevRunTests(unittest.TestCase):
         self.assertEqual(environment["AMBROSE_PANEL_APP"], ci_dev_run.program(folder, "patchserver"))
         self.assertEqual(environment["AMBROSE_GAMESERVER"], ci_dev_run.program(folder, "gameserver"))
         self.assertEqual(environment["CI"], "1")
+
+    def test_every_path_the_dev_run_boots_builds_the_linux_gcc_leg_and_triggers_a_push(self):
+        entries = list(ci_dev_run.EVERYTHING) + [entry for target in ci_dev_run.BOOTED for entry in ci_dev_run.TARGETS[target]]
+        for entry in entries:
+            path = entry + "x" if entry.endswith("/") else entry
+            self.assertEqual(ci_select_legs.legs_for_paths([path]), ["linux-gcc"], entry)
+            self.assertTrue(any(path.startswith(pushed[:-2]) if pushed.endswith("/**") else path == pushed for pushed in ci_select_legs.PUSH_PATHS), entry)
+        result = ci_select_legs.plan("pull_request", {}, at("2026-10-13T00:00:00Z"), FakeGit(["apps/dashboard/src/App.svelte"]))
+        self.assertEqual(result["legs"], ["linux-gcc"])
+        self.assertIn("what the dev run boots", " ".join(result["reasons"]))
+        self.assertEqual(ci_select_legs.legs_for_paths(["src/tools/extractor/Main.cpp"]), ["linux-gcc"])
+        self.assertEqual(ci_select_legs.legs_for_paths(["doc/ROADMAP.md", "apps/launcherui/src/App.svelte"]), [])
+        self.assertEqual(ci_select_legs.matrix(["linux-gcc"])["include"][0]["job_timeout"],
+                         sum(ci_select_legs.LEGS["linux-gcc"][key] for key in ("configure_timeout", "build_timeout", "dev_run_timeout")) + ci_select_legs.JOB_TIMEOUT_MARGIN)
 
     def test_the_workflow_runs_the_panel_after_the_linux_gcc_leg_from_its_own_binaries(self):
         with open(os.path.join(ROOT, ".github", "workflows", "core-build.yml"), encoding="utf-8") as handle:

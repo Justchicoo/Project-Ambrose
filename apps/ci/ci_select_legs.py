@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push or pull request that touches the code, the data the tests read or the build definition, whatever its branch, and for a push that touches none of them while code has changed since that leg last built, so code that landed in a run whose checks failed is not left uncompiled, adding the legs a pull request's ci: labels name, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
+# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push or pull request that touches the code, the data the tests read, the build definition or anything ci_dev_run's dev run boots, whatever its branch, with that leg's job given the dev run's minutes, and for a push that touches none of them while code has changed since that leg last built, so code that landed in a run whose checks failed is not left uncompiled, adding the legs a pull request's ci: labels name, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
 import argparse
 import datetime
 import json
@@ -12,12 +12,14 @@ import urllib.parse
 import urllib.request
 from collections import OrderedDict
 
+import ci_dev_run
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 UTC = datetime.timezone.utc
 
 LEGS = OrderedDict([
     ("windows-msvc-x64", {"os": "windows-latest", "configure": "windows-msvc-ninja", "build": "windows-ninja-debug", "configure_timeout": 90, "build_timeout": 40}),
-    ("linux-gcc", {"os": "ubuntu-latest", "configure": "linux-gcc", "build": "linux-gcc-debug", "configure_timeout": 45, "build_timeout": 30}),
+    ("linux-gcc", {"os": "ubuntu-latest", "configure": "linux-gcc", "build": "linux-gcc-debug", "configure_timeout": 45, "build_timeout": 30, "dev_run_timeout": 5}),
     ("linux-clang", {"os": "ubuntu-latest", "configure": "linux-clang", "build": "linux-clang-debug", "configure_timeout": 45, "build_timeout": 35}),
     ("linux-gcc-asan", {"os": "ubuntu-latest", "configure": "linux-gcc-asan", "build": "linux-gcc-asan", "configure_timeout": 45, "build_timeout": 45}),
     ("linux-clang-tsan", {"os": "ubuntu-latest", "configure": "linux-clang-tsan", "build": "linux-clang-tsan", "configure_timeout": 45, "build_timeout": 35}),
@@ -45,7 +47,7 @@ LABEL_PREFIX = "ci:"
 
 SMOKE_PATHS = (".github/", "apps/ci/ci_build.py", "apps/ci/ci_vcpkg_cache.py", "vcpkg.json")
 BUILD_PATHS = ("CMakeLists.txt", "CMakePresets.json", "cmake/", "data/", "src/")
-PUSH_PATHS = (".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json")
+PUSH_PATHS = (".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/dashboard/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "package-lock.json", "package.json", "packages/**", "playwright.config.ts", "src/**", "tests/e2e/**", "vcpkg.json")
 CODE_PATHSPEC = (".", ":(exclude)doc", ":(exclude,glob)**/*.md")
 ZERO_SHA = re.compile(r"^0*$")
 
@@ -80,7 +82,7 @@ def touches(paths, entries):
 
 
 def legs_for_paths(paths):
-    return ["linux-gcc"] if touches(paths, SMOKE_PATHS + BUILD_PATHS) else []
+    return ["linux-gcc"] if touches(paths, SMOKE_PATHS + BUILD_PATHS) or ci_dev_run.boots(paths) else []
 
 
 def legs_for_labels(labels_json, warnings):
@@ -220,7 +222,7 @@ def plan(event, inputs, now, git, actions=None):
         else:
             legs = legs_for_paths(paths)
             if legs:
-                reasons.append("linux-gcc: selected (the push touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script or vcpkg.json)")
+                reasons.append("linux-gcc: selected (the push touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script, vcpkg.json or what the dev run boots)")
             else:
                 built = {}
                 try:
@@ -242,7 +244,7 @@ def plan(event, inputs, now, git, actions=None):
             reasons.append("linux-gcc: selected (the pull request could not be diffed)")
         elif legs_for_paths(paths):
             legs.append("linux-gcc")
-            reasons.append("linux-gcc: selected (the pull request touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script or vcpkg.json)")
+            reasons.append("linux-gcc: selected (the pull request touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script, vcpkg.json or what the dev run boots)")
     elif event == "schedule":
         cron = inputs.get("schedule", "")
         date = slot_date(cron, now)
@@ -273,12 +275,16 @@ def plan(event, inputs, now, git, actions=None):
     return {"legs": ordered(legs), "reasons": reasons, "warnings": warnings, "windows_keepalive": keepalive}
 
 
+def job_timeout(leg):
+    return LEGS[leg]["configure_timeout"] + LEGS[leg]["build_timeout"] + LEGS[leg].get("dev_run_timeout", 0) + JOB_TIMEOUT_MARGIN
+
+
 def matrix(legs):
     include = []
     for leg in legs:
         entry = {"leg": leg, "os": LEGS[leg]["os"], "configure": LEGS[leg]["configure"], "build": LEGS[leg]["build"],
                  "configure_timeout": LEGS[leg]["configure_timeout"], "build_timeout": LEGS[leg]["build_timeout"],
-                 "job_timeout": LEGS[leg]["configure_timeout"] + LEGS[leg]["build_timeout"] + JOB_TIMEOUT_MARGIN}
+                 "job_timeout": job_timeout(leg)}
         include.append(entry)
     return {"include": include}
 

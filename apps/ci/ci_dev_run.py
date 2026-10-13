@@ -1,13 +1,11 @@
 # Project Ambrose by Imjustchico
-# Plans and runs a change's dev run, which boots what the change touches from the binaries a Linux leg just built: select maps a push's or pull request's changed paths to the targets to boot, the panel with its supervisor and patchserver, the login server and the game server, every target for a change to the build, the shared server code or this tool, and writes them as step outputs, and panel checks the built supervisor, patchserver and gameserver are there, builds the panel and runs the Playwright end-to-end specs against them, failing on a missing binary rather than letting every spec skip.
+# Plans and runs a change's dev run, which boots what the change touches from the binaries a Linux leg just built: select maps a push's or pull request's changed paths to the targets to boot, the panel with its supervisor and patchserver, the login server and the game server, every target for a change to the build, the shared server code or this tool, and writes them as step outputs, and tells the leg selection whether a change has a target it boots so the Linux GCC leg is built for it, and panel checks the built supervisor, patchserver and gameserver are there, builds the panel and runs the Playwright end-to-end specs against them, failing on a missing binary rather than letting every spec skip.
 import argparse
 import os
 import shutil
 import subprocess
 import sys
 from collections import OrderedDict
-
-from ci_select_legs import Git
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -45,6 +43,10 @@ def targets_for(paths):
     if not chosen:
         reasons.append("no target: the change touches nothing a dev run boots")
     return chosen, reasons
+
+
+def boots(paths):
+    return any(target in BOOTED for target in targets_for(paths)[0])
 
 
 def plan(event, before, after, git):
@@ -134,7 +136,10 @@ def main(argv=None, environment=None, git=None, runner=subprocess.run, which=shu
     arguments = parser.parse_args(argv)
     environment = dict(os.environ) if environment is None else environment
     if arguments.command == "select":
-        return select(arguments, environment, git or Git())
+        if git is None:
+            from ci_select_legs import Git
+            git = Git()
+        return select(arguments, environment, git)
     return panel(arguments, environment, runner, which)
 
 
