@@ -26,17 +26,6 @@ namespace
 {
     constexpr std::string_view ObjectListMarker = ".m_objectList[";
 
-    SerializerOptions ZoneDataOptions()
-    {
-        SerializerOptions options;
-        options.Versionable = true;
-        options.Flags = SerializerFlag::None;
-        options.Mask = 0;
-        options.AllowNullRoot = false;
-        options.AllowTrailingBytes = false;
-        return options;
-    }
-
     struct EntryPart
     {
         std::size_t Index = 0;
@@ -92,7 +81,7 @@ namespace
         row.Undetectable = info.IsUndetectable();
         if (PropertyObject const* const requirements = info.GetSpawnRequirements())
         {
-            EncodeResult encoded = ObjectSerializer::Encode(requirements, ZoneDataOptions());
+            EncodeResult encoded = ObjectSerializer::Encode(requirements, ZoneExtractor::DataOptions());
             if (!encoded.Ok())
             {
                 error = encoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(encoded.Status)) : std::move(encoded.Detail);
@@ -106,7 +95,7 @@ namespace
 
     std::optional<std::vector<uint8>> Versionable(PropertyObject const* object, std::string& error)
     {
-        EncodeResult encoded = ObjectSerializer::Encode(object, ZoneDataOptions());
+        EncodeResult encoded = ObjectSerializer::Encode(object, ZoneExtractor::DataOptions());
         if (!encoded.Ok())
         {
             error = encoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(encoded.Status)) : std::move(encoded.Detail);
@@ -423,7 +412,7 @@ std::string ZoneExtractor::ArchiveStemOf(std::string_view zonePath)
 
 void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view archiveStem, std::span<uint8 const> data, ZoneExtraction& extraction)
 {
-    SerializerOptions options = ZoneDataOptions();
+    SerializerOptions options = ZoneExtractor::DataOptions();
     options.ReadUnknownClassAs = catalog ? catalog->FindClass("class CoreObjectInfo") : nullptr;
     options.KeepSkippedValues = true;
     DecodeResult decoded = ObjectSerializer::Decode(catalog, data, options);
@@ -756,7 +745,7 @@ void ZoneExtractor::ReadPaths(TypeCatalogPtr const& catalog, ExtractedZone& zone
     constexpr std::string_view PathRoot = "class PathManager::PathTemplateList";
     constexpr std::string_view NodeRoot = "class PathManager::NodeTemplateList";
     auto const fail = [&](std::string_view file, std::string detail) { extraction.TriggerFailures.push_back({ zone.Path, std::string(file), std::move(detail) }); };
-    DecodeResult const decodedNodes = ObjectSerializer::Decode(catalog, nodes, ZoneDataOptions());
+    DecodeResult const decodedNodes = ObjectSerializer::Decode(catalog, nodes, ZoneExtractor::DataOptions());
     if (!decodedNodes.Ok() || !decodedNodes.Object)
         return fail(PathNodeEntry, decodedNodes.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(decodedNodes.Status)) : decodedNodes.Detail);
     if (decodedNodes.Object->GetClass().Name != NodeRoot)
@@ -824,6 +813,17 @@ void ZoneExtractor::ReadPaths(TypeCatalogPtr const& catalog, ExtractedZone& zone
         extracted.push_back(std::move(path));
     }
     zone.Paths = std::move(extracted);
+}
+
+SerializerOptions ZoneExtractor::DataOptions()
+{
+    SerializerOptions options;
+    options.Versionable = true;
+    options.Flags = SerializerFlag::None;
+    options.Mask = 0;
+    options.AllowNullRoot = false;
+    options.AllowTrailingBytes = false;
+    return options;
 }
 
 ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, ZoneExtractionProgress const& progress)

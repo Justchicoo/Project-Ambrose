@@ -122,46 +122,52 @@ Quest start and end, goal activate and complete, tally and trigger results can c
 
 ## 10.03 Object states (WLD-19 part 1)
 
-**Goal:** ENTERSTATE/LEAVESTATE and per-player persisted overrides.
+**Goal:** ENTERSTATE/LEAVESTATE and per-player Dynamods: persisted world changes such as gates and cages opening for one wizard.
 
 **Size:** M. **Depends on:** 6.16, 10.01
 
-**Client messages:** MSG_ENTERSTATE, MSG_LEAVESTATE
+**Client messages:** MSG_ENTERSTATE, MSG_LEAVESTATE, MSG_DYNAMODBEHAVIOR_UPDATEMODS
 
 **Acceptance**
 
 - [ ] Real client: after 'OpenGateToUW' the Unicorn Way gate is 'IdleOpen' for that player only
 
-### Detailed spec from WLD-19: Object states and per-player visibility
+### Detailed spec from WLD-19: Object states and per-player Dynamods
 
-Objects show the right animation state and quest-gated objects appear only to players who qualify.
+Objects show the right animation state, and the world changes a wizard has earned show for that wizard alone, through the client's Dynamod system. Two unverified leads describe it: contrib/findings/protocol/dynamod-update-mods.json (what the client does with a mod) and contrib/findings/world/dynamod-trigger-results.json (where mods come from, with counts). Re-derive both before building on them.
 
 **Deliverables**
 
-- GameObject state: m_startState on spawn; Map-wide MSG_ENTERSTATE and MSG_LEAVESTATE; per-player state override sent only to that player
-- Per-player visibility filter in VisibilitySet: zone_object.spawnRequirements evaluated through the QST requirement engine, re-evaluated on quest or registry change events
-- Per-player object state persisted in characters DB where trigger results set it (e.g. a gate shown 'IdleOpen' after a quest), sent to that player on zone enter
+- GameObject state: m_startState on spawn, else the state set's start state; map-wide MSG_ENTERSTATE and MSG_LEAVESTATE for shared changes.
+- Dynamods: each character keeps a list of mods, one per (zone, client tag), holding the tag, zone name, state, remove flag, index and originator. A mod is added or changed by the ResAddDynaMod trigger result (m_dynaModRemove true hides the tagged object instead) and by a quest or encounter template's QuestDynaModInfo list, which is dropped when the quest ends unless m_existBeyondQuest is set. The index is the server's handle for the mod and is unique within the character's list.
+- Applying a mod is the server's job: the client never changes an object's state or visibility from a mod. For each object in the wizard's view whose m_zoneTag matches a mod for the current zone, the server sends that wizard alone MSG_ENTERSTATE with the mod's state (or omits or removes the object for a hide), on zone entry and the moment the mod changes. A mod whose state set has a transition state (IdleClosed to IdleOpen through Open) plays the transition when it changes live and lands on the final state on zone entry.
+- MSG_DYNAMODBEHAVIOR_UPDATEMODS on the wizard's player object, which alone carries DynaModBehavior: UpdateAll with the whole list at login, then Add and Remove as mods change, so the client arms and clears its own spawners named by each tag. MSG_DYNAMODDUMP is debug only and is not sent.
+- Tags that name no object in the zone (WC_Hub's PetParkGate and PetParkCollision) are kept and applied to nothing, and reported once when content loads.
 
-**Client messages:** MSG_ENTERSTATE, MSG_LEAVESTATE, MSG_NEWOBJECT, MSG_ADDOBJECT, MSG_REMOVEOBJECT
+**Client messages:** MSG_ENTERSTATE, MSG_LEAVESTATE, MSG_DYNAMODBEHAVIOR_UPDATEMODS, MSG_NEWOBJECT, MSG_REMOVEOBJECT
 
 **Data sources**
 
-- zone_object.startState, spawnRequirements
+- zone_object.zoneTag and startState
+- ResAddDynaMod results in each zone archive's triggers.xml
+- QuestDynaModInfo on quest, encounter and tutorial quest templates. The install ships none of these templates, so they come from the quest data the server authors.
 - StateData/ in Root.wad (object state sets)
 
 **Database tables**
 
-- characters.character_object_state
+- characters.character_dynamod
 
 **Acceptance**
 
-- [ ] Real client: in WC_Hub the Unicorn Way gate shows closed for a fresh character, and after the quest goal named in 'OpenGateToUW' it shows 'IdleOpen' for that player only; player B without the quest still sees it closed
-- [ ] Real client: a quest-gated NPC appears for a player the moment their quest step completes, without a relog
-- [ ] Unit: requirement re-evaluation sends NEWOBJECT/ADDOBJECT or REMOVEOBJECT only for objects whose result changed
+- [ ] Real client: in WC_Hub the Unicorn Way gate shows closed for a fresh character, and after the quest goal named in 'OpenGateToUW' it plays Open and rests 'IdleOpen' for that player only; player B without the quest still sees it closed
+- [ ] Real client: the gate is still 'IdleOpen' for that player after a relog and a zone change
+- [ ] Unit: a character's mods load and save; ResAddDynaMod adds, changes and removes by tag; a quest's mods leave with the quest unless m_existBeyondQuest
+- [ ] Unit: MSG_DYNAMODBEHAVIOR_UPDATEMODS carries the whole list at login and one Add or Remove per change
 
 **Risks**
 
-- Behavior of IgnoreIfCurrentStateIsOff and the Data (EmoteStateOverrideInfo) field is unverified
+- Three ResAddDynaMod bools are unnamed in the type dump, and what they change is unknown.
+- Behavior of IgnoreIfCurrentStateIsOff and the Data (EmoteStateOverrideInfo) field is unverified.
 
 ## 10.04 Requirement-gated visibility (WLD-19 part 2)
 
@@ -173,7 +179,7 @@ Objects show the right animation state and quest-gated objects appear only to pl
 
 **Acceptance**
 
-- [ ] Only changed objects resend
+- [x] Only changed objects resend (`SightRequirementsTest.OnlyObjectsWhoseAnswerChangedAreShownOrTakenAway`: a wizard who takes up a quest is sent only the object placed for its holders as new and only the object placed for those without it as removed, an object with no spawn requirements is left alone, and dropping the quest brings the first back as added)
 - [ ] Real client: quest-gated NPC appears without relog
 
 ### Detailed spec from WLD-19: Object states and per-player visibility
@@ -201,7 +207,7 @@ Objects show the right animation state and quest-gated objects appear only to pl
 
 - [ ] Real client: in WC_Hub the Unicorn Way gate shows closed for a fresh character, and after the quest goal named in 'OpenGateToUW' it shows 'IdleOpen' for that player only; player B without the quest still sees it closed
 - [ ] Real client: a quest-gated NPC appears for a player the moment their quest step completes, without a relog
-- [ ] Unit: requirement re-evaluation sends NEWOBJECT/ADDOBJECT or REMOVEOBJECT only for objects whose result changed
+- [x] Unit: requirement re-evaluation sends NEWOBJECT/ADDOBJECT or REMOVEOBJECT only for objects whose result changed (`SightRequirementsTest.OnlyObjectsWhoseAnswerChangedAreShownOrTakenAway`: a wizard who takes up a quest is sent only the object placed for its holders as new and only the object placed for those without it as removed, an object with no spawn requirements is left alone, and dropping the quest brings the first back as added)
 
 **Risks**
 

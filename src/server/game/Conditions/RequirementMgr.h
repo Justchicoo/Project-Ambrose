@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The requirement rows, the facts a wizard can answer, and the reloadable requirement manager that serves complete nested lists from one immutable generation and evaluates a flat list a caller hands it by the same rules.
+ * The requirement rows, the facts a wizard can answer, and the reloadable requirement manager that serves complete nested lists from one immutable generation and evaluates a flat list or a nested tree a caller hands it by the same rules.
  */
 
 #ifndef AMBROSE_REQUIREMENTMGR_H
@@ -22,7 +22,8 @@ enum class RequirementGoalStatus : std::uint8_t
 {
     DontCare = 0,
     Complete = 1,
-    Incomplete = 2
+    Incomplete = 2,
+    Absent = 3
 };
 
 struct RequirementListRow
@@ -64,6 +65,13 @@ struct RequirementListData
     RequirementListRow Row;
     std::vector<RequirementRow> Requirements;
     std::vector<std::string> Children;
+};
+
+struct RequirementTree
+{
+    RequirementListRow List;
+    std::vector<RequirementRow> Requirements;
+    std::vector<RequirementTree> Children;
 };
 
 struct RequirementStore
@@ -114,6 +122,7 @@ public:
     bool Load(std::vector<std::string>& errors);
     bool Evaluate(std::string_view listId, RequirementContext const& context) const;
     bool EvaluateRequirements(RequirementListRow const& list, std::vector<RequirementRow> const& requirements, RequirementContext const& context) const;
+    bool EvaluateTree(RequirementTree const& tree, RequirementContext const& context) const;
     std::uint64_t GetGeneration() const;
     void Clear();
 
@@ -130,6 +139,7 @@ private:
     std::optional<bool> EvaluateRequirement(
         RequirementRow const& row,
         RequirementContext const& context) const;
+    std::optional<bool> EvaluateSubtree(RequirementTree const& tree, RequirementContext const& context) const;
     void LogUnknownTypeOnce(std::string_view type) const;
 
     ReloadableStore<RequirementStore> _requirements;

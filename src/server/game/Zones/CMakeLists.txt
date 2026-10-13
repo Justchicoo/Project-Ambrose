@@ -4,6 +4,7 @@ ambrose_add_library(zones "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(zones
     PUBLIC
+        conditions
         database
         entities
         movement
