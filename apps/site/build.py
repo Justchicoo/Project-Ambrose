@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds the work board the project publishes: one page a person reads and one state file a contributor's assistant reads, both saying for every milestone whether it is landed, being built right now by an open pull request or claim, ready to start, or waiting on a dependency, every one of them open to anyone with nothing held or reserved, from the phase files, the two tracks and a snapshot of the open pull requests and claims.
+# Builds the work board the project publishes, with the game server and the panel each given their own figure: one page a person reads and one state file a contributor's assistant reads, both saying for every milestone whether it is landed, being built right now by an open pull request or claim, ready to start, or waiting on a dependency, every one of them open to anyone with nothing held or reserved, from the phase files, the two tracks and a snapshot of the open pull requests and claims.
 
 import argparse
 import datetime
@@ -239,6 +239,14 @@ def bar(done, total, colour, background, height=8):
             f'<span style="width:{share}%;background:{colour};height:{height}px"></span></div>')
 
 
+def headline(group, colour, dark):
+    milestones, checks = group.get("milestones", {}), group.get("checks", {})
+    return (f'  <div class="big">{escape(group.get("label", ""))}: {milestones.get("percent", 0)}% built</div>\n'
+            f'  {bar(milestones.get("done", 0), milestones.get("total", 1), colour, dark["edge-quiet"], 10)}\n'
+            f'  <div class="sub">{milestones.get("done", 0)} of {milestones.get("total", 0)} milestones &middot; '
+            f'{checks.get("done", 0)} of {checks.get("total", 0)} acceptance checks</div>')
+
+
 def escape(text):
     return html.escape(str(text), quote=True)
 
@@ -383,11 +391,9 @@ def page(state, dark, light):
 </header>
 
 <section class="headline">
-  <div class="big">{milestones.get("percent", 0)}% of the plan built</div>
-  {bar(milestones.get("done", 0), milestones.get("total", 1), dark["action"], dark["edge-quiet"], 10)}
-  <div class="sub">{milestones.get("done", 0)} of {milestones.get("total", 0)} milestones &middot;
-      {checks.get("done", 0)} of {checks.get("total", 0)} acceptance checks &middot;
-      {len(open_rows)} ready to start &middot; {len(building)} being built &middot;
+{headline(progress.get("game", {"label": "The plan", "milestones": milestones, "checks": checks}), dark["action"], dark)}
+{headline(progress["panel"], dark["state-healthy"], dark) if "panel" in progress else ""}
+  <div class="sub">{len(open_rows)} ready to start &middot; {len(building)} being built &middot;
       {state["contributor_track"]["merged"]} contributor items merged</div>
 </section>
 

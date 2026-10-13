@@ -10,6 +10,53 @@
     "total": 2884,
     "percent": 42.0
   },
+  "game": {
+    "label": "Game server",
+    "phases": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "milestones": {
+      "done": 136,
+      "total": 283,
+      "percent": 48.1
+    },
+    "checks": {
+      "done": 1030,
+      "total": 1771,
+      "percent": 58.2
+    }
+  },
+  "panel": {
+    "label": "Panel",
+    "phases": [
+      17
+    ],
+    "milestones": {
+      "done": 23,
+      "total": 186,
+      "percent": 12.4
+    },
+    "checks": {
+      "done": 182,
+      "total": 1113,
+      "percent": 16.4
+    }
+  },
   "contributor_track": {
     "merged": 94,
     "open": 56

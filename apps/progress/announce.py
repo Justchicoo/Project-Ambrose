@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Keeps one Discord message up to date with the generated progress: it edits the message it posted last time, remembering its id in a state file, and posts a new one only when there is none or Discord says the old one is gone, as one embed whose card is the rendered image the work board publishes rather than an upload, because editing a message with a file adds an attachment rather than replacing it and ten of them fill a message.
+# Keeps one Discord message up to date with the generated progress: it edits the message it posted last time, remembering its id in a state file, and posts a new one only when there is none or Discord says the old one is gone, as one embed that gives the game server and the panel their own figures and whose card is the rendered image the work board publishes rather than an upload, because editing a message with a file adds an attachment rather than replacing it and ten of them fill a message.
 
 import argparse
 import json
@@ -61,13 +61,14 @@ def card_url(now):
 
 def embed(now, before):
     milestones = now["milestones"]
-    checks = now["checks"]
     track = now["contributor_track"]
     gained = milestones["done"] - before["milestones"]["done"] if before else 0
     lines = moved(now, before)
 
-    description = [f'**{milestones["percent"]}% of the plan built** · {milestones["done"]} of {milestones["total"]} milestones · '
-                   f'{checks["done"]} of {checks["total"]} acceptance checks']
+    description = [NEWLINE.join(f'**{group["label"]}: {group["milestones"]["percent"]}% built** · '
+                                f'{group["milestones"]["done"]} of {group["milestones"]["total"]} milestones · '
+                                f'{group["checks"]["done"]} of {group["checks"]["total"]} acceptance checks'
+                                for group in (now["game"], now["panel"]))]
     if gained > 0:
         description.append(f'{gained} milestone{"s" if gained > 1 else ""} finished since the last update.')
     if lines:
