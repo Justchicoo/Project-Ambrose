@@ -230,6 +230,14 @@ The project's own Discord bot, hosted on one machine that keeps it online, which
 - **Lives in:** apps/discordbot, with its self-tests in apps/discordbot/tests/test_discordbot.py
 - **Needs:** git and Python 3.10 or later; the self-tests and `preview` need nothing else
 
+### ci_dev_run (built on 2026-10-13)
+
+Boots what a change touches from binaries a leg already built, so a change is seen to work and not only to compile. `python apps/ci/ci_dev_run.py select --event pull_request --before <base> --after <head>` prints the targets the change's paths map to, the panel with its supervisor and patchserver, the login server and the game server, and every target for a change to the build, `src/common/`, `src/server/shared/`, the database layer or the tool itself; in CI, `--from-github-env` reads the event and range and writes `targets` and one `true` or `false` flag per target as step outputs. `python apps/ci/ci_dev_run.py panel --binaries build/linux-gcc/bin/Debug` checks the built supervisor, patchserver and gameserver are there, builds the panel and runs the Playwright `e2e` project against them through `AMBROSE_SUPERVISOR`, `AMBROSE_PANEL_APP` and `AMBROSE_GAMESERVER`, exiting 1 on a missing binary rather than letting every spec skip. The Linux GCC leg runs it after its tests when the change touches the panel. Booting the login and game servers is the next thing to teach it, through the client driver's server runner, once an install the project authors can stand in for the client's.
+
+- **Form:** CLI (Python)
+- **Lives in:** apps/ci/ci_dev_run.py, with its self-tests in apps/ci/tests/test_ci.py
+- **Needs:** git for `select`; for `panel`, the built binaries, npm with the workspace installed by `npm ci`, and Playwright's Chromium
+
 ### ci_local (built on 2026-09-27)
 
 Runs every step of CI's checks job on a local clone, read from `.github/workflows/core-build.yml` so it follows the workflow as it changes: `python apps/ci/ci_local.py [--branch <pull request branch>] [--base <ref>] [--list] [--stamp <file>]`. The range steps run over what the next push would send, against the project's `main` fetched first. `--branch` adds the contributor path check, and without it the step CI runs only on a push to `main` runs instead, so a run with no branch is the check before pushing to `main`. `--stamp` writes the commit a green run covered to a file, which a pre-push guard can compare with the commit being pushed.

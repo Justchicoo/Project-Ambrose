@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the forbidden file scan, including the key, store, log and token material it keeps out, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, and the build leg selection against fakes, a real git repository and a fake Actions API, and the milestone track, where a branch named for any milestone is allowed the source tree, nothing is held or reserved, and the track's Started rows name real milestones.
+# Self-tests for the forbidden file scan, including the key, store, log and token material it keeps out, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, the build leg selection against fakes, a real git repository and a fake Actions API, the dev run's targets for a change and its panel run against built binaries, and the milestone track, where a branch named for any milestone is allowed the source tree, nothing is held or reserved, and the track's Started rows name real milestones.
 import argparse
 import datetime
 import json
@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 
 import ci_build
 import ci_commit_trailer
+import ci_dev_run
 import ci_contrib_paths
 import ci_local
 import ci_dependency_notices
@@ -1369,6 +1370,76 @@ class GapRecordTests(unittest.TestCase):
     def test_a_file_named_as_a_gap_record_is_refused(self):
         found = ci_findings.problems_for("contrib/findings/combat/move-order-evidence-gap.json", self.finding())
         self.assertTrue(any("named as a gap record" in problem for problem in found), found)
+
+
+class DevRunTests(unittest.TestCase):
+    def test_a_change_boots_only_the_targets_its_paths_belong_to(self):
+        chosen, _ = ci_dev_run.plan("pull_request", "base", "head", FakeGit(["apps/dashboard/src/App.svelte"]))
+        self.assertEqual(chosen, ["panel"])
+        chosen, _ = ci_dev_run.plan("pull_request", "base", "head", FakeGit(["src/server/apps/supervisor/Main.cpp", "src/server/game/Movement/Move.cpp"]))
+        self.assertEqual(chosen, ["panel", "gameserver"])
+        chosen, reasons = ci_dev_run.plan("pull_request", "base", "head", FakeGit(["doc/ROADMAP.md", "src/tools/extractor/Main.cpp"]))
+        self.assertEqual(chosen, [])
+        self.assertIn("touches nothing a dev run boots", " ".join(reasons))
+
+    def test_a_shared_or_undiffable_change_boots_every_target(self):
+        git = FakeGit(["src/server/shared/Network/Session.cpp"])
+        self.assertEqual(ci_dev_run.plan("pull_request", "base", "head", git)[0], list(ci_dev_run.TARGETS))
+        self.assertTrue(git.merge_base)
+        self.assertEqual(ci_dev_run.plan("push", "before", "after", FakeGit(None))[0], list(ci_dev_run.TARGETS))
+        self.assertEqual(ci_dev_run.plan("workflow_dispatch", "", "", FakeGit([]))[0], list(ci_dev_run.TARGETS))
+
+    def test_select_writes_a_flag_for_every_target(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = os.path.join(folder, "output")
+            environment = {"EVENT_NAME": "pull_request", "PR_BASE": "base", "PR_HEAD": "head", "GITHUB_OUTPUT": output}
+            with mock.patch("sys.stdout", io.StringIO()):
+                self.assertEqual(ci_dev_run.main(["select", "--from-github-env"], environment, FakeGit(["tests/e2e/panel.spec.ts"])), 0)
+            with open(output, encoding="utf-8") as handle:
+                lines = handle.read().splitlines()
+        self.assertEqual(lines, ["targets=panel", "panel=true", "loginserver=false", "gameserver=false"])
+
+    def test_the_panel_run_refuses_missing_binaries_instead_of_skipping_every_spec(self):
+        ran = []
+        with tempfile.TemporaryDirectory() as folder, mock.patch("sys.stderr", io.StringIO()) as errors:
+            code = ci_dev_run.main(["panel", "--binaries", folder], {}, runner=lambda *a, **k: ran.append(a), which=lambda name: name)
+        self.assertEqual(code, 1)
+        self.assertEqual(ran, [])
+        self.assertIn("supervisor", errors.getvalue())
+
+    def test_the_panel_run_points_the_specs_at_the_built_binaries(self):
+        calls = []
+
+        def runner(command, cwd, env):
+            calls.append((command, env))
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory() as folder:
+            with mock.patch("os.path.isfile", side_effect=lambda path: True), mock.patch("sys.stdout", io.StringIO()):
+                code = ci_dev_run.main(["panel", "--binaries", folder], {"PATH": "/bin"}, runner=runner, which=lambda name: "/usr/bin/" + name)
+        self.assertEqual(code, 0)
+        self.assertEqual([command[1:] for command, _ in calls], [["run", "build", "--workspace", "apps/dashboard"], ["playwright", "test", "--project", "e2e"]])
+        environment = calls[-1][1]
+        self.assertEqual(environment["AMBROSE_SUPERVISOR"], ci_dev_run.program(folder, "supervisor"))
+        self.assertEqual(environment["AMBROSE_PANEL_APP"], ci_dev_run.program(folder, "patchserver"))
+        self.assertEqual(environment["AMBROSE_GAMESERVER"], ci_dev_run.program(folder, "gameserver"))
+        self.assertEqual(environment["CI"], "1")
+
+    def test_the_workflow_runs_the_panel_after_the_linux_gcc_leg_from_its_own_binaries(self):
+        with open(os.path.join(ROOT, ".github", "workflows", "core-build.yml"), encoding="utf-8") as handle:
+            workflow = handle.read()
+        with open(os.path.join(ROOT, "CMakePresets.json"), encoding="utf-8") as handle:
+            presets = {preset["name"]: preset for preset in json.load(handle)["buildPresets"]}
+        leg = ci_select_legs.LEGS["linux-gcc"]
+        binaries = f"build/{leg['configure']}/bin/{presets[leg['build']]['configuration']}"
+        self.assertIn(f"run: python apps/ci/ci_dev_run.py panel --binaries {binaries}", workflow)
+        self.assertIn("dev_run_panel: ${{ steps.devrun.outputs.panel }}", workflow)
+        self.assertIn("run: python3 apps/ci/ci_dev_run.py select --from-github-env", workflow)
+        self.assertIn("matrix.leg == 'linux-gcc' && needs.select.outputs.dev_run_panel == 'true'", workflow)
+        with open(os.path.join(ROOT, "package.json"), encoding="utf-8") as handle:
+            package = json.load(handle)
+        self.assertIn("playwright test --project e2e", package["scripts"]["e2e"])
+        self.assertIn("key: playwright-${{ runner.os }}-" + package["devDependencies"]["@playwright/test"], workflow)
 
 
 class FindingsTests(unittest.TestCase):
