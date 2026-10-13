@@ -110,3 +110,24 @@ std::optional<SessionHolder> AdminSessions::Hold(std::string_view secret)
         return std::nullopt;
     return SessionHolder{ std::move(*csrf), std::string() };
 }
+
+std::optional<SessionExpiry> AdminSessions::ExpiryOf(std::string_view secret)
+{
+    if (secret.empty() || secret.size() > MaxSecretLength)
+        return std::nullopt;
+    SHA256::Digest const key = SHA256::GetDigestOf(secret);
+    Clock::time_point const now = _timeSource();
+    std::lock_guard const lock(_mutex);
+    auto const found = _sessions.find(key);
+    if (found == _sessions.end())
+        return std::nullopt;
+    if (Expired(found->second, now))
+    {
+        _sessions.erase(found);
+        return std::nullopt;
+    }
+    SessionExpiry expiry;
+    expiry.IdleRemaining = std::chrono::duration_cast<std::chrono::seconds>(_idle - (now - found->second.LastSeen));
+    expiry.AbsoluteRemaining = std::chrono::duration_cast<std::chrono::seconds>(_absolute - (now - found->second.Created));
+    return expiry;
+}

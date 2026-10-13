@@ -25,17 +25,22 @@
 namespace
 {
     constexpr char const* PanelCategory = "server.panel";
+    constexpr std::chrono::seconds ExpiringWarning{ 60 };
 
     class PanelStreamSink final : public StreamSink
     {
     public:
-        PanelStreamSink(std::shared_ptr<AdminSocket> socket, std::string stream, std::string app)
-            : _socket(std::move(socket)), _stream(std::move(stream)), _app(std::move(app))
+        using AllowedCheck = std::function<bool()>;
+
+        PanelStreamSink(std::shared_ptr<AdminSocket> socket, std::string stream, std::string app, AllowedCheck allowed)
+            : _socket(std::move(socket)), _stream(std::move(stream)), _app(std::move(app)), _allowed(std::move(allowed))
         {
         }
 
         void Send(std::string text) override
         {
+            if (_allowed && !_allowed())
+                return;
             _socket->SendText(std::move(text));
         }
 
@@ -49,6 +54,8 @@ namespace
 
         void Dropped(uint64 from, uint64 to, uint64 count) override
         {
+            if (_allowed && !_allowed())
+                return;
             _socket->SendText(PanelEventFrame::Write("dropped", std::nullopt, _app, std::nullopt, PanelEventFrame::NowMs(), PanelEventFrame::DroppedData(_stream, from, to, count)));
         }
 
@@ -61,6 +68,7 @@ namespace
         std::shared_ptr<AdminSocket> _socket;
         std::string _stream;
         std::string _app;
+        AllowedCheck _allowed;
     };
 
     std::string Listed(std::vector<std::string> const& apps)
@@ -77,6 +85,8 @@ struct PanelEventSocket::Connection
     struct Following
     {
         std::string Stream = {};
+        std::string App = {};
+        std::string Permission = {};
         std::shared_ptr<PanelEventSession> Session = {};
     };
 
@@ -87,6 +97,8 @@ struct PanelEventSocket::Connection
     bool Ready = false;
     bool Closing = false;
     PanelEventCaller Caller = {};
+    std::string SessionSecret = {};
+    bool ExpiringWarned = false;
     std::map<std::string, Following> Sessions = {};
 };
 
@@ -155,6 +167,8 @@ PanelEventSocket::PanelEventSocket(Log& log, PanelEventStreams& streams, PanelEv
 {
     Handle("ping", [](Call const& call) { call.Answer("pong", "{}"); });
     Handle("resume", [this](Call const& call) { Resume(call); });
+    Handle("subscribe", [this](Call const& call) { Subscribe(call); });
+    Handle("unsubscribe", [this](Call const& call) { Unsubscribe(call); });
 }
 
 PanelEventSocket::~PanelEventSocket()
@@ -320,6 +334,7 @@ std::size_t PanelEventSocket::Sweep()
 {
     Clock::time_point const now = Now();
     std::vector<std::shared_ptr<Connection>> late;
+    std::vector<std::shared_ptr<Connection>> ready;
     {
         std::lock_guard const lock(_mutex);
         for (auto const& entry : _connections)
@@ -327,10 +342,17 @@ std::size_t PanelEventSocket::Sweep()
             std::lock_guard const held(entry.second->Mutex);
             if (!entry.second->Ready && !entry.second->Closing && now - entry.second->OpenedAt >= HelloDeadline)
                 late.push_back(entry.second);
+            else if (entry.second->Ready && !entry.second->Closing)
+                ready.push_back(entry.second);
         }
     }
     for (std::shared_ptr<Connection> const& connection : late)
         Shut(*connection, PanelEventCatalog::SessionEnded, "no hello arrived within 10 seconds of opening");
+    for (std::shared_ptr<Connection> const& connection : ready)
+    {
+        CheckExpiry(connection);
+        Refilter(connection);
+    }
     return late.size();
 }
 
@@ -583,6 +605,7 @@ void PanelEventSocket::Hello(std::shared_ptr<Connection> const& connection, Pane
     AdminRequest const& upgrade = connection->Upgrade;
     std::optional<std::string> principal;
     std::optional<std::vector<std::string>> scopes;
+    std::string sessionSecret;
     std::string refusal;
     if (withCsrf)
     {
@@ -595,7 +618,10 @@ void PanelEventSocket::Hello(std::shared_ptr<Connection> const& connection, Pane
         else if (!Ambrose::Crypto::ConstantTimeEquals(frame.Data.at("csrf").get_ref<std::string const&>(), held->Csrf))
             refusal = "the CSRF token is not this session's";
         else
+        {
             principal = held->Principal;
+            sessionSecret = *secret;
+        }
     }
     else
     {
@@ -644,6 +670,7 @@ void PanelEventSocket::Hello(std::shared_ptr<Connection> const& connection, Pane
         if (connection->Closing)
             return;
         connection->Caller = *caller;
+        connection->SessionSecret = std::move(sessionSecret);
         connection->Ready = true;
     }
     Send(*connection, "ready", frame.Id, ReadyData(*caller, _streams.Instance(), VisibleApps(*caller), PanelEventFrame::NowMs()));
@@ -735,10 +762,157 @@ void PanelEventSocket::Resume(Call const& call)
     Follow(call._connection, request, call);
 }
 
+void PanelEventSocket::Subscribe(Call const& call)
+{
+    PanelIncomingFrame const& frame = call.Frame();
+    std::string const stream = frame.Data.at("stream").get<std::string>();
+    PanelEventStream const* const known = PanelEventCatalog::FindStream(stream);
+    if (!known)
+    {
+        call.Refuse("invalid", fmt::format("{} is not one of the panel's streams", Ambrose::ForLog(stream, 64)));
+        return;
+    }
+    if (!known->Served || !_streams.Serves(stream))
+    {
+        call.Refuse("unsupported", fmt::format("This panel does not serve the {} stream yet", stream));
+        return;
+    }
+    std::string const app = frame.App.value_or(std::string());
+    if (!app.empty() && !KnowsApp(app))
+    {
+        call.Refuse("not_found", "The panel has no app named " + Ambrose::ForLog(app, 64));
+        return;
+    }
+    std::string const permission(known->Permission);
+    switch (call.Caller().Weigh(permission, app))
+    {
+        case PermissionVerdict::OutOfScope:
+            call.Refuse("not_found", "The panel has no app named " + Ambrose::ForLog(app, 64));
+            return;
+        case PermissionVerdict::Forbidden:
+            call.Refuse("forbidden", "This account is not allowed to " + permission);
+            return;
+        case PermissionVerdict::Allowed:
+            break;
+    }
+    PanelEventRequest request;
+    request.Stream = stream;
+    if (!app.empty())
+        request.App = app;
+    Follow(call._connection, request, call);
+}
+
+void PanelEventSocket::Unsubscribe(Call const& call)
+{
+    PanelIncomingFrame const& frame = call.Frame();
+    std::string const stream = frame.Data.at("stream").get<std::string>();
+    std::string const app = frame.App.value_or(std::string());
+    std::string const key = stream + '\n' + app;
+    std::shared_ptr<PanelEventSession> removed;
+    {
+        std::lock_guard const lock(call._connection->Mutex);
+        auto const found = call._connection->Sessions.find(key);
+        if (found != call._connection->Sessions.end())
+        {
+            removed = std::move(found->second.Session);
+            call._connection->Sessions.erase(found);
+        }
+    }
+    if (removed)
+        _streams.Close(stream, removed);
+}
+
+void PanelEventSocket::Refilter(std::shared_ptr<Connection> const& connection)
+{
+    std::string principal;
+    {
+        std::lock_guard const lock(connection->Mutex);
+        if (!connection->Ready || connection->Closing)
+            return;
+        principal = connection->Caller.Principal;
+    }
+    std::string failure;
+    std::optional<PanelEventCaller> const fresh = CallerOf(principal, failure);
+    std::map<std::string, Connection::Following> dropped;
+    bool hadSessions = false;
+    {
+        std::lock_guard const lock(connection->Mutex);
+        if (!connection->Ready || connection->Closing)
+            return;
+        if (!fresh)
+        {
+            connection->Closing = true;
+        }
+        else
+        {
+            connection->Caller = *fresh;
+            hadSessions = !connection->Sessions.empty();
+            for (auto it = connection->Sessions.begin(); it != connection->Sessions.end();)
+            {
+                if (connection->Caller.Weigh(it->second.Permission, it->second.App) != PermissionVerdict::Allowed)
+                {
+                    dropped.emplace(it->first, std::move(it->second));
+                    it = connection->Sessions.erase(it);
+                }
+                else
+                    ++it;
+            }
+        }
+    }
+    for (auto const& entry : dropped)
+        _streams.Close(entry.second.Stream, entry.second.Session);
+    if (!fresh)
+    {
+        Shut(*connection, PanelEventCatalog::SessionEnded, "the account behind this session can no longer sign in");
+        return;
+    }
+    bool empty = false;
+    {
+        std::lock_guard const lock(connection->Mutex);
+        empty = connection->Sessions.empty();
+    }
+    if (hadSessions && empty)
+        Shut(*connection, PanelEventCatalog::AccessLost, "this account's permissions no longer allow any subscribed stream");
+}
+
+void PanelEventSocket::CheckExpiry(std::shared_ptr<Connection> const& connection)
+{
+    std::string secret;
+    bool warned = false;
+    {
+        std::lock_guard const lock(connection->Mutex);
+        if (!connection->Ready || connection->Closing || connection->SessionSecret.empty())
+            return;
+        secret = connection->SessionSecret;
+        warned = connection->ExpiringWarned;
+    }
+    std::optional<SessionExpiry> const expiry = _sessions.ExpiryOf(secret);
+    if (!expiry)
+    {
+        Shut(*connection, PanelEventCatalog::SessionEnded, "this session has ended; sign in again");
+        return;
+    }
+    std::chrono::seconds const remaining = std::min(expiry->IdleRemaining, expiry->AbsoluteRemaining);
+    if (!warned && remaining <= ExpiringWarning && remaining > std::chrono::seconds(0))
+    {
+        {
+            std::lock_guard const lock(connection->Mutex);
+            if (connection->Closing)
+                return;
+            connection->ExpiringWarned = true;
+        }
+        nlohmann::json data = nlohmann::json::object();
+        data["expires_in"] = remaining.count();
+        Send(*connection, "session.expiring", std::nullopt, data.dump());
+    }
+}
+
 void PanelEventSocket::Follow(std::shared_ptr<Connection> const& connection, PanelEventRequest const& request, Call const& call)
 {
     std::string const app = request.App.value_or(std::string());
     std::string const key = request.Stream + '\n' + app;
+    PanelEventStream const* const known = PanelEventCatalog::FindStream(request.Stream);
+    std::string const permission = known ? std::string(known->Permission) : std::string();
     std::shared_ptr<PanelEventSession> previous;
     {
         std::lock_guard const lock(connection->Mutex);
@@ -753,7 +927,18 @@ void PanelEventSocket::Follow(std::shared_ptr<Connection> const& connection, Pan
     }
     if (previous)
         _streams.Close(request.Stream, previous);
-    std::shared_ptr<PanelEventSession> const session = _streams.Open(std::make_shared<PanelStreamSink>(connection->Socket, request.Stream, app), request);
+    std::weak_ptr<Connection> const weak = connection;
+    auto allowed = [weak, stream = request.Stream, app, permission]() -> bool
+    {
+        std::shared_ptr<Connection> const held = weak.lock();
+        if (!held)
+            return false;
+        std::lock_guard const lock(held->Mutex);
+        if (held->Closing)
+            return false;
+        return held->Caller.Weigh(permission, app) == PermissionVerdict::Allowed;
+    };
+    std::shared_ptr<PanelEventSession> const session = _streams.Open(std::make_shared<PanelStreamSink>(connection->Socket, request.Stream, app, std::move(allowed)), request);
     if (!session)
     {
         call.Refuse("unsupported", fmt::format("This panel does not serve the {} stream yet", request.Stream));
@@ -764,7 +949,7 @@ void PanelEventSocket::Follow(std::shared_ptr<Connection> const& connection, Pan
         std::lock_guard const lock(connection->Mutex);
         closing = connection->Closing;
         if (!closing)
-            connection->Sessions[key] = Connection::Following{ request.Stream, session };
+            connection->Sessions[key] = Connection::Following{ request.Stream, app, permission, session };
     }
     if (closing)
         _streams.Close(request.Stream, session);
