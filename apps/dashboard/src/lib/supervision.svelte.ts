@@ -4,6 +4,7 @@
  */
 
 import { ApiError, request } from "./api.svelte";
+import * as v from "valibot";
 import { filesQuery } from "./files";
 import { live } from "./status.svelte";
 import {
@@ -41,6 +42,9 @@ import {
     ErrorsAnswer,
     ErrorClearAnswer,
     ErrorReportAnswer,
+    PanelUsersAnswer,
+    PanelUserEntry,
+    PanelRolesAnswer,
     type AppEntry,
 } from "./schemas";
 
@@ -282,4 +286,48 @@ export function setFileRules(root: string, patterns: string[], reason: string) {
         FileRulesAnswer,
         reason === "" ? { patterns } : { patterns, reason },
     );
+}
+
+export function panelUsers(signal?: AbortSignal) {
+    return request("GET", "api/panel/users", PanelUsersAnswer, undefined, signal);
+}
+
+export function panelUserDetail(id: number, signal?: AbortSignal) {
+    return request("GET", `api/panel/users/detail?id=${id}`, PanelUserEntry, undefined, signal);
+}
+
+export function createPanelUser(username: string, password: string, roles: string[]) {
+    return request("POST", "api/panel/users", PanelUserEntry, { username, password, roles });
+}
+
+export function updatePanelUser(id: number, changes: { disabled?: boolean; roles?: string[] }) {
+    return request("PATCH", `api/panel/users?id=${id}`, PanelUserEntry, changes);
+}
+
+export function removePanelUser(id: number) {
+    return request("DELETE", `api/panel/users?id=${id}`, v.looseObject({ removed: v.boolean() }), undefined);
+}
+
+export function resetUserTwoFactor(id: number) {
+    return request("POST", `api/panel/users/two-factor-reset?id=${id}`, v.looseObject({ twoFactorReset: v.boolean() }), {});
+}
+
+export function issuePasswordLink(id: number) {
+    return request("POST", `api/panel/users/password-link?id=${id}`, v.looseObject({ linkId: v.string() }), {});
+}
+
+export function panelRoles(signal?: AbortSignal) {
+    return request("GET", "api/panel/roles", PanelRolesAnswer, undefined, signal);
+}
+
+export function createPanelRole(name: string, description: string, keys: string[]) {
+    return request("POST", "api/panel/roles", v.looseObject({ id: v.number() }), { name, description, keys });
+}
+
+export function updatePanelRole(id: number, changes: { name?: string; description?: string; keys?: string[] }) {
+    return request("PATCH", `api/panel/roles?id=${id}`, v.looseObject({ updated: v.boolean() }), changes);
+}
+
+export function removePanelRole(id: number) {
+    return request("DELETE", `api/panel/roles?id=${id}`, v.looseObject({ removed: v.boolean() }), undefined);
 }

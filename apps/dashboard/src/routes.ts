@@ -178,7 +178,16 @@ export const routes: Route[] = [
         permission: "users.read",
         nav: true,
         group: "Panel",
-        view: { kind: "arrives", milestone: "17.50", preview: list },
+        view: { kind: "page", load: () => import("./pages/Users.svelte") },
+    },
+    {
+        path: "roles",
+        title: "Roles",
+        icon: ShieldIcon,
+        permission: "users.read",
+        nav: true,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/Roles.svelte") },
     },
     {
         path: "settings",

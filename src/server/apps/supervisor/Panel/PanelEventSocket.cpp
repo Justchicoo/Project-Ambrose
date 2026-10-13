@@ -19,6 +19,8 @@
 
 #include <algorithm>
 #include <exception>
+#include <functional>
+#include <set>
 #include <stdexcept>
 #include <utility>
 
@@ -441,9 +443,13 @@ std::optional<PanelEventCaller> PanelEventSocket::CallerOf(std::string const& pr
     if (user->Disabled)
         return std::nullopt;
     caller.Name = user->Username;
-    caller.Asking = PanelAsking{ user->Id, user->Role, user->IsOwner };
+    std::set<std::string, std::less<>> roleKeys;
     for (std::string_view const key : PanelPermissions::KeysOf(user->Role))
+    {
+        roleKeys.emplace(key);
         caller.Panel.emplace_back(key);
+    }
+    caller.Asking = PanelAsking{ user->Id, user->Role, user->IsOwner, std::move(roleKeys) };
     std::vector<PanelGrant> const grants = _grants.Of(user->Id, error);
     if (!error.empty())
     {

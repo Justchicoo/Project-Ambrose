@@ -12,17 +12,20 @@
 
 #include <functional>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 
 struct PanelUser;
 class PanelGrants;
+class PanelRoles;
 
 struct PanelAsking
 {
     int64 UserId = 0;
     PanelRole Role = PanelRole::Viewer;
     bool IsOwner = false;
+    std::set<std::string, std::less<>> RoleKeys;
 };
 
 class PanelAuthorization
@@ -31,7 +34,7 @@ public:
     using Finder = std::function<std::optional<PanelUser>(AdminRequest const&)>;
     using Recorder = std::function<void(AdminRequest const&, std::string_view permission, std::string_view app, PermissionVerdict verdict)>;
 
-    PanelAuthorization(PanelGrants& grants, Finder finder, Recorder recorder);
+    PanelAuthorization(PanelGrants& grants, Finder finder, Recorder recorder, PanelRoles* roles = nullptr);
 
     PanelAuthorization(PanelAuthorization const&) = delete;
     PanelAuthorization& operator=(PanelAuthorization const&) = delete;
@@ -44,6 +47,7 @@ public:
 
 private:
     PanelGrants& _grants;
+    PanelRoles* _roles = nullptr;
     Finder _finder;
     Recorder _recorder;
 };

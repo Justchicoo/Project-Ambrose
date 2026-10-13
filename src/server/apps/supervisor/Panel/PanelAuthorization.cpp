@@ -6,10 +6,11 @@
 #include "PanelAuthorization.h"
 
 #include "PanelGrants.h"
+#include "PanelRoles.h"
 #include "PanelUsers.h"
 
-PanelAuthorization::PanelAuthorization(PanelGrants& grants, Finder finder, Recorder recorder)
-    : _grants(grants), _finder(std::move(finder)), _recorder(std::move(recorder))
+PanelAuthorization::PanelAuthorization(PanelGrants& grants, Finder finder, Recorder recorder, PanelRoles* roles)
+    : _grants(grants), _roles(roles), _finder(std::move(finder)), _recorder(std::move(recorder))
 {
 }
 
@@ -31,6 +32,8 @@ PermissionVerdict PanelAuthorization::Weigh(PanelAsking const& asking, std::stri
 {
     if (PanelPermissions::RoleAllows(asking.Role, permission))
         return PermissionVerdict::Allowed;
+    if (asking.RoleKeys.contains(permission))
+        return PermissionVerdict::Allowed;
     if (grantedHere)
         return PermissionVerdict::Allowed;
     if (named && !holdsAnythingHere)
@@ -40,17 +43,26 @@ PermissionVerdict PanelAuthorization::Weigh(PanelAsking const& asking, std::stri
 
 PermissionVerdict PanelAuthorization::Decide(AdminRequest const& request, std::string_view permission)
 {
-    if (!PanelPermissions::Holds(permission))
+    PanelPermission const* const held = PanelPermissions::Find(permission);
+    if (!held)
         return PermissionVerdict::Forbidden;
 
     std::optional<PanelUser> const user = _finder ? _finder(request) : std::nullopt;
     if (!user)
         return PermissionVerdict::Forbidden;
 
+    if (held->OwnerOnly && !user->IsOwner)
+        return PermissionVerdict::Forbidden;
+
     PanelAsking asking;
     asking.UserId = user->Id;
     asking.Role = user->Role;
     asking.IsOwner = user->IsOwner;
+    if (_roles)
+    {
+        std::string error;
+        asking.RoleKeys = _roles->KeysOfUser(user->Id, error);
+    }
 
     std::string const app = AppInPath(request.Path);
     bool grantedHere = false;
@@ -64,8 +76,7 @@ PermissionVerdict PanelAuthorization::Decide(AdminRequest const& request, std::s
 
     PermissionVerdict const verdict = Weigh(asking, permission, grantedHere, holdsAnythingHere, !app.empty());
 
-    PanelPermission const* const held = PanelPermissions::Find(permission);
-    if (_recorder && held && held->Danger)
+    if (_recorder && held->Danger)
         _recorder(request, permission, app, verdict);
     return verdict;
 }
