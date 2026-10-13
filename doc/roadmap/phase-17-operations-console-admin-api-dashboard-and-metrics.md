@@ -1791,7 +1791,7 @@ Changed on 2026-09-27: mute and kick moved with the online players page to 17.17
 - [x] With maintenance on, a player account's sign-in is refused with the maintenance reason and an account above the bypass level signs in
 - [x] Turning maintenance on and off applies without a loginserver restart, and it is still on after one
 - [x] Entering maintenance leaves players already in the world connected
-- [ ] Every change writes an audit row with who, why and the window
+- [x] Every change writes an audit row with who, why and the window (PanelMaintenanceTest.EnterWritesStateAndAuditsWhoWhyAndWindow records maintenance:entered with the actor's id and name, the reason and window_start/window_end_epoch_ms in the same transaction as the state row; PanelMaintenanceTest.ExitClearsTheStateWithItsOwnAuditRow records maintenance:exited with who and why; EnterFailsWhenTheLoginserverRefusesAndLeavesNoStateOrAuditRow and EnterRefusesAnEmptyReasonBeforeAnythingIsCalledOrWritten write nothing on refusal)
 - [ ] Dev-gated: the retail client shows the maintenance reason rather than a generic failure. Needs the maintainer's own retail client, and the result is recorded with the milestone
 
 ## 17.65 Patch server operations: manifest, revisions and signing key
@@ -2531,7 +2531,7 @@ Changed on 2026-09-27: the characters page moved from 17.21 to 17.177, so this m
 - [ ] An event from each of the four sources appears at the right time in the operator's zone
 - [ ] An event spanning a planned restart is marked as a conflict
 - [ ] Changing a schedule moves its entry without reopening the page
-- [ ] An entry the viewer may not see is not shown
+- [x] An entry the viewer may not see is not shown (PanelOpsCalendar.EntriesTheViewerMayNotSeeAreHidden: an entry needing a permission the viewer lacks is left out while its source still reports available; the route decides each source's permission through PanelAuthorization, and PanelOpsCalendar.AnOwnerWithNoGrantAndAViewerSeeTheMaintenanceEntryThroughTheRoute shows an owner and a viewer both see the maintenance entry)
 - [ ] A schedule's next run is the same time here and on the schedules page
 
 ## 17.97 Daily operations digest

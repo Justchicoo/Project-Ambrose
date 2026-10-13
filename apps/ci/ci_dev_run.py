@@ -1,7 +1,8 @@
 # Project Ambrose by Imjustchico
-# Plans and runs a change's dev run, which boots what the change touches from the binaries a Linux leg just built: select maps a push's or pull request's changed paths to the targets to boot, the panel with its supervisor and patchserver, the login server and the game server, every target for a change to the build, the shared server code or this tool, and writes them as step outputs, and tells the leg selection whether a change has a target it boots so the Linux GCC leg is built for it, panel checks the built supervisor, patchserver and gameserver are there, builds the panel, rebuilds the supervisor in its build folder so the page its panel listener serves is that panel rather than the placeholder the leg compiled in before the panel existed, and runs the Playwright end-to-end specs against them, printing each failed spec's page snapshot into the log, failing on a missing binary rather than letting every spec skip, and servers boots the built login server, and the game server attached to it, through the client driver's server runner with no client install against scratch databases on the AMBROSE_TEST_DB server, checks each reaches ready, updates its databases, answers its admin API's health and its console and offers a SessionOffer on its port, then stops each by its process and drops the databases.
+# Plans and runs a change's dev run, which boots what the change touches from the binaries a Linux leg just built: select maps a push's or pull request's changed paths to the targets to boot, the panel with its supervisor and patchserver, the login server and the game server, every target for a change to the build, the shared server code or this tool, and writes them as step outputs, and tells the leg selection whether a change has a target it boots so the Linux GCC leg is built for it, panel checks the built supervisor, patchserver and gameserver are there, builds the panel, rebuilds the supervisor in its build folder so the page its panel listener serves is that panel rather than the placeholder the leg compiled in before the panel existed, and runs the Playwright end-to-end specs against them, printing each failed spec's page snapshot into the log, failing on a missing binary rather than letting every spec skip, and servers has the built unit tests write the project's fixture install, boots the built login server on it with its login and characters databases and the game server attached to it with no client install, through the client driver's server runner against scratch databases on the AMBROSE_TEST_DB server, checks each reaches ready, updates its databases, answers its admin API's health and its console and offers a SessionOffer on its port, has the unit tests' login probe sign in over the wire as the account the run created and list its characters, then stops each by its process and drops the databases.
 import argparse
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -18,7 +19,10 @@ EVERYTHING = (".github/workflows/core-build.yml", "apps/ci/ci_dev_run.py", "CMak
 TARGETS = OrderedDict([
     ("panel", ("apps/dashboard/", "packages/ui/", "design/", "tests/e2e/", "playwright.config.ts", "package.json", "package-lock.json",
                "src/server/apps/supervisor/", "src/server/apps/patchserver/")),
-    ("loginserver", ("src/server/apps/loginserver/", "data/sql/", "apps/clientdriver/clientdriver/server.py", "apps/clientdriver/clientdriver/database.py")),
+    ("loginserver", ("src/server/apps/loginserver/", "data/sql/", "apps/clientdriver/clientdriver/server.py", "apps/clientdriver/clientdriver/database.py",
+                     "src/test/mocks/FixtureInstall.cpp", "src/test/mocks/FixtureInstall.h", "src/test/mocks/LoginProbe.h", "src/test/mocks/LoginMessageFixtures.h",
+                     "src/test/mocks/BaseMessageFixtures.h", "src/test/mocks/CharacterTypeFixtures.h", "src/test/mocks/FakeSessionClient.h", "src/test/mocks/KiwadBuilder.cpp",
+                     "src/test/server/apps/loginserver/Server/LoginProbeTest.cpp")),
     ("gameserver", ("src/server/apps/gameserver/", "src/server/game/", "src/server/scripts/", "modules/", "data/", "apps/clientdriver/clientdriver/server.py",
                     "apps/clientdriver/clientdriver/database.py")),
 ])
@@ -32,6 +36,15 @@ ACCOUNT = "devrun"
 HEADLESS = ("ClientDir=", "TypeDumpPath=", "Setup.Mode=off")
 CLEARED = ("AMBROSE_CLIENT_DIR", "AMBROSE_TYPE_DUMP_PATH", "AMBROSE_SETUP_MODE")
 DATABASE_KINDS = (("login", "login"), ("characters", "characters"), ("world", "world"))
+FIXTURE_DATABASE_KINDS = (("login", "login"), ("characters", "characters"))
+UNIT_TESTS = "unit_tests"
+FIXTURE_CASE = "LoginProbeLive.DISABLED_WriteFixtureInstall"
+PROBE_CASE = "LoginProbeLive.DISABLED_SignInAndListCharacters"
+CASE_TIMEOUT = 120
+CASE_PASSED = r"PASSED[^\n]*1 test"
+PROBE_LINE = "login probe: "
+TYPE_DUMP_LOADED = r"Loaded type dump generation \d+ from .*?(\d+) typed views bound"
+MESSAGES_LOADED = r"Loaded message definitions generation \d+: (\d+) protocols, (\d+) message ids"
 READY_TIMEOUT = 240
 NO_INSTALL = "No Wizard101 install is in use"
 TAIL_LINES = 40
@@ -206,6 +219,48 @@ def headless(server):
     return "it runs with no Wizard101 install, as asked"
 
 
+def run_case(runner, unit_tests, case, environment):
+    completed = runner([unit_tests, "--gtest_also_run_disabled_tests", f"--gtest_filter={case}"], env=environment, capture_output=True, text=True,
+                       timeout=CASE_TIMEOUT)
+    output = (completed.stdout or "") + (completed.stderr or "")
+    if completed.returncode != 0 or not re.search(CASE_PASSED, output):
+        said = [line for line in output.splitlines() if line.startswith(PROBE_LINE) or "Failure" in line or "error" in line.lower()]
+        raise RuntimeError(f"{case} exited {completed.returncode}: " + (" | ".join(said[-TAIL_LINES:]) or "it did not pass"))
+    return output
+
+
+def written_fixture(output):
+    found = {key: re.search(rf"^fixture {key}: (.+)$", output, re.M) for key in ("install", "revision", "type dump")}
+    missing = [key for key, match in found.items() if not match]
+    if missing:
+        raise RuntimeError("the fixture install was written, but its " + ", ".join(missing) + " was not reported")
+    return SimpleNamespace(root=found["install"].group(1).strip(), revision=found["revision"].group(1).strip(), dump=found["type dump"].group(1).strip())
+
+
+def fixture_settings(fixture):
+    return [f"ClientDir={fixture.root}", f"TypeDumpPath={fixture.dump}", "Setup.Mode=off", "WorldDatabaseInfo="]
+
+
+def serves_fixture(server, fixture):
+    if server.console.matching(NO_INSTALL, since=server.console.start):
+        raise RuntimeError(f"{server.WHAT} said it runs without an install, though it was given {fixture.root}")
+    messages = server.console.matching(MESSAGES_LOADED, since=server.console.start)
+    types = server.console.matching(TYPE_DUMP_LOADED, since=server.console.start)
+    if not messages or not types:
+        raise RuntimeError(f"{server.WHAT} did not say it loaded the fixture's " + ("message definitions" if not messages else "type dump"))
+    views = re.search(TYPE_DUMP_LOADED, types[-1]).group(1)
+    return f"it reads the fixture install of {fixture.revision}: {messages[-1].split('] ')[-1].strip()}, and its type dump with {views} typed views bound"
+
+
+def probed(runner, unit_tests, environment, port, account, password):
+    prepared = dict(environment, AMBROSE_PROBE_PORT=str(port), AMBROSE_PROBE_ACCOUNT=account, AMBROSE_PROBE_PASSWORD=password)
+    output = run_case(runner, unit_tests, PROBE_CASE, prepared)
+    steps = [line[len(PROBE_LINE):].strip() for line in output.splitlines() if line.startswith(PROBE_LINE)]
+    if not steps:
+        raise RuntimeError(f"{PROBE_CASE} passed but reported no step")
+    return "; ".join(steps)
+
+
 def console_answers(server, command, pattern, timeout=60):
     server.send(command)
     return server.console.wait(pattern, timeout, alive=server.alive).group(0)
@@ -225,13 +280,17 @@ def realm_attached(game, databases, port, timeout=60):
 
 
 class ServerRun:
-    def __init__(self, binaries, targets, address, environment, work, driver):
+    def __init__(self, binaries, targets, address, environment, work, driver, runner=subprocess.run):
         self.binaries = binaries
         self.targets = targets
         self.address = address
         self.environment = environment
         self.work = work
         self.driver = driver
+        self.runner = runner
+        self.unit_tests = program(binaries, UNIT_TESTS)
+        self.password = secrets.token_urlsafe(12)
+        self.fixture = None
         self.results = []
         self.started = []
 
@@ -253,10 +312,19 @@ class ServerRun:
         return maker(program, defaults, os.path.join(self.work, kind), SERVER_HOST, free_port(), databases, settings=settings,
                      admin_port=free_port(), environment=server_environment(self.environment, self.work))
 
-    def boot(self, server, databases, kinds):
+    def write_fixture(self):
+        folder = os.path.join(self.work, "fixture-install")
+        output = run_case(self.runner, self.unit_tests, FIXTURE_CASE, dict(self.environment, AMBROSE_FIXTURE_INSTALL=folder))
+        self.fixture = written_fixture(output)
+        return f"{self.fixture.root} holds revision {self.fixture.revision}, its Root.wad and the type dump {self.fixture.dump}"
+
+    def boot(self, server, databases, kinds, fixture=None):
         if not self.check(f"{server.WHAT} ready", lambda: server.start(timeout=READY_TIMEOUT)):
             return False
-        self.check(f"{server.WHAT} runs headless", lambda: headless(server))
+        if fixture:
+            self.check(f"{server.WHAT} serves the fixture install", lambda: serves_fixture(server, fixture))
+        else:
+            self.check(f"{server.WHAT} runs headless", lambda: headless(server))
         for kind, label in kinds:
             self.check(f"{server.WHAT} updated the {label} database", lambda kind=kind, label=label: updated(server, databases, kind, label))
         self.check(f"{server.WHAT}'s admin API health", lambda: server.health())
@@ -269,16 +337,21 @@ class ServerRun:
         if not self.check("the scratch databases", lambda: f"{databases.address} will hold {', '.join(sorted(databases.names.values()))}; " + databases.drop()):
             return self.results
         try:
-            login = self.make("loginserver", databases, list(HEADLESS))
+            self.check("the fixture install", self.write_fixture)
+            fixture = self.fixture
+            login = self.make("loginserver", databases, fixture_settings(fixture) if fixture else list(HEADLESS))
             self.started.append(login)
-            if self.boot(login, databases, DATABASE_KINDS):
-                self.check("the login server's console", lambda: account_created(login, databases, secrets.token_urlsafe(12)))
+            if self.boot(login, databases, FIXTURE_DATABASE_KINDS if fixture else DATABASE_KINDS, fixture):
+                self.check("the login server's console", lambda: account_created(login, databases, self.password))
                 if "gameserver" in self.targets:
                     game = self.make("gameserver", databases, list(HEADLESS) + [f"Realm.Name={REALM}"])
                     self.started.append(game)
                     if self.boot(game, databases, DATABASE_KINDS):
                         self.check("the game server's console", lambda: console_answers(game, "server info", r"The world has ticked \d+ time\(s\) and holds \d+ session\(s\)"))
                         self.check("the game server attached to the login database", lambda: realm_attached(game, databases, game.port))
+                if fixture:
+                    self.check("the login probe signed in and listed the characters",
+                               lambda: probed(self.runner, self.unit_tests, self.environment, login.port, ACCOUNT, self.password))
         finally:
             for server in reversed(self.started):
                 self.check(f"{server.WHAT} stopped", lambda server=server: self.stopped(server))
@@ -314,7 +387,7 @@ def servers_summary(results):
     return "### Dev run of the servers\n\n" + "\n".join(lines) + "\n"
 
 
-def servers(arguments, environment, driver=None, work=None):
+def servers(arguments, environment, driver=None, work=None, runner=subprocess.run):
     binaries = os.path.join(ROOT, arguments.binaries) if not os.path.isabs(arguments.binaries) else arguments.binaries
     try:
         targets = server_targets(arguments.targets)
@@ -324,7 +397,7 @@ def servers(arguments, environment, driver=None, work=None):
     if not targets:
         print(f"no server target is named in {arguments.targets!r}, so nothing is booted")
         return 0
-    needed = [path for name in targets for path in (program(binaries, name), os.path.join(binaries, name + ".conf.dist"))]
+    needed = [path for name in targets for path in (program(binaries, name), os.path.join(binaries, name + ".conf.dist"))] + [program(binaries, UNIT_TESTS)]
     missing = [path for path in needed if not os.path.isfile(path)]
     if missing:
         print("the dev run needs the built " + ", ".join(missing) + "; build the leg first", file=sys.stderr)
@@ -336,7 +409,7 @@ def servers(arguments, environment, driver=None, work=None):
     driver = driver or load_driver()
     work = work or tempfile.mkdtemp(prefix="ambrose-devrun-")
     print(f"booting {' and '.join(targets)} from {binaries} in {work}", flush=True)
-    results = ServerRun(binaries, targets, address, environment, work, driver).run()
+    results = ServerRun(binaries, targets, address, environment, work, driver, runner).run()
     failed = [what for what, ok, _ in results if not ok]
     if failed:
         for name in targets:
@@ -360,8 +433,8 @@ def main(argv=None, environment=None, git=None, runner=subprocess.run, which=shu
     runner_parser.add_argument("--binaries", required=True, help="the folder holding the built supervisor, patchserver and gameserver")
     runner_parser.add_argument("--build-dir", required=True, help="the configured build folder those binaries came from, where the supervisor is relinked with the panel just built")
     runner_parser.add_argument("--config", required=True, help="the build configuration those binaries came from, such as Debug")
-    booter = commands.add_parser("servers", help="boot the built login and game servers with no client install and check they serve")
-    booter.add_argument("--binaries", required=True, help="the folder holding the built loginserver and gameserver")
+    booter = commands.add_parser("servers", help="boot the built login server on the fixture install and the game server with no install, check they serve, and sign in over the wire")
+    booter.add_argument("--binaries", required=True, help="the folder holding the built loginserver, gameserver and unit_tests")
     booter.add_argument("--targets", default="loginserver gameserver", help="the targets select chose, space separated; the game server also boots the login server")
     arguments = parser.parse_args(argv)
     environment = dict(os.environ) if environment is None else environment
@@ -371,7 +444,7 @@ def main(argv=None, environment=None, git=None, runner=subprocess.run, which=shu
             git = Git()
         return select(arguments, environment, git)
     if arguments.command == "servers":
-        return servers(arguments, environment, driver)
+        return servers(arguments, environment, driver, runner=runner)
     return panel(arguments, environment, runner, which)
 
 

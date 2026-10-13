@@ -1,0 +1,13 @@
+[
+{"id":245808593,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/Tutorial_More_Advanced_Combat.xml"},
+{"id":469483701,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/Tutorial_Advanced_Combat.xml"},
+{"id":595992452,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/WC-TUT-FUSION-001.xml"},
+{"id":600062081,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/Tutorial_Intro.xml"},
+{"id":625991063,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/KR-MOON-TUT-001.xml"},
+{"id":851615851,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/KT-PreCel-MAIN-001.xml"},
+{"id":851616407,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/WC-PreCel-MAIN-001.xml"},
+{"id":1103857632,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/Tutorial_Krok.xml"},
+{"id":1201039328,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/Tutorial_Deck.xml"},
+{"id":1274790071,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/Tutorial_Advanced_Combat02.xml"},
+{"id":1711963136,"name":"","display":"","class":"TutorialQuestTemplate","group":"Tutorials","behaviors":[],"displayKey":"","archive":"Root.wad","path":"Tutorials/Tutorial_Equipment.xml"}
+]

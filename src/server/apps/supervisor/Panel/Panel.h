@@ -21,6 +21,8 @@
 #include "PanelKeyring.h"
 #include "PanelLaunchSettings.h"
 #include "PanelLinks.h"
+#include "PanelMaintenance.h"
+#include "PanelOpsCalendar.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
 #include "PanelTwoFactor.h"
@@ -125,6 +127,7 @@ public:
     PanelEventSocket& EventSocket() { return *_eventSocket; }
     void SetAppSource(PanelEventSocket::AppSource source);
     void SetLaunchAppSource(std::function<std::vector<std::string>()> source);
+    void SetAppCall(MaintenanceAppCall call) { _appCall = std::move(call); }
     void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
@@ -173,6 +176,12 @@ private:
     void RegisterPlayerAccountRoutes();
     void RegisterTwoFactor();
     void RegisterCommandHistory();
+    void RegisterMaintenance();
+    AdminResponse MaintenanceGet(AdminRequest const& request);
+    AdminResponse MaintenanceEnter(AdminRequest const& request);
+    AdminResponse MaintenanceExit(AdminRequest const& request);
+    void RegisterOpsCalendar();
+    AdminResponse OpsCalendarGet(AdminRequest const& request);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
@@ -265,6 +274,7 @@ private:
     PanelEventStreams _events;
     PanelEventTickets _tickets;
     std::unique_ptr<PanelEventSocket> _eventSocket;
+    MaintenanceAppCall _appCall;
     AdminServer _listener;
     bool _secure = false;
     std::atomic<bool> _accountsReady{ false };

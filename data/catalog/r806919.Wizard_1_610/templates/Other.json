@@ -1,0 +1,8 @@
+[
+{"id":234378,"name":"","display":"","class":"FilterSetTemplate","group":"AudioFilters","behaviors":[],"displayKey":"","archive":"Root.wad","path":"AudioFilters/LowPassDropOff.xml"},
+{"id":303071,"name":"","display":"","class":"FilterSetTemplate","group":"AudioFilters","behaviors":[],"displayKey":"","archive":"Root.wad","path":"AudioFilters/Underwater_LowPass_ZN_Lg.xml"},
+{"id":303072,"name":"","display":"","class":"FilterSetTemplate","group":"AudioFilters","behaviors":[],"displayKey":"","archive":"Root.wad","path":"AudioFilters/Distance_Rolloff_Fountain_Medium.xml"},
+{"id":408071,"name":"","display":"","class":"FilterSetTemplate","group":"AudioFilters","behaviors":[],"displayKey":"","archive":"Root.wad","path":"AudioFilters/Occlusion_01.xml"},
+{"id":1399048,"name":"","display":"","class":"FilterSetTemplate","group":"AudioFilters","behaviors":[],"displayKey":"","archive":"Root.wad","path":"AudioFilters/Partial_Occlusion_01.xml"},
+{"id":1442002,"name":"","display":"","class":"FilterSetTemplate","group":"AudioFilters","behaviors":[],"displayKey":"","archive":"Root.wad","path":"AudioFilters/Distance_SimpleLowpass.xml"}
+]
