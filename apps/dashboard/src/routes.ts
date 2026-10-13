@@ -16,6 +16,7 @@ import GaugeIcon from "@lucide/svelte/icons/gauge";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import GlobeIcon from "@lucide/svelte/icons/globe";
 import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
+import NetworkIcon from "@lucide/svelte/icons/network";
 import LockIcon from "@lucide/svelte/icons/lock";
 import KeyRoundIcon from "@lucide/svelte/icons/key-round";
 import ServerIcon from "@lucide/svelte/icons/server";
@@ -127,6 +128,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Servers",
         view: { kind: "page", load: () => import("./pages/Database.svelte") },
+    },
+    {
+        path: "network",
+        title: "Network",
+        icon: NetworkIcon,
+        permission: "network.read",
+        nav: true,
+        group: "Servers",
+        view: { kind: "page", load: () => import("./pages/Network.svelte") },
     },
     {
         path: "config",

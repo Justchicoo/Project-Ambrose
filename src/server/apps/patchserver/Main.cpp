@@ -13,7 +13,9 @@
 #include "PatchListener.h"
 #include "PatchMessageTable.h"
 #include "PatchMgr.h"
+#include "PortProbe.h"
 #include "ServerApp.h"
+#include "Settings.h"
 
 #include <fmt/format.h>
 
@@ -92,6 +94,8 @@ namespace
                 sAdminCapabilities.AddReloadTarget(std::string(PatchMgr::ReloadTarget));
 
             std::string error;
+            sSettings.AddCheck(std::string(PatchListener::PortOption), [this](std::string_view, Settings::ProposedValue const& proposed) { return CheckListenEndpoint(proposed); });
+            sSettings.AddCheck("BindIP", [this](std::string_view, Settings::ProposedValue const& proposed) { return CheckListenEndpoint(proposed); });
             if (!_listener.Start(Config(), error))
             {
                 LOG_ERROR("server.patchserver", "Cannot listen for clients: {}", error);
@@ -103,6 +107,29 @@ namespace
             return true;
         }
 
+        std::optional<std::string> CheckListenEndpoint(Settings::ProposedValue const& proposed)
+        {
+            std::string const address = proposed("BindIP");
+            uint16 port = 0;
+            try
+            {
+                unsigned long const parsed = std::stoul(proposed(std::string(PatchListener::PortOption)));
+                if (parsed > 65535)
+                    return fmt::format("port {} is outside 1-65535", proposed(std::string(PatchListener::PortOption)));
+                port = static_cast<uint16>(parsed);
+            }
+            catch (std::exception const&)
+            {
+                return std::nullopt;
+            }
+            if (_listener.IsRunning() && _listener.GetBindIp() == address && _listener.GetPort() == port)
+                return std::nullopt;
+            std::string error;
+            if (PortProbe::IsFree(PortProbe::Protocol::Tcp, address, port, error))
+                return std::nullopt;
+            return fmt::format("port {} is already in use on {}: {}", port, address, error);
+        }
+
         void OnConfigChanged(std::vector<std::string> const& changed) override
         {
             sPatchMgr.ApplyConfig(Config(), changed);
@@ -112,7 +139,18 @@ namespace
                 if (_listener.Apply(Config(), error))
                     SetListener(_listener.GetBindIp(), _listener.GetPort());
                 else
+                {
                     LOG_WARN("server.patchserver", "Cannot apply the network settings, so the listener on {}:{} goes on serving: {}", _listener.GetBindIp(), _listener.GetPort(), error);
+                    SettingAuthor author;
+                    author.Who = "patchserver";
+                    author.Source = "listener";
+                    std::string const reason = fmt::format("the new address would not bind, so the listener keeps serving {}:{}", _listener.GetBindIp(), _listener.GetPort());
+                    std::vector<SettingEntry> const entries{
+                        { "BindIP", _listener.GetBindIp() }, { std::string(PatchListener::PortOption), std::to_string(_listener.GetPort()) }
+                    };
+                    if (!sSettings.SetMany(entries, author, reason).Ok())
+                        LOG_ERROR("server.patchserver", "Could not revert the listen settings after the failed rebind");
+                }
             }
         }
 

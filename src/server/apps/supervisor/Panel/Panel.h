@@ -7,6 +7,7 @@
 #define AMBROSE_PANEL_H
 
 #include "AdminServer.h"
+#include "AdminClient.h"
 #include "ListenerSettings.h"
 #include "PanelApiKeys.h"
 #include "PanelAudit.h"
@@ -60,6 +61,7 @@ class Log;
 class PanelSettingStore;
 struct PanelMailSettings;
 class SettingStore;
+struct PortAllocationDraft;
 
 class Panel
 {
@@ -135,6 +137,8 @@ public:
     void SetAppCall(MaintenanceAppCall call) { _appCall = std::move(call); }
     void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
+    void RegisterNetwork();
+
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
     bool Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error);
     bool VerifyAuditChain(AuditChainVerification& verification, std::string& error);
@@ -189,6 +193,21 @@ private:
     void RegisterOpsCalendar();
     AdminResponse OpsCalendarGet(AdminRequest const& request);
     void RegisterInvites();
+    bool NetworkDraftOf(nlohmann::json const& body, PortAllocationDraft& draft, std::string& refusal);
+    std::optional<std::pair<std::string, uint16>> AppListenerOf(std::string_view app);
+    bool AppListensOn(std::string_view app, std::string_view address, uint16 port);
+    AdminResponse NetworkAudited(AdminRequest const& request, std::string_view name, std::function<AdminResponse(std::string& refusal, std::string& error)> operation);
+    AdminResponse NetworkNode(AdminRequest const& request);
+    AdminResponse NetworkApp(AdminRequest const& request);
+    AdminResponse NetworkAllocationAdd(AdminRequest const& request);
+    AdminResponse NetworkAllocationAddRange(AdminRequest const& request);
+    AdminResponse NetworkAllocationPost(AdminRequest const& request);
+    AdminResponse NetworkAllocationDelete(AdminRequest const& request);
+    AdminResponse NetworkAllocationsBulkDelete(AdminRequest const& request);
+    AdminResponse NetworkAllocationAssign(AdminRequest const& request, int64 id);
+    AdminResponse NetworkAllocationUnassign(AdminRequest const& request, int64 id);
+    AdminResponse NetworkPoolSet(AdminRequest const& request);
+    AdminResponse NetworkPoolTake(AdminRequest const& request);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);

@@ -318,6 +318,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     RegisterCommandHistory();
     RegisterMaintenance();
     RegisterOpsCalendar();
+    RegisterNetwork();
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
