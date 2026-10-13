@@ -1624,7 +1624,7 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 - [ ] Removing a user's `console.read` stops their log stream within one second while their status stream continues, and another user's sockets are untouched
 - [ ] Ending a session closes only that user's sockets, with 4401, and the page signs in again without losing its place
-- [ ] A subscription to an app the caller holds nothing on answers not found, never an empty stream
+- [x] A subscription to an app the caller holds nothing on answers not found, never an empty stream (PanelEventSocketTest.SubscribeChecksPermissionLikeARoute: a ticket holding nothing that subscribes to status on gameserver-1 gets an error with code not_found, and PanelEventSocketTest.SubscribeOpensAStreamAndUnsubscribeClosesIt: an unknown app is not_found)
 - [ ] A `session.expiring` message arrives before the idle lifetime ends, and the page's refresh keeps the socket open
 - [ ] A grant added while a socket is open makes the new stream available without reconnecting
 

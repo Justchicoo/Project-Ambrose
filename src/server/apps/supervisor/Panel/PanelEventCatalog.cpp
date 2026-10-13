@@ -124,8 +124,8 @@ namespace
         std::vector<std::string_view> const states{ "offline", "starting", "running", "stopping", "crashed", "backoff", "crash_loop", "disabled", "setup", "updating", "restoring", "moving" };
         return {
             Takes("hello", "", PanelEventGate::SignedIn, "", true, ObjectOf({ Field("version", WholeShape()), Maybe("csrf", TextShape()), Maybe("ticket", TextShape()) })),
-            Takes("subscribe", "", PanelEventGate::StreamPermission, "", false, OpenShape()),
-            Takes("unsubscribe", "", PanelEventGate::None, "", false, OpenShape()),
+            Takes("subscribe", "", PanelEventGate::StreamPermission, "", true, ObjectOf({ Field("stream", TextShape()) })),
+            Takes("unsubscribe", "", PanelEventGate::None, "", true, ObjectOf({ Field("stream", TextShape()) })),
             Takes("resume", "", PanelEventGate::StreamPermission, "", true, ObjectOf({ Field("stream", TextShape()) })),
             Takes("backlog", "logs", PanelEventGate::Permission, "console.read", false, OpenShape()),
             Takes("command", "", PanelEventGate::Permission, "console.write", false, OpenShape()),
@@ -198,7 +198,9 @@ namespace
                 Field("message", TextShape()),
                 Field("correlation", TextShape()),
             })),
-            Later("session.expiring", "", PanelEventGate::User, ""),
+            Sends("session.expiring", "", PanelEventGate::User, "", true, ObjectOf({
+                Field("expires_in", WholeShape()),
+            })),
             Sends("pong", "", PanelEventGate::Sender, "", true, ObjectOf({})),
         };
     }

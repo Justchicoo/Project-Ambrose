@@ -30,12 +30,19 @@ struct SessionHolder
     std::string Principal;
 };
 
+struct SessionExpiry
+{
+    std::chrono::seconds IdleRemaining{ 0 };
+    std::chrono::seconds AbsoluteRemaining{ 0 };
+};
+
 class SessionSource
 {
 public:
     virtual ~SessionSource() = default;
 
     virtual std::optional<SessionHolder> Hold(std::string_view secret) = 0;
+    virtual std::optional<SessionExpiry> ExpiryOf(std::string_view secret) = 0;
 };
 
 class AdminSessions : public SessionSource
@@ -60,6 +67,7 @@ public:
     AdminSession Open();
     std::optional<std::string> Find(std::string_view secret);
     std::optional<SessionHolder> Hold(std::string_view secret) override;
+    std::optional<SessionExpiry> ExpiryOf(std::string_view secret) override;
     bool Close(std::string_view secret);
     void CloseAll();
     std::size_t Count() const;
