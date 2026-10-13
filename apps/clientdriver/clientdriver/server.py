@@ -201,7 +201,8 @@ class LoginServer:
         seen = "no answer"
         while True:
             try:
-                with opener(address, timeout=5) as answer:
+                request = urllib.request.Request(address, headers={"Authorization": f"Bearer {self.admin_token()}"})
+                with opener(request, timeout=5) as answer:
                     body = json.loads(answer.read().decode("utf-8"))
                 if body.get("state") == "running":
                     return f"{address} answered {body.get('app')} running for {body.get('uptime')}s at revision {body.get('revision')}"
@@ -211,6 +212,10 @@ class LoginServer:
             if not self.alive() or time.monotonic() > deadline:
                 raise StepFailed(f"{address} never said {self.WHAT} was running: {seen}")
             time.sleep(0.5)
+
+    def admin_token(self):
+        with open(self.token_path, "r", encoding="utf-8") as handle:
+            return handle.read().strip()
 
     def session_offer(self, timeout=10, connect=socket.create_connection):
         what = f"the first bytes from {self.WHAT} on {self.host}:{self.port}"
