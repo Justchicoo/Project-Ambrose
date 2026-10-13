@@ -1,0 +1,44 @@
+# Builds only the Ambrose `launcher` target on Windows and uploads the .exe
+# as an artifact. Temporary helper workflow (not part of the project's CI).
+name: Build launcher artifact (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/build-launcher-artifact.yml]
+
+jobs:
+  build-launcher:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        run: choco install ninja -y --no-progress
+
+      - name: Setup vcpkg and configure
+        run: python apps/ci/ci_build.py --setup-vcpkg "$env:RUNNER_TEMP/vcpkg" --configure-preset windows-msvc-x64 --build-preset windows-release --stage configure
+
+      - name: Build launcher target
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+        run: cmake --build build/windows-msvc-x64 --config Release --target launcher
+
+      - name: Upload launcher.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-windows-x64
+          path: build/windows-msvc-x64/**/launcher.exe
+          if-no-files-found: error
+          retention-days: 7
