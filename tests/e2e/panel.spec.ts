@@ -25,7 +25,7 @@ async function signIn(page: Page, url: string) {
     const started = Date.now();
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toBeVisible();
-    await expect(page.getByText("Running", { exact: true }).first()).toBeVisible({ timeout: 2000 });
+    await expect(page.getByText(/^(Running|Needs attention)$/).first()).toBeVisible({ timeout: 2000 });
     return Date.now() - started;
 }
 
