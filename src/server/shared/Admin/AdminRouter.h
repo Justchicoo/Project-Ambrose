@@ -150,6 +150,7 @@ public:
     std::vector<std::string> RefusedRoutes() const;
     void AddCosting(std::string method, std::string path, std::string permission, uint32 cost, Handler handler);
     void AddOpenCosting(std::string method, std::string path, uint32 cost, Handler handler);
+    void AddPublicCosting(std::string method, std::string path, uint32 cost, Handler handler);
     void SetThrottle(Throttle throttle);
     std::optional<AdminResponse> Charge(AdminRequest const& request, uint32 cost) const;
     uint32 CostOf(std::string_view method, std::string_view path) const;

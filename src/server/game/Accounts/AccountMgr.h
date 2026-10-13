@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Account management over the login database: creating accounts with validated names and encrypted-at-rest verifiers, passwords, security levels, locks, bans and timed mutes that replace earlier records, and lookups by name or id.
+ * Account management over the login database: creating accounts with validated names, encrypted-at-rest verifiers and an email verification state, passwords, security levels, locks, bans and timed mutes that replace earlier records, and lookups by name or id.
  */
 
 #ifndef AMBROSE_ACCOUNTMGR_H
@@ -54,6 +54,7 @@ struct AccountInfo
     std::string StoredVerifier;
     uint8 VerifierKeyId = 0;
     std::string Email;
+    bool EmailVerified = true;
     uint8 SecurityLevel = SEC_PLAYER;
     uint8 ChatMode = 0;
     bool Locked = false;
@@ -107,7 +108,8 @@ public:
     AccountOpResult ValidateUsername(std::string_view username) const;
     AccountOpResult ValidatePassword(std::string_view password) const;
 
-    AccountOpResult CreateAccount(std::string_view username, std::string_view password, std::string_view email = {}, uint64* accountId = nullptr);
+    AccountOpResult CreateAccount(std::string_view username, std::string_view password, std::string_view email = {}, uint64* accountId = nullptr, bool emailVerified = true);
+    AccountOpResult SetEmailVerified(uint64 accountId, bool verified);
     AccountOpResult ChangePassword(uint64 accountId, std::string_view password);
     AccountOpResult SetSecurityLevel(uint64 accountId, uint8 level);
     AccountOpResult SetLocked(uint64 accountId, bool locked);
@@ -124,6 +126,7 @@ public:
 
     AccountLookup GetAccountByName(std::string_view username) const;
     AccountLookup GetAccountById(uint64 accountId) const;
+    AccountLookup GetAccountByEmail(std::string_view email) const;
     static std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> PrepareGetAccountById(uint64 accountId);
     static std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> PrepareGetAccountByIdWithMute(uint64 accountId, uint64 now);
     static AccountInfo ReadAccountRow(PreparedResultSet const& row);
@@ -138,7 +141,6 @@ public:
 private:
     AccountMgr();
 
-    AccountOpResult StoreVerifier(uint64 accountId, std::string_view username, std::string_view password);
     template<class Key>
     AccountOpResult AddBan(LoginDatabaseStatements index, Key const& key, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason);
     template<class Key>

@@ -29,10 +29,12 @@
 #include "PanelUsers.h"
 #include "PanelStore.h"
 #include "PanelSettings.h"
+#include "PanelPlayerAccounts.h"
 #include "Types.h"
 
 #include <nlohmann/json_fwd.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <map>
@@ -52,6 +54,7 @@ class ConfigMgr;
 class EmbeddedPage;
 class Log;
 class PanelSettingStore;
+struct PanelMailSettings;
 class SettingStore;
 
 class Panel
@@ -75,6 +78,8 @@ public:
     static std::filesystem::path KeyringFile(ConfigMgr const& config, std::filesystem::path const& dataFolder);
 
     void SetDashboard(EmbeddedPage const* page);
+    void SetAccountsReady(bool ready) noexcept { _accountsReady.store(ready, std::memory_order_release); }
+    void SetPlayerSessionKicker(std::function<bool(uint64, std::string&)> kicker) { _playerSessionKicker = std::move(kicker); }
     bool Start(ConfigMgr const& config, std::string& error);
     bool Reload(ConfigMgr const& config);
     void Stop();
@@ -168,6 +173,7 @@ private:
     std::optional<PanelTwoFactorSettings> LoadTwoFactorSettings(ConfigMgr const& config, std::string& error);
     void ApplyTwoFactorSettings(ConfigMgr const& config, PanelTwoFactorSettings const& loaded);
     void RegisterSignIn();
+    void RegisterPlayerAccountRoutes();
     void RegisterTwoFactor();
     void RegisterCommandHistory();
     void RegisterMaintenance();
@@ -203,6 +209,16 @@ private:
     AdminResponse PanelSettingsGet(AdminRequest const& request);
     AdminResponse PanelSettingsUpdate(AdminRequest const& request);
     AdminResponse MailTest(AdminRequest const& request);
+    AdminResponse PlayerRegistrationCreate(AdminRequest const& request);
+    AdminResponse PlayerRegistrationInfo(AdminRequest const& request);
+    AdminResponse PlayerEmailVerification(AdminRequest const& request);
+    AdminResponse PlayerPasswordResetRequest(AdminRequest const& request);
+    AdminResponse PlayerPasswordReset(AdminRequest const& request);
+    AdminResponse PlayerRegistrationsGet(AdminRequest const& request);
+    AdminResponse PlayerRegistrationResend(AdminRequest const& request);
+    AdminResponse PlayerRegistrationBlock(AdminRequest const& request);
+    std::optional<AdminResponse> PlayerAttemptGate(AdminRequest const& request, nlohmann::json const& body);
+    PanelMailSettings PlayerMailSettings() const;
     std::optional<AdminResponse> CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username);
     AdminResponse ClearError(AdminRequest const& request);
     AdminResponse ErrorReport(AdminRequest const& request, bool create);
@@ -232,7 +248,9 @@ private:
     PanelSignInThrottle _signIn;
     PanelSignInThrottle _secondFactor;
     PanelSignInThrottle _linkFailures;
+    PanelSignInThrottle _playerAttempts;
     PanelLinks _links;
+    PanelPlayerAccounts _playerAccounts;
     std::chrono::seconds _sessionIdle{ 0 };
     std::chrono::seconds _sessionLifetime{ 0 };
     std::mutex _challengeMutex;
@@ -240,6 +258,7 @@ private:
     mutable std::mutex _twoFactorMutex;
     PanelTwoFactorSettings _twoFactorSettings;
     PanelRateLimit _rateLimit;
+    PanelRateLimit _playerRateLimit;
     std::mutex _storeMutex;
     std::function<std::vector<std::string>()> _launchAppSource;
     PanelAuditForwarder _auditForwarder;
@@ -259,6 +278,8 @@ private:
     MaintenanceAppCall _appCall;
     AdminServer _listener;
     bool _secure = false;
+    std::atomic<bool> _accountsReady{ false };
+    std::function<bool(uint64, std::string&)> _playerSessionKicker;
 };
 
 #endif

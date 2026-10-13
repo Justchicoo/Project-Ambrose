@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the Login options: defaults, the server name trimmed, allowed empty and bounded, a revision list with spaces and empty entries, clamped limits, durations and AFK warning byte, a disabled AFK timeout and shutdown grace, an unknown duplicate login policy, enforcement refused without any allowed revision, maintenance mode with its reason and bypass level, and maintenance set live through the settings table taking hold with nothing restarted, audited with who and why, and still on after a restart.
+ * Tests the Login options: defaults, the server name trimmed, allowed empty and bounded, a revision list with spaces and empty entries, clamped limits, durations and AFK warning byte, a disabled AFK timeout and shutdown grace, an unknown duplicate login policy, enforcement refused without any allowed revision, email verification required live, maintenance mode with its reason and bypass level, and maintenance set live through the settings table taking hold with nothing restarted, audited with who and why, and still on after a restart.
  */
 
 #include "ConfigMgr.h"
@@ -126,6 +126,35 @@ TEST(LoginSettingsTest, MaintenanceReadsReasonAndBypassLevel)
     EXPECT_EQ(bad.MaintenanceBypassLevel, 2u);
     ASSERT_EQ(problems.size(), 1u);
     EXPECT_EQ(problems.front(), "Login.MaintenanceBypassLevel = 9 is not 0-4; using 2 (game master)");
+}
+
+TEST(LoginSettingsTest, EmailVerificationGateDefaultsOffAndChangesLive)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const file = directory.Write("login.conf", "Login.RequireVerifiedEmail = 0\n");
+    auto const store = std::make_shared<MemorySettingStore>();
+    SettingAuthor const operatorAuthor{ "Merle", 7, "console" };
+    ConfigMgr config;
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+    Settings settings;
+    std::vector<std::string> errors;
+    ASSERT_TRUE(settings.DeclareFor(SettingApps::Login, errors));
+    std::vector<std::string> warnings;
+    ASSERT_TRUE(settings.Start(config, store, warnings));
+    EXPECT_FALSE(LoginSettings::Load(config).RequireVerifiedEmail);
+
+    SettingOutcome const enabled = settings.Set("Login.RequireVerifiedEmail", "true", operatorAuthor, "player account verification");
+    ASSERT_TRUE(enabled.Ok()) << enabled.Message;
+    EXPECT_TRUE(LoginSettings::Load(config).RequireVerifiedEmail);
+
+    ConfigMgr restartedConfig;
+    ASSERT_TRUE(restartedConfig.LoadInitial(file).Succeeded());
+    Settings restartedSettings;
+    errors.clear();
+    ASSERT_TRUE(restartedSettings.DeclareFor(SettingApps::Login, errors));
+    warnings.clear();
+    ASSERT_TRUE(restartedSettings.Start(restartedConfig, store, warnings));
+    EXPECT_TRUE(LoginSettings::Load(restartedConfig).RequireVerifiedEmail);
 }
 
 TEST(LoginSettingsTest, MaintenanceSetLiveTakesHoldWithoutARestartIsAuditedAndIsStillOnAfterOne)

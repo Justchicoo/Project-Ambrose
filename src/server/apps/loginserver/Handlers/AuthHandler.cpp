@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Authenticates MSG_USER_AUTHEN_V3: reserves the attempt against the address's lockout, decrypts Rec1 with the session's offer, checks the session id, revision, machine and address bans, account, ClientKey1, and account bans and locks from one asynchronous query, refuses an account below Login.MaintenanceBypassLevel with Maintenance and Login.MaintenanceReason while Login.Maintenance is on, kicks any earlier session holding the account, stores the session key sealed like a verifier with the last login and a resealed verifier in one transaction, then admits the client or answers with the error, closing after too many failures, and refuses the older authentication messages. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds, a permanent one as the latest end the client reads, and no Reason, since the client would show GUI_<Reason> beside its dated ban line.
+ * Authenticates MSG_USER_AUTHEN_V3: reserves the attempt against the address's lockout, decrypts Rec1 with the session's offer, checks the session id, revision, machine and address bans, account, ClientKey1, and account bans and locks from one asynchronous query, refuses unverified email when Login.RequireVerifiedEmail is on and an account below Login.MaintenanceBypassLevel with Maintenance and Login.MaintenanceReason while Login.Maintenance is on, kicks any earlier session holding the account, stores the session key sealed like a verifier with the last login and a resealed verifier in one transaction, then admits the client or answers with the error, closing after too many failures, and refuses the older authentication messages. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds, a permanent one as the latest end the client reads, and no Reason, since the client would show GUI_<Reason> beside its dated ban line.
  */
 
 #include "AccountMgr.h"
@@ -202,6 +202,11 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
     if (!ClientKey::VerifyClientKey1(*verifier, attempt->Salt, attempt->ClientKey1))
     {
         FailAuthentication(attempt.get(), AuthResult::AuthenFailed, "the password is wrong", true);
+        return;
+    }
+    if (attempt->Settings->RequireVerifiedEmail && !row[9].Get<bool>())
+    {
+        FailAuthentication(attempt.get(), AuthResult::AuthenFailed, "the account's email address has not been verified", false);
         return;
     }
     if (accountBanned || account.Locked)

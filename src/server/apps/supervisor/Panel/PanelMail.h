@@ -31,6 +31,7 @@ struct PanelMailResult
 class PanelMail
 {
 public:
+    static PanelMailResult Send(PanelMailSettings const& settings, std::string_view toAddress, std::string_view subject, std::string_view body);
     static PanelMailResult SendTestMail(PanelMailSettings const& settings, std::string_view toAddress);
 };
 
