@@ -183,14 +183,21 @@ class SelectLegsTests(unittest.TestCase):
     def test_pushes_build_linux_gcc_for_code_data_and_build_inputs(self):
         now = at("2026-10-01T00:00:00Z")
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit([".github/workflows/core-build.yml"]))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["vcpkg.json", "doc/ROADMAP.md"]))["legs"], ["linux-gcc"])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["apps/ci/ci_select_legs.py"]))["legs"], [])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(None))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["src/test/server/shared/ReloadTest.cpp"]))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["data/sql/updates/db_login/2026_09_24_00.sql"]))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["CMakeLists.txt"]))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["cmake/Ambrose.cmake"]))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["apps/dashboard/src/routes.ts"]))["legs"], ["linux-gcc"])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["doc/PANEL.md", "README.md"]))["legs"], [])
+
+    def test_a_push_to_main_touching_code_or_dependencies_also_builds_windows(self):
+        now = at("2026-10-01T00:00:00Z")
+        for paths in (["vcpkg.json", "doc/ROADMAP.md"], ["src/test/server/shared/ReloadTest.cpp"], ["data/sql/updates/db_login/2026_09_24_00.sql"],
+                      ["CMakeLists.txt"], ["CMakePresets.json"], ["cmake/Ambrose.cmake"]):
+            planned = ci_select_legs.plan("push", {}, now, FakeGit(paths))
+            self.assertEqual(planned["legs"], ["windows-msvc-x64", "linux-gcc"], paths)
+            self.assertTrue(any(reason.startswith("windows-msvc-x64: selected") for reason in planned["reasons"]), paths)
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(["src/main.cpp"]))["legs"], ["linux-gcc"])
+        behind = FakeGit(["doc/PANEL.md"], {"codeaaa": True})
+        self.assertEqual(ci_select_legs.plan("push", {}, now, behind, ci_select_legs.KnownBuilds({"linux-gcc": "codeaaa"}))["legs"], ["linux-gcc"])
 
     def test_pull_requests_build_labeled_legs_from_the_merge_base(self):
         now = at("2026-10-01T00:00:00Z")
