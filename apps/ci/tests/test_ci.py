@@ -1709,7 +1709,7 @@ class DevRunTests(unittest.TestCase):
         self.assertNotEqual(login.port, login.admin_port)
         self.assertNotIn("AMBROSE_CLIENT_DIR", login.environment)
         self.assertEqual(login.environment["XDG_DATA_HOME"], os.path.join(folder, "data"))
-        unit_tests = os.path.join(folder, "unit_tests")
+        unit_tests = ci_dev_run.program(folder, "unit_tests")
         (write, written_case, write_env, captured, text, timeout), (probe, probe_case, probe_env, *_) = runner.calls
         self.assertEqual(write, [unit_tests, "--gtest_also_run_disabled_tests", f"--gtest_filter={ci_dev_run.FIXTURE_CASE}"])
         self.assertTrue(captured and text)
