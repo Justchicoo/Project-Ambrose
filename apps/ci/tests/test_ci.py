@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the forbidden file scan, including the key, store, log and token material it keeps out, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, the build leg selection against fakes, a real git repository and a fake Actions API, the dev run's targets for a change and its panel run against built binaries, and the milestone track, where a branch named for any milestone is allowed the source tree, nothing is held or reserved, and the track's Started rows name real milestones.
+# Self-tests for the forbidden file scan, including the key, store, log and token material it keeps out, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, the build leg selection against fakes, a real git repository and a fake Actions API, the dev run's targets for a change, its panel run against built binaries and its boot of the login and game servers against fakes of the client driver's servers and scratch databases, and the milestone track, where a branch named for any milestone is allowed the source tree, nothing is held or reserved, and the track's Started rows name real milestones.
 import argparse
 import datetime
 import json
@@ -13,6 +13,7 @@ import time
 import unittest
 import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -1379,6 +1380,101 @@ class GapRecordTests(unittest.TestCase):
         self.assertTrue(any("named as a gap record" in problem for problem in found), found)
 
 
+class FakeConsole:
+    def __init__(self, lines):
+        self.lines = list(lines)
+        self.start = 0
+
+    def matching(self, pattern, since=0):
+        return [line for line in self.lines[since:] if re.search(pattern, line)]
+
+    def wait(self, pattern, timeout, since=None, fail=None, alive=None, advance=True):
+        for line in self.lines:
+            found = re.search(pattern, line)
+            if found:
+                return found
+        raise RuntimeError(f"/{pattern}/ never appeared")
+
+
+class FakeDevServer:
+    WHAT = "the fake server"
+    READY_LINES = ()
+    ready = True
+    log = None
+
+    def __init__(self, program, defaults, folder, host, port, databases, settings=(), admin_port=None, environment=None):
+        self.program, self.defaults, self.folder, self.host, self.port = program, defaults, folder, host, port
+        self.settings, self.admin_port, self.environment = list(settings), admin_port, environment
+        self.console = FakeConsole(self.READY_LINES)
+        self.process = None
+        self.sent = []
+        FakeDevServer.log.append((self.WHAT, "made"))
+
+    def start(self, timeout):
+        self.process = mock.Mock(pid=4000 + len(FakeDevServer.log), stopped=False)
+        FakeDevServer.log.append((self.WHAT, "start"))
+        if not self.ready:
+            raise RuntimeError(f"{self.WHAT} never said it was ready")
+        return f"ready as process {self.process.pid}"
+
+    def alive(self):
+        return self.process is not None and not self.process.stopped
+
+    def send(self, line):
+        self.sent.append(line)
+
+    def health(self):
+        return f"http://{self.host}:{self.admin_port}/api/health answered running"
+
+    def session_offer(self):
+        return f"{self.host}:{self.port} offered session 1"
+
+    def ensure_account(self, user, password):
+        return f"{user} created with id 1"
+
+    def stop(self):
+        FakeDevServer.log.append((self.WHAT, "stop"))
+        if self.process is None:
+            return "it was never started"
+        self.process.stopped = True
+        return "stopped by the shutdown command with 0"
+
+
+UPDATED = ["No Wizard101 install is in use, so client messages are logged by service and order only"] + [f"INFO  [sql.updates] The {kind} database is up to date" for kind in ("login", "characters", "world")]
+
+
+class FakeDevLogin(FakeDevServer):
+    WHAT = "the login server"
+    READY_LINES = UPDATED + ["Account devrun created with id 1"]
+
+
+class FakeDevGame(FakeDevServer):
+    WHAT = "the game server"
+    READY_LINES = UPDATED + ["Realm AmbroseDevRun at 127.0.0.1:{port} says it is alive every 30 second(s)", "The world has ticked 12 time(s) and holds 1 session(s)"]
+
+    def __init__(self, *arguments, **options):
+        super().__init__(*arguments, **options)
+        self.console.lines = [line.replace("{port}", str(self.port)) for line in self.console.lines]
+
+
+class FakeScratch:
+    def __init__(self, host, port, user, password, prefix):
+        self.address = f"{host}:{port}"
+        self.names = {kind: f"{prefix}_{kind}" for kind in ("login", "characters", "world")}
+        self.queries = []
+
+    def drop(self):
+        FakeDevServer.log.append(("databases", "drop"))
+        return "dropped " + ", ".join(sorted(self.names.values()))
+
+    def value(self, kind, query):
+        self.queries.append((kind, query))
+        return 7
+
+    def account_id(self, user):
+        return 1
+
+
 class DevRunTests(unittest.TestCase):
     def test_a_change_boots_only_the_targets_its_paths_belong_to(self):
         chosen, _ = ci_dev_run.plan("pull_request", "base", "head", FakeGit(["apps/dashboard/src/App.svelte"]))
@@ -1432,6 +1528,89 @@ class DevRunTests(unittest.TestCase):
         self.assertEqual(environment["AMBROSE_GAMESERVER"], ci_dev_run.program(folder, "gameserver"))
         self.assertEqual(environment["CI"], "1")
 
+    def driver(self, game_ready=True):
+        FakeDevServer.log = []
+        game = type("Game", (FakeDevGame,), {"ready": game_ready})
+        return SimpleNamespace(LoginServer=FakeDevLogin, GameServer=game, Scratch=FakeScratch, paths=SimpleNamespace(program=lambda name: name))
+
+    def boot(self, folder, targets, driver, environment=None):
+        environment = {"AMBROSE_TEST_DB": "127.0.0.1;3306;root;root;ambrose_test", "AMBROSE_CLIENT_DIR": "C:/Wizard101"} if environment is None else environment
+        arguments = SimpleNamespace(binaries=folder, targets=targets)
+        with mock.patch("os.path.isfile", side_effect=lambda path: True), mock.patch("sys.stdout", io.StringIO()) as printed:
+            code = ci_dev_run.servers(arguments, environment, driver, work=folder)
+        return code, printed.getvalue()
+
+    def test_the_server_targets_boot_the_login_server_under_the_game_server(self):
+        self.assertEqual(ci_dev_run.server_targets("panel gameserver"), ["loginserver", "gameserver"])
+        self.assertEqual(ci_dev_run.server_targets("loginserver"), ["loginserver"])
+        self.assertEqual(ci_dev_run.server_targets("panel"), [])
+        with self.assertRaises(ValueError):
+            ci_dev_run.server_targets("worldserver")
+        self.assertEqual(ci_dev_run.database_address({"AMBROSE_TEST_DB": "127.0.0.1;3306;root;root;ambrose_test"}), ("127.0.0.1", 3306, "root", "root"))
+        self.assertIsNone(ci_dev_run.database_address({}))
+
+    def test_the_server_run_refuses_missing_binaries_and_a_missing_database(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch("sys.stderr", io.StringIO()) as errors:
+            self.assertEqual(ci_dev_run.main(["servers", "--binaries", folder, "--targets", "loginserver"], {}, driver=self.driver()), 1)
+            self.assertIn("loginserver.conf.dist", errors.getvalue())
+            self.assertNotIn("gameserver", errors.getvalue())
+            with mock.patch("os.path.isfile", side_effect=lambda path: True):
+                self.assertEqual(ci_dev_run.main(["servers", "--binaries", folder], {}, driver=self.driver()), 1)
+            self.assertIn("AMBROSE_TEST_DB", errors.getvalue())
+        self.assertEqual(FakeDevServer.log, [])
+
+    def test_the_server_run_boots_both_headless_checks_each_and_stops_them_before_dropping_the_databases(self):
+        driver = self.driver()
+        with tempfile.TemporaryDirectory() as folder:
+            summary = os.path.join(folder, "summary")
+            code, printed = self.boot(folder, "panel gameserver", driver, {"AMBROSE_TEST_DB": "127.0.0.1;3306;root;root;ambrose_test",
+                                                                           "AMBROSE_CLIENT_DIR": "C:/Wizard101", "GITHUB_STEP_SUMMARY": summary})
+            with open(summary, encoding="utf-8") as handle:
+                written = handle.read()
+        self.assertEqual(code, 0, printed)
+        self.assertNotIn("FAIL", printed)
+        self.assertEqual(FakeDevServer.log, [("databases", "drop"), ("the login server", "made"), ("the login server", "start"), ("the game server", "made"),
+                                             ("the game server", "start"), ("the game server", "stop"), ("the login server", "stop"), ("databases", "drop")])
+        for wanted in ("the login server ready", "the login server updated the world database", "the login server's admin API health", "the login server offers a session",
+                       "the login server's console", "the game server's console: The world has ticked 12", "the game server attached to the login database",
+                       "the game server stopped", "the scratch databases dropped"):
+            self.assertIn(wanted, printed)
+        self.assertIn("### Dev run of the servers", written)
+
+    def test_the_servers_are_given_no_install_their_own_ports_and_their_own_data_folder(self):
+        made = []
+        driver = self.driver()
+
+        class Login(FakeDevLogin):
+            def __init__(self, *arguments, **options):
+                super().__init__(*arguments, **options)
+                made.append(self)
+
+        driver.LoginServer = Login
+        with tempfile.TemporaryDirectory() as folder:
+            code, printed = self.boot(folder, "loginserver", driver)
+        self.assertEqual(code, 0, printed)
+        login = made[0]
+        self.assertEqual(login.program, os.path.join(folder, "loginserver"))
+        self.assertEqual(login.defaults, os.path.join(folder, "loginserver.conf.dist"))
+        for wanted in ("ClientDir=", "TypeDumpPath=", "Setup.Mode=off"):
+            self.assertIn(wanted, login.settings)
+        self.assertNotEqual(login.port, login.admin_port)
+        self.assertNotIn("AMBROSE_CLIENT_DIR", login.environment)
+        self.assertEqual(login.environment["XDG_DATA_HOME"], os.path.join(folder, "data"))
+        self.assertNotIn(("the game server", "made"), FakeDevServer.log)
+
+    def test_a_server_that_never_gets_ready_fails_the_run_and_everything_is_still_stopped_and_dropped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            os.makedirs(os.path.join(folder, "gameserver"))
+            with open(os.path.join(folder, "gameserver", "console.txt"), "w", encoding="utf-8") as handle:
+                handle.write("FATAL the world could not load\n")
+            code, printed = self.boot(folder, "gameserver", self.driver(game_ready=False))
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL the game server ready", printed)
+        self.assertIn("gameserver| FATAL the world could not load", printed)
+        self.assertEqual(FakeDevServer.log[-3:], [("the game server", "stop"), ("the login server", "stop"), ("databases", "drop")])
+
     def test_every_path_the_dev_run_boots_builds_the_linux_gcc_leg_and_triggers_a_push(self):
         entries = list(ci_dev_run.EVERYTHING) + [entry for target in ci_dev_run.BOOTED for entry in ci_dev_run.TARGETS[target]]
         for entry in entries:
@@ -1457,6 +1636,12 @@ class DevRunTests(unittest.TestCase):
         self.assertIn("dev_run_panel: ${{ steps.devrun.outputs.panel }}", workflow)
         self.assertIn("run: python3 apps/ci/ci_dev_run.py select --from-github-env", workflow)
         self.assertIn("matrix.leg == 'linux-gcc' && needs.select.outputs.dev_run_panel == 'true'", workflow)
+        self.assertIn(f'run: python apps/ci/ci_dev_run.py servers --binaries {binaries} --targets "$DEV_RUN_TARGETS"', workflow)
+        for target in ("loginserver", "gameserver", "targets"):
+            self.assertIn(f"dev_run_{target}: ${{{{ steps.devrun.outputs.{target} }}}}", workflow)
+        with open(os.path.join(ROOT, "apps", "clientdriver", "requirements.txt"), encoding="utf-8") as handle:
+            pymysql = next(line.strip() for line in handle if line.startswith("PyMySQL=="))
+        self.assertIn(f"run: python -m pip install --disable-pip-version-check {pymysql}", workflow)
         with open(os.path.join(ROOT, "package.json"), encoding="utf-8") as handle:
             package = json.load(handle)
         self.assertIn("playwright test --project e2e", package["scripts"]["e2e"])

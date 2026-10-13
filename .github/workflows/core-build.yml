@@ -1,11 +1,11 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache, which pull requests restore and only pushes to main, the schedule and manual runs save, each build banking its vcpkg and compiler caches even when a newer push cancels it, and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, today the panel's end-to-end specs against its supervisor and patchserver.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache, which pull requests restore and only pushes to main, the schedule and manual runs save, each build banking its vcpkg and compiler caches even when a newer push cancels it, and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, the panel's end-to-end specs against its supervisor and patchserver, and the login and game servers booted with no client install against scratch databases.
 name: core-build
 
 on:
   push:
     branches: [main]
-    paths: [".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/dashboard/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "package-lock.json", "package.json", "packages/**", "playwright.config.ts", "src/**", "tests/e2e/**", "vcpkg.json"]
+    paths: [".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/dashboard/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "modules/**", "package-lock.json", "package.json", "packages/**", "playwright.config.ts", "src/**", "tests/e2e/**", "vcpkg.json"]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   schedule:
@@ -154,6 +154,9 @@ jobs:
       matrix: ${{ steps.select.outputs.matrix }}
       windows_keepalive: ${{ steps.select.outputs.windows_keepalive }}
       dev_run_panel: ${{ steps.devrun.outputs.panel }}
+      dev_run_loginserver: ${{ steps.devrun.outputs.loginserver }}
+      dev_run_gameserver: ${{ steps.devrun.outputs.gameserver }}
+      dev_run_targets: ${{ steps.devrun.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -329,3 +332,15 @@ jobs:
         if: ${{ !cancelled() && steps.devrun-browser.outcome == 'success' }}
         timeout-minutes: 10
         run: python apps/ci/ci_dev_run.py panel --binaries build/linux-gcc/bin/Debug
+      - name: Install the dev run's database driver
+        id: devrun-servers-setup
+        if: ${{ !cancelled() && steps.configure.outcome == 'success' && matrix.leg == 'linux-gcc' && (needs.select.outputs.dev_run_loginserver == 'true' || needs.select.outputs.dev_run_gameserver == 'true') }}
+        timeout-minutes: 3
+        run: python -m pip install --disable-pip-version-check PyMySQL==1.2.0
+      - name: Dev run of the login and game servers
+        if: ${{ !cancelled() && steps.devrun-servers-setup.outcome == 'success' }}
+        timeout-minutes: 6
+        env:
+          AMBROSE_TEST_DB: 127.0.0.1;3306;root;root;ambrose_test
+          DEV_RUN_TARGETS: ${{ needs.select.outputs.dev_run_targets }}
+        run: python apps/ci/ci_dev_run.py servers --binaries build/linux-gcc/bin/Debug --targets "$DEV_RUN_TARGETS"
