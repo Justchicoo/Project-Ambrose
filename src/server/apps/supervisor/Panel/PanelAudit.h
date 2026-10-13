@@ -47,6 +47,7 @@ struct AuditEvent
     AuditActor Actor = AuditActor::System;
     std::string ActorId;
     std::string ActorName;
+    std::string ApiKeyId;
     std::string Address;
     std::string UserAgent;
     std::string Node;

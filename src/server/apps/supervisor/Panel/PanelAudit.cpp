@@ -263,6 +263,7 @@ AuditScope::AuditScope(AdminRequest const& request, std::string name)
     {
         _event.Actor = AuditActor::Token;
         _event.ActorId = request.Principal;
+        _event.ApiKeyId = request.Principal;
     }
     else if (request.Principal.starts_with("user:"))
     {
@@ -332,8 +333,8 @@ bool PanelAudit::Write(PanelStore& store, AuditEvent const& event, std::string& 
         return false;
     }
     std::optional<PanelStore::Statement> insert = store.Prepare(
-        "INSERT INTO audit_event (event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, address, user_agent, node, result, error, reason, properties, chain_hash)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')", error);
+        "INSERT INTO audit_event (event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, api_key_id, address, user_agent, node, result, error, reason, properties, chain_hash)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')", error);
     if (!insert)
         return false;
     std::string const eventId = event.EventId.empty() ? NewEventId() : event.EventId;
@@ -344,13 +345,14 @@ bool PanelAudit::Write(PanelStore& store, AuditEvent const& event, std::string& 
     insert->Bind(5, ToString(event.Actor));
     BindOrNull(*insert, 6, event.ActorId);
     BindOrNull(*insert, 7, event.ActorName);
-    BindOrNull(*insert, 8, event.Address);
-    BindOrNull(*insert, 9, event.UserAgent);
-    BindOrNull(*insert, 10, event.Node);
-    insert->Bind(11, ToString(event.Result));
-    BindOrNull(*insert, 12, event.Error);
-    BindOrNull(*insert, 13, event.Reason);
-    insert->Bind(14, event.Properties.empty() ? std::string("{}") : event.Properties);
+    BindOrNull(*insert, 8, event.ApiKeyId);
+    BindOrNull(*insert, 9, event.Address);
+    BindOrNull(*insert, 10, event.UserAgent);
+    BindOrNull(*insert, 11, event.Node);
+    insert->Bind(12, ToString(event.Result));
+    BindOrNull(*insert, 13, event.Error);
+    BindOrNull(*insert, 14, event.Reason);
+    insert->Bind(15, event.Properties.empty() ? std::string("{}") : event.Properties);
     if (!insert->Run(error))
     {
         error = fmt::format("the audit row for {} could not be written: {}", event.Name, error);
@@ -398,7 +400,8 @@ bool PanelAudit::Record(PanelStore& store, AuditEvent& event, std::function<bool
         return false;
     if (event.EventId.empty())
         event.EventId = NewEventId();
-    event.CreatedEpochMs = PanelStore::NowEpochMs();
+    if (event.CreatedEpochMs == 0)
+        event.CreatedEpochMs = PanelStore::NowEpochMs();
     if (!Write(store, event, error))
     {
         store.Rollback();

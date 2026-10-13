@@ -6,6 +6,8 @@
 #include "Panel.h"
 #include "AdminClient.h"
 #include "AdminConfigView.h"
+#include "PanelActivityCatalog.h"
+#include "PanelActivityLog.h"
 #include "PanelCaptcha.h"
 #include "PanelErrorReport.h"
 #include "PanelMail.h"
@@ -867,6 +869,10 @@ void Panel::RegisterSignIn()
         };
         return AdminResponse::Json(200, answer.dump());
     });
+    routes.AddGuarded("GET", "/api/panel/activity", "activity.read", [this](AdminRequest const& request) { return ActivityGet(request); });
+    routes.AddGuarded("GET", "/api/panel/activity/rows/", "activity.read", [this](AdminRequest const& request) { return ActivityDetailsGet(request); });
+    routes.AddGuarded("GET", "/api/panel/activity/export", "activity.export", [this](AdminRequest const& request) { return ActivityExport(request); });
+    routes.AddGuarded("POST", "/api/panel/activity/sweep", "activity.read", [this](AdminRequest const& request) { return ActivitySweep(request); });
     routes.AddGuarded("GET", "/api/panel/errors", "errors.read", [this](AdminRequest const&)
     {
         std::string error;
@@ -1040,6 +1046,189 @@ AdminResponse Panel::ErrorReport(AdminRequest const& request, bool create)
     nlohmann::json answer;
     answer["schema"] = 1;
     answer["report"] = std::move(report);
+    return AdminResponse::Json(200, answer.dump());
+}
+
+namespace
+{
+    std::string ActivitySelfActor(AdminRequest const& request)
+    {
+        if (request.Principal.starts_with("user:"))
+            return request.Principal.substr(5);
+        return {};
+    }
+}
+
+AdminResponse Panel::ActivityGet(AdminRequest const& request)
+{
+    PanelActivityLog::Filter filter;
+    filter.EventPrefix = std::string(request.Query("event_prefix"));
+    filter.Actor = std::string(request.Query("actor"));
+    filter.Subject = std::string(request.Query("subject"));
+    filter.Result = std::string(request.Query("result"));
+    filter.Address = std::string(request.Query("address"));
+    if (std::string_view from = request.Query("from"); !from.empty())
+    {
+        auto value = Ambrose::StringTo<int64>(from);
+        if (!value)
+            return AdminResponse::Invalid("The from time takes epoch milliseconds", { { "from", "Give epoch milliseconds" } });
+        filter.FromEpochMs = *value;
+    }
+    if (std::string_view to = request.Query("to"); !to.empty())
+    {
+        auto value = Ambrose::StringTo<int64>(to);
+        if (!value)
+            return AdminResponse::Invalid("The to time takes epoch milliseconds", { { "to", "Give epoch milliseconds" } });
+        filter.ToEpochMs = *value;
+    }
+    if (std::string_view cursor = request.Query("cursor"); !cursor.empty())
+    {
+        auto value = Ambrose::StringTo<int64>(cursor);
+        if (!value)
+            return AdminResponse::Invalid("The cursor takes a row id", { { "cursor", "Give a row id" } });
+        filter.Cursor = *value;
+    }
+    if (std::string_view limit = request.Query("limit"); !limit.empty())
+    {
+        auto value = Ambrose::StringTo<int64>(limit);
+        if (!value || *value < 1 || *value > PanelActivityLog::MaxRows)
+            return AdminResponse::Invalid("The limit takes 1 to 100 rows", { { "limit", "Give from 1 to 100 rows" } });
+        filter.Limit = *value;
+    }
+
+    PanelActivityLog::Page page;
+    std::string error;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (!PanelActivityLog::Query(_store, filter, _authorization->Decide(request, "activity.ip.read") == PermissionVerdict::Allowed, ActivitySelfActor(request), page, error))
+            return AdminResponse::Problem(503, "activity_unavailable", error);
+    }
+    nlohmann::json rows = nlohmann::json::array();
+    for (PanelActivityLog::Row const& row : page.Rows)
+    {
+        rows.push_back({
+            { "id", row.Id },
+            { "event_id", row.EventId },
+            { "created_epoch_ms", row.CreatedEpochMs },
+            { "name", row.Name },
+            { "sentence", row.Sentence },
+            { "actor_type", row.ActorType },
+            { "actor_id", row.ActorId },
+            { "actor_name", row.ActorName },
+            { "address", row.Address },
+            { "node", row.Node },
+            { "result", row.Result },
+            { "reason", row.Reason },
+        });
+    }
+    nlohmann::json const answer{
+        { "schema", 1 },
+        { "rows", std::move(rows) },
+        { "next_cursor", page.HasMore ? nlohmann::json(page.NextCursor) : nlohmann::json(nullptr) },
+        { "has_more", page.HasMore },
+    };
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::ActivityDetailsGet(AdminRequest const& request)
+{
+    std::string_view const path = request.Path;
+    std::string_view const prefix = "/api/panel/activity/rows/";
+    if (!path.starts_with(prefix))
+        return AdminResponse::Invalid("The row id takes a number", { { "id", "Give a row id" } });
+    auto id = Ambrose::StringTo<int64>(path.substr(prefix.size()));
+    if (!id || *id < 1)
+        return AdminResponse::Invalid("The row id takes a number", { { "id", "Give a row id" } });
+
+    PanelActivityLog::Row row;
+    std::string properties;
+    std::string error;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (!PanelActivityLog::Details(_store, *id, _authorization->Decide(request, "activity.ip.read") == PermissionVerdict::Allowed, ActivitySelfActor(request), row, properties, error))
+            return AdminResponse::Problem(404, "activity_row_missing", error);
+    }
+    nlohmann::json const answer{
+        { "schema", 1 },
+        { "id", row.Id },
+        { "event_id", row.EventId },
+        { "created_epoch_ms", row.CreatedEpochMs },
+        { "name", row.Name },
+        { "sentence", row.Sentence },
+        { "actor_type", row.ActorType },
+        { "actor_id", row.ActorId },
+        { "actor_name", row.ActorName },
+        { "api_key_id", row.ApiKeyId },
+        { "address", row.Address },
+        { "node", row.Node },
+        { "result", row.Result },
+        { "error", row.Error },
+        { "reason", row.Reason },
+        { "properties", nlohmann::json::parse(properties, nullptr, false) },
+    };
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::ActivityExport(AdminRequest const& request)
+{
+    std::string_view const format = request.Query("format");
+    if (format != "csv" && format != "json")
+        return AdminResponse::Invalid("The format takes csv or json", { { "format", "Choose csv or json" } });
+
+    PanelActivityLog::Filter filter;
+    filter.EventPrefix = std::string(request.Query("event_prefix"));
+    filter.Actor = std::string(request.Query("actor"));
+    filter.Result = std::string(request.Query("result"));
+    filter.Limit = PanelActivityLog::MaxRows;
+
+    PanelActivityLog::Page page;
+    std::string error;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (!PanelActivityLog::Query(_store, filter, _authorization->Decide(request, "activity.ip.read") == PermissionVerdict::Allowed, ActivitySelfActor(request), page, error))
+            return AdminResponse::Problem(503, "activity_unavailable", error);
+    }
+
+    AuditScope scope(request, std::string(PanelActivityLog::ExportEventName));
+    scope.Event().Reason = std::string(format);
+    std::string recordError;
+    {
+        std::lock_guard const lock(_storeMutex);
+        PanelAudit::Record(_store, scope.Event(), std::function<bool(AuditEvent&, std::string&)>{}, recordError);
+    }
+
+    if (format == "csv")
+        return AdminResponse::Json(200, nlohmann::json({ { "schema", 1 }, { "format", "csv" }, { "csv", PanelActivityLog::ToCsv(page.Rows) } }).dump());
+    return AdminResponse::Json(200, nlohmann::json({ { "schema", 1 }, { "format", "json" }, { "json", PanelActivityLog::ToJson(page.Rows) } }).dump());
+}
+
+AdminResponse Panel::ActivitySweep(AdminRequest const&)
+{
+    int64 securityDays = 365;
+    int64 volumeDays = 90;
+    {
+        std::string value = _settings.ValueOf("Activity.RetentionSecurityDays");
+        if (!value.empty())
+            securityDays = Ambrose::StringTo<int64>(value).value_or(securityDays);
+        value = _settings.ValueOf("Activity.RetentionHighVolumeDays");
+        if (!value.empty())
+            volumeDays = Ambrose::StringTo<int64>(value).value_or(volumeDays);
+    }
+
+    int64 removed = 0;
+    std::string error;
+    {
+        std::lock_guard const lock(_storeMutex);
+        removed = PanelActivityLog::Sweep(_store, securityDays, volumeDays, error);
+    }
+    if (removed < 0)
+        return AdminResponse::Problem(503, "sweep_failed", error);
+    nlohmann::json const answer{
+        { "schema", 1 },
+        { "removed", removed },
+        { "security_retention_days", securityDays },
+        { "high_volume_retention_days", volumeDays },
+    };
     return AdminResponse::Json(200, answer.dump());
 }
 
