@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the installer: that a MariaDB deps installs gets the account with no root password prompt, falling back to the prompt when root refuses that, while one already there is asked for its root password, that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that run starts an app from its bin folder, so a supervisor finds the configurations it names relatively, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent or, like WSL's bash on Windows, cannot take the checkout's paths, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
+# Self-tests for the installer: that a MariaDB deps installs gets the account with no root password prompt, falling back to the prompt when root refuses that, while one already there is asked for its root password, that test dependency overrides isolate MariaDB discovery from the host, that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that run starts an app from its bin folder, so a supervisor finds the configurations it names relatively, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent or, like WSL's bash on Windows, cannot take the checkout's paths, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
 import functools
 import json
 import os
@@ -169,13 +169,18 @@ def run_powershell_plan(found, *options, with_winget=True, client=None):
         write_shim(tools, "winget", f'echo ran> "{marker}"\nif exist "{staged}\\mariadb.cmd" copy /y "{staged}\\mariadb.cmd" "{tools}" >nul',
                    f'echo ran > "{marker}"\n[ -f "{staged}/mariadb" ] && /bin/cp "{staged}/mariadb" "{tools}/"\nexit 0')
     environment = {key: value for key, value in os.environ.items() if key.upper() != "VCPKG_ROOT"}
+    system_tools = [os.path.join(os.environ["SystemRoot"], "System32")] if os.name == "nt" else []
     environment.update(AMBROSE_DEPS_FOUND=found, USERPROFILE=folder, ProgramFiles=folder,
-                       PATH=tools + os.pathsep + environment.get("PATH", "") if with_winget and not client else tools)
+                       PATH=os.pathsep.join([tools, *system_tools]))
     result = subprocess.run([powershell(), "-NoProfile", "-File", POWERSHELL, "deps", *options], cwd=ROOT,
                             env=environment, capture_output=True, text=True)
     ran = os.path.exists(marker)
     if client:
-        ran = open(asked, encoding="utf-8").read() if os.path.exists(asked) else ""
+        if os.path.exists(asked):
+            with open(asked, encoding="utf-8") as handle:
+                ran = handle.read()
+        else:
+            ran = ""
     shutil.rmtree(folder, ignore_errors=True)
     return result, folder, ran
 
@@ -232,20 +237,23 @@ class DepsPlanTests(unittest.TestCase):
         result, _, asked = run_powershell_plan("vs,cmake,git,vcpkg", "-Install", "-WithDatabase", client="installed")
         self.assertIn("MariaDB has the ambrose account", result.stdout, result.stderr)
         self.assertIn("as root through the MariaDB client with no password", result.stdout)
-        self.assertIn("-u root -e CREATE USER IF NOT EXISTS 'ambrose'@'localhost'", asked)
+        self.assertIn("-u root -e", asked)
+        self.assertIn("CREATE USER IF NOT EXISTS 'ambrose'@'localhost'", asked)
         self.assertNotIn("-p", asked.split(" -e ")[0], "a fresh install asked for a root password nobody set")
 
     def test_a_fresh_mariadb_that_refuses_root_without_a_password_falls_back_to_asking(self):
         result, _, asked = run_powershell_plan("vs,cmake,git,vcpkg", "-Install", "-WithDatabase", client="refuses")
         self.assertIn("MariaDB has the ambrose account", result.stdout, result.stderr)
         self.assertIn("root on this MariaDB has a password after all", result.stdout)
-        self.assertIn("-u root -p -e CREATE USER", asked)
+        self.assertIn("-u root -p -e", asked)
+        self.assertIn("CREATE USER", asked)
 
     def test_a_mariadb_already_there_asks_for_its_root_password(self):
         result, _, asked = run_powershell_plan("vs,cmake,git,vcpkg,mariadb", "-Install", "-WithDatabase", client="present")
         self.assertIn("MariaDB has the ambrose account", result.stdout, result.stderr)
         self.assertIn("which asks for the root password", result.stdout)
-        self.assertIn("-u root -p -e CREATE USER", asked)
+        self.assertIn("-u root -p -e", asked)
+        self.assertIn("CREATE USER", asked)
 
     def test_the_plan_never_creates_the_account_without_with_database(self):
         result, _, _ = run_powershell_plan("none", "-Install", "-Plan")

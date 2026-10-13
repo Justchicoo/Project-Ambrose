@@ -39,6 +39,15 @@ function Test-Found([string]$Name, [scriptblock]$Probe) {
 }
 
 function Find-MariaDbClient {
+    if ($env:AMBROSE_DEPS_FOUND) {
+        foreach ($directory in $env:Path -split [System.IO.Path]::PathSeparator) {
+            foreach ($name in @('mariadb.cmd', 'mariadb.exe', 'mysql.cmd', 'mysql.exe')) {
+                $candidate = Join-Path $directory $name
+                if (Test-Path $candidate) { return $candidate }
+            }
+        }
+        return $null
+    }
     $command = Get-Command mariadb, mysql -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command) { return $command.Source }
     $installed = Get-ChildItem (Join-Path $env:ProgramFiles 'MariaDB*\bin\mariadb.exe'), (Join-Path $env:ProgramFiles 'MySQL\MySQL Server*\bin\mysql.exe') -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -56,7 +65,7 @@ function Get-DatabaseAccount {
 }
 
 function Update-Path {
-    if ($Plan -or $env:OS -ne 'Windows_NT') { return }
+    if ($Plan -or $env:OS -ne 'Windows_NT' -or $env:AMBROSE_DEPS_FOUND) { return }
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 }
 

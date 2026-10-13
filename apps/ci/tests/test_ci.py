@@ -1702,11 +1702,11 @@ class DevRunTests(unittest.TestCase):
         self.assertEqual(login.environment["XDG_DATA_HOME"], os.path.join(folder, "data"))
         unit_tests = os.path.join(folder, "unit_tests")
         (write, written_case, write_env, captured, text, timeout), (probe, probe_case, probe_env, *_) = runner.calls
-        self.assertEqual(write, [unit_tests, "--gtest_also_run_disabled_tests", f"--gtest_filter={ci_dev_run.FIXTURE_CASE}"])
+        self.assertEqual(write, [ci_dev_run.program(folder, "unit_tests"), "--gtest_also_run_disabled_tests", f"--gtest_filter={ci_dev_run.FIXTURE_CASE}"])
         self.assertTrue(captured and text)
         self.assertEqual(timeout, ci_dev_run.CASE_TIMEOUT)
         self.assertEqual(write_env["AMBROSE_FIXTURE_INSTALL"], fixture)
-        self.assertEqual(probe, [unit_tests, "--gtest_also_run_disabled_tests", f"--gtest_filter={ci_dev_run.PROBE_CASE}"])
+        self.assertEqual(probe, [ci_dev_run.program(folder, "unit_tests"), "--gtest_also_run_disabled_tests", f"--gtest_filter={ci_dev_run.PROBE_CASE}"])
         self.assertEqual(probe_env["AMBROSE_PROBE_PORT"], str(login.port))
         self.assertEqual(probe_env["AMBROSE_PROBE_ACCOUNT"], ci_dev_run.ACCOUNT)
         self.assertGreaterEqual(len(probe_env["AMBROSE_PROBE_PASSWORD"]), 12)
