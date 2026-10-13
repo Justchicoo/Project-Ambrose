@@ -7,8 +7,8 @@
   },
   "checks": {
     "done": 1212,
-    "total": 2874,
-    "percent": 42.2
+    "total": 2884,
+    "percent": 42.0
   },
   "contributor_track": {
     "merged": 94,
@@ -117,7 +117,7 @@
       "milestones_done": 0,
       "milestones_total": 21,
       "checks_done": 0,
-      "checks_total": 85
+      "checks_total": 95
     },
     {
       "phase": 14,
