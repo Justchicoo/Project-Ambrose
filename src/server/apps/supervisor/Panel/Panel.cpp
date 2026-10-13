@@ -177,7 +177,7 @@ namespace
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
-    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _launch(_store, _keyring, _storeMutex, _dataFolder), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
+    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _keyring(), _settings(_store, _keyring), _launch(_store, _keyring, _storeMutex, _dataFolder), _users(_store), _sessions(_store), _errors(_store), _grants(_store),
       _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
@@ -425,6 +425,7 @@ bool Panel::Start(ConfigMgr const& config, std::string& error)
     _eventSocket->Start();
     OfferTheOwnerLink();
     StartGathering();
+    SyncCaptchaContentPolicy();
     return true;
 }
 
@@ -1358,6 +1359,7 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
         return AdminResponse::Problem(503, "audit_unavailable", error);
     if (event.Result == AuditResult::Refused)
         return AdminResponse::Problem(409, "settings_refused", event.Reason);
+    SyncCaptchaContentPolicy();
     return PanelSettingsGet(request);
 }
 
@@ -1420,6 +1422,11 @@ AdminResponse Panel::MailTest(AdminRequest const& request)
     return AdminResponse::Json(200, answer.dump());
 }
 
+void Panel::SyncCaptchaContentPolicy()
+{
+    _listener.Routes().SetCaptchaProvider(_settings.ValueOf("Security.CaptchaProvider"));
+}
+
 std::optional<AdminResponse> Panel::CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username)
 {
     std::string const provider = _settings.ValueOf("Security.CaptchaProvider");
@@ -1430,7 +1437,15 @@ std::optional<AdminResponse> Panel::CaptchaGate(AdminRequest const& request, nlo
 
     std::string const token = body.contains("captcha") && body["captcha"].is_string() ? body["captcha"].get<std::string>() : std::string();
     if (token.empty())
-        return AdminResponse::Problem(401, "captcha_required", "Too many failed sign-ins; answer the captcha to try again");
+    {
+        nlohmann::json answer;
+        answer["error"] = "captcha_required";
+        answer["message"] = "Too many failed sign-ins; answer the captcha to try again";
+        answer["captcha_provider"] = provider;
+        answer["captcha_site_key"] = _settings.ValueOf("Security.CaptchaSiteKey");
+        answer["captcha_script_url"] = PanelCaptcha::ScriptUrlFor(provider);
+        return AdminResponse::Json(401, answer.dump());
+    }
 
     PanelCaptchaResult const checked = PanelCaptcha::Verify(
         provider, _settings.ValueOf("Security.CaptchaSecret"), token, request.RemoteAddress, CaptchaVerifyUrl(provider));

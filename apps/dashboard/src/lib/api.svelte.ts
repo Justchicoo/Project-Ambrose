@@ -242,8 +242,8 @@ export function adoptUser(user: PanelUser) {
     session.mustEnroll = mustEnroll(user);
 }
 
-export async function signInAsUser(username: string, password: string): Promise<SignInStep> {
-    const answer = await request("POST", "api/panel/session", PanelSignInAnswer, { username, password });
+export async function signInAsUser(username: string, password: string, captcha?: string): Promise<SignInStep> {
+    const answer = await request("POST", "api/panel/session", PanelSignInAnswer, { username, password, captcha });
     const signedIn = v.safeParse(PanelSignedIn, answer);
     if (!signedIn.success) return "second-factor";
     adoptSignedIn(signedIn.output);
