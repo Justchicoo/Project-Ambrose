@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the quest templates of a CSR package a user kept from an older client, its QuestData plain-XML files, into the rows of the world database's quest tables, one set per quest, checks each against the install's templates, object names and locale keys and the quest validator, counts what the tables have no place for, the requirement and unknown classes and the locale keys the quests name, and writes the quests that read cleanly as a script that replaces only the rows the package's source marks.
+ * Reads the quest templates of a CSR package a user kept from an older client, its QuestData plain-XML files, into the rows of the world database's quest tables, one set per quest with its RequirementList encoded into quest_template.requirements, checks each against the install's templates, object names and locale keys and the quest validator, counts what the tables have no place for, the requirement and unknown classes and the locale keys the quests name, and writes the quests that read cleanly as a script that replaces only the rows the package's source marks.
  */
 
 #ifndef AMBROSE_QUESTPACKAGE_H
