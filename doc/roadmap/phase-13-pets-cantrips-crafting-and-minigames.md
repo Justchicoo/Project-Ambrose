@@ -88,7 +88,7 @@ Pet hatching and equip eligibility
 - Persist any additional hatch state or timing data required to ensure hatch timers survive relogs and cannot be bypassed by restarting the client.
 
 **Acceptance**
-  
+
 - [ ] Unit: energy tick never exceeds max; unequip despawns pet object.
 - [ ] Unit: unhatched pets cannot be equipped.
 - [ ] Unit: a pet becomes eligible for equipping when its hatch timer expires.
