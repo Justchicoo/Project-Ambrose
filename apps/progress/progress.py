@@ -1,7 +1,8 @@
 # Project Ambrose by Imjustchico
-# Reads the roadmap phases and the contributor track and writes the project's progress as a card anyone can read at a glance, with the game server and the panel counted apart, the numbers behind it, and a badge endpoint for each, with a check mode that fails when any of them is out of date. None of them carries a commit or a date, because a generated file that names the commit it came from is stale the moment it is committed.
+# Reads the roadmap phases and the contributor track and writes the project's progress as a card anyone can read at a glance, with the game server and the panel counted apart, the numbers behind it with a fingerprint of the card so anything showing it knows when it changed, and a badge endpoint for each, with a check mode that fails when any of them is out of date. None of them carries a commit or a date, because a generated file that names the commit it came from is stale the moment it is committed.
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -209,9 +210,11 @@ def badge(group, label):
 
 def outputs(root):
     data = measure(root)
+    drawn = card(data, colours(root))
+    data["card"] = hashlib.sha1(drawn.encode("utf-8")).hexdigest()[:10]
     return {
         DATA: json.dumps(data, indent=2) + "\n",
-        CARD: card(data, colours(root)),
+        CARD: drawn,
         BADGE: badge(data["game"], "game server"),
         PANEL_BADGE: badge(data["panel"], "panel"),
     }
