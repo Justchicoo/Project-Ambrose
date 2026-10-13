@@ -233,8 +233,8 @@ class SelectLegsTests(unittest.TestCase):
     def test_the_calendar_of_legs(self):
         self.assertEqual(ci_select_legs.scheduled_legs(datetime.date(2026, 10, 4)), list(ci_select_legs.LEGS))
         self.assertEqual(ci_select_legs.scheduled_legs(datetime.date(2026, 10, 11)), ["windows-msvc-x64", "linux-gcc-asan", "linux-clang-tsan"])
-        self.assertEqual(ci_select_legs.scheduled_legs(datetime.date(2026, 10, 7)), ["windows-msvc-x64"])
-        self.assertEqual(ci_select_legs.scheduled_legs(datetime.date(2026, 10, 8)), [])
+        self.assertEqual(ci_select_legs.scheduled_legs(datetime.date(2026, 10, 7)), ["windows-msvc-x64", "linux-gcc-asan"])
+        self.assertEqual(ci_select_legs.scheduled_legs(datetime.date(2026, 10, 8)), ["linux-gcc-asan"])
 
     def test_scheduled_legs_build_only_after_a_code_change_since_their_last_build(self):
         sunday = ci_select_legs.SUNDAY_CRON
@@ -250,15 +250,14 @@ class SelectLegsTests(unittest.TestCase):
         first = ci_select_legs.plan("schedule", {"schedule": sunday}, at("2026-10-04T06:20:00Z"), FakeGit(), built)
         self.assertEqual(first["legs"], ["linux-clang", "linux-clang-fuzz"])
         other = ci_select_legs.plan("schedule", {"schedule": ci_select_legs.OTHER_CRON}, at("2026-10-12T06:20:00Z"), FakeGit(), FailingActions())
-        self.assertEqual(other["legs"], [])
-        self.assertEqual(other["warnings"], [])
+        self.assertEqual(other["legs"], ["linux-gcc-asan"])
         self.assertFalse(other["windows_keepalive"])
         with self.assertRaises(ci_select_legs.SelectionError):
             ci_select_legs.plan("schedule", {"schedule": "5 4 * * *"}, at("2026-10-07T06:20:00Z"), FakeGit(), built)
 
     def test_unreadable_earlier_builds_build_every_leg_of_the_slot(self):
         wednesday = ci_select_legs.plan("schedule", {"schedule": ci_select_legs.WEDNESDAY_CRON}, at("2026-10-07T06:20:00Z"), FakeGit(), FailingActions())
-        self.assertEqual(wednesday["legs"], ["windows-msvc-x64"])
+        self.assertEqual(wednesday["legs"], ["windows-msvc-x64", "linux-gcc-asan"])
         self.assertFalse(wednesday["windows_keepalive"])
         self.assertEqual(len(wednesday["warnings"]), 1)
         self.assertIn("no token", wednesday["warnings"][0])
