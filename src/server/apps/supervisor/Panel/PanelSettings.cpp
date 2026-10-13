@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads and writes the panel's general, mail and security settings with explicit types and bounds, keeps secrets out of answers and audit properties, refuses listener-owned options instead of letting this page become their enforcement point, and answers an option the panel enforces from its own config with the value and layer it was handed rather than a default, so the page shows what is in force.
+ * Reads and writes the panel's general, mail, security and limits settings with explicit types and bounds, keeps secrets out of answers and audit properties, refuses listener-owned options instead of letting this page become their enforcement point, and answers an option the panel enforces from its own config with the value and layer it was handed rather than a default, so the page shows what is in force.
  */
 
 #include "PanelSettings.h"
@@ -60,6 +60,9 @@ namespace
         Definition{ "security", "Panel.BindIP", "127.0.0.1", false, true, "config", 0, 0 },
         Definition{ "security", "Panel.AllowPlainHttpRemote", "0", false, true, "config", 0, 1 },
         Definition{ "security", "Panel.TwoFactorRequired", "none", false, true, "config", 0, 0 },
+        Definition{ "limits", "Limits.ApiKeysPerUser", "25", false, false, "default", 1, 1000 },
+        Definition{ "limits", "Limits.ApiKeyDefaultExpiryDays", "90", false, false, "default", 1, 3650 },
+        Definition{ "limits", "Limits.ApiKeyAllowNoExpiry", "0", false, false, "default", 0, 1 },
     };
 
     Definition const* Find(std::string_view key)

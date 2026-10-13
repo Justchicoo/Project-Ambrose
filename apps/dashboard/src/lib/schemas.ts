@@ -353,7 +353,7 @@ export const PanelSettingsAnswer = v.looseObject({
     settings: v.array(
         v.looseObject({
             key: v.string(),
-            group: v.picklist(["general", "mail", "security"]),
+            group: v.picklist(["general", "mail", "security", "limits"]),
             value: v.string(),
             default: v.string(),
             secret: v.boolean(),

@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The panel settings editor: general, mail and security values grouped like the server model, locked listener-owned values identified by their layer, secrets masked with an explicit clear action, and changes submitted as one audited batch. The mail group sends a test mail through the saved settings to the signed-in operator alone and shows who it reached, or the mail server's own refusal. -->
+<!-- Project Ambrose by Imjustchico: The panel settings editor: general, mail, security and limits values grouped like the server model, locked listener-owned values identified by their layer, secrets masked with an explicit clear action, and changes submitted as one audited batch. The mail group sends a test mail through the saved settings to the signed-in operator alone and shows who it reached, or the mail server's own refusal. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Tabs from "$lib/components/ui/tabs/index.js";
@@ -37,6 +37,7 @@
         { id: "general", label: "General", description: "Identity, locale and retention defaults." },
         { id: "mail", label: "Mail", description: "SMTP delivery for verification and alerts." },
         { id: "security", label: "Security", description: "Sign-in, relay and captcha controls." },
+        { id: "limits", label: "Limits", description: "Personal API key count and expiry." },
     ] as const;
 
     function shown(group: Setting["group"]) {

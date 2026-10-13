@@ -301,6 +301,30 @@ void AdminRouter::SetThrottle(Throttle throttle)
     _throttle = std::move(throttle);
 }
 
+void AdminRouter::SetKeyCheck(KeyCheck check)
+{
+    std::unique_lock const lock(_mutex);
+    _keyCheck = std::move(check);
+}
+
+std::optional<bool> AdminRouter::TryKey(AdminRequest& request, AdminResponse& refused) const
+{
+    KeyCheck keyCheck;
+    {
+        std::shared_lock const lock(_mutex);
+        keyCheck = _keyCheck;
+    }
+    if (!keyCheck || request.Authorization.empty())
+        return std::nullopt;
+    switch (keyCheck(request, refused))
+    {
+        case KeyAuthOutcome::Accepted: return true;
+        case KeyAuthOutcome::Refused: return false;
+        case KeyAuthOutcome::NotAKey: break;
+    }
+    return std::nullopt;
+}
+
 uint32 AdminRouter::CostOf(std::string_view method, std::string_view path) const
 {
     std::shared_lock const lock(_mutex);
@@ -617,9 +641,16 @@ AdminResponse AdminRouter::Answer(AdminRequest& request) const
         }
     }
 
-    AdminAuthResult const authenticated = Authenticate(request);
-    if (authenticated != AdminAuthResult::Ok)
-        return Refused(authenticated);
+    AdminResponse keyRefused;
+    std::optional<bool> const keyed = TryKey(request, keyRefused);
+    if (keyed && !*keyed)
+        return keyRefused;
+    if (!keyed)
+    {
+        AdminAuthResult const authenticated = Authenticate(request);
+        if (authenticated != AdminAuthResult::Ok)
+            return Refused(authenticated);
+    }
     if (std::optional<AdminResponse> held = Admit(request))
         return std::move(*held);
     if (limit != 0 && request.Body.size() > limit)
