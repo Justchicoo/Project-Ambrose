@@ -1,6 +1,7 @@
 # Project Ambrose by Imjustchico
 # Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, and Enter sent as a key only once Alt is up, the order in which a run starts and stops what it owns, the slot a run takes so several share the machine and the one input turn they share, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
 import contextlib
+import io
 import json
 import os
 import re
@@ -2730,6 +2731,17 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("AMBROSE_CLIENT_DIR", gaps[0])
         clientless = scenario.Scenario("test.json", {"title": "x", "requires": {"client": False}, "steps": []})
         self.assertEqual(preflight.missing(clientless, self.environment(), {"capture": True}), [])
+
+    def test_a_run_no_client_was_asked_for_skips_before_probing_the_machine(self):
+        refused = mock.Mock(side_effect=AssertionError("the machine was probed"))
+        said = io.StringIO()
+        environment = {name: value for name, value in os.environ.items() if name != "AMBROSE_CLIENT_DIR"}
+        with (mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(preflight, "probe", refused),
+              mock.patch.object(cli, "take_slot", refused), mock.patch.object(cli, "start_database", refused),
+              contextlib.redirect_stdout(said)):
+            self.assertEqual(cli.main(["run", "--scenario", os.path.join(paths.SCENARIOS, "two-wizards.json")]), cli.SKIP)
+        refused.assert_not_called()
+        self.assertIn("AMBROSE_CLIENT_DIR", said.getvalue())
 
     def test_an_install_the_driver_cannot_read_is_named(self):
         gaps = preflight.missing(self.scenario(), self.environment(install_readable=False),

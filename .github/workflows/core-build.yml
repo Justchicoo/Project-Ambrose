@@ -186,7 +186,7 @@ jobs:
     needs: select
     if: ${{ !cancelled() && github.event_name == 'schedule' && (github.event.schedule == '17 6 * * 0' || github.event.schedule == '17 6 * * 3') && (needs.select.outputs.windows_keepalive == 'true' || needs.select.outputs.build == '' || vars.AMBROSE_CI_BUILDS == 'off') }}
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Refresh Windows vcpkg binary cache
         timeout-minutes: 3
@@ -196,6 +196,14 @@ jobs:
           path: ${{ runner.temp }}/vcpkg-binary-cache
           key: vcpkg-${{ runner.os }}-
           restore-keys: vcpkg-${{ runner.os }}-
+      - name: Refresh Windows compiler cache
+        timeout-minutes: 3
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-windows-msvc-ninja-
+          restore-keys: ccache-windows-msvc-ninja-
 
   build:
     name: build (${{ matrix.leg }})
