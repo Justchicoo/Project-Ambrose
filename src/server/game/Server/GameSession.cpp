@@ -68,6 +68,7 @@ namespace
     std::string TransferAddress;
     uint16 TransferPort = 0;
     constexpr int64 TransferKeyLifetimeSeconds = 120;
+    constexpr std::size_t MaxQuestResultRounds = 16;
     std::mutex OnlookerMutex;
     GameSession::OnlookerSource Onlookers;
 
@@ -1466,11 +1467,24 @@ void GameSession::PostQuestEvents()
 {
     if (!_questLog)
         return;
+    std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    for (std::size_t round = 0; round < MaxQuestResultRounds; ++round)
+    {
+        std::vector<QuestCompletion> const completed = _questLog->TakeCompletions();
+        if (completed.empty())
+            break;
+        std::vector<ResultSource> sources;
+        for (QuestCompletion const& done : completed)
+            if (ResultList const* const results = quests ? quests->FindResults(done.Quest, done.Goal) : nullptr; results && !results->empty())
+                sources.push_back(ResultSource{ done.Goal.empty() ? done.Quest : fmt::format("{}/{}", done.Quest, done.Goal), *results });
+        RunResults(sources, now);
+    }
     for (std::string const& event : _questLog->TakeEvents())
     {
         if (!_mapId)
             continue;
-        std::vector<std::string> const fired = PostZoneEvent(event, std::chrono::steady_clock::now());
+        std::vector<std::string> const fired = PostZoneEvent(event, now);
         LOG_INFO("server.gamesession", "Session {}'s wizard {} posted {} in {}, which fired {}", GetSessionId(), _worldGuid, Ambrose::ForLog(event, 128), Ambrose::ForLog(_zonePath, 128),
             fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
     }

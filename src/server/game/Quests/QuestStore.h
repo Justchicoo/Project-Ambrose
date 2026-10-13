@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One generation of the authored quests, keyed by quest name, each with the requirement tree decoded from its stored RequirementList, its start goals, its goals and their adjectives, client tags and completion logic, and the dialogs of the quest and of each goal in line order, together with the indexes the world asks: which quests a template offers through the first line of the quest's Prep dialog, which persona goals name an object, which usage goals carry a client tag or adjective, which bounty goals an adjective counts toward and which waypoint goals lead to a zone.
+ * One generation of the authored quests, keyed by quest name, each with the requirement tree decoded from its stored RequirementList, the results it and each of its goals run on completing, its start goals, its goals and their adjectives, client tags and completion logic, and the dialogs of the quest and of each goal in line order, together with the indexes the world asks: which quests a template offers through the first line of the quest's Prep dialog, which persona goals name an object, which usage goals carry a client tag or adjective, which bounty goals an adjective counts toward and which waypoint goals lead to a zone.
  */
 
 #ifndef AMBROSE_QUESTSTORE_H
@@ -8,6 +8,7 @@
 
 #include "QuestRows.h"
 #include "RequirementMgr.h"
+#include "ResultMgr.h"
 #include "TypeRegistry.h"
 #include "Types.h"
 
@@ -75,6 +76,7 @@ struct QuestGoal
     std::vector<std::string> ClientTags;
     std::vector<QuestGoalLogic> Logic;
     std::map<std::string, QuestDialog, std::less<>> Dialogs;
+    ResultList Results;
 };
 
 struct QuestInfo
@@ -85,6 +87,7 @@ struct QuestInfo
     std::map<std::string, QuestDialog, std::less<>> Dialogs;
     uint32 Starter = 0;
     std::shared_ptr<RequirementTree const> Requirements;
+    ResultList Results;
 };
 
 class QuestStore
@@ -112,7 +115,8 @@ public:
     std::size_t GetQuestCount() const noexcept { return _quests.size(); }
     std::size_t GetGoalCount() const noexcept { return _goals; }
     std::map<std::string, QuestInfo, std::less<>> const& GetAll() const noexcept { return _quests; }
-    std::vector<std::string> const& GetRequirementProblems() const noexcept { return _requirementProblems; }
+    std::vector<std::string> const& GetProblems() const noexcept { return _problems; }
+    ResultList const* FindResults(std::string_view quest, std::string_view goal) const;
 
     std::vector<std::string> GetQuestsOfferedBy(uint32 templateId) const;
     std::vector<QuestGoalRef> GetPersonaGoals(std::string_view objectName) const;
@@ -129,7 +133,7 @@ private:
 
     std::map<std::string, QuestInfo, std::less<>> _quests;
     std::size_t _goals = 0;
-    std::vector<std::string> _requirementProblems;
+    std::vector<std::string> _problems;
     std::unordered_map<uint32, std::vector<std::string>> _starterByTemplateId;
     GoalIndex _personaGoalsByObjectName;
     GoalIndex _usageGoalsByTag;

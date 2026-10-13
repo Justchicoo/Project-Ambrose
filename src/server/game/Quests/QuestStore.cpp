@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's stored RequirementList with the type dump it is given, a list it cannot read closing the quest and naming why, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog, and fills the lookups by template, object name, tag, adjective and zone.
+ * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's stored RequirementList with the type dump it is given, a list it cannot read closing the quest and naming why, reads the results of each quest and goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog, and fills the lookups by template, object name, tag, adjective and zone.
  */
 
 #include "QuestStore.h"
@@ -66,13 +66,13 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
     {
         if (row.Name.empty() || skipped.contains(row.Name))
             continue;
-        auto const [added, inserted] = store->_quests.try_emplace(row.Name, QuestInfo{ row, {}, {}, {}, 0, nullptr });
+        auto const [added, inserted] = store->_quests.try_emplace(row.Name, QuestInfo{ row, {}, {}, {}, 0, nullptr, {} });
         if (!inserted || row.Requirements.empty())
             continue;
         std::string problem;
         added->second.Requirements = std::make_shared<RequirementTree const>(RequirementObjects::Decode(catalog, row.Requirements, problem));
         if (!problem.empty())
-            store->_requirementProblems.push_back(fmt::format("quest {} is offered to no wizard, since {}", row.Name, problem));
+            store->_problems.push_back(fmt::format("quest {} is offered to no wizard, since {}", row.Name, problem));
     }
 
     auto quest = [&store](std::string const& name) -> QuestInfo*
@@ -180,6 +180,25 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
                 line.Madlibs.push_back(QuestMadlib{ row.Identifier, row.Value });
     }
 
+    std::map<std::pair<std::string, std::string>, std::vector<ResultRow>> results;
+    for (QuestResultRow const& row : rows.Results)
+        results[{ row.Quest, row.Goal }].push_back(ResultRow{ row.Position, row.Class, row.Data });
+    for (auto& [key, list] : results)
+    {
+        ResultList* target = nullptr;
+        if (key.second.empty())
+        {
+            QuestInfo* const info = quest(key.first);
+            target = info ? &info->Results : nullptr;
+        }
+        else if (QuestGoal* const found = goal(key.first, key.second))
+            target = &found->Results;
+        if (!target)
+            continue;
+        std::stable_sort(list.begin(), list.end(), [](ResultRow const& left, ResultRow const& right) { return left.Position < right.Position; });
+        *target = ResultMgr::Read(catalog, list, key.second.empty() ? fmt::format("quest {}", key.first) : fmt::format("goal {} of quest {}", key.second, key.first), store->_problems);
+    }
+
     auto const sortDialogs = [](std::map<std::string, QuestDialog, std::less<>>& owned)
     {
         for (auto& [tag, dialog] : owned)
@@ -244,6 +263,17 @@ QuestInfo const* QuestStore::Find(std::string_view name) const
 {
     auto const found = _quests.find(name);
     return found == _quests.end() ? nullptr : &found->second;
+}
+
+ResultList const* QuestStore::FindResults(std::string_view quest, std::string_view goal) const
+{
+    QuestInfo const* const info = Find(quest);
+    if (!info)
+        return nullptr;
+    if (goal.empty())
+        return &info->Results;
+    auto const found = info->Goals.find(goal);
+    return found == info->Goals.end() ? nullptr : &found->second.Results;
 }
 
 std::vector<std::string> QuestStore::GetQuestsOfferedBy(uint32 templateId) const
