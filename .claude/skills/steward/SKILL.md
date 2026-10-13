@@ -21,7 +21,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 
 - Work in this order: merge conflicts, then red CI, then review comments. A red or conflicted head is never "waiting on review".
 - Fix the root cause. Never skip, disable or quarantine a test, push an empty commit, or close and reopen just to rerun CI.
-- Main has a required `checks` status. Every pull request that touches code gets the Linux GCC build and tests by itself, whatever its branch, and that leg is the landing gate. Do not add `ci:all` for landing: Windows and the sanitizer legs run on their schedule on main. Label one of them (`ci:windows-msvc-x64`, `ci:linux-gcc-asan`, `ci:linux-clang-tsan`) only when the change is platform-specific, such as Windows-only code, threading or memory handling, and take it off a pull request another one supersedes, because every push re-runs it.
+- Main has a required `checks` status. Every pull request that touches code gets the Linux GCC build and tests by itself, whatever its branch, and that leg is the landing gate. Do not add `ci:all` for landing: Windows builds on main after every code push, and the sanitizer legs run on their schedule on main. Label one of them (`ci:windows-msvc-x64`, `ci:linux-gcc-asan`, `ci:linux-clang-tsan`) only when the change is platform-specific, such as Windows-only code, threading or memory handling, and take it off a pull request another one supersedes, because every push re-runs it.
 
 ## Reviewing a contributor's pull request
 

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push or pull request that touches the code, the data the tests read, the build definition or anything ci_dev_run's dev run boots, whatever its branch, with that leg's job given the dev run's minutes, and for a push that touches none of them while code has changed since that leg last built, so code that landed in a run whose checks failed is not left uncompiled, adding the legs a pull request's ci: labels name, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
+# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push or pull request that touches the code, the data the tests read, the build definition or anything ci_dev_run's dev run boots, whatever its branch, with that leg's job given the dev run's minutes, and the Windows leg too for a push to main that touches the code, the data the tests read, the build definition or vcpkg.json, and for a push that touches none of them while code has changed since that leg last built, so code that landed in a run whose checks failed is not left uncompiled, adding the legs a pull request's ci: labels name, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
 import argparse
 import datetime
 import json
@@ -47,6 +47,7 @@ LABEL_PREFIX = "ci:"
 
 SMOKE_PATHS = (".github/", "apps/ci/ci_build.py", "apps/ci/ci_vcpkg_cache.py", "vcpkg.json")
 BUILD_PATHS = ("CMakeLists.txt", "CMakePresets.json", "cmake/", "data/", "src/")
+WINDOWS_PUSH_PATHS = BUILD_PATHS + ("vcpkg.json",)
 PUSH_PATHS = (".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/dashboard/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "package-lock.json", "package.json", "packages/**", "playwright.config.ts", "src/**", "tests/e2e/**", "vcpkg.json")
 CODE_PATHSPEC = (".", ":(exclude)doc", ":(exclude,glob)**/*.md")
 ZERO_SHA = re.compile(r"^0*$")
@@ -223,6 +224,9 @@ def plan(event, inputs, now, git, actions=None):
             legs = legs_for_paths(paths)
             if legs:
                 reasons.append("linux-gcc: selected (the push touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script, vcpkg.json or what the dev run boots)")
+                if touches(paths, WINDOWS_PUSH_PATHS):
+                    legs.append("windows-msvc-x64")
+                    reasons.append("windows-msvc-x64: selected (a push to main that touches the code, the data the tests read, the build definition or vcpkg.json keeps main's Windows caches warm and catches an MSVC break)")
             else:
                 built = {}
                 try:

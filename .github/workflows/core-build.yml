@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, today the panel's end-to-end specs against its supervisor and patchserver.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache, which pull requests restore and only pushes to main, the schedule and manual runs save, each build banking its vcpkg and compiler caches even when a newer push cancels it, and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, today the panel's end-to-end specs against its supervisor and patchserver.
 name: core-build
 
 on:
@@ -268,11 +268,11 @@ jobs:
         run: python apps/ci/ci_build.py --setup-vcpkg "${{ runner.temp }}/vcpkg" --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors --stage configure
       - name: Name vcpkg binary cache
         id: vcpkg-key
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         continue-on-error: true
         run: python apps/ci/ci_vcpkg_cache.py --cache-dir "${{ runner.temp }}/vcpkg-binary-cache" --status "build/${{ matrix.configure }}/vcpkg_installed/vcpkg/status" --prefix "vcpkg-${{ runner.os }}-" --github-output
       - name: Save vcpkg binary cache
-        if: ${{ !cancelled() && steps.vcpkg-key.outputs.key != '' && steps.vcpkg-key.outputs.key != steps.vcpkg-restore.outputs.cache-matched-key }}
+        if: ${{ always() && steps.vcpkg-key.outputs.key != '' && steps.vcpkg-key.outputs.key != steps.vcpkg-restore.outputs.cache-matched-key }}
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
@@ -295,7 +295,7 @@ jobs:
           CCACHE_DIR: ${{ runner.temp }}/ccache
         run: ccache --show-stats
       - name: Save compiler cache
-        if: ${{ !cancelled() && steps.configure.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        if: ${{ always() && github.event_name != 'pull_request' && steps.configure.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
