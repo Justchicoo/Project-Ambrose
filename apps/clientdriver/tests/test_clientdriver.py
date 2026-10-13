@@ -587,14 +587,16 @@ class WorldEntryTests(TemporaryFolder):
         game.process = SimpleNamespace(poll=lambda: None)
         answers = [{"app": "gameserver", "state": "starting"}, {"app": "gameserver", "state": "running", "uptime": 3, "revision": "abc"}]
         asked = []
+        with open(game.token_path, "w", encoding="utf-8") as handle:
+            handle.write("secret-token\n")
 
-        def opener(address, timeout):
-            asked.append(address)
+        def opener(request, timeout):
+            asked.append((request.full_url, request.get_header("Authorization")))
             return contextlib.nullcontext(io.BytesIO(json.dumps(answers.pop(0)).encode("utf-8")))
 
         with mock.patch.object(server.time, "sleep"):
             said = game.health(timeout=5, opener=opener)
-        self.assertEqual(asked, ["http://127.0.0.1:12443/api/health"] * 2)
+        self.assertEqual(asked, [("http://127.0.0.1:12443/api/health", "Bearer secret-token")] * 2)
         self.assertIn("gameserver running for 3s", said)
         with self.assertRaises(StepFailed):
             server.LoginServer("loginserver", "loginserver.conf.dist", self.folder, "127.0.0.1", 12100, scratch).health(timeout=1)
