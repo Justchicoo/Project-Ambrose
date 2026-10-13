@@ -234,6 +234,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     RegisterTwoFactor();
     RegisterCommandHistory();
     RegisterMaintenance();
+    RegisterOpsCalendar();
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
@@ -1280,6 +1281,48 @@ AdminResponse Panel::MaintenanceExit(AdminRequest const& request)
     if (!left)
         return AdminResponse::Problem(503, "maintenance_not_left", error);
     return AdminResponse::Json(200, PanelMaintenance::Answer(state).dump());
+}
+
+void Panel::RegisterOpsCalendar()
+{
+    _listener.Routes().AddGuarded("GET", "/api/ops/calendar", "status.read", [this](AdminRequest const& request)
+    {
+        return OpsCalendarGet(request);
+    });
+}
+
+AdminResponse Panel::OpsCalendarGet(AdminRequest const& request)
+{
+    int64 from = 0;
+    int64 to = 0;
+    if (!PanelOpsCalendar::ParseEpochMs(request.Query("from"), from) || !PanelOpsCalendar::ParseEpochMs(request.Query("to"), to))
+        return AdminResponse::Invalid("Reading the operations calendar takes a from and a to in epoch milliseconds",
+            { { "from", "Give the range start in epoch milliseconds" }, { "to", "Give the range end in epoch milliseconds" } });
+    if (from >= to)
+        return AdminResponse::Invalid("The calendar range starts after it ends",
+            { { "from", "Give a from earlier than to" } });
+    constexpr int64 MaxRangeMs = int64(93) * 24 * 60 * 60 * 1000;
+    if (to - from > MaxRangeMs)
+        return AdminResponse::Invalid("The calendar range is longer than 93 days",
+            { { "to", "Give a range of at most 93 days" } });
+
+    std::lock_guard const lock(_storeMutex);
+    if (!_store.IsOpen())
+        return AdminResponse::Problem(503, "calendar_unavailable", "The panel store is not open");
+
+    std::vector<PanelOpsCalendar::SourceRegistration> registrations;
+    PanelOpsCalendar::RegisterDefaults(_store, registrations);
+    std::vector<std::string> viewer;
+    for (PanelOpsCalendar::SourceRegistration const& registration : registrations)
+        if (_authorization->Decide(request, registration.RequiredPermission) == PermissionVerdict::Allowed)
+            viewer.push_back(registration.RequiredPermission);
+    std::vector<PanelOpsCalendar::CalendarEvent> events;
+    std::vector<PanelOpsCalendar::SourceAvailability> sources;
+    std::vector<PanelOpsCalendar::CalendarConflict> conflicts;
+    std::string error;
+    if (!PanelOpsCalendar::Collect(registrations, viewer, from, to, events, sources, conflicts, error))
+        return AdminResponse::Problem(503, "calendar_unavailable", error);
+    return AdminResponse::Json(200, PanelOpsCalendar::AnswerJson(events, sources, conflicts).dump());
 }
 
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
