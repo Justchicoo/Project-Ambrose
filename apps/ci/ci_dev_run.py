@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Plans and runs a change's dev run, which boots what the change touches from the binaries a Linux leg just built: select maps a push's or pull request's changed paths to the targets to boot, the panel with its supervisor and patchserver, the login server and the game server, every target for a change to the build, the shared server code or this tool, and writes them as step outputs, and tells the leg selection whether a change has a target it boots so the Linux GCC leg is built for it, panel checks the built supervisor, patchserver and gameserver are there, builds the panel, rebuilds the supervisor in its build folder so the page its panel listener serves is that panel rather than the placeholder the leg compiled in before the panel existed, and runs the Playwright end-to-end specs against them, failing on a missing binary rather than letting every spec skip, and servers boots the built login server, and the game server attached to it, through the client driver's server runner with no client install against scratch databases on the AMBROSE_TEST_DB server, checks each reaches ready, updates its databases, answers its admin API's health and its console and offers a SessionOffer on its port, then stops each by its process and drops the databases.
+# Plans and runs a change's dev run, which boots what the change touches from the binaries a Linux leg just built: select maps a push's or pull request's changed paths to the targets to boot, the panel with its supervisor and patchserver, the login server and the game server, every target for a change to the build, the shared server code or this tool, and writes them as step outputs, and tells the leg selection whether a change has a target it boots so the Linux GCC leg is built for it, panel checks the built supervisor, patchserver and gameserver are there, builds the panel, rebuilds the supervisor in its build folder so the page its panel listener serves is that panel rather than the placeholder the leg compiled in before the panel existed, and runs the Playwright end-to-end specs against them, printing each failed spec's page snapshot into the log, failing on a missing binary rather than letting every spec skip, and servers boots the built login server, and the game server attached to it, through the client driver's server runner with no client install against scratch databases on the AMBROSE_TEST_DB server, checks each reaches ready, updates its databases, answers its admin API's health and its console and offers a SessionOffer on its port, then stops each by its process and drops the databases.
 import argparse
 import os
 import secrets
@@ -39,6 +39,8 @@ PANEL_PROGRAMS = ("supervisor", "patchserver", "gameserver")
 PANEL_ENVIRONMENT = {"supervisor": "AMBROSE_SUPERVISOR", "patchserver": "AMBROSE_PANEL_APP", "gameserver": "AMBROSE_GAMESERVER"}
 DASHBOARD = os.path.join("apps", "dashboard", "dist", "index.html")
 EMBEDDING = "supervisor"
+RESULTS = "test-results"
+FAILURE_PAGE = "error-context.md"
 
 
 def matches(path, entry):
@@ -142,8 +144,18 @@ def panel(arguments, environment, runner=subprocess.run, which=shutil.which):
             return 1
         print("+ " + " ".join(command), flush=True)
         if runner(command, cwd=ROOT, env=prepared).returncode != 0:
+            if command[0] == npx:
+                print_failure_pages(os.path.join(ROOT, RESULTS))
             return 1
     return 0
+
+
+def print_failure_pages(results):
+    pages = sorted(os.path.join(folder, name) for folder, _, names in os.walk(results) for name in names if name == FAILURE_PAGE)
+    for page in pages:
+        print(f"--- {os.path.relpath(page, results)}", flush=True)
+        with open(page, "r", encoding="utf-8", errors="replace") as handle:
+            print(handle.read(), flush=True)
 
 
 def database_address(environment):
