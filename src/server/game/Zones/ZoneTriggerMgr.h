@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Every zone's volumes and triggers from zone_volume, zone_trigger, zone_trigger_event and the ResClientNotifyText results in zone_trigger_result, read at start and again by `.reload zone_trigger`, which builds the new set off to the side, validates it and swaps it in only when every row is good, keeping the old set and reporting each error otherwise; and each zone instance's trigger state, so a wizard entering a volume posts the volume's enter events, and EnterZone when it arrives, into its own instance's triggers, and its client may post only the events zone_client_event lists for the zone.
+ * Every zone's volumes and triggers from zone_volume, zone_trigger, zone_trigger_event and the ResClientNotifyText and ResAddDynaMod results in zone_trigger_result, read at start and again by `.reload zone_trigger`, which builds the new set off to the side, validates it and swaps it in only when every row is good, keeping the old set and reporting each error otherwise; and each zone instance's trigger state, so a wizard entering a volume posts the volume's enter events, and EnterZone when it arrives, into its own instance's triggers, firing a trigger with requirements only for a wizard whose facts meet them, an unreadable set never met, handing back the texts, doors and Dynamods of those that fire, and its client may post only the events zone_client_event lists for the zone.
  */
 
 #ifndef AMBROSE_ZONETRIGGERMGR_H
 #define AMBROSE_ZONETRIGGERMGR_H
 
+#include "RequirementMgr.h"
 #include "TypeRegistry.h"
 #include "ZoneTriggers.h"
 #include "ZoneVolume.h"
@@ -27,6 +28,7 @@ struct ZoneTriggerData
     std::map<uint32, std::vector<std::string>> ExitEvents;
     std::vector<ZoneTrigger> Triggers;
     std::set<std::string, std::less<>> ClientEvents;
+    std::map<uint32, std::shared_ptr<RequirementTree const>> Requirements;
 };
 
 class ZoneTriggerMgr
@@ -37,9 +39,12 @@ public:
 
     static constexpr std::string_view NotifyTextClass = "class ResClientNotifyText";
     static constexpr std::string_view TeleportClass = "class ResTeleport";
+    static constexpr std::string_view DynaModClass = "class ResAddDynaMod";
 
     static ZoneTriggerMgr& Instance();
     static std::optional<ZoneNotifyText> ReadNotifyText(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string& error);
+    static std::optional<RequirementTree> ReadRequirements(TypeCatalogPtr const& catalog, std::span<uint8 const> data);
+    static std::optional<ZoneDynaMod> ReadDynaMod(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string& error);
 
     ZoneTriggerMgr(ZoneTriggerMgr const&) = delete;
     ZoneTriggerMgr& operator=(ZoneTriggerMgr const&) = delete;
@@ -51,7 +56,8 @@ public:
 
     std::shared_ptr<ZoneTriggerData const> Find(std::string_view zone) const;
     std::vector<std::string> Post(uint32 mapId, std::string_view zone, std::string_view event, uint64 wizard, ZoneTriggers::Clock::time_point now,
-        std::vector<ZoneNotifyText>* texts = nullptr, std::vector<std::string>* doors = nullptr, bool doorsIgnoreRequirements = false);
+        std::vector<ZoneNotifyText>* texts = nullptr, std::vector<std::string>* doors = nullptr, bool doorsIgnoreRequirements = false, std::vector<ZoneDynaMod>* mods = nullptr,
+        RequirementContext const* facts = nullptr);
     void ForgetMap(uint32 mapId);
 
 private:

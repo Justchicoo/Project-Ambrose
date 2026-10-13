@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A wizard's quest log: its active quests in the order it took them, each with the GID it keeps for life and its goals by their own GIDs, status and count, its per-quest registry, where a completed quest leaves 'Complete' = 1, its other registry entries and the quests it hid. Built from the stored rows, dropping with a warning each quest whose template is gone and each goal its quest no longer has, and turned back into rows under a save's revision; any change marks it for saving and is counted, so what depends on it can tell it moved.
+ * A wizard's quest log: its active quests in the order it took them, each with the GID it keeps for life and its goals by their own GIDs, status and count, its per-quest registry, where a completed quest leaves 'Complete' = 1, its other registry entries, the quests it hid and the Dynamods its progress made, and the quest events its changes publish, such as GoalComplete_<quest>_<goal>, held until the wizard's zone takes them. Built from the stored rows, dropping with a warning each quest whose template is gone and each goal its quest no longer has, and turned back into rows under a save's revision; any change marks it for saving and is counted, so what depends on it can tell it moved.
  */
 
 #ifndef AMBROSE_QUESTLOG_H
@@ -8,6 +8,7 @@
 
 #include "CharacterQuests.h"
 #include "GuidGenerator.h"
+#include "WizardDynaMods.h"
 
 #include <map>
 #include <optional>
@@ -41,6 +42,8 @@ class QuestLog
 public:
     static constexpr std::string_view CompleteEntry = "Complete";
 
+    static std::string GoalCompleteEvent(std::string_view quest, std::string_view goal);
+
     static QuestLog FromStored(CharacterQuests const& stored, QuestStore const* templates, std::vector<std::string>& warnings);
     CharacterQuests ToStored(uint64 revision) const;
 
@@ -64,6 +67,9 @@ public:
     void SetRegistry(std::string_view entry, double value);
     bool IsHidden(std::string_view quest) const { return _hidden.contains(quest); }
     void SetHidden(std::string_view quest, bool hidden);
+    WizardDynaMods const& GetDynaMods() const noexcept { return _dynaMods; }
+    DynaModChange ApplyDynaMod(std::string_view zone, std::string_view tag, std::string_view state, bool remove, uint64 originator);
+    std::vector<std::string> TakeEvents();
 
     bool IsDirty() const noexcept { return _dirty; }
     void MarkSaved() noexcept { _dirty = false; }
@@ -78,6 +84,8 @@ private:
     std::map<std::string, std::map<std::string, double, std::less<>>, std::less<>> _questRegistry;
     std::map<std::string, double, std::less<>> _registry;
     std::set<std::string, std::less<>> _hidden;
+    WizardDynaMods _dynaMods;
+    std::vector<std::string> _events;
     bool _dirty = false;
     uint64 _changes = 0;
 };

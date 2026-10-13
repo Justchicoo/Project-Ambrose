@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A wizard's quest log as the characters database holds it: its active quests and their goals by the GIDs they keep for life, its per-quest and other registry entries, the quests it hid, and the revision of the save that wrote them.
+ * A wizard's quest log as the characters database holds it: its active quests and their goals by the GIDs they keep for life, its per-quest and other registry entries, the quests it hid, the Dynamods its progress has made to the world it sees, and the revision of the save that wrote them.
  */
 
 #ifndef AMBROSE_CHARACTERQUESTS_H
@@ -40,6 +40,18 @@ struct CharacterRegistryRow
     bool operator==(CharacterRegistryRow const&) const = default;
 };
 
+struct CharacterDynaModRow
+{
+    std::string ZoneName;
+    std::string ClientTag;
+    std::string State;
+    bool Remove = false;
+    int32 Index = 0;
+    uint64 Originator = 0;
+
+    bool operator==(CharacterDynaModRow const&) const = default;
+};
+
 struct CharacterQuests
 {
     std::vector<CharacterQuestRow> Quests;
@@ -47,6 +59,7 @@ struct CharacterQuests
     std::vector<CharacterRegistryRow> QuestRegistry;
     std::vector<CharacterRegistryRow> Registry;
     std::vector<std::string> Hidden;
+    std::vector<CharacterDynaModRow> DynaMods;
     uint64 Revision = 0;
 
     bool operator==(CharacterQuests const&) const = default;
