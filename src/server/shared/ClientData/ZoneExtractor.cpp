@@ -149,6 +149,23 @@ namespace
             return texts;
         }
 
+        PropertyTypes::Vector3D Point(std::string_view name) { return Take<PropertyTypes::Vector3D>(name, _object.Get(name)); }
+
+        std::vector<uint64> Ids(std::string_view name)
+        {
+            std::vector<uint64> ids;
+            PropertyValue const* const value = _object.Get(name);
+            PropertyValue::List const* const list = value ? value->GetList() : nullptr;
+            if (!list)
+            {
+                Miss(name);
+                return ids;
+            }
+            for (PropertyValue const& entry : *list)
+                ids.push_back(static_cast<uint64>(Whole(name, &entry)));
+            return ids;
+        }
+
         PropertyObject const* Object(std::string_view name)
         {
             PropertyValue const* const value = _object.Get(name);
@@ -371,6 +388,14 @@ std::size_t ZoneExtraction::GetSpawnerCount() const noexcept
     std::size_t count = 0;
     for (ExtractedZone const& zone : Zones)
         count += zone.Spawners.size();
+    return count;
+}
+
+std::size_t ZoneExtraction::GetPathCount() const noexcept
+{
+    std::size_t count = 0;
+    for (ExtractedZone const& zone : Zones)
+        count += zone.Paths.size();
     return count;
 }
 
@@ -714,6 +739,81 @@ void ZoneExtractor::ReadSpawns(TypeCatalogPtr const& catalog, ExtractedZone& zon
     zone.Spawners = std::move(spawners);
 }
 
+void ZoneExtractor::ReadPaths(TypeCatalogPtr const& catalog, ExtractedZone& zone, std::span<uint8 const> paths, std::span<uint8 const> nodes, ZoneExtraction& extraction)
+{
+    constexpr std::string_view PathRoot = "class PathManager::PathTemplateList";
+    constexpr std::string_view NodeRoot = "class PathManager::NodeTemplateList";
+    auto const fail = [&](std::string_view file, std::string detail) { extraction.TriggerFailures.push_back({ zone.Path, std::string(file), std::move(detail) }); };
+    DecodeResult const decodedNodes = ObjectSerializer::Decode(catalog, nodes, ZoneDataOptions());
+    if (!decodedNodes.Ok() || !decodedNodes.Object)
+        return fail(PathNodeEntry, decodedNodes.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(decodedNodes.Status)) : decodedNodes.Detail);
+    if (decodedNodes.Object->GetClass().Name != NodeRoot)
+        return fail(PathNodeEntry, fmt::format("its root is {}, not {}", decodedNodes.Object->GetClass().Name, NodeRoot));
+    std::string const nodeListPath = fmt::format("{}.m_nodeList[", NodeRoot);
+    FileIssues const nodeIssues = SortIssues(decodedNodes.Issues, nodeListPath);
+    if (!nodeIssues.Failure.empty())
+        return fail(PathNodeEntry, nodeIssues.Failure);
+    std::map<uint64, ExtractedPathNode> byId;
+    FieldReader nodeRoot(*decodedNodes.Object);
+    PropertyValue const* const nodeList = decodedNodes.Object->Get("m_nodeList");
+    if (!nodeList || !nodeList->GetList())
+        return fail(PathNodeEntry, fmt::format("{} has no m_nodeList list", NodeRoot));
+    for (std::size_t index = 0; index < nodeList->GetList()->size(); ++index)
+    {
+        PropertyObject const* const entry = (*nodeList->GetList())[index].AsObject();
+        if (!entry)
+            return fail(PathNodeEntry, fmt::format("{}{}] is null", nodeListPath, index));
+        FieldReader fields(*entry);
+        ExtractedPathNode node;
+        node.Location = fields.Point("m_location");
+        node.Radius = fields.Real("m_fRadius");
+        node.Id = static_cast<uint64>(fields.Whole("m_id"));
+        node.Direction = fields.Real("m_direction");
+        node.Roll = fields.Real("m_roll");
+        if (!fields.GetMissing().empty())
+            return fail(PathNodeEntry, fmt::format("{}{}]: {}", nodeListPath, index, fields.GetMissing()));
+        if (!byId.emplace(node.Id, node).second)
+            return fail(PathNodeEntry, fmt::format("{}{}] repeats node id {}", nodeListPath, index, node.Id));
+    }
+    std::string failure;
+    std::optional<BindReadResult> const read = ReadServerFile(catalog, paths, PathRoot, failure);
+    if (!read)
+        return fail(PathEntry, std::move(failure));
+    std::string const pathListPath = fmt::format("{}.m_pathList[", PathRoot);
+    FileIssues const pathIssues = SortIssues(read->Decoded.Issues, pathListPath);
+    if (!pathIssues.Failure.empty())
+        return fail(PathEntry, pathIssues.Failure);
+    PropertyValue const* const pathList = read->Decoded.Object->Get("m_pathList");
+    if (!pathList || !pathList->GetList())
+        return fail(PathEntry, fmt::format("{} has no m_pathList list", PathRoot));
+    std::vector<ExtractedPath> extracted;
+    std::set<uint64> seen;
+    for (std::size_t index = 0; index < pathList->GetList()->size(); ++index)
+    {
+        PropertyObject const* const entry = (*pathList->GetList())[index].AsObject();
+        if (!entry)
+            return fail(PathEntry, fmt::format("{}{}] is null", pathListPath, index));
+        FieldReader fields(*entry);
+        ExtractedPath path;
+        path.Id = static_cast<uint64>(fields.Whole("m_id"));
+        path.Name = fields.Text("m_name");
+        std::vector<uint64> const ids = fields.Ids("m_nodeIDs");
+        if (!fields.GetMissing().empty())
+            return fail(PathEntry, fmt::format("{}{}]: {}", pathListPath, index, fields.GetMissing()));
+        if (!seen.insert(path.Id).second)
+            return fail(PathEntry, fmt::format("{}{}] repeats path id {}", pathListPath, index, path.Id));
+        for (uint64 const id : ids)
+        {
+            auto const node = byId.find(id);
+            if (node == byId.end())
+                return fail(PathEntry, fmt::format("path {} ({}) names node {}, which {} does not hold", path.Id, path.Name, id, PathNodeEntry));
+            path.Nodes.push_back(node->second);
+        }
+        extracted.push_back(std::move(path));
+    }
+    zone.Paths = std::move(extracted);
+}
+
 ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, ZoneExtractionProgress const& progress)
 {
     ZoneExtraction extraction;
@@ -772,6 +872,19 @@ ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, Typ
                 ReadTriggers(catalog, zone, read.Data, extraction);
             else
                 ReadSpawns(catalog, zone, read.Data, extraction);
+        }
+        if (archive->Find(PathEntry))
+        {
+            KiwadReadResult const paths = archive->Read(PathEntry, MaxEntryBytes);
+            KiwadReadResult const nodes = archive->Find(PathNodeEntry) ? archive->Read(PathNodeEntry, MaxEntryBytes) : KiwadReadResult{};
+            if (!paths.Succeeded())
+                extraction.TriggerFailures.push_back({ zone.Path, std::string(PathEntry), paths.Error });
+            else if (!archive->Find(PathNodeEntry))
+                extraction.TriggerFailures.push_back({ zone.Path, std::string(PathNodeEntry), "the archive holds pathData.xml but no pathNodeData.bin" });
+            else if (!nodes.Succeeded())
+                extraction.TriggerFailures.push_back({ zone.Path, std::string(PathNodeEntry), nodes.Error });
+            else
+                ReadPaths(catalog, zone, paths.Data, nodes.Data, extraction);
         }
     }
     if (progress)

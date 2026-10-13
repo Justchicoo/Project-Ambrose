@@ -5,7 +5,7 @@ import re
 import secrets
 import time
 
-from . import install, paths, report, screens, zones
+from . import install, paths, report, screens, slots, zones
 from .capture import Capture
 from .client import Client, prepare_process
 from .database import Scratch
@@ -44,8 +44,11 @@ class Run:
         self.scenario = scenario
         self.references = references
         self.environment = environment
-        self.run_id = stamp()
+        self.run_id = stamp() + (f"-s{options['slot']}" if options.get("slot") else "")
         self.folder = os.path.join(options["runs"], self.run_id)
+        while os.path.exists(self.folder):
+            self.run_id += "x"
+            self.folder = os.path.join(options["runs"], self.run_id)
         self.shots = os.path.join(self.folder, "shots")
         self.cleanups = []
         self.prepared = []
@@ -231,6 +234,7 @@ class Run:
                 "screenshots": engine.screenshots,
                 "recorded_lines": engine.notes,
                 "capture": capture.facts(),
+                "input_turn": slots.input_waits(),
                 "needs_client": self.scenario.needs_client,
                 "install": self.environment.get("install"),
                 "install_files": len(before),

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, a wizard's position written under the revision of its row, its character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, and its character_spell rows, read the same way in the order it learned them and each written under its spellbook's revision, and its backpack, read the same way in the order its items arrived, an item added with its instance, its backpack row and the item sequence in one transaction and trashed only by its owner, and the highest item id ever used, with statement builders and row readers for callers that query or save asynchronously.
+ * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, a wizard's position written under the revision of its row, its character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, and its character_spell rows, read the same way in the order it learned them and each written under its spellbook's revision, and its backpack, read the same way in the order its items arrived, an item added with its instance, its backpack row and the item sequence in one transaction and trashed only by its owner, and the highest item id ever used, and the items it wears, read the same way, each with the slot it is worn in, an item moved from its backpack to a slot, with the item that slot gave back moved the other way, or from a slot back to its backpack, each in one transaction, with statement builders and row readers for callers that query or save asynchronously.
  */
 
 #ifndef AMBROSE_CHARACTERREPOSITORY_H
@@ -51,6 +51,12 @@ struct CharacterInventoryLoad
     std::vector<CharacterItem> Items;
 };
 
+struct CharacterEquipmentLoad
+{
+    CharacterOpResult Result = CharacterOpResult::DatabaseError;
+    std::vector<CharacterEquippedItem> Items;
+};
+
 struct DeletedCharacter
 {
     uint64 Guid = 0;
@@ -76,6 +82,7 @@ public:
     static constexpr std::string_view ItemGuidSequence = "item";
     static constexpr std::size_t MaxCustomNameBytes = 64;
     static constexpr std::size_t MaxZoneBytes = 128;
+    static constexpr std::size_t MaxSlotBytes = 64;
 
     CharacterRepository() = delete;
 
@@ -99,6 +106,8 @@ public:
     static CharacterOpResult AddItem(uint64 guid, CharacterItem const& item);
     static CharacterOpResult TrashItem(uint64 guid, uint64 itemGuid);
     static std::optional<uint64> GetMaxItemGuid();
+    static CharacterEquipmentLoad LoadEquipment(uint64 guid);
+    static CharacterOpResult EquipItem(uint64 guid, CharacterItem const& item, std::string_view slot);
 
     static Statement PrepareLoadByAccount(uint64 account);
     static Statement PrepareDelete(uint64 guid, uint64 account, std::optional<uint64> deletedAt);
@@ -119,6 +128,10 @@ public:
     static Statement PrepareTrashItem(uint64 guid, uint64 itemGuid);
     static Statement PrepareLockItem(uint64 guid, uint64 itemGuid, bool locked);
     static std::vector<CharacterItem> ReadInventory(PreparedResultSet& result);
+    static Statement PrepareLoadEquipment(uint64 guid);
+    static CreateTransaction PrepareEquipItem(uint64 guid, CharacterItem const& item, std::string_view slot, std::optional<CharacterItem> const& returned);
+    static CreateTransaction PrepareUnequipItem(uint64 guid, CharacterItem const& item);
+    static std::vector<CharacterEquippedItem> ReadEquipment(PreparedResultSet& result);
     static bool IsValidStats(CharacterStats const& stats) noexcept;
     static std::string_view GetResultName(CharacterOpResult result) noexcept;
 };

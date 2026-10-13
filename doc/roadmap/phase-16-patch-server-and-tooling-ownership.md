@@ -112,7 +112,7 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 **Acceptance**
 
 - [x] Synthetic dir gives {Base, ZoneA, ZoneB} with correct Size/CRC/HeaderSize/HeaderCRC (`InstallFixture.SyntheticInstallProducesExpectedPackagesAndMetrics`)
-- [ ] Reference diff: 100% match on type 3/5 CRC/HeaderSize/HeaderCRC, all 3590 packages
+- [x] Reference diff: 100% match on type 3/5 CRC/HeaderSize/HeaderCRC, all 3590 packages [patchlist_generator at b98c3ab on a complete r806919 install, the Steam edition, against its own PatchInfo/LatestFileList.bin on 2026-10-10: 3589 of 3589 type 3 and 5 records match Size, CRC, HeaderSize and HeaderCRC, and package membership matches for 3590 of 3590 tables; the 2 other differences are the install's own edited PatchConfig.xml files. The KingsIsle-launcher install streams its WADs, so 31 still had segments pending and only its fully fetched files can match]
 - [x] Second run faster, identical .bin (`InstallFixture.SecondRunUsesCacheAndKeepsBinaryIdentical`)
 
 ### Detailed spec from PAT-5: Install scanner: generate the manifest from the user's client install
@@ -126,7 +126,7 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 - CRC cache keyed by path+size+mtime so reruns skip rehashing Root.wad (295 MB)
 - FileType assignment: 3 = WAD (default), 5 = WAD listed in a rules override, 1 = plain file, 4 = rules override (see open questions)
 - Optional --reference <LatestFileList.xml> mode that copies FileType/CompressedHeaderSize/package membership from a list the user supplies and prints a diff report
-- conf/dist/patchlist_generator.conf.dist
+- src/tools/patchlist_generator/patchlist_generator.conf.dist
 
 **Data sources**
 
@@ -136,7 +136,7 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 **Acceptance**
 
 - [x] Unit (synthetic temp dir): 2 zone WADs + Root.wad + Bin/a.dll give packages {Base, ZoneA, ZoneB} with the correct Size/CRC/HeaderSize/HeaderCRC (`InstallFixture.SyntheticInstallProducesExpectedPackagesAndMetrics`)
-- [ ] Env-gated diff run on r806919 with a reference list: Size, CRC, HeaderSize and HeaderCRC match 100% of type 3/5 records, and package membership matches for all 3590 tables
+- [x] Env-gated diff run on r806919 with a reference list: Size, CRC, HeaderSize and HeaderCRC match 100% of type 3/5 records, and package membership matches for all 3590 tables [patchlist_generator at b98c3ab on a complete r806919 install, the Steam edition, against its own PatchInfo/LatestFileList.bin on 2026-10-10: 3589 of 3589 type 3 and 5 records match Size, CRC, HeaderSize and HeaderCRC, and package membership matches for 3590 of 3590 tables; the 2 other differences are the install's own edited PatchConfig.xml files. The KingsIsle-launcher install streams its WADs, so 31 still had segments pending and only its fully fetched files can match]
 - [x] Second run finishes much faster than the first (CRC cache hit) and gives an identical .bin (`InstallFixture.SecondRunUsesCacheAndKeepsBinaryIdentical`)
 
 **Risks**
@@ -157,10 +157,10 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 
 **Acceptance**
 
-- [ ] Fake client gets ListFileSize/ListFileCRC equal to the .bin
-- [ ] Probe without session accept still gets a reply
-- [ ] ListFileURL contains '/V_r806919.Wizard_1_610/'
-- [ ] Corrupt manifest reload keeps the old one; port change rebinds live
+- [x] Fake client gets ListFileSize/ListFileCRC equal to the .bin (`PatchFileListTest.HandshakeThenV2InEnglishGetsTheSizeAndCrcOfTheBinOnDisk`)
+- [x] Probe without session accept still gets a reply (`PatchFileListTest.ProbeWithoutSessionAcceptStillGetsAReply`)
+- [x] ListFileURL contains '/V_r806919.Wizard_1_610/' (`PatchFileListTest.ListFileUrlNamesTheRevisionFolderUnderThePublicAddress`)
+- [x] Corrupt manifest reload keeps the old one; port change rebinds live (`PatchReloadTest.CorruptManifestReloadKeepsTheOldOneServingAndReportsTheError`, `PatchReloadTest.PortChangeRebindsLiveAndAFailedBindKeepsTheOldListener`)
 
 ### Detailed spec from PAT-6: patchserver app: TCP service 8 answering MSG_LATEST_FILE_LIST_V2
 
@@ -183,11 +183,11 @@ A client or probe that connects to the patch port gets a correct pointer to our 
 
 **Acceptance**
 
-- [ ] Integration test (src/test): fake client completes the NET session handshake, sends MSG_LATEST_FILE_LIST_V2 with Locale 'English', and gets a reply whose ListFileSize/ListFileCRC equal the .bin on disk
-- [ ] A probe that sends the V2 request right after the 28-byte session offer, without a session accept first (the reference probe byte sequence 0D F0 27 00 00 00 00 00 08 02 22 00 + 30 zero bytes), still gets a reply
-- [ ] Reply ListFileURL contains '/V_r806919.Wizard_1_610/'
+- [x] Integration test (src/test): fake client completes the NET session handshake, sends MSG_LATEST_FILE_LIST_V2 with Locale 'English', and gets a reply whose ListFileSize/ListFileCRC equal the .bin on disk (`PatchFileListTest.HandshakeThenV2InEnglishGetsTheSizeAndCrcOfTheBinOnDisk`: the reply's size is the file's and its CRC the client CRC of the file's bytes, with LatestVersion 1, ListFileType 1, ListFileTime the file's modification time and the locale echoed)
+- [x] A probe that sends the V2 request right after the 28-byte session offer, without a session accept first (the reference probe byte sequence 0D F0 27 00 00 00 00 00 08 02 22 00 + 30 zero bytes), still gets a reply (`PatchFileListTest.ProbeWithoutSessionAcceptStillGetsAReply`: the frame's own length 0x27 counts 39 bytes after its 4-byte prefix, so the sequence is the 30 zero body bytes and the frame's zero trailer byte, 43 bytes in all, which the test checks against `FrameWriter::WriteDml` before sending it)
+- [x] Reply ListFileURL contains '/V_r806919.Wizard_1_610/' (`PatchFileListTest.ListFileUrlNamesTheRevisionFolderUnderThePublicAddress`)
 - [ ] Unknown locale: behaviour matches the client string 'Locale (%s) not supported by the server' (exact reply to be decided from the PAT-8 client test, logged)
-- [ ] Reloading a corrupt manifest keeps the old manifest serving and reports the error, and changing PatchServer.Port rebinds without a restart while a failed bind keeps the old listener
+- [x] Reloading a corrupt manifest keeps the old manifest serving and reports the error, and changing PatchServer.Port rebinds without a restart while a failed bind keeps the old listener (`PatchReloadTest.CorruptManifestReloadKeepsTheOldOneServingAndReportsTheError` through the `manifest` reload target, `PatchReloadTest.PortChangeRebindsLiveAndAFailedBindKeepsTheOldListener` through a configuration reload; the port option keeps the name `PatchServerPort` phase 1 gave it beside `LoginServerPort` and `WorldServerPort`)
 
 **Risks**
 
@@ -292,9 +292,9 @@ The retail client patches against Ambrose, finds nothing to change on a complete
 **Acceptance**
 
 - [x] PATCHINGBLOCKED and LOGPATCHCLIENTPATCHTIME registered 'logged in' [WizardDispatchTest.PatchNoticesAreHandledForLoggedInWizards; GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled]
-- [ ] -P 0 zones in with no download-package messages
+- [x] -P 0 zones in with no download-package messages [patch-off-zone-in.json run 20261009-223932 on the r806919 install: the client launched with -P 0 entered WizardCity/WC_Ravenwood and then WizardCity/WC_Hub, with the game server's packet log filtered to MSG_DOWNLOADPACKAGE, MSG_DOWNLOADPACKAGEELEMENT and MSG_DOWNLOADBROWSER showing none sent, neither patch port seeing a connection and no patch line in the client log; patch-off.json run 20261009-222129 saw 0 connections on 12500 and the PatchConfig.xml host]
 - [x] Revision mismatch rejected only with Login.EnforceRevision=1 [AuthHandlerDatabaseTest.RevisionEnforcementCanBeChangedForTheNextLogin, run against MySQL on linux-gcc: a mismatched revision is admitted with Login.EnforceRevision off and refused with ErrorNoLock once it is on]
-- [ ] Login.EnforceRevision and Patch.Enabled changes apply live
+- [x] Login.EnforceRevision and Patch.Enabled changes apply live [patch-off-zone-in.json run 20261009-223932: the login server let the first login in with revision r806919.Wizard_1_610 while Login.AllowedRevision named another, then after `.settings set Login.EnforceRevision 1`, with no restart, refused the next login of the restarted client with MSG_USER_AUTHEN_RSP Error=ErrorNoLock, which the client showed; `.settings set Patch.Enabled 0` on the running game server was followed by a transfer from WC_Ravenwood to WC_Hub with no MSG_DOWNLOAD* sent. Nothing on main sends a download package yet, so that send gate reading the live value each time is what PatchHandlerTest.PackageDownloadsFollowTheLiveSetting proves]
 
 ### Detailed spec from PAT-9: Game/login integration switches for patching
 
@@ -317,9 +317,9 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 **Acceptance**
 
 - [x] Unit: dispatch table has MSG_PATCHINGBLOCKED and MSG_LOGPATCHCLIENTPATCHTIME registered with state 'logged in' [WizardDispatchTest.PatchNoticesAreHandledForLoggedInWizards; GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled]
-- [ ] Real client with -P 0 logs in and zones in without the gameserver sending any download-package message (sniffer or server log shows none)
+- [x] Real client with -P 0 logs in and zones in without the gameserver sending any download-package message (sniffer or server log shows none) [patch-off-zone-in.json run 20261009-223932 on the r806919 install: the client launched with -P 0 entered WizardCity/WC_Ravenwood and then WizardCity/WC_Hub, with the game server's packet log filtered to MSG_DOWNLOADPACKAGE, MSG_DOWNLOADPACKAGEELEMENT and MSG_DOWNLOADBROWSER showing none sent, neither patch port seeing a connection and no patch line in the client log; patch-off.json run 20261009-222129 saw 0 connections on 12500 and the PatchConfig.xml host]
 - [x] Login with mismatched Revision is rejected with a clear login error only when Login.EnforceRevision=1 [AuthHandlerDatabaseTest.RevisionEnforcementCanBeChangedForTheNextLogin, run against MySQL on linux-gcc: a mismatched revision is admitted with Login.EnforceRevision off and refused with ErrorNoLock once it is on]
-- [ ] `.settings set Login.EnforceRevision 1` on a running loginserver rejects the next mismatched login without a restart, and setting Patch.Enabled to 0 stops download-package messages from the next zone transfer
+- [x] `.settings set Login.EnforceRevision 1` on a running loginserver rejects the next mismatched login without a restart, and setting Patch.Enabled to 0 stops download-package messages from the next zone transfer [patch-off-zone-in.json run 20261009-223932: the login server let the first login in with revision r806919.Wizard_1_610 while Login.AllowedRevision named another, then after `.settings set Login.EnforceRevision 1`, with no restart, refused the next login of the restarted client with MSG_USER_AUTHEN_RSP Error=ErrorNoLock, which the client showed; `.settings set Patch.Enabled 0` on the running game server was followed by a transfer from WC_Ravenwood to WC_Hub with no MSG_DOWNLOAD* sent. Nothing on main sends a download package yet, so that send gate reading the live value each time is what PatchHandlerTest.PackageDownloadsFollowTheLiveSetting proves]
 
 **Risks**
 

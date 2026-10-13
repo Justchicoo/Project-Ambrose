@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, list the scenarios, or start a play session that keeps its databases and stays up until told to stop, holding the WSL distribution the scratch database runs in, named by --wsl-distro or AMBROSE_TEST_DB_WSL, for as long as the driver runs.
+# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, list the scenarios, or start a play session that keeps its databases and stays up until told to stop, a run taking the first free driver slot so several can share the machine, holding the WSL distribution the scratch database runs in, named by --wsl-distro or AMBROSE_TEST_DB_WSL, for as long as the driver runs.
 import argparse
 import os
 import sys
@@ -117,13 +117,27 @@ def command_check(args):
     return OK
 
 
+def take_slot(args):
+    from . import slots
+
+    taken = slots.take(wanted=None if args.slot == "auto" else int(args.slot))
+    if taken:
+        args.port, args.game_port, args.db_prefix = (
+            slots.shifted({"port": args.port, "game_port": args.game_port, "db_prefix": args.db_prefix}, taken,
+                          DEFAULT_PORT, DEFAULT_GAME_PORT, DEFAULT_DB[4])[key] for key in ("port", "game_port", "db_prefix"))
+    print(f"clientdriver: slot {taken}: login port {args.port}, game port {args.game_port}, databases {args.db_prefix}_*")
+    return taken
+
+
 def command_run(args):
+    slot = take_slot(args)
     scenario, references, options, environment, gaps = look(args)
     if gaps:
         print("clientdriver: skipped: " + "; ".join(gaps))
         return SKIP
     from .run import Run
 
+    options["slot"] = slot
     return Run(options, scenario, references, environment).execute()
 
 
@@ -192,6 +206,9 @@ def build_parser():
     run.add_argument("--wizard-from", help="a characters database, host;port;user;password;database, to copy the scenario's wizard from instead of the one it describes; it is only read")
     run.add_argument("--wizard-guid", type=int, help="the wizard --wizard-from copies (default 1)")
     run.add_argument("--foreground", dest="background", action="store_false", help="leave the client window in front instead of at the bottom")
+    run.add_argument("--slot", default="auto", choices=["auto"] + [str(index) for index in range(4)],
+                     help="which of the machine's driver slots the run takes, so up to four runs share the machine: auto takes the first free one, "
+                          "slot 0 keeps the default ports and databases and slot N moves each of them that was left at its default up by 10 times N")
     check = commands.add_parser("check", help="say whether a run is possible on this machine, and exit 77 when it is not")
     add_common(check)
     capture = commands.add_parser("capture-refs", help="rebuild the reference crops for the install in front of the driver")

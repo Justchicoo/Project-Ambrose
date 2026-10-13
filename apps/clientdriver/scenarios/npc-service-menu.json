@@ -1,0 +1,331 @@
+{
+  "title": "Walking up to an NPC with nothing to offer shows no prompt; walking up to WC-RAV-NPC06 with the sample greeter on offers its service, X or a click routes it, and walking away takes it away, once per crossing",
+  "include": "parts/common.json",
+  "notes": [
+    "7.07: an NPC shows a prompt only when it has something to offer. The game master first walks up to WC-GTW-Registrar, template 39088, which no",
+    "script serves: no MSG_SENDNPCOPTIONS, no prompt, no MSG_LEAVESERVICERANGE. Npc.TestGreeter turns on the spec's sample npc_test_greeter for",
+    "this run only; in play it is off, and real prompts come from the quest givers of 7.08 and 7.09 and the shops of phase 8.",
+    "Each NPC is reached with go_to_npc, 290 units off, inside its range, and facing it. The game master is then put by WC-RAV-NPC06, template 38232, and takes a step, which brings it into the NPC's",
+    "300-unit range: the game server sends MSG_SENDNPCOPTIONS with the sample npc_test_greeter's one option, and the client shows the NPC's prompt",
+    "with its name and portrait, and pressing X, as the prompt asks, sends MSG_INTERACTOPTION, which the server routes as option 0 to npc_test_greeter.",
+    "Steps inside the range offer nothing more; put far away, a step takes the wizard out of range with MSG_LEAVESERVICERANGE.",
+    "The far point faces yaw 3.1416, into Ravenwood and away from the Commons door, as this client walks along (-sin yaw, -cos yaw)."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Npc.TestGreeter=1"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Ravenwood",
+    "zone_display": "Ravenwood",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in Ravenwood",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Ravenwood instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood"
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the wizard stands 290 units from WC-GTW-Registrar, facing it",
+      "npc": "WC-GTW-Registrar",
+      "distance": 290
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles 290 units from WC-GTW-Registrar",
+      "file": "registrar-arrived",
+      "settle": 3
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard takes a step inside WC-GTW-Registrar's range",
+      "vk": "0x57",
+      "seconds": 0.4,
+      "moves": true
+    },
+    {
+      "action": "shot",
+      "name": "WC-GTW-Registrar, which offers nothing, shows no prompt",
+      "file": "registrar-no-prompt",
+      "settle": 2
+    },
+    {
+      "action": "forbid_log",
+      "name": "the server sent no MSG_SENDNPCOPTIONS or MSG_LEAVESERVICERANGE for WC-GTW-Registrar",
+      "side": "game",
+      "pattern": "service range of NPC"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the client began no NPC interaction",
+      "side": "client",
+      "pattern": "InteractionManager::NewNPCInteraction"
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the wizard stands 290 units from WC-RAV-NPC06, facing it",
+      "npc": "WC-RAV-NPC06",
+      "distance": 290
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles 290 units from WC-RAV-NPC06",
+      "file": "npc06-arrived",
+      "settle": 3
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard takes a step inside the NPC's range",
+      "vk": "0x57",
+      "seconds": 0.4,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "stepping inside the range of WC-RAV-NPC06 offers its services",
+      "pattern": "wizard {wizard_guid} entered the service range of NPC \\d+ \\(template (\\d+), mobile id \\d+, (\\S+) with icon",
+      "timeout": 20,
+      "expect": "38232",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the interaction prompt of WC-RAV-NPC06",
+      "file": "npc06-prompt",
+      "settle": 2
+    },
+    {
+      "action": "key",
+      "name": "press X, as the prompt of WC-RAV-NPC06 asks",
+      "vk": "0x58"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the server routes the prompt's option",
+      "pattern": "wizard {wizard_guid} picked option (\\d+) \\(Greeting\\) of NPC \\d+ \\(template 38232\\), routed to npc_test_greeter option 0",
+      "timeout": 15,
+      "expect": "0"
+    },
+    {
+      "action": "shot",
+      "name": "WC-RAV-NPC06 after X answers its prompt",
+      "file": "npc06-pressed-x",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "click WC-RAV-NPC06, the prompt's other way to talk",
+      "target": "npc06_beside",
+      "attempts": 3,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "wizard {wizard_guid} picked option (\\d+) \\(Greeting\\) of NPC \\d+ \\(template 38232\\), routed to npc_test_greeter option 0",
+        "timeout": 10,
+        "expect": "0"
+      }
+    },
+    {
+      "action": "shot",
+      "name": "WC-RAV-NPC06 after it is clicked",
+      "file": "npc06-clicked",
+      "settle": 2
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks about inside the NPC's range",
+      "vk": "0x53",
+      "seconds": 0.3,
+      "moves": true
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks back inside the NPC's range",
+      "vk": "0x57",
+      "seconds": 0.3,
+      "moves": true
+    },
+    {
+      "action": "forbid_log",
+      "name": "walking about inside the range never left it, so it was not entered again either",
+      "side": "game",
+      "pattern": "left the service range of NPC"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz far from WC-RAV-NPC06",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz far from WC-RAV-NPC06",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz far from WC-RAV-NPC06",
+      "text": ".go xyz -5.6 -1431.5 -30.5 3.1416"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz far from WC-RAV-NPC06",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands far from WC-RAV-NPC06",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Ravenwood to \\((\\S+, \\S+, \\S+)\\) facing",
+      "timeout": 20
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard takes a step out of the NPC's range",
+      "vk": "0x57",
+      "seconds": 1.0,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "leaving the range takes the services away",
+      "pattern": "wizard {wizard_guid} left the service range of NPC (\\d+)",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the prompt is gone after walking away",
+      "file": "npc06-walked-away",
+      "settle": 2
+    }
+  ]
+}

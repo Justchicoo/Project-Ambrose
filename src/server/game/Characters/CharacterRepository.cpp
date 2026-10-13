@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Binds wizard fields to the characters statements and reads joined character and appearance rows back field by field; refuses a zero guid or account, a character already marked deleted, and text that is not UTF-8, holds control characters or is too long, before touching the database; treats a commit whose reply was lost as done when the stored character matches; and tells soft deletion, restoring and the online flag apart by the rows each update changed. A stats write older than the row it would replace changes nothing, which the statement itself decides, so it is not an error. A stats row with a negative amount or vital, or a potion charge that is not a finite number of zero or more, is refused before it is written, A stats read that finds the wizard but no row loads as having none, and one that finds no wizard is told apart from both; a spellbook read does the same, a wizard with no spell rows reading as one row of nothing. A spell row for spell 0 is refused, since no spell's name hashes to it. An item with no id, no template or no quantity is refused before the database is touched, and trashing an item another wizard owns changes nothing and is reported as not found.
+ * Binds wizard fields to the characters statements and reads joined character and appearance rows back field by field; refuses a zero guid or account, a character already marked deleted, and text that is not UTF-8, holds control characters or is too long, before touching the database; treats a commit whose reply was lost as done when the stored character matches; and tells soft deletion, restoring and the online flag apart by the rows each update changed. A stats write older than the row it would replace changes nothing, which the statement itself decides, so it is not an error. A stats row with a negative amount or vital, or a potion charge that is not a finite number of zero or more, is refused before it is written, A stats read that finds the wizard but no row loads as having none, and one that finds no wizard is told apart from both; a spellbook read does the same, a wizard with no spell rows reading as one row of nothing. A spell row for spell 0 is refused, since no spell's name hashes to it. An item with no id, no template or no quantity is refused before the database is touched, and trashing an item another wizard owns changes nothing and is reported as not found. An equip removes the item's backpack row and adds its equipment row, and the item a full slot gives back loses its equipment row and gains a backpack row, in one transaction; an equipment row is written only for an item the wizard owns, and an unequip does the reverse; a slot name that is empty or longer than the column is refused.
  */
 
 #include "CharacterRepository.h"
@@ -723,6 +723,118 @@ std::vector<CharacterItem> CharacterRepository::ReadInventory(PreparedResultSet&
         item.Created = row[9].Get<uint64>();
         item.Slot = row[10].Get<uint32>();
         items.push_back(item);
+    } while (result.NextRow());
+    return items;
+}
+
+CharacterEquipmentLoad CharacterRepository::LoadEquipment(uint64 guid)
+{
+    Statement const statement = PrepareLoadEquipment(guid);
+    if (!statement)
+        return {};
+    PreparedQueryResult result;
+    if (!CharacterDatabase.TryQuery(*statement, result))
+        return {};
+    if (!result)
+        return { CharacterOpResult::NotFound, {} };
+    return { CharacterOpResult::Ok, ReadEquipment(*result) };
+}
+
+CharacterOpResult CharacterRepository::EquipItem(uint64 guid, CharacterItem const& item, std::string_view slot)
+{
+    CreateTransaction const transaction = PrepareEquipItem(guid, item, slot, std::nullopt);
+    if (!transaction)
+        return guid == 0 || item.Guid == 0 || slot.empty() || slot.size() > MaxSlotBytes ? CharacterOpResult::InvalidData : CharacterOpResult::DatabaseError;
+    return CharacterDatabase.DirectCommitTransaction(transaction) ? CharacterOpResult::Ok : CharacterOpResult::DatabaseError;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareLoadEquipment(uint64 guid)
+{
+    Statement statement = Prepare(CHAR_SEL_CHARACTER_EQUIPMENT);
+    if (statement)
+        statement->SetData(0, guid);
+    return statement;
+}
+
+CharacterRepository::CreateTransaction CharacterRepository::PrepareEquipItem(uint64 guid, CharacterItem const& item, std::string_view slot,
+    std::optional<CharacterItem> const& returned)
+{
+    if (guid == 0 || item.Guid == 0 || slot.empty() || slot.size() > MaxSlotBytes || (returned && returned->Guid == 0))
+        return nullptr;
+    Statement held = Prepare(CHAR_DEL_CHARACTER_INVENTORY);
+    Statement worn = Prepare(CHAR_INS_CHARACTER_EQUIPMENT);
+    if (!held || !worn)
+        return nullptr;
+    held->SetData(0, guid);
+    held->SetData(1, item.Guid);
+    worn->SetData(0, std::string(slot));
+    worn->SetData(1, item.Guid);
+    worn->SetData(2, guid);
+    Statement takenOff;
+    Statement putBack;
+    if (returned)
+    {
+        takenOff = Prepare(CHAR_DEL_CHARACTER_EQUIPMENT);
+        putBack = Prepare(CHAR_INS_CHARACTER_INVENTORY);
+        if (!takenOff || !putBack)
+            return nullptr;
+        takenOff->SetData(0, guid);
+        takenOff->SetData(1, returned->Guid);
+        putBack->SetData(0, guid);
+        putBack->SetData(1, returned->Guid);
+        putBack->SetData(2, returned->Slot);
+    }
+
+    CreateTransaction transaction = CharacterDatabase.BeginTransaction();
+    if (returned)
+        transaction->Append(std::move(takenOff));
+    transaction->Append(std::move(held));
+    transaction->Append(std::move(worn));
+    if (returned)
+        transaction->Append(std::move(putBack));
+    return transaction;
+}
+
+CharacterRepository::CreateTransaction CharacterRepository::PrepareUnequipItem(uint64 guid, CharacterItem const& item)
+{
+    if (guid == 0 || item.Guid == 0)
+        return nullptr;
+    Statement takenOff = Prepare(CHAR_DEL_CHARACTER_EQUIPMENT);
+    Statement putBack = Prepare(CHAR_INS_CHARACTER_INVENTORY);
+    if (!takenOff || !putBack)
+        return nullptr;
+    takenOff->SetData(0, guid);
+    takenOff->SetData(1, item.Guid);
+    putBack->SetData(0, guid);
+    putBack->SetData(1, item.Guid);
+    putBack->SetData(2, item.Slot);
+
+    CreateTransaction transaction = CharacterDatabase.BeginTransaction();
+    transaction->Append(std::move(takenOff));
+    transaction->Append(std::move(putBack));
+    return transaction;
+}
+
+std::vector<CharacterEquippedItem> CharacterRepository::ReadEquipment(PreparedResultSet& result)
+{
+    std::vector<CharacterEquippedItem> items;
+    do
+    {
+        Field const* const row = result.Fetch();
+        if (row[0].Get<uint32>() == 0)
+            continue;
+        CharacterEquippedItem worn;
+        worn.Item.Guid = row[1].Get<uint64>();
+        worn.Item.TemplateId = row[2].Get<uint32>();
+        worn.Item.Quantity = row[3].Get<uint32>();
+        worn.Item.PrimaryColor = row[4].Get<uint8>();
+        worn.Item.SecondaryColor = row[5].Get<uint8>();
+        worn.Item.Pattern = row[6].Get<uint8>();
+        worn.Item.Locked = row[7].Get<uint8>() != 0;
+        worn.Item.Flags = row[8].Get<uint32>();
+        worn.Item.Created = row[9].Get<uint64>();
+        worn.Slot = row[10].Get<std::string>();
+        items.push_back(std::move(worn));
     } while (result.NextRow());
     return items;
 }

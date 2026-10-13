@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, and Enter sent as a key only once Alt is up, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, and Enter sent as a key only once Alt is up, the order in which a run starts and stops what it owns, the slot a run takes so several share the machine and the one input turn they share, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
+import contextlib
 import json
 import os
 import re
@@ -13,7 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clientdriver import capture, cli, client, database, engine, install, listeners, netguard, paths, play, preflight, references, refscapture, report, run, scenario, screens, server, zones
+from clientdriver import capture, cli, client, database, engine, install, listeners, netguard, paths, play, preflight, references, refscapture, report, run, scenario, screens, server, slots, zones
 from clientdriver.errors import Refused, StepFailed
 from clientdriver.logtail import LogTail, read_lines
 
@@ -300,6 +301,34 @@ class ScenarioTests(TemporaryFolder):
             scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
         self.assertIn("two steps named", str(raised.exception))
 
+    def test_a_comparison_of_shots_is_refused_unless_both_were_taken_and_its_region_and_outcome_make_sense(self):
+        shot = {"action": "shot", "name": "the doll", "file": "doll"}
+        cases = [
+            ({"first": "doll", "second": "later", "region": [0, 0, 10, 10], "expect": "differ"}, "no earlier shot step takes"),
+            ({"first": "doll", "second": "doll", "region": [10, 0, 5, 10], "expect": "differ"}, "four pixel edges"),
+            ({"first": "doll", "second": "doll", "region": [0, 0, 10], "expect": "differ"}, "four pixel edges"),
+            ({"first": "doll", "second": "doll", "region": [0, 0, 10, 10], "expect": "same"}, "differ or match"),
+            ({"first": "doll", "second": "doll", "region": [0, 0, 10, 10], "expect": "match", "fraction": 1.5}, "fraction of matching pixels"),
+        ]
+        for compared, said in cases:
+            self.scenario_file("one.json", {"title": "x", "steps": [shot, dict(compared, action="compare_shots", name="the doll changed")]})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
+            self.assertIn(said, str(raised.exception))
+        colors = {"action": "compare_colors", "name": "one color", "first": ["doll", "doll"], "first_region": [0, 0, 10, 10],
+                  "second": ["doll", "doll"], "second_region": [0, 0, 10, 10]}
+        for changed, said in [({"first": "doll"}, "names of two shots"), ({"second": ["doll", "later"]}, "no earlier shot step takes"),
+                              ({"second_region": [5, 5, 5, 9]}, "second region of four pixel edges"), ({"degrees": 120}, "at most 90 degrees"),
+                              ({"at_least": 0}, "one or more changed colored pixels")]:
+            self.scenario_file("one.json", {"title": "x", "steps": [shot, dict(colors, **changed)]})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
+            self.assertIn(said, str(raised.exception))
+        self.scenario_file("one.json", {"title": "x", "steps": [shot, dict(shot, name="the doll again")]})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertIn("a second time", str(raised.exception))
+
     def test_a_scenario_without_a_title_is_refused(self):
         self.scenario_file("one.json", {"steps": []})
         with self.assertRaises(Refused):
@@ -320,12 +349,13 @@ class ScenarioTests(TemporaryFolder):
     def test_the_screens_and_targets_a_scenario_uses_are_checked_against_the_references(self):
         self.scenario_file("one.json", {"title": "x", "steps": [
             {"action": "wait_screen", "name": "a", "screens": ["login", "nowhere"], "timeout": 1},
-            {"action": "click", "name": "b", "target": "missing", "on_screen": "login"}]})
+            {"action": "click", "name": "b", "target": "missing", "on_screen": "login"},
+            {"action": "drag", "name": "c", "target": "missing", "to": "elsewhere"}]})
         loaded = scenario.load("one.json", search=(os.path.join(self.folder, "scenarios"),))
         self.assertEqual(loaded.screens_used(), ["login", "nowhere"])
-        self.assertEqual(loaded.targets_used(), ["missing"])
+        self.assertEqual(loaded.targets_used(), ["elsewhere", "missing"])
         problems = loaded.names_against(references.References("references.json", REFERENCE_DOCUMENT))
-        self.assertEqual(len(problems), 2)
+        self.assertEqual(len(problems), 3)
 
     def test_a_scenario_can_expect_to_fail(self):
         self.scenario_file("one.json", {"title": "x", "expect": "failure", "steps": []})
@@ -554,11 +584,25 @@ class WorldEntryTests(TemporaryFolder):
         self.assertIn("could not reload names", str(raised.exception))
 
     def test_the_zone_rows_are_cached_by_revision_and_layout_outside_the_repository(self):
-        path = zones.cache_path("r806919.Wizard_1_610")
+        path = zones.cache_path("r806919.Wizard_1_610", self.folder)
         self.assertTrue(path.endswith(os.path.join("clientdriver", "zones", f"r806919.Wizard_1_610.v{zones.LAYOUT}.sql")))
         self.assertFalse(os.path.abspath(path).startswith(os.path.abspath(paths.REPOSITORY)))
         with self.assertRaises(StepFailed):
             zones.ensure(self.folder, self.folder, "")
+
+    def test_a_checkout_whose_world_tables_differ_reads_its_own_zone_rows(self):
+        world = os.path.join(self.folder, "data", "sql", "base", "db_world")
+        os.makedirs(world)
+        with open(os.path.join(world, "world.sql"), "w", encoding="utf-8") as handle:
+            handle.write("CREATE TABLE `zone_object` (`id` INT);\n")
+        main = zones.cache_path("r806919.Wizard_1_610", self.folder)
+        self.assertRegex(os.path.basename(main), rf"^r806919\.Wizard_1_610\.v{zones.LAYOUT}\.[0-9a-f]{{10}}\.sql$")
+        self.assertEqual(main, zones.cache_path("r806919.Wizard_1_610", self.folder))
+        pending = os.path.join(self.folder, "data", "sql", "updates", "pending_db_world")
+        os.makedirs(pending)
+        with open(os.path.join(pending, "zone_path.sql"), "w", encoding="utf-8") as handle:
+            handle.write("CREATE TABLE `zone_path` (`id` INT);\n")
+        self.assertNotEqual(main, zones.cache_path("r806919.Wizard_1_610", self.folder))
 
     def test_the_extractor_s_script_is_applied_statement_by_statement_without_its_header_comment(self):
         script = os.path.join(self.folder, "zones.sql")
@@ -893,11 +937,15 @@ class FakeClient:
     def enter(self, hold=0.05):
         self.typed.append("enter")
 
-    def click(self, x, y, dwell=0.35):
-        self.presses.append((x, y, round(dwell, 2)))
+    def click(self, x, y, dwell=0.35, clicks=1):
+        self.presses.append((x, y, round(dwell, 2)) if clicks == 1 else (x, y, round(dwell, 2), clicks))
         if self.on_click:
             self.on_click(len(self.presses))
         return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if self.active else "NOT active"), self.active
+
+    def drag(self, start, end, dwell=0.35, steps=8):
+        self.presses.append((start, end, steps))
+        return f"{start[0]},{start[1]} to {end[0]},{end[1]} in {steps} move(s)", self.active
 
 
 class FakeLauncherClient(FakeClient):
@@ -1290,6 +1338,26 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(self.client.presses[0][:2], (5, 5))
         self.assertIn("3 attempt(s)", running.steps[0]["result"])
 
+    def test_a_double_click_presses_twice_and_nothing_else_is_taken(self):
+        running = self.build([{"action": "click", "name": "put the hat on", "target": "press", "clicks": 2, "dwell": 0.0}])
+        running.run()
+        self.assertEqual(self.client.presses, [(5, 5, 0.0, 2)])
+        running = self.build([{"action": "click", "name": "put the hat on", "target": "press", "clicks": 3, "dwell": 0.0}])
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("twice for a double click", str(raised.exception))
+
+    def test_a_drag_presses_on_one_target_and_lets_go_on_another(self):
+        running = self.build([{"action": "drag", "name": "put the hat on", "target": "press", "to": "press", "steps": 4, "dwell": 0.0}])
+        running.run()
+        self.assertEqual(self.client.presses, [((5, 5), (5, 5), 4)])
+        self.assertIn("dragged press onto press", running.steps[0]["result"])
+        running = self.build([{"action": "drag", "name": "put the hat on", "target": "press", "to": "press", "dwell": 0.0}])
+        self.client.active = False
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("dropped the drag", str(raised.exception))
+
     def test_a_press_that_never_takes_fails_and_names_the_check(self):
         running = self.build([{"action": "click", "name": "press the button", "target": "press", "attempts": 2,
                                "dwell": 0.0, "dwell_step": 0.0,
@@ -1351,6 +1419,24 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(running.game.commands, ["server announce Hello clientdriver"])
         self.assertEqual(self.server.commands, [], "a game command never reaches the login server")
         self.assertIn("Shown to 1 wizard", running.steps[0]["result"])
+
+    def test_going_to_an_npc_teleports_the_wizard_beside_it_through_the_game_server(self):
+        running = self.build([{"action": "go_to_npc", "name": "stand by the headmaster", "npc": "Merle Ambrose", "distance": 80}])
+        running.variables["wizard_guid"] = "7"
+        game_console = self.write(os.path.join("game", "console.txt"), ["Moved Tester to beside Merle Ambrose in WizardCity/WC_Hub, at (1.00, 2.00, 3.00)"])
+        running.game = FakeServer(self.write(os.path.join("game", "Server.log"), []), game_console)
+        running.run()
+        self.assertEqual(running.game.commands, ['tele npc "Merle Ambrose" 7 80'])
+        self.assertIn("beside Merle Ambrose", running.steps[0]["result"])
+
+    def test_going_to_an_npc_fails_at_once_when_the_game_server_refuses(self):
+        running = self.build([{"action": "go_to_npc", "name": "stand by nobody", "npc": "Nobody", "wizard": "Tester", "timeout": 5}])
+        game_console = self.write(os.path.join("game", "console.txt"), ["Not moved: in WizardCity/WC_Hub, nothing placed answers to Nobody"])
+        running.game = FakeServer(self.write(os.path.join("game", "Server.log"), []), game_console)
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertEqual(running.game.commands, ['tele npc "Nobody" Tester'])
+        self.assertIn("nothing placed answers to Nobody", str(raised.exception))
 
     def test_a_game_command_is_refused_without_the_game_server(self):
         running = self.build([{"action": "game_command", "name": "tell the world", "command": "server announce Hello"}])
@@ -1469,6 +1555,69 @@ class EngineTests(TemporaryFolder):
         self.assertIn("the disk is full", str(raised.exception))
         self.assertEqual(len(running.screenshots), 1)
         self.assertEqual(running.screenshots[0]["step"], "the login window")
+
+    def test_two_shots_are_compared_over_a_region_only(self):
+        running = self.build([
+            {"action": "shot", "name": "before the hat", "file": "before"},
+            {"action": "shot", "name": "after the hat", "file": "after"},
+            {"action": "compare_shots", "name": "the left side changed", "first": "before", "second": "after", "region": [0, 0, 10, 20], "expect": "differ"},
+            {"action": "compare_shots", "name": "the right side stayed", "first": "before", "second": "after", "region": [10, 0, 40, 20], "expect": "match"},
+        ])
+        running.execute(running.scenario.steps[0])
+        self.client.current = frame_of(GREEN, BLUE)
+        for step in running.scenario.steps[1:]:
+            running.execute(step)
+        self.assertIn("0.0 of the pixels in [0, 0, 10, 20] match between 01-before.png and 02-after.png", running.steps[2]["result"])
+        self.assertIn("1.0 of the pixels", running.steps[3]["result"])
+
+    def test_a_comparison_fails_when_the_shots_do_not_say_what_it_expects(self):
+        running = self.build([
+            {"action": "shot", "name": "before the hat", "file": "before"},
+            {"action": "shot", "name": "after the hat", "file": "after"},
+            {"action": "compare_shots", "name": "the hat changed the doll", "first": "before", "second": "after", "region": [10, 0, 40, 20], "expect": "differ"},
+        ])
+        running.execute(running.scenario.steps[0])
+        self.client.current = frame_of(GREEN, BLUE)
+        running.execute(running.scenario.steps[1])
+        with self.assertRaises(StepFailed) as raised:
+            running.execute(running.scenario.steps[2])
+        self.assertIn("so they do not differ", str(raised.exception))
+
+    def color_steps(self):
+        return [
+            {"action": "shot", "name": "the doll before", "file": "doll-bare"},
+            {"action": "shot", "name": "the doll after", "file": "doll-hat"},
+            {"action": "shot", "name": "the companion before", "file": "seen-bare"},
+            {"action": "shot", "name": "the companion after", "file": "seen-hat"},
+            {"action": "compare_colors", "name": "both see one hat color", "first": ["doll-bare", "doll-hat"], "first_region": [0, 0, 10, 20],
+             "second": ["seen-bare", "seen-hat"], "second_region": [10, 0, 40, 20]},
+        ]
+
+    def test_two_views_of_one_change_agree_on_its_color_and_the_scene_behind_it_does_not_count(self):
+        running = self.build(self.color_steps())
+        frames = [frame_of(GREEN, GREEN), frame_of(BLUE, GREEN), frame_of(GREEN, GREEN), frame_of(GREEN, BLUE)]
+        for step, frame in zip(running.scenario.steps, frames + [frames[-1]]):
+            self.client.current = frame
+            running.execute(step)
+        self.assertIn("hue 248 over 200 pixel(s) in 02-doll-hat.png and hue 248 over 600 pixel(s) in 04-seen-hat.png, 0 degrees apart", running.steps[4]["result"])
+
+    def test_a_hat_one_client_draws_blue_and_the_other_red_fails(self):
+        running = self.build(self.color_steps())
+        frames = [frame_of(GREEN, GREEN), frame_of(BLUE, GREEN), frame_of(GREEN, GREEN), frame_of(GREEN, RED)]
+        for step, frame in zip(running.scenario.steps[:4], frames):
+            self.client.current = frame
+            running.execute(step)
+        with self.assertRaises(StepFailed) as raised:
+            running.execute(running.scenario.steps[4])
+        self.assertIn("degrees apart, more than the 30 the same color may be", str(raised.exception))
+
+    def test_a_color_is_not_read_from_a_change_too_small_to_see(self):
+        running = self.build(self.color_steps())
+        for step in running.scenario.steps[:4]:
+            running.execute(step)
+        with self.assertRaises(StepFailed) as raised:
+            running.execute(running.scenario.steps[4])
+        self.assertIn("only 0 strongly colored pixel(s)", str(raised.exception))
 
     def test_the_first_shot_of_a_run_failing_names_the_reason_rather_than_an_index(self):
         running = self.build([{"action": "shot", "name": "the login window", "file": "login-window"}])
@@ -1718,6 +1867,93 @@ class ScreenSpotTests(unittest.TestCase):
         self.assertEqual(client.screen_spot(work, (1296, 759), "top left"), (-1920, 0))
         self.assertEqual(client.screen_spot(work, (1296, 759), "bottom right"), (-1296, 273))
         self.assertEqual(client.screen_spot((0, 0, 800, 600), (1296, 759), "bottom right"), (0, 0), "a window larger than the screen starts at its corner")
+
+
+class SlotTests(TemporaryFolder):
+    def tearDown(self):
+        slots.release()
+
+    def test_runs_take_the_first_free_slot_and_a_named_slot_that_is_taken_is_refused(self):
+        self.assertEqual(slots.take(self.folder), 0)
+        self.assertEqual(slots.take(self.folder), 1)
+        with self.assertRaises(Refused):
+            slots.take(self.folder, wanted=1)
+        self.assertEqual(slots.take(self.folder, wanted=3), 3)
+        self.assertEqual(slots.take(self.folder), 2)
+        with self.assertRaises(Refused) as raised:
+            slots.take(self.folder)
+        self.assertIn("all 4 driver slots", str(raised.exception))
+        slots.release()
+        self.assertEqual(slots.take(self.folder), 0)
+
+    def test_a_slot_moves_only_what_was_left_at_its_default(self):
+        defaults = {"port": 12100, "game_port": 12433, "db_prefix": "ambrose_driver_run"}
+        self.assertEqual(slots.shifted(defaults, 0, 12100, 12433, "ambrose_driver_run"), defaults)
+        self.assertEqual(slots.shifted(defaults, 2, 12100, 12433, "ambrose_driver_run"),
+                         {"port": 12120, "game_port": 12453, "db_prefix": "ambrose_driver_run2"})
+        chosen = dict(defaults, port=15000)
+        self.assertEqual(slots.shifted(chosen, 1, 12100, 12433, "ambrose_driver_run")["port"], 15000)
+
+    def test_the_cli_takes_a_slot_before_the_run_and_the_run_folder_names_it(self):
+        with mock.patch.object(slots, "take", return_value=2) as take:
+            args = cli.build_parser().parse_args(["run", "--runs", self.folder])
+            self.assertEqual(cli.take_slot(args), 2)
+        take.assert_called_once_with(wanted=None)
+        self.assertEqual((args.port, args.game_port, args.db_prefix), (12120, 12453, "ambrose_driver_run2"))
+        loaded = scenario.Scenario("test.json", {"title": "x", "steps": []})
+        first = run.Run({"runs": self.folder, "slot": 2}, loaded, None, {})
+        os.makedirs(first.folder)
+        second = run.Run({"runs": self.folder, "slot": 2}, loaded, None, {})
+        self.assertTrue(first.run_id.endswith("-s2"))
+        self.assertNotEqual(first.folder, second.folder)
+
+    def test_the_input_turn_is_one_at_a_time_across_handles_and_reentrant_within_a_run(self):
+        with slots.input_turn(self.folder):
+            with slots.input_turn(self.folder):
+                other = slots.open_lock(os.path.join(self.folder, "input.lock"))
+                try:
+                    self.assertFalse(slots.lock(other))
+                finally:
+                    other.close()
+        other = slots.open_lock(os.path.join(self.folder, "input.lock"))
+        try:
+            self.assertTrue(slots.lock(other))
+            with self.assertRaises(StepFailed):
+                with slots.input_turn(self.folder, wait=0.1, poll=0.02):
+                    pass
+            slots.unlock(other)
+        finally:
+            other.close()
+
+    def test_the_run_counts_how_long_it_waited_for_the_input_turn(self):
+        before = slots.input_waits()
+        with slots.input_turn(self.folder):
+            with slots.input_turn(self.folder):
+                pass
+        after = slots.input_waits()
+        self.assertEqual(after["turns"], before["turns"] + 1)
+        self.assertGreaterEqual(after["waited_seconds"], before["waited_seconds"])
+        self.assertGreaterEqual(after["longest_wait_seconds"], 0.0)
+
+    def test_a_press_waits_for_the_input_turn(self):
+        window = client.Client.__new__(client.Client)
+        turns = []
+
+        @contextlib.contextmanager
+        def turn():
+            turns.append("taken")
+            yield
+            turns.append("given back")
+
+        @contextlib.contextmanager
+        def activated(self):
+            turns.append("activated")
+            yield True
+
+        with mock.patch.object(slots, "input_turn", turn), mock.patch.object(client.Client, "_activated", activated):
+            with window.activated() as got:
+                self.assertTrue(got)
+        self.assertEqual(turns, ["taken", "activated", "given back"])
 
 
 class RunOrderTests(TemporaryFolder):

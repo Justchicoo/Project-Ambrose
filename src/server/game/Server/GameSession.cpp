@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, chat, outbound instance updates, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, chat, outbound instance updates with the moves and walking states of the objects that walk a path, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
 #include "AccountMgr.h"
 #include "CharacterNameMgr.h"
+#include "CharacterQuestRepository.h"
 #include "CharacterRepository.h"
+#include "QuestMgr.h"
 #include "CoreObjectSerializer.h"
 #include "Frame.h"
 #include "GameMessageTable.h"
@@ -260,6 +262,7 @@ void GameSession::ProcessCallbacks()
     _countedCallbacks.ProcessReadyCallbacks();
     _queryCallbacks.ProcessReadyCallbacks();
     _transactionCallbacks.ProcessReadyCallbacks();
+    _holderCallbacks.ProcessReadyCallbacks();
 }
 
 SQLOperation::CompletionHandler GameSession::MakeCompletionHandler()
@@ -300,6 +303,7 @@ void GameSession::OnSessionClosed()
     _countedCallbacks.Clear();
     _queryCallbacks.Clear();
     _transactionCallbacks.Clear();
+    _holderCallbacks.Clear();
     SessionBase::OnSessionClosed();
 }
 
@@ -580,15 +584,63 @@ void GameSession::LoadInventory(LoginKeyClaim const& claim, CharacterSummary cha
             RefuseEntry(claim, fmt::format("wizard {}'s backpack cannot be read from the characters database", character.Guid));
             return;
         }
-        std::vector<CharacterItem> items = CharacterRepository::ReadInventory(*result);
+        LoadEquipment(claim, character, stored, spells, CharacterRepository::ReadInventory(*result));
+    }));
+}
+
+void GameSession::LoadEquipment(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells,
+    std::vector<CharacterItem> items)
+{
+    CharacterRepository::Statement statement = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareLoadEquipment(character.Guid) : nullptr;
+    if (!statement)
+    {
+        RefuseEntry(claim, "the characters database is not open");
+        return;
+    }
+    _queryCallbacks.AddCallback(CharacterDatabase.AsyncQuery(std::move(statement), MakeCompletionHandler()).WithPreparedCallback(
+        [this, claim, character = std::move(character), stored = std::move(stored), spells = std::move(spells), items = std::move(items)](PreparedQueryResult result)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        if (!result)
+        {
+            RefuseEntry(claim, fmt::format("wizard {}'s equipment cannot be read from the characters database", character.Guid));
+            return;
+        }
+        LoadQuests(claim, character, stored, spells, items, CharacterRepository::ReadEquipment(*result));
+    }));
+}
+
+void GameSession::LoadQuests(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells,
+    std::vector<CharacterItem> items, std::vector<CharacterEquippedItem> equipped)
+{
+    CharacterQuestRepository::LoadHolder holder = CharacterDatabase.IsOpen() ? CharacterQuestRepository::PrepareLoad(character.Guid) : nullptr;
+    if (!holder)
+    {
+        RefuseEntry(claim, "the characters database is not open");
+        return;
+    }
+    _holderCallbacks.AddCallback(CharacterDatabase.DelayQueryHolder(std::move(holder), MakeCompletionHandler()).AfterComplete(
+        [this, claim, character = std::move(character), stored = std::move(stored), spells = std::move(spells), items = std::move(items), equipped = std::move(equipped)](
+            SQLQueryHolderBase const& done)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        std::optional<CharacterQuests> quests = CharacterQuestRepository::Read(done);
+        if (!quests)
+        {
+            RefuseEntry(claim, fmt::format("wizard {}'s quest log cannot be read from the characters database", character.Guid));
+            return;
+        }
         std::shared_ptr<GameSession> const self = SharedSelf();
-        if (!QueueInbound([self, claim, character, stored, spells, items = std::move(items)] { self->EnterWorld(claim, character, stored, spells, items); }))
+        if (!QueueInbound([self, claim, character, stored, spells, items, equipped, quests = std::move(*quests)]
+            { self->EnterWorld(claim, character, stored, spells, items, equipped, quests); }))
             RefuseEntry(claim, "its queue of work is full");
     }));
 }
 
 void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells,
-    std::vector<CharacterItem> const& items)
+    std::vector<CharacterItem> const& items, std::vector<CharacterEquippedItem> const& equipped, CharacterQuests const& quests)
 {
     if (!_world)
     {
@@ -604,6 +656,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     std::optional<Player> resumedPlayer;
     std::optional<PlayerSpellbook> resumedSpellbook;
     std::optional<PlayerBackpack> resumedBackpack;
+    std::optional<PlayerEquipment> resumedEquipment;
+    std::optional<QuestLog> resumedQuestLog;
     PlayerMovement movement;
     MovementRelay relay;
     if (previous && previous->IsLinkDead() && !previous->CanResume(std::chrono::steady_clock::now()))
@@ -634,6 +688,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
             }
             resumedSpellbook = previous->_spellbook;
             resumedBackpack = previous->_backpack;
+            resumedEquipment = previous->_equipment;
+            resumedQuestLog = previous->_questLog;
             movement = previous->_movement;
             relay = previous->_relay;
         }
@@ -704,7 +760,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
     uint32 const permissions = ChatMgr::PermissionsForMode(AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions")), _chatMode);
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
+    PropertyObjectPtr player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
     PlayerBackpack backpack = resumedBackpack ? std::move(*resumedBackpack) : PlayerBackpack::FromStored(items);
     uint32 const itemsAllowed = sSettings.Get<uint32>("Inventory.Slots");
     if (player)
@@ -728,6 +784,21 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
             LOG_WARN("server.gamesession", "Session {} left {} item(s) wizard {} holds out of its backpack, since the items this server holds do not name their templates: {}",
                 GetSessionId(), unheld.size(), character.Guid, fmt::join(unheld, ", "));
     }
+    PlayerEquipment equipment = resumedEquipment ? std::move(*resumedEquipment) : PlayerEquipment::FromStored(equipped);
+    if (player && types && itemTemplates && equipment.Size() > 0)
+    {
+        std::vector<uint64> unheld;
+        std::string equipmentProblem;
+        if (!ItemObjectBuilder::FillEquipment(*player, *types, *itemTemplates, equipment.GetItems(), unheld, equipmentProblem))
+            LOG_WARN("server.gamesession", "Session {} shows wizard {} wearing nothing, though it wears {} item(s), since {}", GetSessionId(), character.Guid, equipment.Size(),
+                equipmentProblem);
+        if (!unheld.empty())
+            LOG_WARN("server.gamesession", "Session {} left {} item(s) wizard {} wears out of its equipment, since the items this server holds do not name their templates: {}",
+                GetSessionId(), unheld.size(), character.Guid, fmt::join(unheld, ", "));
+    }
+    else if (equipment.Size() > 0)
+        LOG_WARN("server.gamesession", "Session {} shows wizard {} wearing nothing, though it wears {} item(s), since no item templates are loaded", GetSessionId(), character.Guid,
+            equipment.Size());
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
     if (!player || !field || !data.Ok())
@@ -807,7 +878,22 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _statsRevision = stored ? stored->Revision : 0;
     _spellbook = std::move(spellbook);
     _backpack = std::move(backpack);
+    _equipment = std::move(equipment);
+    _equipmentChanges.clear();
+    _playerObject = std::move(player);
     _itemsAllowed = itemsAllowed;
+    if (resumedQuestLog)
+        _questLog = std::move(resumedQuestLog);
+    else
+    {
+        std::vector<std::string> pruned;
+        std::shared_ptr<QuestStore const> const questTemplates = sQuestMgr.GetQuests();
+        _questLog = QuestLog::FromStored(quests, questTemplates.get(), pruned);
+        _questRevision = quests.Revision;
+        for (std::string const& warning : pruned)
+            LOG_WARN("server.gamesession", "Session {} pruned wizard {}'s quest log: {}", GetSessionId(), character.Guid, warning);
+        SaveQuestLogIfDirty();
+    }
     if (resumed)
     {
         _movement = std::move(movement);
@@ -1370,6 +1456,13 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
             GameMessages::NewObject message;
             message.Data.assign(object->Data.begin(), object->Data.end());
             SendDmlMessage(message);
+            if (map.GetWalkers().contains(id))
+            {
+                MapObjectChanges walked;
+                walked.DynamicZoneId = map.GetDynamicZoneId();
+                walked.Moved.push_back({ id, object->MobileId, object->Spawn.Position, object->Spawn.Orientation.Z, std::nullopt });
+                SendObjectChanges(walked);
+            }
         }
         else if (auto const wizard = wizards.find(id); wizard != wizards.end())
         {
@@ -1430,6 +1523,31 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
     }
     for (uint64 const removed : changes.Removed)
         ForgetSight(removed);
+    for (MapObjectMove const& moved : changes.Moved)
+    {
+        if (!_sight.IsVisible(moved.GlobalId))
+            continue;
+        std::optional<int16> const x = MovementPacking::TryPackLocation(moved.Position.X);
+        std::optional<int16> const y = MovementPacking::TryPackLocation(moved.Position.Y);
+        std::optional<int16> const z = MovementPacking::TryPackLocation(moved.Position.Z);
+        if (x && y && z)
+        {
+            GameMessages::ServerMove move;
+            move.LocationX = static_cast<uint16>(*x);
+            move.LocationY = static_cast<uint16>(*y);
+            move.LocationZ = static_cast<uint16>(*z);
+            move.Direction = MovementPacking::PackYaw(moved.Yaw);
+            move.MobileId = moved.MobileId;
+            SendDmlMessage(move);
+        }
+        if (moved.State)
+        {
+            GameMessages::MoveState state;
+            state.GlobalId = moved.GlobalId;
+            state.NewState = *moved.State;
+            SendDmlMessage(state);
+        }
+    }
 }
 
 void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
@@ -1645,6 +1763,28 @@ void GameSession::SaveStatsIfDirty()
         SaveStats();
 }
 
+void GameSession::SaveQuestLog()
+{
+    if (!_questLog || !CharacterDatabase.IsOpen())
+        return;
+    CharacterQuests const stored = _questLog->ToStored(++_questRevision);
+    CharacterRepository::CreateTransaction transaction = CharacterQuestRepository::PrepareSave(_worldGuid, stored);
+    if (!transaction)
+    {
+        LOG_ERROR("server.gamesession", "Session {} did not save wizard {}'s quest log of {} quest(s), which holds a row the characters database cannot take", GetSessionId(), _worldGuid,
+            stored.Quests.size());
+        return;
+    }
+    CharacterDatabase.CommitTransaction(std::move(transaction));
+    _questLog->MarkSaved();
+}
+
+void GameSession::SaveQuestLogIfDirty()
+{
+    if (_questLog && _questLog->IsDirty())
+        SaveQuestLog();
+}
+
 SpellbookChange GameSession::LearnSpell(uint32 spellId)
 {
     if (!_spellbook)
@@ -1712,6 +1852,8 @@ void GameSession::LeaveWorld()
     _wizBangId = 0;
     _pendingWizBang.reset();
     _sight.Clear();
+    _npcRange.Clear();
+    _npcTemplates.clear();
     if (_player)
     {
         SaveStats();
@@ -1719,6 +1861,11 @@ void GameSession::LeaveWorld()
     }
     _spellbook.reset();
     _backpack.reset();
+    _equipment.reset();
+    _equipmentChanges.clear();
+    _playerObject.reset();
+    SaveQuestLogIfDirty();
+    _questLog.reset();
     _effects.Clear();
     _effectChanges.clear();
     if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())
@@ -1747,6 +1894,7 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
     replacement._relay = _relay;
     replacement._characterRevision = _characterRevision;
     replacement._statsRevision = _statsRevision;
+    replacement._questRevision = _questRevision;
     replacement._arrived = _arrived;
     replacement._effects = std::move(_effects);
     _effects.Clear();
@@ -1763,6 +1911,9 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
     _player.reset();
     _spellbook.reset();
     _backpack.reset();
+    _equipment.reset();
+    _equipmentChanges.clear();
+    _playerObject.reset();
     _worldGuid = 0;
     _zonePath.clear();
     _movement.Reset({}, 0);

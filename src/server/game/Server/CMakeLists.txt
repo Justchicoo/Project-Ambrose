@@ -13,4 +13,5 @@ target_link_libraries(gameserver-sessions
         scripting
         spells
         inventory
-        zones)
+        zones
+        npc)

@@ -1,0 +1,352 @@
+{
+  "title": "12.21: a realm at its player limit queues the next wizard, which enters by itself when the first logs out",
+  "include": "parts/common.json",
+  "notes": [
+    "Two clients on accounts of their own, as in two-wizards.json. The main wizard enters the Commons, then the realm's player_limit is set to 1 in the login database and read back on a one-second refresh.",
+    "The companion presses Play on the full realm and is queued at position 1; it is photographed twice while queued, to show what the client draws for MSG_CHARACTERSELECTED PrepPhase=1.",
+    "The main wizard quits from the in-world menu, its realm_online_character row goes, and the companion is sent to the realm with a fresh key without pressing anything, and stands in the Commons.",
+    "Opening the in-world menu asks for the privacy and PvP options, which no milestone answers yet."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "server_settings": [
+    "Realm.RefreshInterval=1",
+    "Logger.server=2,Console Server Errors Stream"
+  ],
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "wait_db",
+      "name": "the game server's realm is listed",
+      "database": "login",
+      "query": "SELECT COUNT(*) FROM realmlist",
+      "expect": "1",
+      "timeout": 60
+    },
+    {
+      "action": "db_exec",
+      "name": "limit the realm to one player",
+      "database": "login",
+      "statement": "UPDATE realmlist SET player_limit = 1"
+    },
+    {
+      "action": "wait_db",
+      "name": "the realm holds its one player",
+      "database": "login",
+      "query": "SELECT COUNT(*) FROM realm_online_character",
+      "expect": "1",
+      "timeout": 60
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard in the Commons while the realm is full",
+      "file": "main-in-full-realm",
+      "settle": 3
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion) on a full realm",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "client": "companion",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "queued account \\d+ with wizard (\\d+) for realm .* at position \\d+",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the companion is queued at position 1",
+      "pattern": "queued account \\d+ with wizard {companion_wizard_guid} for realm .* at position (\\d+)",
+      "timeout": 10,
+      "from": "start",
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "what the companion shows while queued",
+      "file": "companion-queued",
+      "client": "companion",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "what the companion shows still queued",
+      "file": "companion-still-queued",
+      "client": "companion",
+      "settle": 10
+    },
+    {
+      "action": "forbid_log",
+      "name": "the queued companion is not sent anywhere yet",
+      "side": "server",
+      "pattern": "sent account \\d+ with wizard {companion_wizard_guid} to realm"
+    },
+    {
+      "action": "key",
+      "name": "the main wizard opens its in-world menu",
+      "vk": "0x1B"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the in-world menu",
+      "file": "main-in-world-menu",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "the main wizard chooses Quit from the menu",
+      "target": "game_menu_quit"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the menu logout saves the main wizard",
+      "pattern": "saved wizard {wizard_guid} at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the queued companion is sent to the realm by itself",
+      "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+      "timeout": 120,
+      "expect": "{companion_wizard_guid}",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the companion's fresh key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the queued companion stands in the Commons",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the companion in the Commons after the queue",
+      "file": "companion-in-world",
+      "client": "companion",
+      "settle": 3
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CANSEETIEREDSPELLGROUPS",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTPRIVACYOPTIONS",
+    "MSG_REQUESTSHOWPVPOPTION",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}

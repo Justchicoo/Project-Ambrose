@@ -1,0 +1,511 @@
+{
+  "title": "Two wizards on Unicorn Way see the same ghost patrol walk its path, and the Commons' wisps and reagents stand on their nodes",
+  "include": "parts/common.json",
+  "notes": [
+    "10.14: both accounts are game masters and both wizards enter Unicorn Way, where spawner entries have no position of their own and are placed on a node",
+    "of their path. Both go beside Path Ghost02 (nodes from (-10803, 4637) north to y 5838) and each client is shot five times about two seconds apart, so the",
+    "same walker can be compared at the same moment on both. The main wizard then travels to the Commons and goes beside Path 86, the mana wisps' path,",
+    "to show its wisps and reagents on their nodes rather than at the origin. The pending SQL adds zone_path, zone_path_node and the MobMonsterMagicBehavior row."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "server_settings": [
+    "Updates.AllowPending=1"
+  ],
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000",
+    "Updates.AllowPending=1"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Streets/WC_Unicorn",
+    "zone_display": "Unicorn Way",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Streets/WC_Unicorn",
+      "zone_display": "Unicorn Way",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "server_command",
+      "name": "make the companion's account a game master",
+      "command": "account set gmlevel {companion_user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard on Unicorn Way",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Streets/WC_Unicorn instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Streets/WC_Unicorn"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard on Unicorn Way (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Streets/WC_Unicorn instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Streets/WC_Unicorn"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz to the ghost patrol",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz to the ghost patrol",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz to the ghost patrol",
+      "text": ".go xyz -10515 2162 30 -3.13"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz to the ghost patrol",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master goes to the ghost patrol",
+      "pattern": "ran go xyz -10515 2162 30 -3.13, which (\\S+)",
+      "timeout": 20,
+      "expect": "worked",
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz to the ghost patrol (companion)",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz to the ghost patrol (companion)",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz to the ghost patrol (companion)",
+      "text": ".go xyz -10415 2162 30 -3.13",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz to the ghost patrol (companion)",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the companion goes to the ghost patrol",
+      "pattern": "ran go xyz -10415 2162 30 -3.13, which (\\S+)",
+      "timeout": 20,
+      "expect": "worked",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, main, 1",
+      "file": "patrol-main-1",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, companion, 1",
+      "file": "patrol-companion-1",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, main, 2",
+      "file": "patrol-main-2",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, companion, 2",
+      "file": "patrol-companion-2",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, main, 3",
+      "file": "patrol-main-3",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, companion, 3",
+      "file": "patrol-companion-3",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, main, 4",
+      "file": "patrol-main-4",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, companion, 4",
+      "file": "patrol-companion-4",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, main, 5",
+      "file": "patrol-main-5",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the ghost patrol, companion, 5",
+      "file": "patrol-companion-5",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele zone WizardCity/WC_Hub",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele zone WizardCity/WC_Hub",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele zone WizardCity/WC_Hub",
+      "text": ".tele zone WizardCity/WC_Hub"
+    },
+    {
+      "action": "char",
+      "name": "send .tele zone WizardCity/WC_Hub",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client acknowledges and is sent to the Commons",
+      "pattern": "sent wizard {wizard_guid} from WizardCity/WC_Streets/WC_Unicorn to WizardCity/WC_Hub at (\\S+) with a single-use transfer key",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client attaches again with the transfer key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the Commons",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz beside the mana wisps' Path 86",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz beside the mana wisps' Path 86",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz beside the mana wisps' Path 86",
+      "text": ".go xyz 7700 2300 10 0.6"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz beside the mana wisps' Path 86",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master goes beside Path 86",
+      "pattern": "ran go xyz 7700 2300 10 0.6, which (\\S+)",
+      "timeout": 20,
+      "expect": "worked",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the Commons' wisps and reagents on their nodes, 1",
+      "file": "commons-nodes-1",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "the Commons' wisps and reagents on their nodes, 2",
+      "file": "commons-nodes-2",
+      "settle": 3
+    },
+    {
+      "action": "forbid_log",
+      "name": "no walker stops on a broken path",
+      "side": "game",
+      "pattern": "stops walking path|Zone paths: "
+    },
+    {
+      "action": "forbid_log",
+      "name": "the main client loaded every walker",
+      "side": "client",
+      "pattern": "Failed to find core template|LoadObject Failed"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the companion loaded every walker",
+      "side": "client",
+      "pattern": "Failed to find core template|LoadObject Failed",
+      "client": "companion"
+    }
+  ]
+}
