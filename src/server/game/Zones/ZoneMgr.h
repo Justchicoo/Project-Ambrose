@@ -66,6 +66,7 @@ struct ZoneObjectSpawn
     bool Undetectable = false;
     ZoneObjectLoading Loading = ZoneObjectLoading::StaticClientServer;
     bool HasSpawnRequirements = false;
+    std::vector<uint8> SpawnRequirements;
     std::string SigilTemplate;
 
     bool IsSigil() const noexcept { return ClassName.ends_with("SigilInfo"); }
