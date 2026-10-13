@@ -255,7 +255,7 @@ TEST(PortAllocationTest, RangeAddsNothingWhenOnePortIsHeld)
     uint16 const held = holder.local_endpoint(code).port();
     ASSERT_FALSE(code) << code.message();
 
-    uint16 const start = static_cast<uint16>(held > 5 ? held - 5 : held);
+    uint16 const start = static_cast<uint16>(held > 65526 ? 65526 : held);
     PortAllocationDraft draft;
     draft.BindAddress = "127.0.0.1";
     draft.Port = start;
