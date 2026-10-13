@@ -235,11 +235,11 @@ namespace
             });
             _supervisor.SetLaunchSettingsProvider([this](std::string_view app)
             {
-                LaunchSettings settings;
+                LaunchSettings launch;
                 std::string error;
-                if (!_panel.LaunchStore().Load(app, settings, error))
+                if (!_panel.LaunchStore().Load(app, launch, error))
                     return LaunchSettings();
-                return settings;
+                return launch;
             });
             _panel.SetAppCall([this](std::string_view app, std::string_view method, std::string_view path, std::string_view body)
             {
