@@ -52,6 +52,7 @@ struct RequirementRow
     std::optional<std::uint8_t> TargetType;
     std::string ZoneName;
     std::string Gender;
+    std::string ClassProjectName;
 };
 
 struct RequirementRows
@@ -103,6 +104,7 @@ public:
     virtual std::optional<bool> IsInZone(std::string_view zoneName) const;
     virtual std::optional<bool> IsGender(std::string_view gender) const;
     virtual std::optional<bool> HasBadge(std::string_view badgeName) const;
+    virtual std::optional<bool> IsClassProjectActive(std::string_view projectName) const;
 };
 
 class RequirementMgr

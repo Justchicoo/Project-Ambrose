@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a requirement object by property name: its type is its class name without the class prefix, and its m_applyNOT, quest, goal, registry entry, badge, required status, value, comparison, school, target, zone and gender are taken wherever its class has them; a RequirementList inside a list becomes a nested list, read no deeper than a fixed depth, its m_operator 1 being ROP_OR and any other ROP_AND as the type dump gives Requirement::Operator, and a requirement the decode could not name becomes a row of no known type, which the evaluator counts as unmet.
+ * Reads a requirement object by property name: its type is its class name without the class prefix, and its m_applyNOT, quest, goal, registry entry, badge, required status, value, comparison, school, target, zone, gender and class project are taken wherever its class has them; a RequirementList inside a list becomes a nested list, read no deeper than a fixed depth, its m_operator 1 being ROP_OR and any other ROP_AND as the type dump gives Requirement::Operator, and a requirement the decode could not name becomes a row of no known type, which the evaluator counts as unmet.
  */
 
 #include "RequirementObjects.h"
@@ -127,6 +127,7 @@ RequirementRow RequirementObjects::RowOf(PropertyObject const* requirement)
         row.TargetType = static_cast<uint8>(*target);
     row.ZoneName = TextOf(object, "m_zoneName");
     row.Gender = TextOf(object, "m_playerGender");
+    row.ClassProjectName = TextOf(object, "m_classProjectName");
     return row;
 }
 

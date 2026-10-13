@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests reading requirement objects through a type dump the test writes: a RequirementList holding a quest requirement and a nested NOT list with a goal requirement reads as a tree with its operators, names and status and survives the zone data encoding the extractor stores it in, a goal the wizard does not hold counts as not held so a NOT over it passes, and something that is not a RequirementList gives no tree.
+ * Tests reading requirement objects through a type dump the test writes: a RequirementList holding a quest requirement and a nested NOT list with a goal requirement reads as a tree with its operators, names and status and survives the zone data encoding the extractor stores it in, a goal the wizard does not hold counts as not held so a NOT over it passes, a class project requirement reads its project's name and passes only while that project runs, and something that is not a RequirementList gives no tree.
  */
 
 #include "ObjectSerializer.h"
@@ -61,6 +61,7 @@ namespace
         AddClass(classes, "class ReqHasQuest", { "class Requirement", "class PropertyClass" }, { applyNot, listOperator, { "std::string", "m_questName" } });
         AddClass(classes, "class ReqHasGoal", { "class Requirement", "class PropertyClass" },
             { applyNot, listOperator, { "std::string", "m_questName" }, { "std::string", "m_goalName" }, { "enum GoalStatusRequirement", "m_requiredStatus" } });
+        AddClass(classes, "class ReqClassProjectActive", { "class Requirement", "class PropertyClass" }, { applyNot, listOperator, { "std::string", "m_classProjectName" } });
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
     }
 
@@ -69,12 +70,14 @@ namespace
     public:
         std::set<std::string, std::less<>> Quests;
         std::set<std::string, std::less<>> CompletedGoals;
+        std::set<std::string, std::less<>> ClassProjects;
 
         std::optional<bool> HasQuest(std::string_view questName) const override { return Quests.contains(questName); }
         std::optional<RequirementGoalStatus> GetGoalStatus(std::string_view, std::string_view goalName) const override
         {
             return CompletedGoals.contains(goalName) ? RequirementGoalStatus::Complete : RequirementGoalStatus::Absent;
         }
+        std::optional<bool> IsClassProjectActive(std::string_view projectName) const override { return ClassProjects.contains(projectName); }
     };
 
     class RequirementObjectsTest : public testing::Test
@@ -151,6 +154,26 @@ TEST_F(RequirementObjectsTest, AGoalTheWizardDoesNotHoldCountsAsNotHeldSoANotOve
     EXPECT_TRUE(sRequirementMgr.EvaluateTree(*tree, wizard)) << "the goal is not held yet, so NOT completed passes";
     wizard.CompletedGoals.insert("OpenGate");
     EXPECT_FALSE(sRequirementMgr.EvaluateTree(*tree, wizard)) << "once the goal is complete the object is no longer for this wizard";
+}
+
+TEST_F(RequirementObjectsTest, AClassProjectRequirementReadsItsProjectAndPassesOnlyWhileItRuns)
+{
+    PropertyObjectPtr project = Create("class ReqClassProjectActive");
+    ASSERT_EQ(project->Set("m_classProjectName", std::string("DuelArena")), PropertySetResult::Ok);
+    PropertyObjectPtr const list = Create("class RequirementList");
+    PropertyValue::List held;
+    held.emplace_back(std::move(project));
+    ASSERT_EQ(list->Set("m_requirements", std::move(held)), PropertySetResult::Ok);
+
+    std::optional<RequirementTree> const tree = RequirementObjects::TreeOf(list.get());
+    ASSERT_TRUE(tree.has_value());
+    ASSERT_EQ(tree->Requirements.size(), 1u);
+    EXPECT_EQ(tree->Requirements[0].Type, "ReqClassProjectActive");
+    EXPECT_EQ(tree->Requirements[0].ClassProjectName, "DuelArena");
+    QuestFacts realm;
+    EXPECT_FALSE(sRequirementMgr.EvaluateTree(*tree, realm)) << "no project runs, so the object stays hidden";
+    realm.ClassProjects.insert("DuelArena");
+    EXPECT_TRUE(sRequirementMgr.EvaluateTree(*tree, realm));
 }
 
 TEST_F(RequirementObjectsTest, SomethingThatIsNotARequirementListGivesNoTree)
