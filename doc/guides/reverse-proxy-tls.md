@@ -2,6 +2,8 @@
 
 # C-44: Running Ambrose behind a reverse proxy with TLS
 
+The panel's **Reverse proxy** page writes the proxy config for you: pick Caddy, nginx, Apache httpd, HAProxy, Traefik or IIS with Application Request Routing and the public hostname, review the generated config, install it on the proxy, then run the page's connection check and trust the proxy. The choices below are what the page leaves to the operator: certificates, the proxy's own TLS settings and where the proxy runs. Start from the page; use this guide for the rest.
+
 The current Ambrose admin API does not serve TLS itself. The safe boundary today is a local reverse proxy that owns the public HTTPS socket and forwards to an admin listener bound to loopback. Do not bind the Ambrose admin API to a public address just because a proxy exists.
 
 ## Target topology

@@ -24,38 +24,39 @@ namespace
         std::string_view Default;
         bool Secret;
         bool Locked;
+        bool ApiSettable;
         std::string_view Layer;
         int64 Minimum;
         int64 Maximum;
     };
 
     constexpr std::array Definitions{
-        Definition{ "general", "Panel.Name", "Ambrose", false, false, "default", 0, 0 },
-        Definition{ "general", "Panel.PublicUrl", "", false, false, "default", 0, 0 },
-        Definition{ "general", "Panel.Logo", "", false, false, "default", 0, 0 },
-        Definition{ "general", "Panel.Locale", "en-US", false, false, "default", 0, 0 },
-        Definition{ "general", "Panel.SessionIdleMinutes", "720", false, false, "default", 5, 10080 },
-        Definition{ "general", "Panel.SessionLifetimeHours", "168", false, false, "default", 1, 8760 },
-        Definition{ "general", "Panel.RetentionDays", "30", false, false, "default", 1, 3650 },
-        Definition{ "mail", "Mail.SmtpHost", "", false, false, "default", 0, 0 },
-        Definition{ "mail", "Mail.SmtpPort", "587", false, false, "default", 1, 65535 },
-        Definition{ "mail", "Mail.TlsMode", "starttls", false, false, "default", 0, 0 },
-        Definition{ "mail", "Mail.Username", "", false, false, "default", 0, 0 },
-        Definition{ "mail", "Mail.Password", "", true, false, "default", 0, 0 },
-        Definition{ "mail", "Mail.FromAddress", "", false, false, "default", 0, 0 },
-        Definition{ "mail", "Mail.FromName", "Ambrose", false, false, "default", 0, 0 },
-        Definition{ "security", "Security.SignInBurst", "10", false, false, "default", 1, 1000 },
-        Definition{ "security", "Security.SignInPerMinute", "5", false, false, "default", 1, 1000 },
-        Definition{ "security", "Security.RelayTimeoutSeconds", "10", false, false, "default", 1, 300 },
-        Definition{ "security", "Security.PortPoolStart", "12000", false, false, "default", 1, 65535 },
-        Definition{ "security", "Security.PortPoolEnd", "12100", false, false, "default", 1, 65535 },
-        Definition{ "security", "Security.CaptchaProvider", "off", false, false, "default", 0, 0 },
-        Definition{ "security", "Security.CaptchaSiteKey", "", false, false, "default", 0, 0 },
-        Definition{ "security", "Security.CaptchaSecret", "", true, false, "default", 0, 0 },
-        Definition{ "security", "Panel.TrustedProxies", "", false, true, "environment", 0, 0 },
-        Definition{ "security", "Panel.BindIP", "127.0.0.1", false, true, "config", 0, 0 },
-        Definition{ "security", "Panel.AllowPlainHttpRemote", "0", false, true, "config", 0, 1 },
-        Definition{ "security", "Panel.TwoFactorRequired", "none", false, true, "config", 0, 0 },
+        Definition{ "general", "Panel.Name", "Ambrose", false, false, true, "default", 0, 0 },
+        Definition{ "general", "Panel.PublicUrl", "", false, false, true, "default", 0, 0 },
+        Definition{ "general", "Panel.Logo", "", false, false, true, "default", 0, 0 },
+        Definition{ "general", "Panel.Locale", "en-US", false, false, true, "default", 0, 0 },
+        Definition{ "general", "Panel.SessionIdleMinutes", "720", false, false, true, "default", 5, 10080 },
+        Definition{ "general", "Panel.SessionLifetimeHours", "168", false, false, true, "default", 1, 8760 },
+        Definition{ "general", "Panel.RetentionDays", "30", false, false, true, "default", 1, 3650 },
+        Definition{ "mail", "Mail.SmtpHost", "", false, false, true, "default", 0, 0 },
+        Definition{ "mail", "Mail.SmtpPort", "587", false, false, true, "default", 1, 65535 },
+        Definition{ "mail", "Mail.TlsMode", "starttls", false, false, true, "default", 0, 0 },
+        Definition{ "mail", "Mail.Username", "", false, false, true, "default", 0, 0 },
+        Definition{ "mail", "Mail.Password", "", true, false, true, "default", 0, 0 },
+        Definition{ "mail", "Mail.FromAddress", "", false, false, true, "default", 0, 0 },
+        Definition{ "mail", "Mail.FromName", "Ambrose", false, false, true, "default", 0, 0 },
+        Definition{ "security", "Security.SignInBurst", "10", false, false, true, "default", 1, 1000 },
+        Definition{ "security", "Security.SignInPerMinute", "5", false, false, true, "default", 1, 1000 },
+        Definition{ "security", "Security.RelayTimeoutSeconds", "10", false, false, true, "default", 1, 300 },
+        Definition{ "security", "Security.PortPoolStart", "12000", false, false, true, "default", 1, 65535 },
+        Definition{ "security", "Security.PortPoolEnd", "12100", false, false, true, "default", 1, 65535 },
+        Definition{ "security", "Security.CaptchaProvider", "off", false, false, true, "default", 0, 0 },
+        Definition{ "security", "Security.CaptchaSiteKey", "", false, false, true, "default", 0, 0 },
+        Definition{ "security", "Security.CaptchaSecret", "", true, false, true, "default", 0, 0 },
+        Definition{ "security", "Panel.TrustedProxies", "", false, true, true, "environment", 0, 0 },
+        Definition{ "security", "Panel.BindIP", "127.0.0.1", false, true, false, "config", 0, 0 },
+        Definition{ "security", "Panel.AllowPlainHttpRemote", "0", false, true, false, "config", 0, 1 },
+        Definition{ "security", "Panel.TwoFactorRequired", "none", false, true, false, "config", 0, 0 },
     };
 
     Definition const* Find(std::string_view key)
@@ -136,13 +137,14 @@ nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error)
             value = pushed->second.first;
             layer = pushed->second.second;
         }
+        bool const locked = definition.ApiSettable ? !LockedBy(definition.Key).empty() : definition.Locked;
         nlohmann::json row{
             { "key", definition.Key },
             { "group", definition.Group },
             { "value", definition.Secret && !value.empty() ? "***" : value },
             { "default", definition.Secret && !definition.Default.empty() ? "***" : definition.Default },
             { "secret", definition.Secret },
-            { "locked", definition.Locked },
+            { "locked", locked },
             { "layer", layer },
             { "minimum", definition.Minimum },
             { "maximum", definition.Maximum },
@@ -173,6 +175,68 @@ std::string PanelSettings::ValueOf(std::string_view key) const
     return rows->Text(0);
 }
 
+std::string PanelSettings::LockedBy(std::string_view key) const
+{
+    Definition const* const definition = Find(key);
+    if (!definition || !definition->Locked)
+        return {};
+    if (definition->Key == "Panel.TrustedProxies" && !EnvironmentValue("AMBROSE_PANEL_TRUSTED_PROXIES").empty())
+        return "environment";
+    std::lock_guard const lock(_ownedMutex);
+    if (auto const owned = _owned.find(std::string(key)); owned != _owned.end())
+        return owned->second.second;
+    return {};
+}
+
+PanelEffectiveSetting PanelSettings::Effective(std::string_view key) const
+{
+    PanelEffectiveSetting result;
+    Definition const* const definition = Find(key);
+    if (!definition)
+        return result;
+    result.Value = std::string(definition->Default);
+    result.Layer = "default";
+    std::string error;
+    if (std::optional<PanelStore::Statement> rows = _store.Prepare("SELECT value FROM panel_setting WHERE key = ?", error); rows)
+    {
+        rows->Bind(1, key);
+        if (rows->Step(error))
+        {
+            result.Value = rows->Text(0);
+            result.Layer = "settings";
+        }
+    }
+    if (definition->Key == "Panel.TrustedProxies" && !EnvironmentValue("AMBROSE_PANEL_TRUSTED_PROXIES").empty())
+    {
+        result.Value = EnvironmentValue("AMBROSE_PANEL_TRUSTED_PROXIES");
+        result.Layer = "environment";
+    }
+    std::lock_guard const lock(_ownedMutex);
+    if (definition->Locked)
+        if (auto const owned = _owned.find(std::string(key)); owned != _owned.end())
+        {
+            result.Value = owned->second.first;
+            result.Layer = owned->second.second;
+        }
+    result.Locked = !LockedBy(key).empty();
+    return result;
+}
+
+nlohmann::json PanelSettings::DescribeChange(nlohmann::json const& values) const
+{
+    nlohmann::json changes = nlohmann::json::object();
+    for (auto const& [key, raw] : values.items())
+    {
+        Definition const* const definition = Find(key);
+        if (!definition || !raw.is_string())
+            continue;
+        std::string const oldValue = definition->Secret ? "***" : ValueOf(key);
+        std::string const newValue = definition->Secret ? "***" : raw.get<std::string>();
+        changes[key] = { { "old", oldValue }, { "new", newValue } };
+    }
+    return changes;
+}
+
 bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::string& error, bool transactionAlreadyOpen)
 {
     error.clear();
@@ -185,9 +249,19 @@ bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::stri
     for (auto const& [key, raw] : values.items())
     {
         Definition const* definition = Find(key);
-        if (!definition || definition->Locked || !raw.is_string())
+        if (!definition || !raw.is_string())
         {
-            error = definition && definition->Locked ? std::string(key) + " is locked by " + std::string(definition->Layer) : "unknown or invalid setting " + key;
+            error = "unknown or invalid setting " + key;
+            return false;
+        }
+        if (!definition->ApiSettable)
+        {
+            error = std::string(key) + " is owned by the listener and cannot be changed through the settings page";
+            return false;
+        }
+        if (std::string const lockedBy = LockedBy(key); !lockedBy.empty())
+        {
+            error = std::string(key) + " is locked by " + lockedBy;
             return false;
         }
         std::string const value = raw.get<std::string>();

@@ -9,6 +9,8 @@
 #include "PanelCaptcha.h"
 #include "PanelErrorReport.h"
 #include "PanelMail.h"
+#include "PanelProxy.h"
+#include "TrustedProxies.h"
 #include "ConfigMgr.h"
 #include "PanelSettingStore.h"
 #include "CryptoRandom.h"
@@ -221,6 +223,8 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     _listener.Routes().SetPermissionKnown([](std::string_view permission) { return PanelPermissions::Holds(permission); });
     _listener.Routes().SetAdmission([this](AdminRequest const& request) { return Admit(request); });
     _listener.Routes().SetStepUp([this](AdminRequest const& request, std::string_view permission, StepUpWhen when) { return StepUpCheck(request, permission, when); });
+    _listener.Routes().SetRequestInspector([this](AdminRequest const& request) { WatchProxyHeaders(request); });
+    RegisterProxy();
     _secondFactor.SetLimits(PanelTwoFactorSettings::DefaultFailureLimit, std::chrono::minutes(PanelTwoFactorSettings::DefaultFailureWindowMinutes));
     _settingStore = std::make_shared<PanelSettingStore>(_store, _storeMutex);
     RegisterSignIn();
@@ -418,6 +422,8 @@ bool Panel::Start(ConfigMgr const& config, std::string& error)
         _auditForwarding = false;
         return false;
     }
+    _configTrustedProxies = settings.TrustedProxies;
+    ApplyTrustedProxies();
     _events.Start();
     _eventSocket->Start();
     OfferTheOwnerLink();
@@ -467,6 +473,8 @@ bool Panel::Reload(ConfigMgr const& config)
     if (twoFactor)
         ApplyTwoFactorSettings(config, *twoFactor);
     _secure = settings.Enable && settings.HasTls();
+    _configTrustedProxies = settings.TrustedProxies;
+    ApplyTrustedProxies();
     return true;
 }
 
@@ -1062,6 +1070,111 @@ void Panel::RegisterCommandHistory()
     });
 }
 
+void Panel::RegisterProxy()
+{
+    _listener.Routes().AddGuarded("GET", "/api/panel/proxy/check", "panel.settings",
+        [this](AdminRequest const& request) { return ProxyCheckRoute(request); });
+    _listener.Routes().AddGuarded("POST", "/api/panel/proxy/config", "panel.settings",
+        [this](AdminRequest const& request) { return ProxyConfigRoute(request); });
+}
+
+AdminResponse Panel::ProxyCheckRoute(AdminRequest const& request)
+{
+    PanelEffectiveSetting const trusted = _settings.Effective("Panel.TrustedProxies");
+    PanelEffectiveSetting const url = _settings.Effective("Panel.PublicUrl");
+    ProxyCheckInput input;
+    input.Peer = request.PeerAddress;
+    input.ForwardedFor = request.ForwardedFor;
+    input.ForwardedProto = request.ForwardedProto;
+    input.ForwardedHost = request.ForwardedHost;
+    input.Forwarded = request.Forwarded;
+    input.TrustedProxies = trusted.Value;
+    input.PublicUrl = url.Value;
+    input.HostHeader = request.Host;
+    input.Secure = _secure;
+    input.UpgradeReceived = request.Upgrade;
+    nlohmann::json answer = CheckProxyRequest(input);
+    answer["trusted_proxies_layer"] = trusted.Layer;
+    answer["trusted_proxies_locked"] = trusted.Locked;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::ProxyConfigRoute(AdminRequest const& request)
+{
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (!body.is_object() || !body.contains("product") || !body["product"].is_string() ||
+        !body.contains("hostname") || !body["hostname"].is_string())
+        return AdminResponse::Invalid("Rendering a proxy config takes a product and a hostname",
+            { { "product", "Choose caddy, nginx, apache, haproxy, traefik or iis" }, { "hostname", "Give the public hostname" } });
+    std::optional<ProxyProduct> const product = ParseProxyProduct(body["product"].get<std::string>());
+    if (!product)
+        return AdminResponse::Invalid("That proxy product is not one the page writes",
+            { { "product", "Choose caddy, nginx, apache, haproxy, traefik or iis" } });
+    std::string const hostname = std::string(Ambrose::Trim(body["hostname"].get<std::string>()));
+    if (hostname.empty() || hostname.find_first_of(" \t\r\n/") != std::string::npos)
+        return AdminResponse::Invalid("That hostname cannot name a proxy target", { { "hostname", "Give the public hostname" } });
+    ProxyConfigParams params;
+    params.Product = *product;
+    params.Hostname = hostname;
+    params.PanelPort = _listener.GetPort() != 0 ? _listener.GetPort() : DefaultPort;
+    if (body.contains("panel_port") && body["panel_port"].is_number_unsigned())
+        params.PanelPort = static_cast<uint16>(std::min<uint64>(body["panel_port"].get<uint64>(), 65535));
+    params.MaxBodyBytes = _listener.Routes().MaxBodyBytes() != 0 ? _listener.Routes().MaxBodyBytes() : ListenerSettings{}.MaxRequestBytes;
+    if (body.contains("include_patchserver") && body["include_patchserver"].is_boolean())
+        params.IncludePatchserver = body["include_patchserver"].get<bool>();
+    if (body.contains("patchserver_port") && body["patchserver_port"].is_number_unsigned())
+        params.PatchserverPort = static_cast<uint16>(std::min<uint64>(body["patchserver_port"].get<uint64>(), 65535));
+    nlohmann::json answer;
+    answer["product"] = std::string(::NameOf(*product));
+    answer["hostname"] = hostname;
+    answer["config"] = RenderProxyConfig(params);
+    return AdminResponse::Json(200, answer.dump());
+}
+
+void Panel::WatchProxyHeaders(AdminRequest const& request)
+{
+    bool const hasForwarded = !request.ForwardedFor.empty() || !request.ForwardedProto.empty() ||
+        !request.ForwardedHost.empty() || !request.Forwarded.empty();
+    if (!hasForwarded || request.PeerAddress.empty())
+        return;
+    if (_listener.Routes().IsTrustedProxy(request.PeerAddress))
+        return;
+    {
+        std::lock_guard const lock(_proxyWatchMutex);
+        auto const seen = _proxyWatch.find(request.PeerAddress);
+        if (seen != _proxyWatch.end() && std::chrono::steady_clock::now() - seen->second < std::chrono::hours(1))
+            return;
+        _proxyWatch[request.PeerAddress] = std::chrono::steady_clock::now();
+    }
+    if (!IsStoreOpen())
+        return;
+    AuditEvent event;
+    event.Name = "panel:proxy.untrusted_forwarded";
+    event.Actor = AuditActor::System;
+    event.Address = request.PeerAddress;
+    event.UserAgent = request.UserAgent;
+    event.Result = AuditResult::Failed;
+    event.Reason = "forwarded headers arrived from a peer not in Panel.TrustedProxies, so they are ignored and every throttle and audit row records the proxy's address";
+    std::string error;
+    if (!Record(event, {}, error))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "An untrusted proxy's forwarded headers could not be recorded: {}", error);
+}
+
+void Panel::ApplyTrustedProxies()
+{
+    PanelEffectiveSetting trusted = _settings.Effective("Panel.TrustedProxies");
+    if (trusted.Layer == "default" && !_configTrustedProxies.empty())
+    {
+        trusted.Value = _configTrustedProxies;
+        trusted.Layer = "config";
+    }
+    {
+        std::lock_guard const lock(_proxyWatchMutex);
+        _proxyWatch.clear();
+    }
+    _listener.Routes().SetTrustedProxies(TrustedProxies::Parse(trusted.Value));
+}
+
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
 {
     std::string error;
@@ -1082,7 +1195,7 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
     event.ActorId = std::to_string(user->Id);
     event.ActorName = user->Username;
     event.Address = request.RemoteAddress;
-    event.Properties = "{\"changed\":true}";
+    event.Properties = nlohmann::json({ { "changed", true }, { "changes", _settings.DescribeChange(body["values"]) } }).dump();
     event.On("panel_user", std::to_string(user->Id), user->Username);
     if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
     {
@@ -1095,6 +1208,8 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
         return AdminResponse::Problem(503, "audit_unavailable", error);
     if (event.Result == AuditResult::Refused)
         return AdminResponse::Problem(409, "settings_refused", event.Reason);
+    if (body["values"].contains("Panel.TrustedProxies"))
+        ApplyTrustedProxies();
     return PanelSettingsGet(request);
 }
 

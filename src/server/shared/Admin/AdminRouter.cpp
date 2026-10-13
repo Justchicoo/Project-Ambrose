@@ -361,6 +361,12 @@ void AdminRouter::SetProblemLog(ProblemLog log)
     _problemLog = std::move(log);
 }
 
+void AdminRouter::SetRequestInspector(RequestInspector inspector)
+{
+    std::unique_lock const lock(_mutex);
+    _inspector = std::move(inspector);
+}
+
 void AdminRouter::SetSecure(bool secure)
 {
     _secure.store(secure);
@@ -378,9 +384,20 @@ std::string AdminRouter::ResolveAddress(std::string_view peer, std::string_view 
     return _trustedProxies.ClientAddress(peer, forwardedFor);
 }
 
+bool AdminRouter::IsTrustedProxy(std::string_view peer) const
+{
+    std::shared_lock lock(_mutex);
+    return _trustedProxies.Holds(peer);
+}
+
 void AdminRouter::SetMaxBodyBytes(std::size_t bytes)
 {
     _maxBodyBytes.store(bytes);
+}
+
+std::size_t AdminRouter::MaxBodyBytes() const
+{
+    return _maxBodyBytes.load();
 }
 
 bool AdminRouter::Has(std::string const& method, std::string const& path) const
@@ -520,6 +537,13 @@ AdminResponse AdminRouter::Dispatch(AdminRequest const& incoming) const
     AdminRequest request = incoming;
     if (request.Id.empty())
         request.Id = NewRequestId();
+    RequestInspector inspector;
+    {
+        std::shared_lock const lock(_mutex);
+        inspector = _inspector;
+    }
+    if (inspector)
+        inspector(request);
     AdminResponse response = Answer(request);
     Finish(request, response);
     return response;

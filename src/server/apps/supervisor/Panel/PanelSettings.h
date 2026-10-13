@@ -19,6 +19,13 @@
 
 class PanelStore;
 
+struct PanelEffectiveSetting
+{
+    std::string Value;
+    std::string Layer;
+    bool Locked = false;
+};
+
 class PanelSettings
 {
 public:
@@ -28,6 +35,9 @@ public:
     bool Update(nlohmann::json const& values, int64 userId, std::string& error, bool transactionAlreadyOpen = false);
     void SetOwned(std::string_view key, std::string value, std::string layer);
     std::string ValueOf(std::string_view key) const;
+    std::string LockedBy(std::string_view key) const;
+    PanelEffectiveSetting Effective(std::string_view key) const;
+    nlohmann::json DescribeChange(nlohmann::json const& values) const;
 
 private:
     PanelStore& _store;

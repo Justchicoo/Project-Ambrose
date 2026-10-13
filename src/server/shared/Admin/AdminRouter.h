@@ -36,6 +36,11 @@ struct AdminRequest
     std::string Cookie;
     std::string Csrf;
     std::string Range;
+    std::string PeerAddress;
+    std::string ForwardedFor;
+    std::string ForwardedProto;
+    std::string ForwardedHost;
+    std::string Forwarded;
     bool Upgrade = false;
     std::string Id;
     std::string Principal;
@@ -118,6 +123,7 @@ public:
     using Handler = std::function<AdminResponse(AdminRequest const&)>;
     using PermissionCheck = std::function<PermissionVerdict(AdminRequest const&, std::string_view permission)>;
     using ProblemLog = std::function<void(AdminRequest const&, AdminResponse const&)>;
+    using RequestInspector = std::function<void(AdminRequest const&)>;
     using Known = std::function<bool(std::string_view permission)>;
     using PermissionResolver = std::function<std::string(AdminRequest const&)>;
 
@@ -159,9 +165,12 @@ public:
     void SetAllowedHosts(std::vector<std::string> names);
     void SetBrowserAccess(AdminBrowserAccess access);
     void SetProblemLog(ProblemLog log);
+    void SetRequestInspector(RequestInspector inspector);
     void SetMaxBodyBytes(std::size_t bytes);
+    std::size_t MaxBodyBytes() const;
     void SetSecure(bool secure);
     void SetTrustedProxies(TrustedProxies proxies);
+    bool IsTrustedProxy(std::string_view peer) const;
     std::string ResolveAddress(std::string_view peer, std::string_view forwardedFor) const;
     bool Has(std::string const& method, std::string const& path) const;
     std::vector<std::string> Describe() const;
@@ -223,6 +232,7 @@ private:
     std::vector<std::string> _allowedHosts;
     AdminBrowserAccess _browser;
     ProblemLog _problemLog;
+    RequestInspector _inspector;
 };
 
 #endif
