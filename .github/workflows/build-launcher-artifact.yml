@@ -28,7 +28,7 @@ jobs:
         run: choco install ninja -y --no-progress
 
       - name: Setup vcpkg and configure (Ninja preset, like the repo CI)
-        run: python apps/ci/ci_build.py --setup-vcpkg "$env:RUNNER_TEMP/vcpkg" --configure-preset windows-msvc-ninja --stage configure
+        run: python apps/ci/ci_build.py --setup-vcpkg "${{ runner.temp }}/vcpkg" --configure-preset windows-msvc-ninja --build-preset windows-ninja-debug --stage configure
 
       - name: Build launcher target
         env:
