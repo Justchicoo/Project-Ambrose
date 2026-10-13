@@ -99,9 +99,23 @@ export const AppExit = v.looseObject({
     code: v.nullable(v.number()),
     signal: v.nullable(v.number()),
     requested: v.boolean(),
+    classification: v.string(),
     during: v.string(),
     uptime_ms: v.number(),
 });
+
+export const CrashRecord = v.looseObject({
+    epoch_ms: v.number(),
+    code: v.nullable(v.number()),
+    signal: v.nullable(v.number()),
+    classification: v.string(),
+    uptime_ms: v.number(),
+    log_tail: v.array(v.string()),
+    dump_written: v.boolean(),
+    dump_note: v.string(),
+});
+
+export const CrashHistoryAnswer = v.array(CrashRecord);
 
 export const Supervision = v.looseObject({
     name: v.string(),
@@ -126,6 +140,9 @@ export const Supervision = v.looseObject({
     crashes: v.number(),
     failed_starts: v.number(),
     restarts: v.number(),
+    crash_loop: v.boolean(),
+    backoff_seconds: v.nullable(v.number()),
+    lock: v.nullable(v.looseObject({ holder: v.string(), action: v.string(), started_epoch_ms: v.number() })),
     last_exit: v.nullable(AppExit),
     exits: v.array(AppExit),
     message: v.nullable(v.string()),
@@ -501,6 +518,8 @@ export type Status = v.InferOutput<typeof Status>;
 export type Capabilities = v.InferOutput<typeof Capabilities>;
 export type Supervision = v.InferOutput<typeof Supervision>;
 export type AppExit = v.InferOutput<typeof AppExit>;
+export type CrashRecord = v.InferOutput<typeof CrashRecord>;
+export type CrashHistoryAnswer = v.InferOutput<typeof CrashHistoryAnswer>;
 export const ReloadTarget = v.looseObject({
     target: v.string(),
     generation: v.number(),

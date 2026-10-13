@@ -67,7 +67,7 @@ namespace
 
     std::string StatusData(uint64 index)
     {
-        return fmt::format(R"({{"app":"gameserver-1","state":"running","since":{},"pid":{},"exit_code":null,"crashes":0,"next_restart":null}})", 1789650000000 + index, 4000 + index);
+        return fmt::format(R"({{"app":"gameserver-1","state":"running","since":{},"pid":{},"exit_code":null,"classification":null,"crashes":0,"crash_loop":false,"next_restart":null}})", 1789650000000 + index, 4000 + index);
     }
 
     std::optional<nlohmann::json> Read(AdminTest::SocketClient& client)

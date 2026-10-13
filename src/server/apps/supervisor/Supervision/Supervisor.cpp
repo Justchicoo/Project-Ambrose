@@ -72,8 +72,26 @@ namespace
         body["code"] = exit.Code ? nlohmann::json(*exit.Code) : nlohmann::json(nullptr);
         body["signal"] = exit.Signal ? nlohmann::json(*exit.Signal) : nlohmann::json(nullptr);
         body["requested"] = exit.Requested;
+        body["classification"] = std::string(ClassificationName(exit.Classification));
         body["during"] = std::string(ManagedApp::StateName(exit.During));
         body["uptime_ms"] = exit.UptimeMs;
+        return body;
+    }
+
+    nlohmann::json CrashRecordJson(CrashRecord const& record)
+    {
+        nlohmann::json body;
+        body["epoch_ms"] = record.EpochMs;
+        body["code"] = record.Code ? nlohmann::json(*record.Code) : nlohmann::json(nullptr);
+        body["signal"] = record.Signal ? nlohmann::json(*record.Signal) : nlohmann::json(nullptr);
+        body["classification"] = std::string(ClassificationName(record.Classification));
+        body["uptime_ms"] = record.UptimeMs;
+        nlohmann::json tail = nlohmann::json::array();
+        for (std::string const& line : record.LogTail)
+            tail.push_back(line);
+        body["log_tail"] = std::move(tail);
+        body["dump_written"] = record.DumpWritten;
+        body["dump_note"] = record.DumpWritten ? std::string() : std::string("no dump was written");
         return body;
     }
 
@@ -108,6 +126,12 @@ namespace
         body["crashes"] = snapshot.Crashes;
         body["failed_starts"] = snapshot.FailedStarts;
         body["restarts"] = snapshot.Restarts;
+        body["crash_loop"] = snapshot.CrashLoop;
+        body["backoff_seconds"] = snapshot.BackoffSeconds ? nlohmann::json(*snapshot.BackoffSeconds) : nlohmann::json(nullptr);
+        if (snapshot.Lock)
+            body["lock"] = { { "holder", snapshot.Lock->Holder }, { "action", snapshot.Lock->Action }, { "started_epoch_ms", snapshot.Lock->StartedEpochMs } };
+        else
+            body["lock"] = nullptr;
         nlohmann::json exits = nlohmann::json::array();
         for (AppExit const& exit : snapshot.Exits)
             exits.push_back(ExitJson(exit));
@@ -166,6 +190,7 @@ SupervisorSettings SupervisorSettings::Load(ConfigMgr const& config, std::filesy
     settings.MaxOutputBytes = std::clamp<uint64>(bytes, OutputLog::MinMaxFileBytes, MaxOutputBytesLimit);
     if (settings.MaxOutputBytes != bytes)
         problems.push_back(fmt::format("Supervisor.OutputMaxBytes is {}, outside {} to {}; using {}", bytes, OutputLog::MinMaxFileBytes, MaxOutputBytesLimit, settings.MaxOutputBytes));
+    settings.CrashPolicy = CrashPolicySettings::Load(config, problems);
     return settings;
 }
 
@@ -187,8 +212,9 @@ bool Supervisor::Start(ConfigMgr const& config, SupervisorSettings const& settin
     std::vector<std::unique_ptr<ManagedApp>> apps;
     for (AppDefinition& definition : definitions)
     {
-        apps.push_back(std::make_unique<ManagedApp>(std::move(definition), *state, settings.OutputFolder, settings.MaxOutputBytes, settings.DataFolder, _sendBreak, _log));
+        apps.push_back(std::make_unique<ManagedApp>(std::move(definition), settings.CrashPolicy, *state, settings.OutputFolder, settings.MaxOutputBytes, settings.DataFolder, _sendBreak, _log));
         apps.back()->SetStatusObserver([this](AppSnapshot const& snapshot) { ForwardStatus(snapshot); });
+        apps.back()->SetCrashObserver([this](std::string_view app, CrashEvent const& event) { ForwardCrash(app, event); });
     }
     {
         std::unique_lock<std::shared_mutex> const lock(_mutex);
@@ -225,6 +251,24 @@ PowerResult Supervisor::Power(std::string_view name, PowerAction action, uint32 
     if (!app)
         return { false, 404, "unknown_app", fmt::format("The supervisor runs no app named {}", name) };
     return app->Power(action, countdownSeconds);
+}
+
+LockResult Supervisor::AcquireAppLock(std::string_view name, std::string holder, std::string action)
+{
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    ManagedApp* const app = Find(name);
+    if (!app)
+        return { false, fmt::format("The supervisor runs no app named {}", name) };
+    return app->AcquireLock(std::move(holder), std::move(action));
+}
+
+bool Supervisor::ReleaseAppLock(std::string_view name, std::string holder)
+{
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    ManagedApp* const app = Find(name);
+    if (!app)
+        return false;
+    return app->ReleaseLock(std::move(holder));
 }
 
 std::vector<AppSnapshot> Supervisor::Snapshots() const
@@ -496,6 +540,14 @@ AdminResponse Supervisor::AnswerCore(AdminRequest const& request, AdminRouter co
         OutputRun const run = tail == "/output/current" ? OutputRun::Current : OutputRun::Previous;
         return AdminResponse::Json(200, OutputJson(name, run, app->Output(run, 0)));
     }
+    if (tail == "/crashes")
+    {
+        if (std::optional<AdminResponse> refused = Refuse(request, "status.read", router))
+            return std::move(*refused);
+        if (method != "GET")
+            return only("GET");
+        return AdminResponse::Json(200, CrashHistoryJson(app->Snapshot().CrashHistory));
+    }
     std::optional<std::string_view> const permission = PermissionFor(method, tail);
     if (!permission)
         return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor relays nothing at {} {}", method, request.Path));
@@ -532,6 +584,19 @@ void Supervisor::ForwardStatus(AppSnapshot const& snapshot)
         _statusObserver(snapshot);
 }
 
+void Supervisor::SetCrashObserver(AppCrashObserver observer)
+{
+    std::lock_guard<std::mutex> const lock(_observerMutex);
+    _crashObserver = std::move(observer);
+}
+
+void Supervisor::ForwardCrash(std::string_view app, CrashEvent const& event)
+{
+    std::lock_guard<std::mutex> const lock(_observerMutex);
+    if (_crashObserver)
+        _crashObserver(app, event);
+}
+
 std::string Supervisor::StatusData(AppSnapshot const& snapshot)
 {
     bool const alive = snapshot.State == AppState::Starting || snapshot.State == AppState::Running || snapshot.State == AppState::Stopping;
@@ -541,9 +606,43 @@ std::string Supervisor::StatusData(AppSnapshot const& snapshot)
     data["since"] = snapshot.StateSinceEpochMs;
     data["pid"] = snapshot.ProcessId ? nlohmann::json(*snapshot.ProcessId) : nlohmann::json(nullptr);
     data["exit_code"] = !alive && !snapshot.Exits.empty() && snapshot.Exits.back().Code ? nlohmann::json(*snapshot.Exits.back().Code) : nlohmann::json(nullptr);
+    data["classification"] = !alive && !snapshot.Exits.empty() ? nlohmann::json(std::string(ClassificationName(snapshot.Exits.back().Classification))) : nlohmann::json(nullptr);
     data["crashes"] = snapshot.Crashes;
+    data["crash_loop"] = snapshot.CrashLoop;
     data["next_restart"] = OptionalNumber(snapshot.RestartEpochMs);
     return data.dump();
+}
+
+std::string Supervisor::CrashEventJson(std::string_view app, CrashEvent const& event)
+{
+    nlohmann::json data;
+    data["app"] = std::string(app);
+    data["time"] = event.Record.EpochMs;
+    data["classification"] = std::string(ClassificationName(event.Record.Classification));
+    data["exit_code"] = event.Record.Code ? nlohmann::json(*event.Record.Code) : nlohmann::json(nullptr);
+    data["signal"] = event.Record.Signal ? nlohmann::json(*event.Record.Signal) : nlohmann::json(nullptr);
+    data["uptime_ms"] = event.Record.UptimeMs;
+    data["crashes_in_window"] = event.CrashesInWindow;
+    data["dump_note"] = event.Record.DumpWritten ? std::string() : std::string("no dump was written");
+    return data.dump();
+}
+
+std::string Supervisor::CrashLoopEventJson(std::string_view app, CrashEvent const& event)
+{
+    nlohmann::json data;
+    data["app"] = std::string(app);
+    data["time"] = event.Record.EpochMs;
+    data["crashes_in_window"] = event.CrashesInWindow;
+    data["last_classification"] = std::string(ClassificationName(event.Record.Classification));
+    return data.dump();
+}
+
+std::string Supervisor::CrashHistoryJson(std::vector<CrashRecord> const& records)
+{
+    nlohmann::json body = nlohmann::json::array();
+    for (CrashRecord const& record : records)
+        body.push_back(CrashRecordJson(record));
+    return body.dump();
 }
 
 std::vector<std::pair<std::string, std::string>> Supervisor::ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,

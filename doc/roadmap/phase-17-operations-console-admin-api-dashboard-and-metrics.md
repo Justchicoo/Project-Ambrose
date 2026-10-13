@@ -1689,11 +1689,11 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] Killing gameserver from outside four times within the crash loop window stops restarts, badges the app as crash looping, and keeps four crash records with their log tails
-- [ ] A clean exit that nobody requested is classified as clean but unexpected, not as a crash
-- [ ] An app killed for exceeding its 17.28 memory limit is classified out of memory
-- [ ] Backoff grows from 1 second towards 5 minutes and resets after 10 healthy minutes
-- [ ] A crash while a restore holds the app's lock records the crash and does not restart the app until the restore releases it
+- [x] Killing gameserver from outside four times within the crash loop window stops restarts, badges the app as crash looping, and keeps four crash records with their log tails (SupervisorCrashTest.FourKillsFromOutsideTripTheCrashLoopAndKeepFourRecords)
+- [x] A clean exit that nobody requested is classified as clean but unexpected, not as a crash (SupervisorCrashTest.ACleanExitNobodyAskedForIsCleanButUnexpected)
+- [x] An app killed for exceeding its 17.28 memory limit is classified out of memory (SupervisorCrashTest.AnAppOverItsMemoryLimitIsClassifiedOutOfMemory)
+- [x] Backoff grows from 1 second towards 5 minutes and resets after 10 healthy minutes (CrashPolicyTest.BackoffGrowsFromASecondTowardsFiveMinutes, CrashPolicyTest.TheHealthyResetTripsAfterTenHealthyMinutes)
+- [x] A crash while a restore holds the app's lock records the crash and does not restart the app until the restore releases it (SupervisorCrashTest.ACrashWhileARestoreHoldsTheLockIsRecordedAndWaitsForRelease)
 
 ## 17.61 Reconciling stale online and session rows after a crash
 

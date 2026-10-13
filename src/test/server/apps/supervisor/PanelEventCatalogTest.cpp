@@ -188,10 +188,23 @@ namespace
             exit.EpochMs = 1789649999000;
             exit.Code = 3;
             exit.During = AppState::Running;
+            exit.Classification = ExitClassification::Crash;
             snapshot.Exits.push_back(exit);
             snapshot.RestartEpochMs = 1789650001000;
         }
         return snapshot;
+    }
+
+    CrashEvent CrashedEvent()
+    {
+        CrashEvent event;
+        event.Record.EpochMs = 1789649999000;
+        event.Record.Code = 3;
+        event.Record.Classification = ExitClassification::Crash;
+        event.Record.UptimeMs = 9000;
+        event.Record.LogTail = { "a last line" };
+        event.CrashesInWindow = 1;
+        return event;
     }
 }
 
@@ -268,6 +281,8 @@ TEST(PanelEventCatalogTest, EveryFrameTheServerWritesValidatesAgainstItsEntry)
         { "status", Supervisor::StatusData(Snapshot(AppState::Running)) },
         { "status", Supervisor::StatusData(Snapshot(AppState::Crashed)) },
         { "status", Supervisor::StatusData(Snapshot(AppState::Offline)) },
+        { "app.crashed", Supervisor::CrashEventJson("gameserver-1", CrashedEvent()) },
+        { "app.crash_loop", Supervisor::CrashLoopEventJson("gameserver-1", CrashedEvent()) },
         { "pong", "{}" },
     };
     std::set<std::string> covered;
@@ -285,6 +300,7 @@ TEST(PanelEventCatalogTest, EveryFrameTheServerWritesValidatesAgainstItsEntry)
 
     nlohmann::json const crashed = nlohmann::json::parse(Supervisor::StatusData(Snapshot(AppState::Crashed)));
     EXPECT_EQ(crashed["exit_code"], 3);
+    EXPECT_EQ(crashed["classification"], "crash");
     EXPECT_TRUE(crashed["pid"].is_null());
     EXPECT_EQ(crashed["next_restart"], 1789650001000);
     nlohmann::json const running = nlohmann::json::parse(Supervisor::StatusData(Snapshot(AppState::Running)));

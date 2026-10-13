@@ -41,17 +41,19 @@ export const streamPermissions = {
 export const clientTypes = ["hello", "subscribe", "unsubscribe", "resume", "backlog", "command", "power", "stats.now", "ping"] as const;
 export type ClientType = (typeof clientTypes)[number];
 
-export const serverTypes = ["ready", "status", "stats", "log", "dropped", "command.result", "power.accepted", "power.progress", "power.result", "players", "setup.output", "setup.state", "backup.progress", "backup.completed", "backup.failed", "restore.progress", "restore.completed", "restore.failed", "update.progress", "update.result", "setting.changed", "reload.result", "schedule.run.started", "schedule.run.waiting", "schedule.countdown.tick", "schedule.task.started", "schedule.task.output", "schedule.task.finished", "schedule.run.finished", "schedule.changed", "realm.changed", "announce.sent", "file.job", "node.status", "node.move", "alert", "audit", "permissions.changed", "throttled", "error", "session.expiring", "pong"] as const;
+export const serverTypes = ["ready", "status", "app.crashed", "app.crash_loop", "stats", "log", "dropped", "command.result", "power.accepted", "power.progress", "power.result", "players", "setup.output", "setup.state", "backup.progress", "backup.completed", "backup.failed", "restore.progress", "restore.completed", "restore.failed", "update.progress", "update.result", "setting.changed", "reload.result", "schedule.run.started", "schedule.run.waiting", "schedule.countdown.tick", "schedule.task.started", "schedule.task.output", "schedule.task.finished", "schedule.run.finished", "schedule.changed", "realm.changed", "announce.sent", "file.job", "node.status", "node.move", "alert", "audit", "permissions.changed", "throttled", "error", "session.expiring", "pong"] as const;
 export type ServerType = (typeof serverTypes)[number];
 
 export const handledTypes = ["hello", "resume", "ping"] as const;
 export type HandledType = (typeof handledTypes)[number];
 
-export const sentTypes = ["ready", "status", "dropped", "error", "pong"] as const;
+export const sentTypes = ["ready", "status", "app.crashed", "app.crash_loop", "dropped", "error", "pong"] as const;
 export type SentType = (typeof sentTypes)[number];
 
 export const streamOfType = {
     "status": "status",
+    "app.crashed": "status",
+    "app.crash_loop": "status",
     "stats": "stats",
     "log": "logs",
     "power.accepted": "status",
@@ -159,10 +161,32 @@ export const StatusData = v.looseObject({
     since: v.pipe(v.number(), v.integer()),
     pid: v.nullable(v.pipe(v.number(), v.integer())),
     exit_code: v.nullable(v.pipe(v.number(), v.integer())),
+    classification: v.nullable(v.string()),
     crashes: v.pipe(v.number(), v.integer()),
+    crash_loop: v.boolean(),
     next_restart: v.nullable(v.pipe(v.number(), v.integer())),
 });
 export type StatusData = v.InferOutput<typeof StatusData>;
+
+export const AppCrashedData = v.looseObject({
+    app: v.string(),
+    time: v.pipe(v.number(), v.integer()),
+    classification: v.string(),
+    exit_code: v.nullable(v.pipe(v.number(), v.integer())),
+    signal: v.nullable(v.pipe(v.number(), v.integer())),
+    uptime_ms: v.pipe(v.number(), v.integer()),
+    crashes_in_window: v.pipe(v.number(), v.integer()),
+    dump_note: v.string(),
+});
+export type AppCrashedData = v.InferOutput<typeof AppCrashedData>;
+
+export const AppCrashLoopData = v.looseObject({
+    app: v.string(),
+    time: v.pipe(v.number(), v.integer()),
+    crashes_in_window: v.pipe(v.number(), v.integer()),
+    last_classification: v.string(),
+});
+export type AppCrashLoopData = v.InferOutput<typeof AppCrashLoopData>;
 
 export const StatsData = v.looseObject({});
 export type StatsData = v.InferOutput<typeof StatsData>;
@@ -309,6 +333,8 @@ export const clientData = {
 export const serverData = {
     "ready": ReadyData,
     "status": StatusData,
+    "app.crashed": AppCrashedData,
+    "app.crash_loop": AppCrashLoopData,
     "stats": StatsData,
     "log": LogData,
     "dropped": DroppedData,

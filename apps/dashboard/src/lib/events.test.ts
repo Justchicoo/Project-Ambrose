@@ -116,7 +116,49 @@ function status(seq: number, state = "running") {
         type: "status",
         seq,
         scope: { app: "gameserver-1" },
-        data: { app: "gameserver-1", state, since: 1789650000000 + seq, pid: 4000 + seq, exit_code: null, crashes: 1, next_restart: null },
+        data: {
+            app: "gameserver-1",
+            state,
+            since: 1789650000000 + seq,
+            pid: 4000 + seq,
+            exit_code: null,
+            classification: null,
+            crashes: 1,
+            crash_loop: false,
+            next_restart: null,
+        },
+    };
+}
+
+function crashed(seq: number, crashesInWindow: number) {
+    return {
+        type: "app.crashed",
+        seq,
+        scope: { app: "gameserver-1" },
+        data: {
+            app: "gameserver-1",
+            time: 1789650000000 + seq,
+            classification: "crash",
+            exit_code: 3,
+            signal: null,
+            uptime_ms: 9000,
+            crashes_in_window: crashesInWindow,
+            dump_note: "no dump was written",
+        },
+    };
+}
+
+function crashLoop(seq: number, crashesInWindow: number) {
+    return {
+        type: "app.crash_loop",
+        seq,
+        scope: { app: "gameserver-1" },
+        data: {
+            app: "gameserver-1",
+            time: 1789650000000 + seq,
+            crashes_in_window: crashesInWindow,
+            last_classification: "crash",
+        },
     };
 }
 
@@ -146,6 +188,9 @@ function supervisedApp(): AppEntry {
             crashes: 0,
             failed_starts: 0,
             restarts: 0,
+            crash_loop: false,
+            backoff_seconds: null,
+            lock: null,
             last_exit: null,
             exits: [],
             message: null,
@@ -263,6 +308,18 @@ describe("ready, records and resume", () => {
         expect(supervision?.pid).toBe(4005);
         expect(supervision?.crashes).toBe(1);
         expect(supervision?.restart_epoch_ms).toBeNull();
+    });
+
+    it("records a crash and badges the app when the crash loop trips", async () => {
+        live.apps = [supervisedApp()];
+        const socket = await connected();
+        ready(socket);
+        follow("status", "gameserver-1");
+        socket.receive(crashed(5, 3));
+        expect(live.apps[0]?.supervision?.crashes).toBe(3);
+        socket.receive(crashLoop(6, 4));
+        expect(live.apps[0]?.supervision?.crash_loop).toBe(true);
+        expect(live.apps[0]?.supervision?.state).toBe("crash_loop");
     });
 
     it("keeps a dropped range as a gap for its stream", async () => {

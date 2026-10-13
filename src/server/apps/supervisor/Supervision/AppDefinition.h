@@ -32,6 +32,7 @@ struct AppDefinition
     bool Autostart = true;
     std::chrono::seconds StartTimeout{ DefaultStartTimeoutSeconds };
     std::chrono::seconds StopTimeout{ DefaultStopTimeoutSeconds };
+    uint64 MemoryLimitBytes = 0;
 
     static bool IsValidName(std::string_view name) noexcept;
     static std::vector<AppDefinition> Load(ConfigMgr const& config, std::filesystem::path const& programFolder, std::filesystem::path const& workingFolder, std::vector<std::string>& problems);
