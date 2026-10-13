@@ -44,10 +44,10 @@ export type ClientType = (typeof clientTypes)[number];
 export const serverTypes = ["ready", "status", "stats", "log", "dropped", "command.result", "power.accepted", "power.progress", "power.result", "players", "setup.output", "setup.state", "backup.progress", "backup.completed", "backup.failed", "restore.progress", "restore.completed", "restore.failed", "update.progress", "update.result", "setting.changed", "reload.result", "schedule.run.started", "schedule.run.waiting", "schedule.countdown.tick", "schedule.task.started", "schedule.task.output", "schedule.task.finished", "schedule.run.finished", "schedule.changed", "realm.changed", "announce.sent", "file.job", "node.status", "node.move", "alert", "audit", "permissions.changed", "throttled", "error", "session.expiring", "pong"] as const;
 export type ServerType = (typeof serverTypes)[number];
 
-export const handledTypes = ["hello", "resume", "ping"] as const;
+export const handledTypes = ["hello", "subscribe", "unsubscribe", "resume", "ping"] as const;
 export type HandledType = (typeof handledTypes)[number];
 
-export const sentTypes = ["ready", "status", "dropped", "error", "pong"] as const;
+export const sentTypes = ["ready", "status", "dropped", "error", "session.expiring", "pong"] as const;
 export type SentType = (typeof sentTypes)[number];
 
 export const streamOfType = {
@@ -117,10 +117,14 @@ export const HelloData = v.looseObject({
 });
 export type HelloData = v.InferOutput<typeof HelloData>;
 
-export const SubscribeData = v.looseObject({});
+export const SubscribeData = v.looseObject({
+    stream: v.string(),
+});
 export type SubscribeData = v.InferOutput<typeof SubscribeData>;
 
-export const UnsubscribeData = v.looseObject({});
+export const UnsubscribeData = v.looseObject({
+    stream: v.string(),
+});
 export type UnsubscribeData = v.InferOutput<typeof UnsubscribeData>;
 
 export const ResumeData = v.looseObject({
@@ -288,7 +292,9 @@ export const ErrorData = v.looseObject({
 });
 export type ErrorData = v.InferOutput<typeof ErrorData>;
 
-export const SessionExpiringData = v.looseObject({});
+export const SessionExpiringData = v.looseObject({
+    expires_in: v.pipe(v.number(), v.integer()),
+});
 export type SessionExpiringData = v.InferOutput<typeof SessionExpiringData>;
 
 export const PongData = v.looseObject({});

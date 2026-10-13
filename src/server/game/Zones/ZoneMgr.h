@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The zones a world is made of, held in memory (sZoneMgr): the template of every zone the extractor read from the user's own install, the named places inside each one, and the objects placed in them, each a store of its own that is rebuilt beside the one serving and swapped in whole, so a reader holding a snapshot keeps the whole generation it started with and a build that fails leaves what was serving exactly where it was. A place is asked for by zone and name, and a name that zone does not have falls back to its Start, because a wizard sent to a door that no longer exists must still stand somewhere; a zone nothing knows is a typed refusal rather than a guess, because putting a wizard in a zone this server cannot load would strand them. A location's direction is the one float its data gives, its yaw, and an object keeps the orientation vector its zone data gives it, which is what the client is sent, along with how the client loads it: the client builds the objects of the static client kinds from its own copy of the zone, and the server sends it the dynamic ones, never a sigil, whose class the server does not build.
+ * The zones a world is made of, held in memory (sZoneMgr): the template of every zone the extractor read from the user's own install, the named places inside each one, and the objects placed in them, each a store of its own that is rebuilt beside the one serving and swapped in whole, so a reader holding a snapshot keeps the whole generation it started with and a build that fails leaves what was serving exactly where it was. A place is asked for by zone and name, and a name that zone does not have falls back to its Start, because a wizard sent to a door that no longer exists must still stand somewhere; a zone nothing knows is a typed refusal rather than a guess, because putting a wizard in a zone this server cannot load would strand them. A location's direction is the one float its data gives, its yaw, and an object keeps the orientation vector its zone data gives it, which is what the client is sent, along with how the client loads it: the client builds the objects of the static client kinds from its own copy of the zone, and the server sends it the dynamic ones, never a sigil, whose class the server does not build and which keeps the name of the sigil record a duel placed on it uses.
  */
 
 #ifndef AMBROSE_ZONEMGR_H
@@ -66,6 +66,7 @@ struct ZoneObjectSpawn
     bool Undetectable = false;
     ZoneObjectLoading Loading = ZoneObjectLoading::StaticClientServer;
     bool HasSpawnRequirements = false;
+    std::string SigilTemplate;
 
     bool IsSigil() const noexcept { return ClassName.ends_with("SigilInfo"); }
     bool IsSentByServer() const noexcept { return Loading == ZoneObjectLoading::DynamicServer && !IsSigil(); }

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a skipped value's bits through the bit reader fenced at the value's own length, a text as a compact length, one bit that says whether seven or 31 bits of length follow, then that many printable bytes, and gives every reading that uses every bit, followed by the bytes in hex.
+ * Reads a skipped value's bits through the bit reader fenced at the value's own length, a text as a compact length, one bit that says whether seven or 31 bits of length follow, or as the 16-bit length a stream without compact lengths writes, then that many printable bytes, and gives every reading that uses every bit, followed by the bytes in hex.
  */
 
 #include "SkippedValue.h"
@@ -16,16 +16,27 @@
 
 namespace
 {
-    std::optional<std::string> ReadCompactText(BitReader& reader)
+    std::optional<std::string> ReadPrintable(BitReader& reader, uint64 length)
     {
-        bool const wide = reader.ReadBit();
-        uint64 const length = reader.ReadBits(wide ? 31 : 7);
         if (reader.Failed() || length > reader.GetRemainingBits() / 8)
             return std::nullopt;
         std::span<uint8 const> const bytes = reader.ReadBytes(static_cast<std::size_t>(length));
         if (reader.Failed() || !std::ranges::all_of(bytes, [](uint8 c) { return c >= 0x20 && c < 0x7F; }))
             return std::nullopt;
         return std::string(bytes.begin(), bytes.end());
+    }
+
+    std::optional<std::string> ReadCompactText(BitReader& reader)
+    {
+        bool const wide = reader.ReadBit();
+        uint64 const length = reader.ReadBits(wide ? 31 : 7);
+        return ReadPrintable(reader, length);
+    }
+
+    std::optional<std::string> ReadPlainText(BitReader& reader)
+    {
+        uint64 const length = reader.Read<uint16>();
+        return ReadPrintable(reader, length);
     }
 
     BitReader Fenced(uint64 bits, std::span<uint8 const> value)
@@ -68,6 +79,9 @@ std::vector<std::string> SkippedValue::Readings(uint64 bits, std::span<uint8 con
         BitReader text = Fenced(bits, value);
         if (std::optional<std::string> const one = ReadCompactText(text); one && text.GetRemainingBits() == 0)
             readings.push_back(fmt::format("std::string \"{}\"", *one));
+        BitReader plain = Fenced(bits, value);
+        if (std::optional<std::string> const one = ReadPlainText(plain); one && plain.GetRemainingBits() == 0)
+            readings.push_back(fmt::format("std::string \"{}\" of 16-bit length", *one));
         BitReader list = Fenced(bits, value);
         bool const wide = list.ReadBit();
         uint64 const count = list.ReadBits(wide ? 31 : 7);
@@ -87,9 +101,12 @@ std::optional<std::string> SkippedValue::Text(uint64 bits, std::span<uint8 const
 {
     if (bits % 8 != 0 || value.size() * uint64{ 8 } < bits || value.empty())
         return std::nullopt;
-    BitReader reader = Fenced(bits, value);
-    std::optional<std::string> text = ReadCompactText(reader);
-    return text && reader.GetRemainingBits() == 0 ? text : std::nullopt;
+    BitReader compact = Fenced(bits, value);
+    if (std::optional<std::string> text = ReadCompactText(compact); text && compact.GetRemainingBits() == 0)
+        return text;
+    BitReader plain = Fenced(bits, value);
+    std::optional<std::string> text = ReadPlainText(plain);
+    return text && plain.GetRemainingBits() == 0 ? text : std::nullopt;
 }
 
 std::string SkippedValue::Describe(uint64 bits, std::span<uint8 const> value)

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Sets up pinned vcpkg when asked, then configures, builds, and tests one preset, in one go or one stage at a time, for CI or local verification, running the tests in parallel on every core unless told otherwise; or brings a long-lived clone to a commit of another repository, keeping its build trees so each build is incremental, and runs several presets one after another as legs, going on past a failed leg and ending with how long each leg spent configuring, building and testing; or builds one target of an already configured tree and runs only the tests its own program holds, at the job counts a quick bus job sets; or profiles a tree already built, from Ninja's log and CTest's cost data, printing where its build and test time went.
+# Sets up pinned vcpkg when asked, then configures, builds, and tests one preset, in one go or one stage at a time, for CI or local verification, configuring once more when vcpkg could not download a port's source, running the tests in parallel on every core unless told otherwise; or brings a long-lived clone to a commit of another repository, keeping its build trees so each build is incremental, and runs several presets one after another as legs, going on past a failed leg and ending with how long each leg spent configuring, building and testing; or builds one target of an already configured tree and runs only the tests its own program holds, at the job counts a quick bus job sets; or profiles a tree already built, from Ninja's log and CTest's cost data, printing where its build and test time went.
 import argparse
 import json
 import os
@@ -13,6 +13,7 @@ from pathlib import PureWindowsPath
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 VCPKG_URL = "https://github.com/microsoft/vcpkg.git"
 STAGES = ("all", "configure", "build-test")
+DOWNLOAD_FAILURES = ("Download failed, halting portfile", "error: Download timed out", "error: Reached maximum number of attempts")
 
 
 def run(command, cwd=ROOT, environment=None):
@@ -36,6 +37,29 @@ def setup_vcpkg(path):
         else:
             run(["sh", os.path.join(path, "bootstrap-vcpkg.sh"), "-disableMetrics"], cwd=path)
     return path
+
+
+def download_failed(command):
+    if command[:2] != ["cmake", "--preset"]:
+        return False
+    log = os.path.join(ROOT, "build", command[2], "vcpkg-manifest-install.log")
+    if not os.path.isfile(log):
+        return False
+    with open(log, encoding="utf-8", errors="replace") as handle:
+        text = handle.read()
+    return any(failure in text for failure in DOWNLOAD_FAILURES)
+
+
+def run_step(command, environment, runner=None, failed=None):
+    runner = runner or run
+    failed = failed or download_failed
+    try:
+        runner(command, environment=environment)
+    except subprocess.CalledProcessError:
+        if not failed(command):
+            raise
+        print("vcpkg could not download a port's source; configuring afresh once more, restoring every port already built from the binary cache", flush=True)
+        runner(command + ["--fresh"], environment=environment)
 
 
 def prepare_binary_cache(environment):
@@ -136,7 +160,7 @@ def run_leg(args, leg, environment, runner=None):
     for command in commands(leg_arguments(args, leg)):
         started = time.monotonic()
         try:
-            runner(command, environment=environment)
+            run_step(command, environment, runner)
         except subprocess.CalledProcessError as error:
             result = error.returncode or 1
         spent[stage_of(command)] += time.monotonic() - started
@@ -317,7 +341,7 @@ def main(argv=None):
 
     try:
         for command in commands(args):
-            run(command, environment=environment)
+            run_step(command, environment)
     except subprocess.CalledProcessError as error:
         return error.returncode or 1
     return 0

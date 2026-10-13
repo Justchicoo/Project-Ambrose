@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the forbidden file scan, including the key, store, log and token material it keeps out, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, and the build leg selection against fakes, a real git repository and a fake Actions API, and the milestone track, where a branch named for any milestone is allowed the source tree, nothing is held or reserved, and the track's Started rows name real milestones.
+# Self-tests for the forbidden file scan, including the key, store, log and token material it keeps out, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, the build leg selection against fakes, a real git repository and a fake Actions API, the dev run's targets for a change, its panel run against built binaries and its boot of the login and game servers against fakes of the client driver's servers and scratch databases, and the milestone track, where a branch named for any milestone is allowed the source tree, nothing is held or reserved, and the track's Started rows name real milestones.
 import argparse
 import datetime
 import json
@@ -13,6 +13,7 @@ import time
 import unittest
 import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 
 import ci_build
 import ci_commit_trailer
+import ci_dev_run
 import ci_contrib_paths
 import ci_local
 import ci_dependency_notices
@@ -182,35 +184,44 @@ class SelectLegsTests(unittest.TestCase):
     def test_pushes_build_linux_gcc_for_code_data_and_build_inputs(self):
         now = at("2026-10-01T00:00:00Z")
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit([".github/workflows/core-build.yml"]))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["vcpkg.json", "doc/ROADMAP.md"]))["legs"], ["linux-gcc"])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["apps/ci/ci_select_legs.py"]))["legs"], [])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(None))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["src/test/server/shared/ReloadTest.cpp"]))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["data/sql/updates/db_login/2026_09_24_00.sql"]))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["CMakeLists.txt"]))["legs"], ["linux-gcc"])
-        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["cmake/Ambrose.cmake"]))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["apps/dashboard/src/routes.ts"]))["legs"], ["linux-gcc"])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["doc/PANEL.md", "README.md"]))["legs"], [])
+
+    def test_a_push_to_main_touching_code_or_dependencies_also_builds_windows(self):
+        now = at("2026-10-01T00:00:00Z")
+        for paths in (["vcpkg.json", "doc/ROADMAP.md"], ["src/test/server/shared/ReloadTest.cpp"], ["data/sql/updates/db_login/2026_09_24_00.sql"],
+                      ["CMakeLists.txt"], ["CMakePresets.json"], ["cmake/Ambrose.cmake"]):
+            planned = ci_select_legs.plan("push", {}, now, FakeGit(paths))
+            self.assertEqual(planned["legs"], ["windows-msvc-x64", "linux-gcc"], paths)
+            self.assertTrue(any(reason.startswith("windows-msvc-x64: selected") for reason in planned["reasons"]), paths)
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(["src/main.cpp"]))["legs"], ["linux-gcc"])
+        behind = FakeGit(["doc/PANEL.md"], {"codeaaa": True})
+        self.assertEqual(ci_select_legs.plan("push", {}, now, behind, ci_select_legs.KnownBuilds({"linux-gcc": "codeaaa"}))["legs"], ["linux-gcc"])
 
     def test_pull_requests_build_labeled_legs_from_the_merge_base(self):
         now = at("2026-10-01T00:00:00Z")
-        git = FakeGit(["src/main.cpp"])
+        git = FakeGit(["doc/PANEL.md"])
         labeled = ci_select_legs.plan("pull_request", {"labels": '["ci:weekly", "bug", "ci:nonsense"]'}, now, git)
         self.assertEqual(labeled["legs"], ["windows-msvc-x64", "linux-gcc-asan", "linux-clang-tsan"])
         self.assertEqual(len(labeled["warnings"]), 1)
         self.assertTrue(git.merge_base)
-        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": '["CI:Linux-Clang", "Ci: weekly"]'}, now, FakeGit(["src/main.cpp"]))["legs"], ["windows-msvc-x64", "linux-clang", "linux-gcc-asan", "linux-clang-tsan"])
-        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "null"}, now, FakeGit(["src/main.cpp"]))["legs"], [])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": '["CI:Linux-Clang", "Ci: weekly"]'}, now, FakeGit(["README.md"]))["legs"], ["windows-msvc-x64", "linux-clang", "linux-gcc-asan", "linux-clang-tsan"])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "null"}, now, FakeGit(["doc/PANEL.md"]))["legs"], [])
         self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(["apps/ci/ci_build.py"]))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(None))["legs"], ["linux-gcc"])
 
-    def test_a_milestone_branch_builds_without_waiting_for_a_label(self):
+    def test_a_pull_request_touching_code_builds_linux_gcc_without_a_label(self):
         now = at("2026-10-01T00:00:00Z")
-        milestone = ci_select_legs.plan("pull_request", {"labels": "[]", "branch": "milestone/4.04-world-wire-math"}, now, FakeGit(["src/main.cpp"]))
-        self.assertEqual(milestone["legs"], ["linux-gcc"])
-        self.assertEqual(milestone["warnings"], [])
-        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]", "branch": "contrib/C-60-watcher"}, now, FakeGit(["src/main.cpp"]))["legs"], [])
-        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(["src/main.cpp"]))["legs"], [])
-        both = ci_select_legs.plan("pull_request", {"labels": '["ci:windows-msvc-x64"]', "branch": "milestone/16.01-file-binary"}, now, FakeGit(["src/main.cpp"]))
+        for path in ("src/main.cpp", "data/sql/updates/db_login/2026_09_24_00.sql", "cmake/Ambrose.cmake", "CMakeLists.txt", "CMakePresets.json", "vcpkg.json", ".github/workflows/core-build.yml"):
+            planned = ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit([path]))
+            self.assertEqual(planned["legs"], ["linux-gcc"], path)
+            self.assertEqual(planned["warnings"], [])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": "[]"}, now, FakeGit(["doc/ROADMAP.md", "apps/site/build.py", "README.md"]))["legs"], [])
+        both = ci_select_legs.plan("pull_request", {"labels": '["ci:windows-msvc-x64", "ci:linux-gcc"]'}, now, FakeGit(["src/main.cpp"]))
         self.assertEqual(both["legs"], ["windows-msvc-x64", "linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("pull_request", {"labels": '["ci:linux-gcc-asan"]'}, now, FakeGit(["src/main.cpp"]))["legs"], ["linux-gcc", "linux-gcc-asan"])
 
     def test_slot_dates_follow_the_cron_weekday(self):
         self.assertEqual(ci_select_legs.slot_date(ci_select_legs.SUNDAY_CRON, at("2026-10-05T01:00:00Z")), datetime.date(2026, 10, 4))
@@ -264,7 +275,7 @@ class SelectLegsTests(unittest.TestCase):
         self.assertEqual([entry["leg"] for entry in matrix["include"]], ["windows-msvc-x64", "linux-gcc"])
         self.assertEqual([entry["configure"] for entry in matrix["include"]], ["windows-msvc-ninja", "linux-gcc"])
         for entry in matrix["include"]:
-            self.assertEqual(entry["job_timeout"], entry["configure_timeout"] + entry["build_timeout"] + ci_select_legs.JOB_TIMEOUT_MARGIN)
+            self.assertEqual(entry["job_timeout"], entry["configure_timeout"] + entry["build_timeout"] + ci_select_legs.LEGS[entry["leg"]].get("dev_run_timeout", 0) + ci_select_legs.JOB_TIMEOUT_MARGIN)
         lines = ci_select_legs.output_lines({"legs": [], "windows_keepalive": True})
         self.assertEqual(lines, ["build=false", 'matrix={"include":[]}', "windows_keepalive=true"])
 
@@ -540,6 +551,35 @@ class BuildStageTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"VCPKG_ROOT": "vcpkg"}), mock.patch.object(ci_build, "run", side_effect=lambda command, **_: ran.append(command)):
             ci_build.main(["--leg", "linux-gcc-asan", "--test-jobs", "1", "--exclude-label", "render", "--exclude-label", "slow"])
         self.assertEqual(ran[-1], ["ctest", "--preset", "linux-gcc-asan", "--label-exclude", "^(render|slow)$"])
+
+    def test_a_configure_that_could_not_download_a_port_runs_once_more_afresh(self):
+        ran = []
+        def runner(command, **_):
+            ran.append(command)
+            if len(ran) == 1:
+                raise subprocess.CalledProcessError(1, command)
+        ci_build.run_step(["cmake", "--preset", "windows-msvc-ninja"], {}, runner, lambda command: True)
+        self.assertEqual(ran, [["cmake", "--preset", "windows-msvc-ninja"], ["cmake", "--preset", "windows-msvc-ninja", "--fresh"]])
+
+    def test_any_other_failure_is_not_retried(self):
+        ran = []
+        def runner(command, **_):
+            ran.append(command)
+            raise subprocess.CalledProcessError(2, command)
+        with self.assertRaises(subprocess.CalledProcessError):
+            ci_build.run_step(["cmake", "--preset", "linux-gcc"], {}, runner, lambda command: False)
+        self.assertEqual(len(ran), 1)
+
+    def test_only_a_vcpkg_download_failure_in_the_presets_log_counts(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(ci_build, "ROOT", root):
+            log = Path(root, "build", "windows-msvc-ninja", "vcpkg-manifest-install.log")
+            self.assertFalse(ci_build.download_failed(["cmake", "--preset", "windows-msvc-ninja"]))
+            log.parent.mkdir(parents=True)
+            log.write_text("error: building fmt:x64-windows failed with: BUILD_FAILED\n", encoding="utf-8")
+            self.assertFalse(ci_build.download_failed(["cmake", "--preset", "windows-msvc-ninja"]))
+            log.write_text("error: Download timed out.\nCMake Error at scripts/cmake/vcpkg_download_distfile.cmake:136 (message):\n  Download failed, halting portfile.\n", encoding="utf-8")
+            self.assertTrue(ci_build.download_failed(["cmake", "--preset", "windows-msvc-ninja"]))
+            self.assertFalse(ci_build.download_failed(["cmake", "--build", "--preset", "windows-msvc-ninja"]))
 
 
 class BuildProfileTests(unittest.TestCase):
@@ -1367,6 +1407,308 @@ class GapRecordTests(unittest.TestCase):
     def test_a_file_named_as_a_gap_record_is_refused(self):
         found = ci_findings.problems_for("contrib/findings/combat/move-order-evidence-gap.json", self.finding())
         self.assertTrue(any("named as a gap record" in problem for problem in found), found)
+
+
+class FakeConsole:
+    def __init__(self, lines):
+        self.lines = list(lines)
+        self.start = 0
+
+    def matching(self, pattern, since=0):
+        return [line for line in self.lines[since:] if re.search(pattern, line)]
+
+    def wait(self, pattern, timeout, since=None, fail=None, alive=None, advance=True):
+        for line in self.lines:
+            found = re.search(pattern, line)
+            if found:
+                return found
+        raise RuntimeError(f"/{pattern}/ never appeared")
+
+
+class FakeDevServer:
+    WHAT = "the fake server"
+    READY_LINES = ()
+    ready = True
+    log = None
+
+    def __init__(self, program, defaults, folder, host, port, databases, settings=(), admin_port=None, environment=None):
+        self.program, self.defaults, self.folder, self.host, self.port = program, defaults, folder, host, port
+        self.settings, self.admin_port, self.environment = list(settings), admin_port, environment
+        self.console = FakeConsole(self.READY_LINES)
+        self.process = None
+        self.sent = []
+        FakeDevServer.log.append((self.WHAT, "made"))
+
+    def start(self, timeout):
+        self.process = mock.Mock(pid=4000 + len(FakeDevServer.log), stopped=False)
+        FakeDevServer.log.append((self.WHAT, "start"))
+        if not self.ready:
+            raise RuntimeError(f"{self.WHAT} never said it was ready")
+        return f"ready as process {self.process.pid}"
+
+    def alive(self):
+        return self.process is not None and not self.process.stopped
+
+    def send(self, line):
+        self.sent.append(line)
+
+    def health(self):
+        return f"http://{self.host}:{self.admin_port}/api/health answered running"
+
+    def session_offer(self):
+        return f"{self.host}:{self.port} offered session 1"
+
+    def ensure_account(self, user, password):
+        return f"{user} created with id 1"
+
+    def stop(self):
+        FakeDevServer.log.append((self.WHAT, "stop"))
+        if self.process is None:
+            return "it was never started"
+        self.process.stopped = True
+        return "stopped by the shutdown command with 0"
+
+
+UPDATED = ["No Wizard101 install is in use, so client messages are logged by service and order only"] + [f"INFO  [sql.updates] The {kind} database is up to date" for kind in ("login", "characters", "world")]
+
+
+class FakeDevLogin(FakeDevServer):
+    WHAT = "the login server"
+    READY_LINES = UPDATED + ["Account devrun created with id 1"]
+
+
+class FakeDevGame(FakeDevServer):
+    WHAT = "the game server"
+    READY_LINES = UPDATED + ["Realm AmbroseDevRun at 127.0.0.1:{port} says it is alive every 30 second(s)", "The world has ticked 12 time(s) and holds 1 session(s)"]
+
+    def __init__(self, *arguments, **options):
+        super().__init__(*arguments, **options)
+        self.console.lines = [line.replace("{port}", str(self.port)) for line in self.console.lines]
+
+
+class FakeScratch:
+    def __init__(self, host, port, user, password, prefix):
+        self.address = f"{host}:{port}"
+        self.names = {kind: f"{prefix}_{kind}" for kind in ("login", "characters", "world")}
+        self.queries = []
+
+    def drop(self):
+        FakeDevServer.log.append(("databases", "drop"))
+        return "dropped " + ", ".join(sorted(self.names.values()))
+
+    def value(self, kind, query):
+        self.queries.append((kind, query))
+        return 7
+
+    def account_id(self, user):
+        return 1
+
+
+class DevRunTests(unittest.TestCase):
+    def test_a_change_boots_only_the_targets_its_paths_belong_to(self):
+        chosen, _ = ci_dev_run.plan("pull_request", "base", "head", FakeGit(["apps/dashboard/src/App.svelte"]))
+        self.assertEqual(chosen, ["panel"])
+        chosen, _ = ci_dev_run.plan("pull_request", "base", "head", FakeGit(["src/server/apps/supervisor/Main.cpp", "src/server/game/Movement/Move.cpp"]))
+        self.assertEqual(chosen, ["panel", "gameserver"])
+        chosen, reasons = ci_dev_run.plan("pull_request", "base", "head", FakeGit(["doc/ROADMAP.md", "src/tools/extractor/Main.cpp"]))
+        self.assertEqual(chosen, [])
+        self.assertIn("touches nothing a dev run boots", " ".join(reasons))
+
+    def test_a_shared_or_undiffable_change_boots_every_target(self):
+        git = FakeGit(["src/server/shared/Network/Session.cpp"])
+        self.assertEqual(ci_dev_run.plan("pull_request", "base", "head", git)[0], list(ci_dev_run.TARGETS))
+        self.assertTrue(git.merge_base)
+        self.assertEqual(ci_dev_run.plan("push", "before", "after", FakeGit(None))[0], list(ci_dev_run.TARGETS))
+        self.assertEqual(ci_dev_run.plan("workflow_dispatch", "", "", FakeGit([]))[0], list(ci_dev_run.TARGETS))
+
+    def test_select_writes_a_flag_for_every_target(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = os.path.join(folder, "output")
+            environment = {"EVENT_NAME": "pull_request", "PR_BASE": "base", "PR_HEAD": "head", "GITHUB_OUTPUT": output}
+            with mock.patch("sys.stdout", io.StringIO()):
+                self.assertEqual(ci_dev_run.main(["select", "--from-github-env"], environment, FakeGit(["tests/e2e/panel.spec.ts"])), 0)
+            with open(output, encoding="utf-8") as handle:
+                lines = handle.read().splitlines()
+        self.assertEqual(lines, ["targets=panel", "panel=true", "loginserver=false", "gameserver=false"])
+
+    def test_the_panel_run_refuses_missing_binaries_instead_of_skipping_every_spec(self):
+        ran = []
+        with tempfile.TemporaryDirectory() as folder, mock.patch("sys.stderr", io.StringIO()) as errors:
+            code = ci_dev_run.main(["panel", "--binaries", folder, "--build-dir", folder, "--config", "Debug"], {}, runner=lambda *a, **k: ran.append(a),
+                                   which=lambda name: name)
+        self.assertEqual(code, 1)
+        self.assertEqual(ran, [])
+        self.assertIn("supervisor", errors.getvalue())
+
+    def test_the_panel_run_compiles_no_supervisor_from_a_panel_build_that_left_no_page(self):
+        calls = []
+
+        def runner(command, cwd, env):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory() as folder, mock.patch("sys.stdout", io.StringIO()), mock.patch("sys.stderr", io.StringIO()) as errors:
+            with mock.patch("os.path.isfile", side_effect=lambda path: not path.endswith("index.html")):
+                code = ci_dev_run.main(["panel", "--binaries", folder, "--build-dir", folder, "--config", "Debug"], {}, runner=runner,
+                                       which=lambda name: "/usr/bin/" + name)
+        self.assertEqual(code, 1)
+        self.assertEqual([command[1:] for command in calls], [["run", "build", "--workspace", "apps/dashboard"]])
+        self.assertIn("index.html", errors.getvalue())
+
+    def test_a_failed_spec_run_prints_each_failure_page_into_the_log(self):
+        with tempfile.TemporaryDirectory() as folder:
+            page = os.path.join(folder, "panel-signing-in-e2e")
+            os.makedirs(page)
+            with open(os.path.join(page, "error-context.md"), "w", encoding="utf-8") as handle:
+                handle.write("- heading \"Overview\"\n- text: Not answering\n")
+            with open(os.path.join(page, "trace.zip"), "w", encoding="utf-8") as handle:
+                handle.write("binary")
+            with mock.patch("sys.stdout", io.StringIO()) as printed:
+                ci_dev_run.print_failure_pages(folder)
+        self.assertIn(os.path.join("panel-signing-in-e2e", "error-context.md"), printed.getvalue())
+        self.assertIn("text: Not answering", printed.getvalue())
+        self.assertNotIn("binary", printed.getvalue())
+
+    def test_the_panel_run_points_the_specs_at_the_built_binaries(self):
+        calls = []
+
+        def runner(command, cwd, env):
+            calls.append((command, env))
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory() as folder:
+            with mock.patch("os.path.isfile", side_effect=lambda path: True), mock.patch("sys.stdout", io.StringIO()):
+                code = ci_dev_run.main(["panel", "--binaries", folder, "--build-dir", folder, "--config", "Debug"], {"PATH": "/bin"}, runner=runner,
+                                       which=lambda name: "/usr/bin/" + name)
+        self.assertEqual(code, 0)
+        self.assertEqual([command[1:] for command, _ in calls], [["run", "build", "--workspace", "apps/dashboard"],
+                                                                 ["--build", folder, "--config", "Debug", "--target", "supervisor"],
+                                                                 ["playwright", "test", "--project", "e2e"]])
+        environment = calls[-1][1]
+        self.assertEqual(environment["AMBROSE_SUPERVISOR"], ci_dev_run.program(folder, "supervisor"))
+        self.assertEqual(environment["AMBROSE_PANEL_APP"], ci_dev_run.program(folder, "patchserver"))
+        self.assertEqual(environment["AMBROSE_GAMESERVER"], ci_dev_run.program(folder, "gameserver"))
+        self.assertEqual(environment["CI"], "1")
+
+    def driver(self, game_ready=True):
+        FakeDevServer.log = []
+        game = type("Game", (FakeDevGame,), {"ready": game_ready})
+        return SimpleNamespace(LoginServer=FakeDevLogin, GameServer=game, Scratch=FakeScratch, paths=SimpleNamespace(program=lambda name: name))
+
+    def boot(self, folder, targets, driver, environment=None):
+        environment = {"AMBROSE_TEST_DB": "127.0.0.1;3306;root;root;ambrose_test", "AMBROSE_CLIENT_DIR": "C:/Wizard101"} if environment is None else environment
+        arguments = SimpleNamespace(binaries=folder, targets=targets)
+        with mock.patch("os.path.isfile", side_effect=lambda path: True), mock.patch("sys.stdout", io.StringIO()) as printed:
+            code = ci_dev_run.servers(arguments, environment, driver, work=folder)
+        return code, printed.getvalue()
+
+    def test_the_server_targets_boot_the_login_server_under_the_game_server(self):
+        self.assertEqual(ci_dev_run.server_targets("panel gameserver"), ["loginserver", "gameserver"])
+        self.assertEqual(ci_dev_run.server_targets("loginserver"), ["loginserver"])
+        self.assertEqual(ci_dev_run.server_targets("panel"), [])
+        with self.assertRaises(ValueError):
+            ci_dev_run.server_targets("worldserver")
+        self.assertEqual(ci_dev_run.database_address({"AMBROSE_TEST_DB": "127.0.0.1;3306;root;root;ambrose_test"}), ("127.0.0.1", 3306, "root", "root"))
+        self.assertIsNone(ci_dev_run.database_address({}))
+
+    def test_the_server_run_refuses_missing_binaries_and_a_missing_database(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch("sys.stderr", io.StringIO()) as errors:
+            self.assertEqual(ci_dev_run.main(["servers", "--binaries", folder, "--targets", "loginserver"], {}, driver=self.driver()), 1)
+            self.assertIn("loginserver.conf.dist", errors.getvalue())
+            self.assertNotIn("gameserver", errors.getvalue())
+            with mock.patch("os.path.isfile", side_effect=lambda path: True):
+                self.assertEqual(ci_dev_run.main(["servers", "--binaries", folder], {}, driver=self.driver()), 1)
+            self.assertIn("AMBROSE_TEST_DB", errors.getvalue())
+        self.assertEqual(FakeDevServer.log, [])
+
+    def test_the_server_run_boots_both_headless_checks_each_and_stops_them_before_dropping_the_databases(self):
+        driver = self.driver()
+        with tempfile.TemporaryDirectory() as folder:
+            summary = os.path.join(folder, "summary")
+            code, printed = self.boot(folder, "panel gameserver", driver, {"AMBROSE_TEST_DB": "127.0.0.1;3306;root;root;ambrose_test",
+                                                                           "AMBROSE_CLIENT_DIR": "C:/Wizard101", "GITHUB_STEP_SUMMARY": summary})
+            with open(summary, encoding="utf-8") as handle:
+                written = handle.read()
+        self.assertEqual(code, 0, printed)
+        self.assertNotIn("FAIL", printed)
+        self.assertEqual(FakeDevServer.log, [("databases", "drop"), ("the login server", "made"), ("the login server", "start"), ("the game server", "made"),
+                                             ("the game server", "start"), ("the game server", "stop"), ("the login server", "stop"), ("databases", "drop")])
+        for wanted in ("the login server ready", "the login server updated the world database", "the login server's admin API health", "the login server offers a session",
+                       "the login server's console", "the game server's console: The world has ticked 12", "the game server attached to the login database",
+                       "the game server stopped", "the scratch databases dropped"):
+            self.assertIn(wanted, printed)
+        self.assertIn("### Dev run of the servers", written)
+
+    def test_the_servers_are_given_no_install_their_own_ports_and_their_own_data_folder(self):
+        made = []
+        driver = self.driver()
+
+        class Login(FakeDevLogin):
+            def __init__(self, *arguments, **options):
+                super().__init__(*arguments, **options)
+                made.append(self)
+
+        driver.LoginServer = Login
+        with tempfile.TemporaryDirectory() as folder:
+            code, printed = self.boot(folder, "loginserver", driver)
+        self.assertEqual(code, 0, printed)
+        login = made[0]
+        self.assertEqual(login.program, os.path.join(folder, "loginserver"))
+        self.assertEqual(login.defaults, os.path.join(folder, "loginserver.conf.dist"))
+        for wanted in ("ClientDir=", "TypeDumpPath=", "Setup.Mode=off"):
+            self.assertIn(wanted, login.settings)
+        self.assertNotEqual(login.port, login.admin_port)
+        self.assertNotIn("AMBROSE_CLIENT_DIR", login.environment)
+        self.assertEqual(login.environment["XDG_DATA_HOME"], os.path.join(folder, "data"))
+        self.assertNotIn(("the game server", "made"), FakeDevServer.log)
+
+    def test_a_server_that_never_gets_ready_fails_the_run_and_everything_is_still_stopped_and_dropped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            os.makedirs(os.path.join(folder, "gameserver"))
+            with open(os.path.join(folder, "gameserver", "console.txt"), "w", encoding="utf-8") as handle:
+                handle.write("FATAL the world could not load\n")
+            code, printed = self.boot(folder, "gameserver", self.driver(game_ready=False))
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL the game server ready", printed)
+        self.assertIn("gameserver| FATAL the world could not load", printed)
+        self.assertEqual(FakeDevServer.log[-3:], [("the game server", "stop"), ("the login server", "stop"), ("databases", "drop")])
+
+    def test_every_path_the_dev_run_boots_builds_the_linux_gcc_leg_and_triggers_a_push(self):
+        entries = list(ci_dev_run.EVERYTHING) + [entry for target in ci_dev_run.BOOTED for entry in ci_dev_run.TARGETS[target]]
+        for entry in entries:
+            path = entry + "x" if entry.endswith("/") else entry
+            self.assertEqual(ci_select_legs.legs_for_paths([path]), ["linux-gcc"], entry)
+            self.assertTrue(any(path.startswith(pushed[:-2]) if pushed.endswith("/**") else path == pushed for pushed in ci_select_legs.PUSH_PATHS), entry)
+        result = ci_select_legs.plan("pull_request", {}, at("2026-10-13T00:00:00Z"), FakeGit(["apps/dashboard/src/App.svelte"]))
+        self.assertEqual(result["legs"], ["linux-gcc"])
+        self.assertIn("what the dev run boots", " ".join(result["reasons"]))
+        self.assertEqual(ci_select_legs.legs_for_paths(["src/tools/extractor/Main.cpp"]), ["linux-gcc"])
+        self.assertEqual(ci_select_legs.legs_for_paths(["doc/ROADMAP.md", "apps/launcherui/src/App.svelte"]), [])
+        self.assertEqual(ci_select_legs.matrix(["linux-gcc"])["include"][0]["job_timeout"],
+                         sum(ci_select_legs.LEGS["linux-gcc"][key] for key in ("configure_timeout", "build_timeout", "dev_run_timeout")) + ci_select_legs.JOB_TIMEOUT_MARGIN)
+
+    def test_the_workflow_runs_the_panel_after_the_linux_gcc_leg_from_its_own_binaries(self):
+        with open(os.path.join(ROOT, ".github", "workflows", "core-build.yml"), encoding="utf-8") as handle:
+            workflow = handle.read()
+        with open(os.path.join(ROOT, "CMakePresets.json"), encoding="utf-8") as handle:
+            presets = {preset["name"]: preset for preset in json.load(handle)["buildPresets"]}
+        leg = ci_select_legs.LEGS["linux-gcc"]
+        binaries = f"build/{leg['configure']}/bin/{presets[leg['build']]['configuration']}"
+        self.assertIn(f"run: python apps/ci/ci_dev_run.py panel --binaries {binaries} --build-dir build/{leg['configure']} --config {presets[leg['build']]['configuration']}",
+                      workflow)
+        self.assertIn("dev_run_panel: ${{ steps.devrun.outputs.panel }}", workflow)
+        self.assertIn("run: python3 apps/ci/ci_dev_run.py select --from-github-env", workflow)
+        self.assertIn("matrix.leg == 'linux-gcc' && needs.select.outputs.dev_run_panel == 'true'", workflow)
+        self.assertIn(f'run: python apps/ci/ci_dev_run.py servers --binaries {binaries} --targets "$DEV_RUN_TARGETS"', workflow)
+        for target in ("loginserver", "gameserver", "targets"):
+            self.assertIn(f"dev_run_{target}: ${{{{ steps.devrun.outputs.{target} }}}}", workflow)
+        with open(os.path.join(ROOT, "apps", "clientdriver", "requirements.txt"), encoding="utf-8") as handle:
+            pymysql = next(line.strip() for line in handle if line.startswith("PyMySQL=="))
+        self.assertIn(f"run: python -m pip install --disable-pip-version-check {pymysql}", workflow)
+        with open(os.path.join(ROOT, "package.json"), encoding="utf-8") as handle:
+            package = json.load(handle)
+        self.assertIn("playwright test --project e2e", package["scripts"]["e2e"])
+        self.assertIn("key: playwright-${{ runner.os }}-" + package["devDependencies"]["@playwright/test"], workflow)
 
 
 class FindingsTests(unittest.TestCase):

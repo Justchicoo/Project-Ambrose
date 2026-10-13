@@ -613,6 +613,18 @@ TEST(ChildProcessHandleTest, LaunchWritesOutputAndErrorsToFilesAndReportsTheExit
     EXPECT_FALSE(ChildProcessHandle::Describe(child.GetIdentity().Id).has_value());
 }
 
+TEST(ChildProcessHandleTest, LaunchPassesEnvironmentVariablesToTheChild)
+{
+    LogTestDirectory directory;
+    std::string error;
+    ChildLaunchOptions options = LaunchOptions(directory, { "env", "AMBROSE_LAUNCH_TEST_VAR" });
+    options.Environment = { { "AMBROSE_LAUNCH_TEST_VAR", "launch-value-42" } };
+    ChildProcessHandle child = ChildProcessHandle::Launch(options, error);
+    ASSERT_TRUE(child) << error;
+    ASSERT_TRUE(child.WaitForExit(30s));
+    EXPECT_EQ(ReadWhole(directory.Path() / "out.log"), "launch-value-42\n");
+}
+
 TEST(ChildProcessHandleTest, OutputKeepsLandingAfterTheLaunchingHandleIsGone)
 {
     LogTestDirectory directory;

@@ -1,11 +1,11 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, then builds and tests, with every leg compiling through its own ccache cache and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a push that touches the code, the data the tests read or the build definition, by the schedule, a label, or a manual run.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache, which pull requests restore and only pushes to main, the schedule and manual runs save, each build banking its vcpkg and compiler caches even when a newer push cancels it, and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, the panel's end-to-end specs against its supervisor, relinked with the panel just built, and patchserver, keeping a failed run's Playwright results as an artifact, and the login and game servers booted with no client install against scratch databases.
 name: core-build
 
 on:
   push:
     branches: [main]
-    paths: [".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json"]
+    paths: [".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/dashboard/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "modules/**", "package-lock.json", "package.json", "packages/**", "playwright.config.ts", "src/**", "tests/e2e/**", "vcpkg.json"]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   schedule:
@@ -39,10 +39,6 @@ jobs:
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       OUTSIDE_PULL_REQUEST: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || contains(github.event.pull_request.labels.*.name, 'contrib') || startsWith(github.head_ref, 'milestone/')) }}
-    outputs:
-      build: ${{ steps.select.outputs.build }}
-      matrix: ${{ steps.select.outputs.matrix }}
-      windows_keepalive: ${{ steps.select.outputs.windows_keepalive }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,21 +129,6 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
         run: python apps/ci/ci_commit_trailer.py --from-github-env
-      - name: Select build legs
-        id: select
-        if: ${{ !cancelled() }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          SCHEDULE: ${{ github.event.schedule }}
-          DISPATCH_LEGS: ${{ inputs.legs }}
-          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-          PR_BRANCH: ${{ github.head_ref }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD: ${{ github.event.pull_request.head.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
-          PUSH_AFTER: ${{ github.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python apps/ci/ci_select_legs.py --from-github-env
       - name: Refresh Linux vcpkg binary cache
         if: ${{ !cancelled() && github.event_name == 'schedule' }}
         timeout-minutes: 3
@@ -158,12 +139,57 @@ jobs:
           key: vcpkg-${{ runner.os }}-
           restore-keys: vcpkg-${{ runner.os }}-
 
+  select:
+    name: select
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || startsWith(github.event.label.name, 'ci:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    outputs:
+      build: ${{ steps.select.outputs.build }}
+      matrix: ${{ steps.select.outputs.matrix }}
+      windows_keepalive: ${{ steps.select.outputs.windows_keepalive }}
+      dev_run_panel: ${{ steps.devrun.outputs.panel }}
+      dev_run_loginserver: ${{ steps.devrun.outputs.loginserver }}
+      dev_run_gameserver: ${{ steps.devrun.outputs.gameserver }}
+      dev_run_targets: ${{ steps.devrun.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select build legs
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          DISPATCH_LEGS: ${{ inputs.legs }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 apps/ci/ci_select_legs.py --from-github-env
+      - name: Select the dev run
+        id: devrun
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: python3 apps/ci/ci_dev_run.py select --from-github-env
+
   windows-cache:
     name: windows-cache
-    needs: checks
-    if: ${{ !cancelled() && github.event_name == 'schedule' && (github.event.schedule == '17 6 * * 0' || github.event.schedule == '17 6 * * 3') && (needs.checks.outputs.windows_keepalive == 'true' || needs.checks.outputs.build == '' || vars.AMBROSE_CI_BUILDS == 'off') }}
+    needs: select
+    if: ${{ !cancelled() && github.event_name == 'schedule' && (github.event.schedule == '17 6 * * 0' || github.event.schedule == '17 6 * * 3') && (needs.select.outputs.windows_keepalive == 'true' || needs.select.outputs.build == '' || vars.AMBROSE_CI_BUILDS == 'off') }}
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Refresh Windows vcpkg binary cache
         timeout-minutes: 3
@@ -173,16 +199,24 @@ jobs:
           path: ${{ runner.temp }}/vcpkg-binary-cache
           key: vcpkg-${{ runner.os }}-
           restore-keys: vcpkg-${{ runner.os }}-
+      - name: Refresh Windows compiler cache
+        timeout-minutes: 3
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-windows-msvc-ninja-
+          restore-keys: ccache-windows-msvc-ninja-
 
   build:
     name: build (${{ matrix.leg }})
-    needs: checks
-    if: ${{ !cancelled() && needs.checks.outputs.build == 'true' && (github.event_name == 'schedule' || needs.checks.result == 'success') && (github.event_name == 'workflow_dispatch' || vars.AMBROSE_CI_BUILDS != 'off') }}
+    needs: select
+    if: ${{ !cancelled() && needs.select.outputs.build == 'true' && (github.event_name == 'workflow_dispatch' || vars.AMBROSE_CI_BUILDS != 'off') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.job_timeout }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.checks.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -237,11 +271,11 @@ jobs:
         run: python apps/ci/ci_build.py --setup-vcpkg "${{ runner.temp }}/vcpkg" --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors --stage configure
       - name: Name vcpkg binary cache
         id: vcpkg-key
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         continue-on-error: true
         run: python apps/ci/ci_vcpkg_cache.py --cache-dir "${{ runner.temp }}/vcpkg-binary-cache" --status "build/${{ matrix.configure }}/vcpkg_installed/vcpkg/status" --prefix "vcpkg-${{ runner.os }}-" --github-output
       - name: Save vcpkg binary cache
-        if: ${{ !cancelled() && steps.vcpkg-key.outputs.key != '' && steps.vcpkg-key.outputs.key != steps.vcpkg-restore.outputs.cache-matched-key }}
+        if: ${{ always() && steps.vcpkg-key.outputs.key != '' && steps.vcpkg-key.outputs.key != steps.vcpkg-restore.outputs.cache-matched-key }}
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
@@ -264,9 +298,59 @@ jobs:
           CCACHE_DIR: ${{ runner.temp }}/ccache
         run: ccache --show-stats
       - name: Save compiler cache
-        if: ${{ !cancelled() && steps.configure.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        if: ${{ always() && github.event_name != 'pull_request' && steps.configure.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/ccache
           key: ccache-${{ matrix.configure }}-${{ github.sha }}
+      - name: Set up Node for the dev run
+        id: devrun-node
+        if: ${{ !cancelled() && steps.configure.outcome == 'success' && matrix.leg == 'linux-gcc' && needs.select.outputs.dev_run_panel == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install the panel workspace for the dev run
+        id: devrun-install
+        if: ${{ !cancelled() && steps.devrun-node.outcome == 'success' }}
+        timeout-minutes: 5
+        run: npm ci --ignore-scripts
+      - name: Restore the dev run's browser
+        id: devrun-browsers
+        if: ${{ !cancelled() && steps.devrun-install.outcome == 'success' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-1.63.0
+      - name: Install the dev run's browser
+        id: devrun-browser
+        if: ${{ !cancelled() && steps.devrun-install.outcome == 'success' }}
+        timeout-minutes: 5
+        run: npx playwright install --with-deps chromium
+      - name: Dev run of the panel, supervisor and patchserver
+        id: devrun-panel
+        if: ${{ !cancelled() && steps.devrun-browser.outcome == 'success' }}
+        timeout-minutes: 10
+        run: python apps/ci/ci_dev_run.py panel --binaries build/linux-gcc/bin/Debug --build-dir build/linux-gcc --config Debug
+      - name: Keep the dev run's failed specs
+        if: ${{ !cancelled() && steps.devrun-panel.outcome == 'failure' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-run-panel-results
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Install the dev run's database driver
+        id: devrun-servers-setup
+        if: ${{ !cancelled() && steps.configure.outcome == 'success' && matrix.leg == 'linux-gcc' && (needs.select.outputs.dev_run_loginserver == 'true' || needs.select.outputs.dev_run_gameserver == 'true') }}
+        timeout-minutes: 3
+        run: python -m pip install --disable-pip-version-check PyMySQL==1.2.0
+      - name: Dev run of the login and game servers
+        if: ${{ !cancelled() && steps.devrun-servers-setup.outcome == 'success' }}
+        timeout-minutes: 6
+        env:
+          AMBROSE_TEST_DB: 127.0.0.1;3306;root;root;ambrose_test
+          DEV_RUN_TARGETS: ${{ needs.select.outputs.dev_run_targets }}
+        run: python apps/ci/ci_dev_run.py servers --binaries build/linux-gcc/bin/Debug --targets "$DEV_RUN_TARGETS"

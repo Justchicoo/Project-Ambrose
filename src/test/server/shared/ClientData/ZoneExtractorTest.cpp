@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing sigil class is read as the CoreObjectInfo it derives from and kept under its own class name, which the zone manager never sends, an entry of a missing class no sigil name proves is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry. A zone's pathData.xml, written as BINd, and the node list its pathNodeData.bin holds as a bare versionable object become paths with their nodes in the order each path names them, which the SQL script writes to zone_path and zone_path_node, and a path naming a node the list lacks, or files given the wrong way round, fail that file alone.
+ * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing sigil class is read as the CoreObjectInfo it derives from and kept under its own class name with the sigil record name its m_templateName holds, which the zone manager never sends, an entry of a missing class no sigil name proves is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry. A zone's pathData.xml, written as BINd, and the node list its pathNodeData.bin holds as a bare versionable object become paths with their nodes in the order each path names them, which the SQL script writes to zone_path and zone_path_node, and a path naming a node the list lacks, or files given the wrong way round, fail that file alone.
  */
 
 #include "BindFile.h"
@@ -40,6 +40,7 @@ namespace
     constexpr char const* Hub = "WizardCity/WC_Hub";
     constexpr char const* HubArchive = "WizardCity-WC_Hub";
     constexpr char const* Sigil = "class MinigameSigilInfo";
+    constexpr char const* SigilTemplate = "TestRingOfEight";
     constexpr char const* Mystery = "class MysteryObjectInfo";
 
     Json Property(std::string const& type, std::string const& name, uint32 id, std::string const& container)
@@ -117,6 +118,7 @@ namespace
         {
             std::vector<std::pair<std::string, std::string>> sigil = ObjectInfoFields();
             sigil.emplace_back("std::string", "m_sigilName");
+            sigil.emplace_back("std::string", "m_templateName");
             AddClass(classes, Sigil, { "class CoreObjectInfo", "class PropertyClass" }, sigil);
             AddClass(classes, Mystery, { "class CoreObjectInfo", "class PropertyClass" }, ObjectInfoFields());
             AddClass(classes, "class ReqQuestState", { "class Requirement", "class PropertyClass" }, { { "unsigned int", "m_questID" } });
@@ -251,6 +253,10 @@ namespace
                 EXPECT_EQ(object->Set("m_overrideName", placed.OverrideName), PropertySetResult::Ok);
                 EXPECT_EQ(object->Set("m_globalDynamic", placed.GlobalDynamic), PropertySetResult::Ok);
                 EXPECT_EQ(object->Set("m_bUndetectable", placed.Undetectable), PropertySetResult::Ok);
+                if (placed.ClassName == Sigil)
+                {
+                    EXPECT_EQ(object->Set("m_templateName", std::string(SigilTemplate)), PropertySetResult::Ok);
+                }
                 if (placed.Requirements)
                 {
                     EXPECT_EQ(object->Set("m_spawnRequirements", Requirements(placed.UnknownRequirement)), PropertySetResult::Ok);
@@ -345,6 +351,8 @@ TEST_F(ZoneExtractorTest, EachLocationAndEachEntryTheDumpDescribesBecomesARow)
     EXPECT_FLOAT_EQ(sigil.Scale, 1.0f);
     EXPECT_EQ(sigil.ZoneTag, "tag 114612");
     EXPECT_EQ(sigil.LoadingType, 3);
+    EXPECT_EQ(sigil.SigilTemplate, SigilTemplate) << "a sigil keeps the name of the sigil record it places, read from the property the reader's dump cannot describe";
+    EXPECT_TRUE(zone.Objects[0].SigilTemplate.empty());
     ExtractedObject const& emitter = zone.Objects[2];
     EXPECT_EQ(emitter.ClassName, "class PositionalSoundEmitterInfo") << "a subclass of CoreObjectInfo is kept with its own class";
     EXPECT_EQ(emitter.StartState, "Playing") << "the start state is the name of a state, not a number";
@@ -417,7 +425,8 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     EXPECT_NE(statements[1].find(WorldSqlScript::Literal(std::string(Hub))), std::string::npos) << statements[1];
     EXPECT_EQ(statements[4], "DELETE FROM `zone_object`");
     EXPECT_NE(statements[5].find("`spawn_requirements`"), std::string::npos) << statements[5];
-    EXPECT_NE(statements[5].find("'', 0, 0, 1, NULL)"), std::string::npos) << "the emitter's loading type is 1 and it has no spawn requirements: " << statements[5];
+    EXPECT_NE(statements[5].find("'', 0, 0, 1, NULL, '')"), std::string::npos) << "the emitter's loading type is 1 and it has no spawn requirements or sigil: " << statements[5];
+    EXPECT_NE(statements[5].find(WorldSqlScript::Literal(std::string(SigilTemplate))), std::string::npos) << statements[5];
     EXPECT_EQ(statements[6], "DELETE FROM `zone_volume`");
     EXPECT_EQ(statements[9], "DELETE FROM `zone_trigger_result`");
     EXPECT_EQ(statements[10], "DELETE FROM `zone_spawner`");
@@ -485,6 +494,7 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
         EXPECT_EQ(objects->at(1).ClassName, Sigil);
         EXPECT_EQ(objects->at(1).Loading, objects->at(0).Loading);
         EXPECT_TRUE(objects->at(1).IsSigil());
+        EXPECT_EQ(objects->at(1).SigilTemplate, SigilTemplate);
         EXPECT_FALSE(objects->at(1).IsSentByServer()) << "a sigil row is kept but never sent as an object, whatever its loading type";
         EXPECT_EQ(objects->at(2).ClassName, "class PositionalSoundEmitterInfo");
         EXPECT_EQ(objects->at(2).Loading, ZoneObjectLoading::StaticClient);

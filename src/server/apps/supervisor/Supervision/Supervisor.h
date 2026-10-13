@@ -83,6 +83,7 @@ public:
     void SetCommandContext(SupervisorCommandLevel level, SupervisorActorName actor);
     void SetRelayHooks(SupervisorRelayHooks hooks);
     void SetStatusObserver(AppStatusObserver observer);
+    void SetLaunchSettingsProvider(LaunchSettingsProvider provider);
     static std::string StatusData(AppSnapshot const& snapshot);
     static std::vector<std::pair<std::string, std::string>> ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,
         std::string_view permission, std::string const& name);
@@ -116,6 +117,7 @@ private:
 
     Log& _log;
     ChildBreakSender _sendBreak;
+    LaunchSettingsProvider _launchSettings;
     std::unique_ptr<SupervisorState> _state;
     mutable std::shared_mutex _mutex;
     std::vector<std::unique_ptr<ManagedApp>> _apps;

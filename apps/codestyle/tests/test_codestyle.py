@@ -281,6 +281,12 @@ class VendoredAssetTests(unittest.TestCase):
     def test_a_vendored_icon_is_exempt(self):
         self.assertEqual(check("design/icons/play.svg", '<svg viewBox="0 0 24 24"></svg>\n'), [])
 
+    def test_the_creature_deck_file_is_exempt(self):
+        self.assertEqual(check("data/combatdecks.db", b"SQLite format 3\x00"), [])
+
+    def test_another_database_file_has_no_rule(self):
+        self.assertEqual([issue.rule for issue in check("data/other.db", b"SQLite format 3\x00")], ["unknown-type"])
+
     def test_an_npmrc_takes_the_hash_header(self):
         self.assertEqual(check(".npmrc", HASH_HEADER + "save-exact=true\n"), [])
 

@@ -12,7 +12,8 @@
 [![Build](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/core-build.yml/badge.svg)](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/core-build.yml)
 [![Front end](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/front-end.yml/badge.svg)](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/front-end.yml)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-8798BC?labelColor=131B31)](#building)
-[![Progress](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FJustchicoo%2FProject-Ambrose%2Fmain%2Fdoc%2Fprogress%2Fbadge.json)](doc/progress/)
+[![Game server](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FJustchicoo%2FProject-Ambrose%2Fmain%2Fdoc%2Fprogress%2Fbadge.json)](doc/progress/)
+[![Panel](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FJustchicoo%2FProject-Ambrose%2Fmain%2Fdoc%2Fprogress%2Fpanel-badge.json)](doc/progress/)
 [![Contributor track](https://img.shields.io/badge/open%20items-56-5FD3C4?labelColor=131B31)](doc/CONTRIBUTOR-TRACK.md)
 
 **[Roadmap](doc/ROADMAP.md)** &nbsp;·&nbsp; **[Architecture](doc/ARCHITECTURE.md)** &nbsp;·&nbsp; **[Panel](doc/PANEL.md)** &nbsp;·&nbsp; **[Work board](https://justchicoo.github.io/Project-Ambrose/)** &nbsp;·&nbsp; **[Contribute](doc/CONTRIBUTOR-TRACK.md)** &nbsp;·&nbsp; **[Milestones](doc/MILESTONE-TRACK.md)** &nbsp;·&nbsp; **[Start with your AI](contrib/AI-MILESTONES-HERE.md)** &nbsp;·&nbsp; **[Discord](https://discord.gg/Dx6ACDUj6N)**
@@ -24,7 +25,7 @@
 The experiment is simple: see how far AI-driven development can take a complete game server. Humans set direction and review; AI agents write the code. Nothing here is copied from another emulator, and nothing extracted from the game client is ever committed.
 
 > [!NOTE]
-> **Pre-alpha.** Press Play in Ambrose's own launcher and a real Wizard101 client signs in, creates, picks or deletes a wizard and enters the world: it stands in the Commons with the zone's objects and NPCs around it, walks, sees other players and chats with them, walks through doors from one Wizard City zone to the next, quits back to character select, and logs out where it stood. Quests, gear and combat are being built, and each server shows itself live in its own web panel.
+> **Pre-alpha.** Press Play in Ambrose's own launcher and a real Wizard101 client signs in, creates, picks or deletes a wizard and enters the world: it stands in the Commons with the zone's objects and NPCs around it, walks, sees other players and chats with them, walks through doors from one Wizard City zone to the next, wears gear that other players see, finds its spells in its Spell Deck, quits back to character select, and logs out where it stood. Quests and combat are being built, and each server shows itself live in its own web panel.
 
 ## Where the project is
 
@@ -34,21 +35,26 @@ The experiment is simple: see how far AI-driven development can take a complete 
 
 </div>
 
-The card is generated from the roadmap itself by `apps/progress/progress.py`, so it cannot drift from what is built: a milestone counts when every one of its acceptance checks is ticked. [doc/progress/progress.json](doc/progress/progress.json) holds the same numbers for anything that wants to read them, and the panel and the Discord announcement both use it.
+The card is generated from the roadmap itself by `apps/progress/progress.py`, so it cannot drift from what is built: a milestone counts when every one of its acceptance checks is ticked. The game server, phases 1 to 16, and the panel, phase 17, are counted apart, each with its own bar and badge, so one never hides how far the other has come. [doc/progress/progress.json](doc/progress/progress.json) holds the same numbers for anything that wants to read them, and the panel and the Discord announcement both use it.
 
 ## What runs today
 
 | Working | Not yet |
 |---|---|
 | Session handshake against a retail client, signing in, a wrong password and a retry | Teleporting to friends and from the map |
-| The character list, creating a wizard through the client's own screens, deleting one, and the school badge on its Badges page | Quests and NPC dialog |
-| Picking a wizard and the handoff to the game server with the key it was issued, and quitting from the world back to character select without the password | Combat and wearing gear |
+| The character list, creating a wizard through the client's own screens, deleting one, and the school badge on its Badges page | Quests offered by NPCs, and their dialog |
+| Picking a wizard and the handoff to the game server with the key it was issued, and quitting from the world back to character select without the password | Combat rounds, spells cast in a duel, and its rewards |
 | Entering the world: a wizard stands in its zone with every object and NPC the zone's data places there | Pets, housing, crafting and minigames |
-| Walking, with where the wizard stands kept and restored at the next login, and walking through a door into the next zone | Serving patches to a client |
-| The wizard's level, experience, health, mana and gold from the database, shown on the client's HUD and character page | The installer's first full run on a clean Windows machine; it already takes a clean Ubuntu from a checkout to running servers |
+| Walking, with where the wizard stands kept and restored at the next login, and walking through a door into the next zone | Serving patch files to a client and patching it from Ambrose |
+| The wizard's level, experience, health, mana and gold from the database, shown on the client's HUD and character page | The Windows setup program that installs Ambrose like any other program |
 | Other players in the same zone, say chat, quick chat and emotes | The panel's game data pages, hosting and backups, and two-factor sign-in |
 | GM commands typed in chat, checked against the account's security level |
 | The backpack on the server: items added, stacked, locked and trashed, with an overflow when it is full | |
+| Wearing and taking off gear, seen on the wearer and by other players, and learned spells shown in the Spell Deck beside a worn deck | |
+| A wizard's quest log, kept across logouts with the quest and goal ids it was given | |
+| The installer, taking a clean Windows 11 or Ubuntu machine from a checkout to running servers | |
+| The patch server answering the client's request for its file list | |
+| A game master's duel: a wizard and a creature placed on their circles in a sigil's ring | |
 | Logging out, link-dead and AFK handling, and a server shutdown that warns players and brings each wizard back where it stood | |
 | Ambrose's own launcher: a window with a Play button that starts your own client, and the console launcher beside it | |
 | The game layer's core: a world tick, scripts and modules that join the build by existing, command handling with security levels, and settings and data that reload live | |
@@ -58,7 +64,7 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 
 [doc/ROADMAP.md](doc/ROADMAP.md)'s **Where we are** says exactly which milestones are done, and the [work board](https://justchicoo.github.io/Project-Ambrose/) says what is being built right now and by whom. The plan runs in **17 phases**, each milestone ending in something visible in the real client or the panel.
 
-143 of the 469 milestones are finished. Phases 1, 2, 4 and 6 are complete, phase 3 waits only on the launcher as its own app and phase 5 only on the installer, and quests, a wizard's gear and combat have their groundwork in. Outside contributors have finished twenty-five milestones and landed part of eighteen more. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
+The game server has 136 of its 283 milestones finished and the panel 23 of its 186. Phases 1, 2, 4, 5 and 6 are complete, phase 3 waits only on the launcher as its own app, a wizard now wears its gear and sees its spells, a game master can start a duel that puts a wizard and a creature on their circles, and quests and the rest of combat have their groundwork in. Outside contributors have had a hand in thirty-five finished milestones and landed part of eight more. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
 
 ## Building
 

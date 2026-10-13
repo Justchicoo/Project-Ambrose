@@ -64,6 +64,15 @@ export const routes: Route[] = [
         view: { kind: "page", load: () => import("./pages/Servers.svelte") },
     },
     {
+        path: "launch",
+        title: "Launch settings",
+        icon: SlidersHorizontalIcon,
+        permission: "launch.read",
+        nav: true,
+        group: "Servers",
+        view: { kind: "page", load: () => import("./pages/Launch.svelte") },
+    },
+    {
         path: "logs",
         title: "Logs",
         icon: FileTextIcon,

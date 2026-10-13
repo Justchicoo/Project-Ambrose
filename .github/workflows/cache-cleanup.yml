@@ -1,0 +1,50 @@
+# Project Ambrose by Imjustchico
+# Deletes the Actions caches pull requests saved, when a pull request closes and once a day, so main's compiler and vcpkg caches keep their room in the repository's shared cache limit.
+name: cache-cleanup
+
+on:
+  pull_request_target:
+    types: [closed]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/cache-cleanup.yml
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: cache-cleanup-${{ github.event.pull_request.number || 'sweep' }}
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    name: cleanup
+    if: ${{ github.repository == 'Justchicoo/Project-Ambrose' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Delete pull request caches
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${PR_NUMBER}" ]; then
+            refs="refs/pull/${PR_NUMBER}/merge"
+          else
+            refs=$(gh cache list --limit 1000 --json ref --jq '[.[].ref | select(startswith("refs/pull/"))] | unique | .[]')
+          fi
+          deleted=0
+          for ref in ${refs}; do
+            for id in $(gh cache list --ref "${ref}" --limit 1000 --json id --jq '.[].id'); do
+              gh cache delete "${id}"
+              deleted=$((deleted + 1))
+            done
+          done
+          echo "Deleted ${deleted} pull request cache(s)." | tee -a "${GITHUB_STEP_SUMMARY}"

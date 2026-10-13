@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push that touches the code, the data the tests read or the build definition, for a push that touches none of them while code has changed since that leg last built, so code that landed in a run whose checks failed is not left uncompiled, and for a milestone branch without waiting for a label, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
+# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push or pull request that touches the code, the data the tests read, the build definition or anything ci_dev_run's dev run boots, whatever its branch, with that leg's job given the dev run's minutes, and the Windows leg too for a push to main that touches the code, the data the tests read, the build definition or vcpkg.json, and for a push that touches none of them while code has changed since that leg last built, so code that landed in a run whose checks failed is not left uncompiled, adding the legs a pull request's ci: labels name, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
 import argparse
 import datetime
 import json
@@ -12,12 +12,14 @@ import urllib.parse
 import urllib.request
 from collections import OrderedDict
 
+import ci_dev_run
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 UTC = datetime.timezone.utc
 
 LEGS = OrderedDict([
     ("windows-msvc-x64", {"os": "windows-latest", "configure": "windows-msvc-ninja", "build": "windows-ninja-debug", "configure_timeout": 90, "build_timeout": 40}),
-    ("linux-gcc", {"os": "ubuntu-latest", "configure": "linux-gcc", "build": "linux-gcc-debug", "configure_timeout": 45, "build_timeout": 30}),
+    ("linux-gcc", {"os": "ubuntu-latest", "configure": "linux-gcc", "build": "linux-gcc-debug", "configure_timeout": 45, "build_timeout": 30, "dev_run_timeout": 8}),
     ("linux-clang", {"os": "ubuntu-latest", "configure": "linux-clang", "build": "linux-clang-debug", "configure_timeout": 45, "build_timeout": 35}),
     ("linux-gcc-asan", {"os": "ubuntu-latest", "configure": "linux-gcc-asan", "build": "linux-gcc-asan", "configure_timeout": 45, "build_timeout": 45}),
     ("linux-clang-tsan", {"os": "ubuntu-latest", "configure": "linux-clang-tsan", "build": "linux-clang-tsan", "configure_timeout": 45, "build_timeout": 35}),
@@ -42,11 +44,11 @@ SETS.update({leg: [leg] for leg in LEGS})
 OPTIONS = ("none", "linux-gcc", "linux-clang", "linux-gcc-asan", "linux-clang-tsan", "linux-clang-fuzz", "windows-msvc-x64", "weekly", "linux", "all")
 DEFAULT_OPTION = "linux-gcc"
 LABEL_PREFIX = "ci:"
-MILESTONE_PREFIX = "milestone/"
 
 SMOKE_PATHS = (".github/", "apps/ci/ci_build.py", "apps/ci/ci_vcpkg_cache.py", "vcpkg.json")
 BUILD_PATHS = ("CMakeLists.txt", "CMakePresets.json", "cmake/", "data/", "src/")
-PUSH_PATHS = (".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json")
+WINDOWS_PUSH_PATHS = BUILD_PATHS + ("vcpkg.json",)
+PUSH_PATHS = (".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/dashboard/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "modules/**", "package-lock.json", "package.json", "packages/**", "playwright.config.ts", "src/**", "tests/e2e/**", "vcpkg.json")
 CODE_PATHSPEC = (".", ":(exclude)doc", ":(exclude,glob)**/*.md")
 ZERO_SHA = re.compile(r"^0*$")
 
@@ -80,12 +82,8 @@ def touches(paths, entries):
     return any(path.startswith(entry) if entry.endswith("/") else path == entry for path in paths for entry in entries)
 
 
-def touches_smoke_paths(paths):
-    return touches(paths, SMOKE_PATHS)
-
-
 def legs_for_paths(paths):
-    return ["linux-gcc"] if touches(paths, SMOKE_PATHS + BUILD_PATHS) else []
+    return ["linux-gcc"] if touches(paths, SMOKE_PATHS + BUILD_PATHS) or ci_dev_run.boots(paths) else []
 
 
 def legs_for_labels(labels_json, warnings):
@@ -225,7 +223,10 @@ def plan(event, inputs, now, git, actions=None):
         else:
             legs = legs_for_paths(paths)
             if legs:
-                reasons.append("linux-gcc: selected (the push touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script or vcpkg.json)")
+                reasons.append("linux-gcc: selected (the push touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script, vcpkg.json or what the dev run boots)")
+                if touches(paths, WINDOWS_PUSH_PATHS):
+                    legs.append("windows-msvc-x64")
+                    reasons.append("windows-msvc-x64: selected (a push to main that touches the code, the data the tests read, the build definition or vcpkg.json keeps main's Windows caches warm and catches an MSVC break)")
             else:
                 built = {}
                 try:
@@ -241,13 +242,13 @@ def plan(event, inputs, now, git, actions=None):
     elif event == "pull_request":
         legs = legs_for_labels(inputs.get("labels"), warnings)
         reasons.extend(f"{leg}: selected (pull request label)" for leg in ordered(legs))
-        if (inputs.get("branch") or "").startswith(MILESTONE_PREFIX):
-            legs.append("linux-gcc")
-            reasons.append("linux-gcc: selected (a milestone branch builds without waiting for a label)")
         paths = git.changed_paths(inputs.get("before"), inputs.get("after"), merge_base=True)
-        if paths is None or touches_smoke_paths(paths):
+        if paths is None:
             legs.append("linux-gcc")
-            reasons.append("linux-gcc: selected (the pull request touches a build input or could not be diffed)")
+            reasons.append("linux-gcc: selected (the pull request could not be diffed)")
+        elif legs_for_paths(paths):
+            legs.append("linux-gcc")
+            reasons.append("linux-gcc: selected (the pull request touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script, vcpkg.json or what the dev run boots)")
     elif event == "schedule":
         cron = inputs.get("schedule", "")
         date = slot_date(cron, now)
@@ -278,12 +279,16 @@ def plan(event, inputs, now, git, actions=None):
     return {"legs": ordered(legs), "reasons": reasons, "warnings": warnings, "windows_keepalive": keepalive}
 
 
+def job_timeout(leg):
+    return LEGS[leg]["configure_timeout"] + LEGS[leg]["build_timeout"] + LEGS[leg].get("dev_run_timeout", 0) + JOB_TIMEOUT_MARGIN
+
+
 def matrix(legs):
     include = []
     for leg in legs:
         entry = {"leg": leg, "os": LEGS[leg]["os"], "configure": LEGS[leg]["configure"], "build": LEGS[leg]["build"],
                  "configure_timeout": LEGS[leg]["configure_timeout"], "build_timeout": LEGS[leg]["build_timeout"],
-                 "job_timeout": LEGS[leg]["configure_timeout"] + LEGS[leg]["build_timeout"] + JOB_TIMEOUT_MARGIN}
+                 "job_timeout": job_timeout(leg)}
         include.append(entry)
     return {"include": include}
 
@@ -325,7 +330,6 @@ def main(argv=None, environment=None, git=None):
     parser.add_argument("--schedule", default="", help="the triggering cron, for a scheduled dry run")
     parser.add_argument("--legs", default="", help="the manual run option, for a dispatch dry run")
     parser.add_argument("--labels", default="", help="pull request labels as a JSON list, for a dry run")
-    parser.add_argument("--branch", default="", help="the pull request branch, so a milestone branch builds without a label")
     parser.add_argument("--before", default="", help="the range start, for a push or pull request dry run")
     parser.add_argument("--after", default="", help="the range end, for a push or pull request dry run")
     parser.add_argument("--now", default="", help="the UTC time of the run, for a dry run")
@@ -337,10 +341,10 @@ def main(argv=None, environment=None, git=None):
         event = environment.get("EVENT_NAME", "")
         before = environment.get("PR_BASE") if event == "pull_request" else environment.get("PUSH_BEFORE")
         after = environment.get("PR_HEAD") if event == "pull_request" else environment.get("PUSH_AFTER")
-        inputs = {"schedule": environment.get("SCHEDULE", ""), "legs": environment.get("DISPATCH_LEGS", ""), "labels": environment.get("PR_LABELS", ""), "branch": environment.get("PR_BRANCH", ""), "before": before, "after": after}
+        inputs = {"schedule": environment.get("SCHEDULE", ""), "legs": environment.get("DISPATCH_LEGS", ""), "labels": environment.get("PR_LABELS", ""), "before": before, "after": after}
     elif args.event:
         event = args.event
-        inputs = {"schedule": args.schedule, "legs": args.legs, "labels": args.labels, "branch": args.branch, "before": args.before, "after": args.after}
+        inputs = {"schedule": args.schedule, "legs": args.legs, "labels": args.labels, "before": args.before, "after": args.after}
     else:
         parser.error("pass --from-github-env or --event")
     now = parse_now(args.now) if args.now else datetime.datetime.now(UTC)

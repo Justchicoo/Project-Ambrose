@@ -64,6 +64,11 @@ namespace
                 return SessionHolder{ "csrf-viewer", "user:2" };
             return std::nullopt;
         }
+
+        std::optional<SessionExpiry> ExpiryOf(std::string_view) override
+        {
+            return SessionExpiry{ std::chrono::hours(1), std::chrono::hours(2) };
+        }
     };
 
     bool Mentions(Json const& value, std::string const& text)

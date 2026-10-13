@@ -1,10 +1,12 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, and Enter sent as a key only once Alt is up, the order in which a run starts and stops what it owns, the slot a run takes so several share the machine and the one input turn they share, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the scratch servers started off Windows with no Windows-only flag, their admin API's health, the SessionOffer read from their port and a kill by process id when the shutdown command is ignored, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, with Enter skipping to the login window and pressing Play before any click, and Enter sent as a key only once Alt is up, the order in which a run starts and stops what it owns, the slot a run takes so several share the machine and the one input turn they share, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls, and the play session's start order, its stop from the console, from another play or from a server that ends, and the databases and ports it keeps apart from a run's, and the security level a run or play session gives its account.
 import contextlib
+import io
 import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -542,6 +544,102 @@ class WorldEntryTests(TemporaryFolder):
         login = server.LoginServer("loginserver.exe", "loginserver.conf.dist", os.path.join(self.folder, "login"), "127.0.0.2", 12100, scratch)
         self.assertIn("LoginServerPort=12100", login.overrides())
         self.assertTrue(login.log.path.endswith("Login.log"))
+
+    def test_a_server_starts_without_windows_flags_off_windows_and_with_the_environment_it_was_given(self):
+        self.assertEqual(server.window_flags("win32"), server.NO_WINDOW)
+        self.assertEqual(server.window_flags("linux"), 0)
+        scratch = database.Scratch("127.0.0.1", 3306, "root", "root", "ambrose_driver_devrun")
+        program = self.write(os.path.join("bin", "loginserver"), [])
+        defaults = self.write(os.path.join("bin", "loginserver.conf.dist"), ["LogsDir = logs"])
+        login = server.LoginServer(program, defaults, os.path.join(self.folder, "login"), "127.0.0.1", 12100, scratch, environment={"XDG_DATA_HOME": "data"})
+        started = {}
+
+        def popen(command, **options):
+            started.update(options, command=command)
+            options["stdout"].write(b"INFO  [server.loginserver] loginserver ready\n")
+            options["stdout"].flush()
+            return SimpleNamespace(pid=4242, poll=lambda: None)
+
+        with mock.patch.object(server.sys, "platform", "linux"), mock.patch.object(server.subprocess, "Popen", side_effect=popen):
+            said = login.start(timeout=5)
+        login._close()
+        self.assertEqual(said, "ready on 127.0.0.1:12100 as process 4242")
+        self.assertEqual(started["creationflags"], 0)
+        self.assertEqual(started["env"], {"XDG_DATA_HOME": "data"})
+        self.assertEqual(started["command"][:3], [program, "-c", login.config])
+
+    def test_the_admin_api_is_enabled_on_the_run_s_own_port_only_when_asked_for(self):
+        scratch = database.Scratch("127.0.0.1", 3306, "root", "root", "ambrose_driver_devrun")
+        folder = os.path.join(self.folder, "login")
+        login = server.LoginServer("loginserver", "loginserver.conf.dist", folder, "127.0.0.1", 12100, scratch, admin_port=12110)
+        for wanted in ("Admin.Enable=1", "Admin.BindIP=127.0.0.1", "Admin.Port=12110", f"Admin.TokenFile={os.path.join(folder, 'admin.token')}"):
+            self.assertIn(wanted, login.overrides())
+        plain = server.LoginServer("loginserver", "loginserver.conf.dist", folder, "127.0.0.1", 12100, scratch)
+        self.assertFalse(any(override.startswith("Admin.") for override in plain.overrides()))
+        game = server.GameServer("gameserver", "gameserver.conf.dist", folder, "127.0.0.1", 12433, scratch, admin_port=12443, settings=["Realm.Name=Dev"])
+        self.assertIn("Admin.Port=12443", game.overrides())
+        self.assertNotIn("Admin.Enable=0", game.overrides())
+        self.assertEqual(game.overrides()[-1], "Realm.Name=Dev")
+
+    def test_the_admin_api_health_is_read_until_the_server_says_it_is_running(self):
+        scratch = database.Scratch("127.0.0.1", 3306, "root", "root", "ambrose_driver_devrun")
+        game = server.GameServer("gameserver", "gameserver.conf.dist", self.folder, "127.0.0.1", 12433, scratch, admin_port=12443)
+        game.process = SimpleNamespace(poll=lambda: None)
+        answers = [{"app": "gameserver", "state": "starting"}, {"app": "gameserver", "state": "running", "uptime": 3, "revision": "abc"}]
+        asked = []
+        with open(game.token_path, "w", encoding="utf-8") as handle:
+            handle.write("secret-token\n")
+
+        def opener(request, timeout):
+            asked.append((request.full_url, request.get_header("Authorization")))
+            return contextlib.nullcontext(io.BytesIO(json.dumps(answers.pop(0)).encode("utf-8")))
+
+        with mock.patch.object(server.time, "sleep"):
+            said = game.health(timeout=5, opener=opener)
+        self.assertEqual(asked, [("http://127.0.0.1:12443/api/health", "Bearer secret-token")] * 2)
+        self.assertIn("gameserver running for 3s", said)
+        with self.assertRaises(StepFailed):
+            server.LoginServer("loginserver", "loginserver.conf.dist", self.folder, "127.0.0.1", 12100, scratch).health(timeout=1)
+
+    def offered(self, data):
+        ours, theirs = socket.socketpair()
+        self.addCleanup(theirs.close)
+        theirs.sendall(data)
+        theirs.shutdown(socket.SHUT_WR)
+        scratch = database.Scratch("127.0.0.1", 3306, "root", "root", "ambrose_driver_devrun")
+        login = server.LoginServer("loginserver", "loginserver.conf.dist", self.folder, "127.0.0.1", 12100, scratch)
+        return login.session_offer(timeout=2, connect=lambda address, timeout: ours)
+
+    def test_a_connection_is_read_up_to_the_session_offer_the_server_sends_first(self):
+        body = bytes.fromhex("3412") + bytes(12)
+        frame = bytes.fromhex("0df0") + (4 + len(body) + 1).to_bytes(2, "little") + bytes([1, 0, 0, 0]) + body + b"\x00"
+        self.assertEqual(self.offered(frame), "127.0.0.1:12100 accepted a connection and offered session 4660")
+        with self.assertRaisesRegex(StepFailed, "frame magic"):
+            self.offered(b"HTTP/1.1 200 OK\r\n")
+        with self.assertRaisesRegex(StepFailed, "not a SessionOffer"):
+            self.offered(bytes.fromhex("0df0") + (4 + len(body) + 1).to_bytes(2, "little") + bytes([1, 5, 0, 0]) + body + b"\x00")
+        with self.assertRaisesRegex(StepFailed, "ended after"):
+            self.offered(frame[:10])
+        with self.assertRaisesRegex(StepFailed, "did not accept"):
+            server.LoginServer("loginserver", "d", self.folder, "127.0.0.1", 1, None).session_offer(connect=mock.Mock(side_effect=ConnectionRefusedError("refused")))
+
+    def test_a_server_that_ignores_the_shutdown_command_is_killed_by_its_process_id(self):
+        scratch = database.Scratch("127.0.0.1", 3306, "root", "root", "ambrose_driver_devrun")
+        login = server.LoginServer("loginserver", "loginserver.conf.dist", self.folder, "127.0.0.1", 12100, scratch)
+        killed = []
+        waits = [subprocess.TimeoutExpired("loginserver", 1), None]
+
+        def wait(_timeout):
+            outcome = waits.pop(0)
+            if outcome:
+                raise outcome
+
+        login.process = SimpleNamespace(pid=4242, returncode=-9, poll=lambda: None if not killed else -9, wait=wait, kill=lambda: killed.append(4242),
+                                        stdin=SimpleNamespace(write=lambda _data: None, flush=lambda: None))
+        with mock.patch.object(server.importlib.util, "find_spec", return_value=None):
+            said = login.stop(timeout=1)
+        self.assertEqual(killed, [4242])
+        self.assertIn("a kill of process 4242", said)
 
     def reloading_login(self, answer):
         scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
@@ -2730,6 +2828,17 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("AMBROSE_CLIENT_DIR", gaps[0])
         clientless = scenario.Scenario("test.json", {"title": "x", "requires": {"client": False}, "steps": []})
         self.assertEqual(preflight.missing(clientless, self.environment(), {"capture": True}), [])
+
+    def test_a_run_no_client_was_asked_for_skips_before_probing_the_machine(self):
+        refused = mock.Mock(side_effect=AssertionError("the machine was probed"))
+        said = io.StringIO()
+        environment = {name: value for name, value in os.environ.items() if name != "AMBROSE_CLIENT_DIR"}
+        with (mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(preflight, "probe", refused),
+              mock.patch.object(cli, "take_slot", refused), mock.patch.object(cli, "start_database", refused),
+              contextlib.redirect_stdout(said)):
+            self.assertEqual(cli.main(["run", "--scenario", os.path.join(paths.SCENARIOS, "two-wizards.json")]), cli.SKIP)
+        refused.assert_not_called()
+        self.assertIn("AMBROSE_CLIENT_DIR", said.getvalue())
 
     def test_an_install_the_driver_cannot_read_is_named(self):
         gaps = preflight.missing(self.scenario(), self.environment(install_readable=False),

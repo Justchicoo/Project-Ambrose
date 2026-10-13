@@ -63,7 +63,8 @@ namespace
         return placement;
     }
 
-    std::optional<std::vector<uint8>> Encode(ObjectTemplate const& objectTemplate, ZoneObjectPlacement const& placement, MapObjectSources const& sources, std::string& problem)
+    std::optional<std::vector<uint8>> Encode(ObjectTemplate const& objectTemplate, ZoneObjectPlacement const& placement, MapObjectSources const& sources, std::string& problem,
+        MapObjectDecorator const& decorate = {})
     {
         if (!sources.Types || !sources.Behaviors)
         {
@@ -72,6 +73,8 @@ namespace
         }
         PropertyObjectPtr const object = ZoneObjectBuilder::Build(sources.Catalog, *sources.Types, *sources.Behaviors, objectTemplate, placement, problem);
         if (!object)
+            return std::nullopt;
+        if (decorate && !decorate(*object, placement.GlobalId, problem))
             return std::nullopt;
         ObjectField const* const field = ObjectFields::Find("MSG_NEWOBJECT", "Data");
         if (!field)
@@ -122,7 +125,7 @@ void MapObjectChanges::Absorb(MapObjectChanges other)
 }
 
 std::optional<uint64> MapObjectSpawner::Place(Map& map, ZoneObjectSpawn const& row, MapObjectOrigin origin, uint32 spawnerIndex, MapObjectSources const& sources,
-    Map::Clock::time_point now, std::chrono::milliseconds releaseDelay, MapObjectChanges& changes)
+    Map::Clock::time_point now, std::chrono::milliseconds releaseDelay, MapObjectChanges& changes, MapObjectDecorator const& decorate)
 {
     std::string const name = RowName(row, origin, spawnerIndex);
     {
@@ -146,7 +149,7 @@ std::optional<uint64> MapObjectSpawner::Place(Map& map, ZoneObjectSpawn const& r
         }
         ZoneObjectPlacement const placement = PlaceAt(map, row, *globalId, *mobileId);
         std::string problem;
-        std::optional<std::vector<uint8>> data = Encode(*found.Template, placement, sources, problem);
+        std::optional<std::vector<uint8>> data = Encode(*found.Template, placement, sources, problem, decorate);
         if (!data)
         {
             map.GetMobileIds().Release(*mobileId, now, releaseDelay);

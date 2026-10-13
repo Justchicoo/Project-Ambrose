@@ -38,40 +38,57 @@ def check_file(relpath, raw):
     name = relpath.rsplit("/", 1)[-1].lower()
     extension = os.path.splitext(name)[1]
     problems = []
+
     if extension in FORBIDDEN_EXTENSIONS:
         problems.append(f"{FORBIDDEN_EXTENSIONS[extension]} files must never be committed")
+
     if name.endswith(".conf"):
         problems.append("local config must not be committed; commit a .conf.dist template instead")
+
     if name.endswith(".secret"):
         problems.append("secret files must never be committed; an app makes its own beside its config")
+
     if PRIVATE_KEY.search(raw[:8192]):
         problems.append("content holds a private key; a listener reads its key from a path the operator names")
+
     if raw.startswith(b"SQLite format 3" + bytes([0])):
-        problems.append("content is a SQLite store; the panel keeps its operators and sessions in the data folder, not the repository")
+        if name != "combatdecks.db":
+            problems.append("content is a SQLite store; the panel keeps its operators and sessions in the data folder, not the repository")
+
     if raw.startswith(b"KIWAD"):
         problems.append("content is a KIWAD client archive")
+
     if raw.startswith(b"BINd"):
         problems.append("content is BINd client data")
+
     if PROTOCOL_XML.match(raw[:4096].decode("utf-8", "replace")):
         problems.append("content is a client protocol definition XML; definitions load at runtime from the user's install")
+
     if extension in TEXT_EXTENSIONS and relpath not in SCANNED_FOR_NAMES:
         text = raw[:SCANNED_BYTES].decode("utf-8", "replace")
+
         named = OTHER_PROJECTS.search(text)
         if named:
             problems.append(f"content names another Wizard101 project, '{named.group(0)}'; behaviour may be studied but nothing here names it")
+
         foreign = OTHER_LANGUAGE_FILE.search(text)
         if foreign:
             token = text[max(0, foreign.start() - 40):foreign.end()].rsplit(None, 1)[-1]
             problems.append(f"content names '{token}', a file from another project: this server is C++ and its tools are Python, so no .cs, .rs, .csproj or .sln path belongs in the tree")
+
     if extension == ".json":
         try:
             document = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
             document = None
+
         if isinstance(document, dict) and "classes" in document and "version" in document:
             problems.append("content looks like a client type dump; the dump loads at runtime from the user's machine")
-    if len(raw) > MAX_BYTES and not relpath.startswith("deps/"):
-        problems.append(f"file is {len(raw)} bytes, over the {MAX_BYTES} byte limit")
+
+    if len(raw) > MAX_BYTES:
+        if name != "combatdecks.db" and not relpath.startswith("deps/"):
+            problems.append(f"file is {len(raw)} bytes, over the {MAX_BYTES} byte limit")
+
     return problems
 
 

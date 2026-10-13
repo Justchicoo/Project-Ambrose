@@ -79,6 +79,7 @@ export const events = $state({
     gaps: [] as Gap[],
     error: null as EventError | null,
     closedWith: 0,
+    sessionExpiringIn: null as number | null,
 });
 
 type Pending = {
@@ -234,6 +235,9 @@ export const handlers: Handlers = {
             return;
         }
         events.error = failure;
+    },
+    "session.expiring": (_frame, data) => {
+        events.sessionExpiringIn = data.expires_in;
     },
     pong: (frame) => {
         if (frame.id !== null && frame.id === awaitingPong) awaitingPong = null;

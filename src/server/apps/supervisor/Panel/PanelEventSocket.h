@@ -114,7 +114,11 @@ private:
     void Hello(std::shared_ptr<Connection> const& connection, PanelIncomingFrame const& frame);
     void Dispatch(std::shared_ptr<Connection> const& connection, PanelIncomingFrame const& frame);
     void Resume(Call const& call);
+    void Subscribe(Call const& call);
+    void Unsubscribe(Call const& call);
     void Follow(std::shared_ptr<Connection> const& connection, PanelEventRequest const& request, Call const& call);
+    void Refilter(std::shared_ptr<Connection> const& connection);
+    void CheckExpiry(std::shared_ptr<Connection> const& connection);
     void Shut(Connection& connection, uint16 code, std::string_view reason);
     void Send(Connection& connection, std::string_view type, std::optional<std::string> const& id, std::string const& data);
     void Report(Connection& connection, std::optional<std::string> const& id, std::string_view code, std::string const& text, bool internal);

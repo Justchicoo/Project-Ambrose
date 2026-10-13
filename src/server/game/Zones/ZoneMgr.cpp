@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the three zone tables into stores that are swapped in whole. A location or an object naming a zone no template knows is a refusal with that row named rather than a row quietly dropped, because a place nothing can load is how a wizard ends up nowhere, and the refusal leaves the rows already serving in place; so is an object whose loading type is none the client has. Only the first few problems of a build are reported, because a table that is wrong is usually wrong in every row and an operator needs the shape of it rather than all of it.
+ * Reads the three zone tables into stores that are swapped in whole. A location or an object naming a zone no template knows is a refusal with that row named rather than a row quietly dropped, because a place nothing can load is how a wizard ends up nowhere, and the refusal leaves the rows already serving in place; so is an object whose loading type is none the client has. Only the first few problems of a build are reported, because a table that is wrong is usually wrong in every row and an operator needs the shape of it rather than all of it. A sigil's row also carries the name of its sigil record.
  */
 
 #include "ZoneMgr.h"
@@ -226,6 +226,7 @@ ZoneObjects ZoneMgr::ReadObjects(PreparedResultSet* result, ZoneTemplates const&
         }
         object.Loading = static_cast<ZoneObjectLoading>(loading);
         object.HasSpawnRequirements = row[18].Get<uint8>() != 0;
+        object.SigilTemplate = row[19].Get<std::string>();
         byZone[zone].push_back(std::move(object));
     } while (result->NextRow());
     return ZoneObjects(std::move(byZone));
