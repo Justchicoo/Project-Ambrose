@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Verifies a sign-in captcha answer against its provider through the outbound HTTP library, failing closed when the provider cannot be reached or is not one the panel knows.
+ * Verifies a sign-in captcha answer against its provider through the outbound HTTP library, failing closed when the provider cannot be reached or is not one the panel knows, and names the provider's own widget script so the sign-in page loads the script the panel names instead of carrying another host's address in the dashboard bundle.
  */
 
 #include "PanelCaptcha.h"
@@ -43,6 +43,17 @@ std::string PanelCaptcha::VerifyUrlFor(std::string_view provider)
         return "https://api.hcaptcha.com/siteverify";
     if (provider == "turnstile")
         return "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+    return {};
+}
+
+std::string PanelCaptcha::ScriptUrlFor(std::string_view provider)
+{
+    if (provider == "recaptcha")
+        return "https://www.google.com/recaptcha/api.js?render=explicit";
+    if (provider == "hcaptcha")
+        return "https://js.hcaptcha.com/1/api.js?render=explicit";
+    if (provider == "turnstile")
+        return "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
     return {};
 }
 

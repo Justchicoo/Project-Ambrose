@@ -5,7 +5,10 @@
 
 #include "PanelSettings.h"
 
+#include "Base64.h"
+#include "PanelKeyring.h"
 #include "PanelStore.h"
+#include "SecureMemory.h"
 
 #include <nlohmann/json.hpp>
 
@@ -100,17 +103,86 @@ namespace
             return false;
         }
     }
+
+    PanelKeyPurpose PurposeOf(std::string_view key)
+    {
+        if (key == "Mail.Password")
+            return PanelKeyPurpose::SmtpPassword;
+        return PanelKeyPurpose::CaptchaSecret;
+    }
+
+    std::string SealedAssociatedData(std::string_view key)
+    {
+        return "panel setting " + std::string(key);
+    }
+}
+
+bool PanelSettings::IsSealedKey(std::string_view key)
+{
+    return key == "Mail.Password" || key == "Security.CaptchaSecret";
+}
+
+bool PanelSettings::WriteSealed(std::string_view key, std::string_view plain, int64 userId, std::string& error)
+{
+    Definition const* const definition = Find(key);
+    if (!definition)
+    {
+        error = "unknown setting";
+        return false;
+    }
+    std::string encoded;
+    int64 keyId = 0;
+    if (!plain.empty())
+    {
+        std::vector<uint8> bytes(plain.begin(), plain.end());
+        std::optional<PanelSealed> const sealed = _keyring.Seal(PurposeOf(key), bytes, SealedAssociatedData(key));
+        Ambrose::Crypto::SecureWipe(bytes);
+        if (!sealed)
+        {
+            error = "the secret could not be sealed because the keyring is not open";
+            return false;
+        }
+        encoded = Base64::Encode(sealed->Bytes);
+        keyId = sealed->KeyId;
+    }
+    std::optional<PanelStore::Statement> write = _store.Prepare(
+        "INSERT INTO panel_setting (key, group_name, value, secret, sealed_value, sealed_key_id, updated_epoch_ms, updated_by) "
+        "VALUES (?, ?, '', 1, ?, ?, ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = '', sealed_value = excluded.sealed_value, sealed_key_id = excluded.sealed_key_id, "
+        "updated_epoch_ms = excluded.updated_epoch_ms, updated_by = excluded.updated_by",
+        error);
+    if (!write)
+        return false;
+    write->Bind(1, key);
+    write->Bind(2, definition->Group);
+    if (encoded.empty())
+    {
+        write->BindNull(3);
+        write->BindNull(4);
+    }
+    else
+    {
+        write->Bind(3, encoded);
+        write->Bind(4, keyId);
+    }
+    write->Bind(5, PanelStore::NowEpochMs());
+    write->Bind(6, userId);
+    return write->Run(error);
 }
 
 nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error) const
 {
     nlohmann::json settings = nlohmann::json::array();
     std::map<std::string, std::string> saved;
-    std::optional<PanelStore::Statement> rows = _store.Prepare("SELECT key, value FROM panel_setting", error);
+    std::map<std::string, bool> sealed;
+    std::optional<PanelStore::Statement> rows = _store.Prepare("SELECT key, value, sealed_value FROM panel_setting", error);
     if (!rows)
         return {};
     while (rows->Step(error))
+    {
         saved[rows->Text(0)] = rows->Text(1);
+        sealed[rows->Text(0)] = !rows->IsNull(2) && !rows->Text(2).empty();
+    }
     if (!error.empty())
         return {};
 
@@ -136,10 +208,16 @@ nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error)
             value = pushed->second.first;
             layer = pushed->second.second;
         }
+        bool hasSecret = !value.empty();
+        if (IsSealedKey(definition.Key))
+        {
+            auto const box = sealed.find(std::string(definition.Key));
+            hasSecret = hasSecret || (box != sealed.end() && box->second);
+        }
         nlohmann::json row{
             { "key", definition.Key },
             { "group", definition.Group },
-            { "value", definition.Secret && !value.empty() ? "***" : value },
+            { "value", definition.Secret && hasSecret ? "***" : value },
             { "default", definition.Secret && !definition.Default.empty() ? "***" : definition.Default },
             { "secret", definition.Secret },
             { "locked", definition.Locked },
@@ -164,12 +242,25 @@ std::string PanelSettings::ValueOf(std::string_view key) const
     if (!definition)
         return {};
     std::string error;
-    std::optional<PanelStore::Statement> rows = _store.Prepare("SELECT value FROM panel_setting WHERE key = ?", error);
+    std::optional<PanelStore::Statement> rows = _store.Prepare(
+        "SELECT value, sealed_value, sealed_key_id FROM panel_setting WHERE key = ?", error);
     if (!rows)
         return std::string(definition->Default);
     rows->Bind(1, key);
     if (!rows->Step(error))
         return std::string(definition->Default);
+    if (IsSealedKey(key) && !rows->IsNull(1) && !rows->Text(1).empty())
+    {
+        std::optional<std::vector<uint8>> const bytes = Base64::Decode(rows->Text(1));
+        if (!bytes)
+            return {};
+        std::optional<std::vector<uint8>> plain = _keyring.Unseal(PurposeOf(key), rows->Int64(2), *bytes, SealedAssociatedData(key));
+        if (!plain)
+            return {};
+        std::string result(plain->begin(), plain->end());
+        Ambrose::Crypto::SecureWipe(*plain);
+        return result;
+    }
     return rows->Text(0);
 }
 
@@ -218,6 +309,18 @@ bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::stri
     for (std::pair<Definition const*, std::string> const& setting : validated)
     {
         Definition const& definition = *setting.first;
+        std::string plain = setting.second;
+        if (IsSealedKey(definition.Key))
+        {
+            if (!WriteSealed(definition.Key, plain, userId, error))
+            {
+                Ambrose::Crypto::SecureWipe(std::span<uint8>(reinterpret_cast<uint8*>(plain.data()), plain.size()));
+                rollback();
+                return false;
+            }
+            Ambrose::Crypto::SecureWipe(std::span<uint8>(reinterpret_cast<uint8*>(plain.data()), plain.size()));
+            continue;
+        }
         std::optional<PanelStore::Statement> write = _store.Prepare(
             "INSERT INTO panel_setting (key, group_name, value, secret, updated_epoch_ms, updated_by) VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_epoch_ms = excluded.updated_epoch_ms, updated_by = excluded.updated_by",

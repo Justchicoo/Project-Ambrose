@@ -154,9 +154,11 @@ std::string_view PanelKeyring::InfoOf(PanelKeyPurpose purpose) noexcept
     {
         case PanelKeyPurpose::TwoFactorSecret: return "ambrose panel two-factor secret";
         case PanelKeyPurpose::RecoveryCode: return "ambrose panel recovery code";
-        case PanelKeyPurpose::LaunchSecret: break;
+        case PanelKeyPurpose::LaunchSecret: return "ambrose panel launch secret";
+        case PanelKeyPurpose::SmtpPassword: return "ambrose panel smtp password";
+        case PanelKeyPurpose::CaptchaSecret: break;
     }
-    return "ambrose panel launch secret";
+    return "ambrose panel captcha secret";
 }
 
 void PanelKeyring::Derive(Key& key)
