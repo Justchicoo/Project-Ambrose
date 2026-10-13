@@ -7,8 +7,8 @@
   },
   "checks": {
     "done": 1236,
-    "total": 2884,
-    "percent": 42.9
+    "total": 2885,
+    "percent": 42.8
   },
   "game": {
     "label": "Game server",
@@ -37,7 +37,7 @@
     },
     "checks": {
       "done": 1034,
-      "total": 1771,
+      "total": 1772,
       "percent": 58.4
     }
   },
@@ -140,7 +140,7 @@
       "milestones_done": 1,
       "milestones_total": 18,
       "checks_done": 8,
-      "checks_total": 115
+      "checks_total": 116
     },
     {
       "phase": 11,
@@ -199,5 +199,5 @@
       "checks_total": 1113
     }
   ],
-  "card": "c82aedf469"
+  "card": "36b9fabfb5"
 }

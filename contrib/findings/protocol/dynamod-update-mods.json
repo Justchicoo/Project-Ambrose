@@ -1,0 +1,25 @@
+{
+  "subject": "MSG_DYNAMODBEHAVIOR_UPDATEMODS and MSG_DYNAMODDUMP",
+  "area": "protocol",
+  "claim": "Only the player object (template 1, PlayerObject) carries DynaModBehavior, which the client builds as ClientDynaModBehavior and which has no fields beyond m_behaviorTemplateNameID. MSG_DYNAMODBEHAVIOR_UPDATEMODS (GAME order 70) keeps that player's mod list: UpdateAll clears the list and loads AllMods as a binary DynaModList under property mask 0x18 (Transmit and AuthorityTransmit) with plain serializer flags; Add loads NewMod as one DynaMod under the same mask and appends it; Remove erases the mod whose m_index equals Index; when both are set Add runs first. Under that mask DynaMod sends m_clientTag, m_originator, m_index and m_zoneID, and DynaModDelta also sends m_remove and m_stateID but not m_state; m_zoneName and m_zoneInstance are never sent. A mod with m_index below zero takes the next value of a per-behavior counter, so m_index is the handle Remove names. For each added mod the client activates every client-side SpawnObject whose name equals m_clientTag, and for each removed mod it deactivates those spawners and despawns their objects. The client never uses a mod's m_stateID, m_remove or DynaModShowObject type to change the state or visibility of a server object, so a gate opening or an object hiding for one player has to come from what the server sends that player about the object itself. MSG_DYNAMODDUMP (GAME order 71) is a debug and game master message that writes a DynaModList (mask 0x10) to a file named by Filename; a server never needs to send it.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Build `client` from this repository revision and point it at your own r806919.Wizard_1_610 install and type dump.",
+    "Run `client catalog <out>` and search every template's behaviors for DynaModBehavior; then `client wad ObjectData/PlayerObject.xml` and `client behaviors DynaModBehavior`.",
+    "Run `client messages MSG_DYNAMODBEHAVIOR_UPDATEMODS`, `client handlers MSG_DYNAMODBEHAVIOR_UPDATEMODS` and `client vtable` on ClientDynaModBehavior's table, then `client decompile` the handler and the slots it calls for add and remove.",
+    "Run `client types DynaMod`, `client types DynaModDelta` and `client types DynaModShowObject` and read each property's flags against mask 0x18.",
+    "Run `client handlers MSG_DYNAMODDUMP` and `client decompile` the handler; `client strings DebugDynamodSettings` shows where the debug filters are read."
+  ],
+  "evidence": [
+    "Of 137,423 templates in the catalog only template 1 lists DynaModBehavior.",
+    "m_zoneName and m_zoneInstance carry flags 39 (no Transmit bit); m_clientTag and m_originator carry 63; m_stateID carries 31; m_zoneID carries 16 (AuthorityTransmit only).",
+    "The added-mod path calls a GameClient slot that is an empty stub, then walks the client spawn manager's SpawnObjects comparing each name to m_clientTag and calls SpawnObject::Activate on matches.",
+    "The only references to the DynaModBehavior type are its own GetType, ClientGameStateStrategy::CreateContainer and one unnamed function; nothing else reads the behavior's mod lists."
+  ],
+  "disproof": "A client that changes a placed object's animation state or hides it on receiving a DynaModDelta with no other message about that object, or a capture where m_zoneName or m_state is present in AllMods.",
+  "confidence": "high",
+  "submitted_by": "Project Ambrose",
+  "submitted_on": "2026-10-13",
+  "status": "claimed"
+}

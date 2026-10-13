@@ -1,0 +1,27 @@
+{
+  "subject": "ResAddDynaMod zone trigger results",
+  "area": "world",
+  "claim": "Per-player world changes such as gates opening are zone trigger results named ResAddDynaMod in each zone archive's triggers.xml, with m_dynaModClientTag, m_dynaModRemove, m_dynaModState, m_zoneName and three bools whose names the type dump does not give (hashes 1110452292, 35044672 and 1494302749). There is no ResRemoveDynaMod class: a removal is ResAddDynaMod with m_dynaModRemove true. The tag names a placed object by its m_zoneTag. In WizardCity/WC_Hub, 'Trigger OpenGateToUW' is activated on StartZone, fires on the event GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0 and adds the mod WC_GateCommons_ToUnicornWay with state IdleOpen; that gate is template 1451018 with m_startState IdleClosed, whose state set WC_GateCommons_States (category GateStates, start and base IdleClosed) goes IdleClosed to Open to IdleOpen, Open auto-transitioning after 4.167 seconds, and back through Close, which auto-transitions after 1.0 second. A mod with an empty state shows or hides its tagged object: WC_HEROIC_Rattlebones_040's OnDeath trigger adds Ultra_Rattlebones_40 with no state and its zone entry trigger removes it, where the TEST_Rattlebones_NoDynamods copy of the zone does the same with ResAddTriggerObject and ResRemoveTriggerObject. Some tags name no object in the current zone, such as PetParkGate and PetParkCollision in WC_Hub, whose gate is tagged WC_GateCommons_ToPetPark. No zone archive holds a Dynamod-specific file. Across the install's 3,375 zones with data there are 1,529 ResAddDynaMod results in 558 zones (797 adds, 732 removes, 1,270 distinct tags; 1,156 with an empty state), and 465 of 68,532 placed objects in 150 zones carry m_spawnRequirements. Quest, encounter and tutorial quest templates, which carry QuestDynaModInfo lists, are not in the install.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Build `client` from this repository revision and point it at your own r806919.Wizard_1_610 install and type dump.",
+    "Run `client types ResAddDynaMod` and `client types --list DynaMod`.",
+    "Run `client wad --wad WizardCity-WC_Hub.wad triggers.xml` and find the triggers OpenGateToUW and Trigger-OpenPetPark; run `client wad --wad WizardCity-WC_Hub.wad gamedata.bin` and find the objects whose m_zoneTag starts WC_GateCommons.",
+    "Run `client template 1451018`, then `client wad ObjectData/WC/WC_GateCommons.xml` and `client wad StateData/WC_GateCommons_States.xml`.",
+    "Run `client wad --list` on Heroic_Dungeons_01-TEST_Rattlebones_NoDynamods.wad and Heroic_Dungeons_01-WC_HEROIC_Rattlebones_040.wad and compare, then read each one's triggers.xml.",
+    "For every zone archive in Data/GameData run `client wad --wad <archive> triggers.xml` and `client wad --wad <archive> gamedata.bin`, and count ResAddDynaMod results by m_dynaModRemove and m_dynaModState, and placed objects with a non-null m_spawnRequirements.",
+    "Run `client wad --list Quests/` against Root.wad to see no quest templates ship."
+  ],
+  "evidence": [
+    "WC_Hub places five WC_GateCommons gates of template 1451018; only _ToUnicornWay and _ToGolemCourt set m_startState IdleClosed.",
+    "Trigger-OpenPetPark fires on EnterZone when the player has quest WC-PET-C08-001, WC-BOOST-MAIN-001 or either's _Complete entry, adds PetParkGate with state IdleOpen and removes PetParkCollision.",
+    "The two Rattlebones archives hold 12 and 13 entries; the only extra entry is zone.nav.",
+    "State targets across all results: empty 1,156, On 120, Open 28, Quest 16, Good 12, Idle_On 11, Idle 10."
+  ],
+  "disproof": "A zone archive with a separate Dynamod data file, a ResRemoveDynaMod class in the dump, or a ResAddDynaMod whose tag names something other than a placed object's m_zoneTag or a client spawner.",
+  "confidence": "high",
+  "submitted_by": "Project Ambrose",
+  "submitted_on": "2026-10-13",
+  "status": "claimed"
+}
