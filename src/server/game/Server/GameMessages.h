@@ -1848,6 +1848,98 @@ namespace GameMessages
         }
     };
 
+    struct InteractAvailableQuest
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_INTERACTAVAILABLEQUEST";
+
+        uint64 MobileId = 0;
+        std::string QuestName;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MobileID", &InteractAvailableQuest::MobileId), DmlField("QuestName", &InteractAvailableQuest::QuestName) };
+        }
+    };
+
+    struct ActorDialog
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_ACTORDIALOG";
+
+        uint64 MobileId = 0;
+        uint64 QuestId = 0;
+        uint64 GoalId = 0;
+        std::string CompletionType;
+        std::string Dialog;
+        std::string Persona;
+        std::string PersonaName;
+        std::string PersonaIcon;
+        uint8 RangeCheck = 0;
+        uint8 IsEncounter = 0;
+        std::string DefaultDialogAnimation;
+        uint8 IsYesNo = 0;
+        uint32 PolymorphViewMobTemplateId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MobileID", &ActorDialog::MobileId), DmlField("QuestID", &ActorDialog::QuestId), DmlField("GoalID", &ActorDialog::GoalId),
+                DmlField("CompletionType", &ActorDialog::CompletionType), DmlField("ActorDialog", &ActorDialog::Dialog), DmlField("Persona", &ActorDialog::Persona),
+                DmlField("PersonaName", &ActorDialog::PersonaName), DmlField("PersonaIcon", &ActorDialog::PersonaIcon), DmlField("RangeCheck", &ActorDialog::RangeCheck),
+                DmlField("IsEncounter", &ActorDialog::IsEncounter), DmlField("DefaultDialogAnimation", &ActorDialog::DefaultDialogAnimation), DmlField("IsYesNo", &ActorDialog::IsYesNo),
+                DmlField("PolymorphViewMobTemplateID", &ActorDialog::PolymorphViewMobTemplateId) };
+        }
+    };
+
+    struct QuestOffer
+    {
+        static constexpr uint8 ServiceId = QuestService;
+        static constexpr std::string_view Tag = "MSG_QUESTOFFER";
+
+        uint64 MobileId = 0;
+        std::string QuestName;
+        std::string QuestTitle;
+        std::string QuestInfo;
+        int32 Level = 0;
+        std::string Rewards;
+        std::string GoalData;
+        uint8 Mainline = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MobileID", &QuestOffer::MobileId), DmlField("QuestName", &QuestOffer::QuestName), DmlField("QuestTitle", &QuestOffer::QuestTitle),
+                DmlField("QuestInfo", &QuestOffer::QuestInfo), DmlField("Level", &QuestOffer::Level), DmlField("Rewards", &QuestOffer::Rewards), DmlField("GoalData", &QuestOffer::GoalData),
+                DmlField("Mainline", &QuestOffer::Mainline) };
+        }
+    };
+
+    struct DeclineQuest
+    {
+        static constexpr uint8 ServiceId = QuestService;
+        static constexpr std::string_view Tag = "MSG_DECLINEQUEST";
+
+        std::string QuestName;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("QuestName", &DeclineQuest::QuestName) };
+        }
+    };
+
+    struct AcceptQuest
+    {
+        static constexpr uint8 ServiceId = QuestService;
+        static constexpr std::string_view Tag = "MSG_ACCEPTQUEST";
+
+        uint64 MobileId = 0;
+        std::string QuestName;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MobileID", &AcceptQuest::MobileId), DmlField("QuestName", &AcceptQuest::QuestName) };
+        }
+    };
+
     struct InteractObject
     {
         static constexpr uint8 ServiceId = GameService;
