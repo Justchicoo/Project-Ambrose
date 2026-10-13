@@ -365,6 +365,19 @@ TEST_F(ZoneExtractorTest, EachLocationAndEachEntryTheDumpDescribesBecomesARow)
     EXPECT_EQ(zone.Objects[3].StartState, "Idle");
 }
 
+TEST(ZoneExtractionTest, LocationsCsvQuotesZoneAndLocationNames)
+{
+    ZoneExtraction extraction;
+    ExtractedZone zone;
+    zone.Path = "World/Zone, 1";
+    ExtractedLocation location;
+    location.Name = "Target \"one\"";
+    zone.Locations.push_back(location);
+    extraction.Zones.push_back(zone);
+
+    EXPECT_EQ(extraction.LocationsCsv(), "zone_path,location_name\n\"World/Zone, 1\",\"Target \"\"one\"\"\"\n");
+}
+
 TEST_F(ZoneExtractorTest, AnEntryOfAClassTheDumpLacksAndNoSigilNameProvesIsReportedWithItsHash)
 {
     ZoneExtraction const extraction = ReadHub();

@@ -384,6 +384,12 @@ class ScenarioTests(TemporaryFolder):
 
 class WorldEntryTests(TemporaryFolder):
     WIZARD = {"school": 2343174, "zone": "WizardCity/WC_Ravenwood", "first": 1, "middle": 1, "last": 1}
+    WORLD_HUBS = [
+        {"world": "WizardCity", "client_world": "WC", "hub_zone": "WizardCity/WC_Hub", "hub_location": "Start",
+         "universe_zone": "WizardCity/WC_Ravenwood", "universe_location": "Start"},
+        {"world": "Krokotopia", "client_world": "KT", "hub_zone": "WizardCity/WC_Hub", "hub_location": "Start",
+         "universe_zone": "Krokotopia/KT_Hub", "universe_location": "Start"},
+    ]
 
     def scenario_file(self, name, document):
         return self.write_json(os.path.join("scenarios", name), document)
@@ -404,6 +410,29 @@ class WorldEntryTests(TemporaryFolder):
         self.assertTrue(loaded.needs_gameserver)
         self.assertEqual(loaded.wizard["zone"], "WizardCity/WC_Ravenwood")
         self.assertEqual(loaded.game_settings, ["Realm.Name=Test"])
+
+    def test_spiral_door_routes_and_unlocked_worlds_are_validated_together(self):
+        search = (os.path.join(self.folder, "scenarios"),)
+        document = {"title": "routes", "requires": {"gameserver": True}, "wizard": self.WIZARD,
+                    "world_hubs": self.WORLD_HUBS, "unlocked_worlds": ["WizardCity", "Krokotopia"], "steps": []}
+        self.scenario_file("routes.json", document)
+        loaded = scenario.load("routes.json", search=search)
+        self.assertEqual(loaded.world_hubs, self.WORLD_HUBS)
+        self.assertEqual(loaded.unlocked_worlds, ["WizardCity", "Krokotopia"])
+        cases = [
+            (dict(document, world_hubs=[]), "one or more routes"),
+            (dict(document, world_hubs=[{"world": "Krokotopia"}]), "needs exactly"),
+            (dict(document, world_hubs=[dict(self.WORLD_HUBS[1], universe_location=" ")]), "non-empty universe_location"),
+            (dict(document, requires={}, world_hubs=self.WORLD_HUBS), "does not require the game server"),
+            (dict(document, unlocked_worlds=["Unknown"]), "which its world_hubs do not route"),
+            (dict(document, unlocked_worlds=["Krokotopia", "Krokotopia"]), "repeats a world"),
+            (dict(document, wizard=None), "does not seed the wizard"),
+        ]
+        for invalid, said in cases:
+            self.scenario_file("bad-routes.json", invalid)
+            with self.subTest(said=said), self.assertRaises(Refused) as raised:
+                scenario.load("bad-routes.json", search=search)
+            self.assertIn(said, str(raised.exception))
 
     def test_more_wizards_join_the_first_on_its_account_and_need_it(self):
         steps = [{"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1}]
@@ -822,6 +851,19 @@ class ScreenTests(unittest.TestCase):
 
 
 class ClientInputTests(unittest.TestCase):
+    def test_activated_does_not_reorder_a_window_that_is_already_foreground(self):
+        gui = mock.Mock()
+        gui.GetForegroundWindow.return_value = 0x1234
+        client_window = client.Client.__new__(client.Client)
+        client_window.handle = 0x1234
+        con = SimpleNamespace(HWND_TOP=1, HWND_BOTTOM=2, SWP_NOMOVE=1, SWP_NOSIZE=2, SWP_NOACTIVATE=4)
+
+        with mock.patch.dict(sys.modules, {"win32con": con, "win32gui": gui}):
+            with client_window.activated() as active:
+                self.assertTrue(active)
+
+        gui.SetWindowPos.assert_not_called()
+
     def test_mouse_click_allows_a_lagging_client_to_process_window_messages(self):
         api = mock.Mock()
         api.GetAsyncKeyState.return_value = 0
@@ -1957,7 +1999,15 @@ class SlotTests(TemporaryFolder):
 
 
 class RunOrderTests(TemporaryFolder):
-    def parts(self, server_fails=False, window_fails=False):
+    def test_reported_server_commands_redact_the_database_password(self):
+        command = ["gameserver.exe", "--set", "LoginDatabaseInfo=127.0.0.1;3307;ambrose;db-secret;ambrose_driver_run_login"]
+
+        reported = run.reported_command(command, "db-secret")
+
+        self.assertNotIn("db-secret", reported)
+        self.assertIn("[REDACTED]", reported)
+
+    def parts(self, server_fails=False, window_fails=False, database_fails=False):
         events = self.events = []
         logs = self.folder
 
@@ -2063,9 +2113,13 @@ class RunOrderTests(TemporaryFolder):
             def __init__(self, *arguments):
                 self.address = "127.0.0.1:3307"
                 self.names = {"login": "ambrose_driver_run_login"}
+                self.drop_calls = 0
 
             def drop(self):
                 events.append("the databases were dropped")
+                self.drop_calls += 1
+                if database_fails and self.drop_calls == 1:
+                    raise StepFailed("database access denied")
                 return "dropped"
 
             def existing(self):
@@ -2099,6 +2153,24 @@ class RunOrderTests(TemporaryFolder):
             "the scenario ran", "the client was closed", "the login server stopped", "the capture stopped",
             "the guard stopped", "the databases were dropped"])
         self.assertEqual(code, 0)
+
+    def test_the_install_is_snapshotted_before_the_database_is_touched(self):
+            snapshot = install.snapshot
+
+            def record_snapshot(path):
+                self.events.append("the install was snapshotted")
+                return snapshot(path)
+
+            with mock.patch.object(run.install, "snapshot", side_effect=record_snapshot):
+                running, code = self.execute(database_fails=True)
+
+            self.assertLess(self.events.index("the install was snapshotted"), self.events.index("the databases were dropped"))
+            self.assertNotIn("the client started", self.events)
+            self.assertEqual(code, 1)
+            with open(os.path.join(running.folder, "report.json"), "r", encoding="utf-8") as handle:
+                written = json.load(handle)
+            self.assertGreater(written["install_files"], 0)
+            self.assertEqual(written["install_changes"], {"added": [], "removed": [], "changed": []})
 
     def test_a_companion_starts_after_the_main_client_under_the_same_guard_and_stops_before_it(self):
         running, code = self.execute(companion=True)
@@ -2526,6 +2598,74 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(scratch.info("characters"), "127.0.0.1;3307;ambrose;ambrose;ambrose_driver_run_characters")
         self.assertEqual(scratch.address, "127.0.0.1:3307")
 
+    def test_world_hub_routes_are_bound_to_the_scratch_world_database(self):
+        calls = []
+
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def execute(self, statement, values):
+                calls.append((statement, values))
+
+        class Connection:
+            def cursor(self):
+                return Cursor()
+
+            def commit(self):
+                pass
+
+            def close(self):
+                pass
+
+        connection = Connection()
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
+        with mock.patch.dict(sys.modules, {"pymysql": SimpleNamespace(connect=lambda **kwargs: connection)}):
+            result = scratch.seed_world_hubs(WorldEntryTests.WORLD_HUBS)
+        self.assertEqual(result, "seeded 2 world-hub route(s)")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][1], ("WizardCity", "WC", "WizardCity/WC_Hub", "Start", "WizardCity/WC_Ravenwood", "Start"))
+        self.assertEqual(calls[1][1], ("Krokotopia", "KT", "WizardCity/WC_Hub", "Start", "Krokotopia/KT_Hub", "Start"))
+
+    def test_character_unlocks_are_written_with_the_seeded_wizard(self):
+        calls = []
+
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def execute(self, statement, values=None):
+                calls.append((statement, values))
+
+            def fetchone(self):
+                return (23,)
+
+        class Connection:
+            def cursor(self):
+                return Cursor()
+
+            def commit(self):
+                pass
+
+            def close(self):
+                pass
+
+        connection = Connection()
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
+        scratch.account_id = lambda _user: 17
+        scratch.character_name = lambda _wizard, _gender: "Test Wizard"
+        wizard = dict(WorldEntryTests.WIZARD)
+        with mock.patch.dict(sys.modules, {"pymysql": SimpleNamespace(connect=lambda **kwargs: connection)}):
+            guid, name = scratch.seed_character("clientdriver", wizard, ["Krokotopia"])
+        self.assertEqual((guid, name), (23, "Test Wizard"))
+        self.assertIn(("INSERT INTO character_world_unlock (guid, world) VALUES (%s, %s)", (23, "Krokotopia")), calls)
+
     def test_a_prefix_that_is_not_the_driver_s_own_is_refused(self):
         with self.assertRaises(Refused):
             database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose")
@@ -2693,7 +2833,7 @@ class PreflightTests(unittest.TestCase):
             "revision": "r806919.Wizard_1_610",
             "install_reason": "",
             "install_readable": True,
-            "database_answers": True,
+            "database_authenticated": True,
             "tshark": "C:/Program Files/Wireshark/tshark.exe",
             "capture": True,
             "capture_reason": "",
@@ -2709,11 +2849,59 @@ class PreflightTests(unittest.TestCase):
     def test_a_machine_with_everything_can_run(self):
         self.assertEqual(preflight.missing(self.scenario(), self.environment(), {"capture": True, "client": "C:/Wizard101"}), [])
 
+    def test_the_scratch_database_password_can_come_from_the_environment(self):
+        with mock.patch.dict(os.environ, {"AMBROSE_TEST_DB_PASSWORD": "test-only"}):
+            arguments = cli.build_parser().parse_args(["check"])
+
+        self.assertEqual(arguments.db_password, "test-only")
+
+    def test_scratch_database_preflight_authenticates_without_selecting_a_database(self):
+        connection = mock.Mock()
+        driver = SimpleNamespace(connect=mock.Mock(return_value=connection), MySQLError=RuntimeError)
+        connect = driver.connect
+        with mock.patch.dict(sys.modules, {"pymysql": driver}):
+            problem = preflight.database_error("127.0.0.1", 3307, "ambrose", "ambrose")
+
+        self.assertEqual(problem, "")
+        connect.assert_called_once_with(host="127.0.0.1", port=3307, user="ambrose", password="ambrose", connect_timeout=2.0)
+        connection.close.assert_called_once_with()
+
+    def test_scratch_database_authentication_failure_is_reported(self):
+        class MySQLError(Exception):
+            pass
+
+        driver = SimpleNamespace(connect=mock.Mock(side_effect=MySQLError("access denied")), MySQLError=MySQLError)
+        with mock.patch.dict(sys.modules, {"pymysql": driver}):
+            problem = preflight.database_error("127.0.0.1", 3306, "ambrose", "wrong")
+
+        self.assertEqual(problem, "scratch database connection failed on 127.0.0.1:3306: access denied")
+
+    def test_missing_pymysql_is_reported_without_importing_it_at_module_load(self):
+        with mock.patch.dict(sys.modules, {"pymysql": None}):
+            problem = preflight.database_error("127.0.0.1", 3306, "ambrose", "ambrose")
+
+        self.assertEqual(problem, "PyMySQL is not installed, so the scratch database could not be checked")
+
+    def test_launcher_probe_receives_the_explicit_client_install(self):
+        result = mock.Mock(stdout="launcher: install C:/Wizard101 (r806919.Wizard_1_610)\n", stderr="", returncode=0)
+        with mock.patch.object(preflight.subprocess, "run", return_value=result) as run:
+            install, revision, reason = preflight.ask_launcher("C:/build/bin", "127.0.0.2", 12100, "800x600", "C:/run",
+                                                                "C:/Wizard101")
+
+        self.assertEqual((install, revision, reason), ("C:/Wizard101", "r806919.Wizard_1_610", ""))
+        self.assertEqual(run.call_args.args[0][-2:], ["--client", "C:/Wizard101"])
+
+    def test_an_unreachable_scratch_database_is_named_before_a_run(self):
+        gaps = preflight.missing(self.scenario(), self.environment(database_authenticated=False,
+                                                                  database_error="scratch database connection failed"),
+                                 {"capture": True, "client": "C:/Wizard101"})
+        self.assertEqual(gaps, ["scratch database connection failed"])
+
     def test_every_missing_piece_is_named(self):
         gaps = preflight.missing(self.scenario(), self.environment(
             windows=False, platform="linux", packages_missing=["pywin32"], binaries=None,
             binaries_reason="loginserver.exe and launcher.exe are not built", server_defaults=None,
-            database_answers=False, capture=False, capture_reason="tshark is not installed",
+            database_authenticated=False, capture=False, capture_reason="tshark is not installed",
             reference_problems=["the reference crops login are not there"]), {"capture": True, "client": "C:/Wizard101"})
         self.assertEqual(len(gaps), 7)
         self.assertIn("only on Windows", gaps[0])

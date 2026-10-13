@@ -158,12 +158,6 @@ void GameSession::HandleInteractNpc(GameMessages::InteractNpc& message)
     menu.Route(target, message.ServiceIndex);
 }
 
-void GameSession::HandleInteractObject(GameMessages::InteractObject& message)
-{
-    LOG_INFO("server.gamesession", "Session {}'s wizard {} interacted with object {} (template {}), which offers no options yet", GetSessionId(), _worldGuid, message.GlobalId,
-        message.TemplateId);
-}
-
 void GameSession::HandleInteractOption(GameMessages::InteractOption& message)
 {
     Map const* const map = _mapId ? sMapMgr.Find(*_mapId) : nullptr;

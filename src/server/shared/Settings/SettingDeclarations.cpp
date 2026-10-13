@@ -83,6 +83,7 @@ namespace
 
             Unsigned("Zone.UnloadDelay", "60", "0", "86400", "s", "Zones", Game, NextUse, "How long an empty zone instance stays loaded, read when its last wizard leaves."),
             Unsigned("Zone.MobileIdReleaseDelay", "2000", "0", "60000", "ms", "Zones", Game, NextUse, "How long a mobile id rests after its wizard leaves before another wizard may take it."),
+            Unsigned("GoHome.CooldownSeconds", "30", "0", "86400", "s", "Zones", Game, Live, "How long a wizard must wait after an accepted Go Home press before another is accepted; read on each press."),
             Flag("Zone.DoorsIgnoreRequirements", "false", "Zones", Game, Live,
                 "Whether a door, a trigger holding a ResTeleport, fires for a wizard who does not meet its requirements, which otherwise fail closed until requirements are checked; for exploring a test server."),
             Unsigned("Zone.MoveFlushInterval", "250", "50", "5000", "ms", "Zones", Game, NextUse, "How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush."),

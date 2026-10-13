@@ -533,15 +533,16 @@ class Client:
         import win32gui
 
         previous = win32gui.GetForegroundWindow()
-        got = True if previous == self.handle else force_foreground(self.handle)
-        win32gui.SetWindowPos(self.handle, win32con.HWND_TOP, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+        got = previous == self.handle or force_foreground(self.handle)
+        if previous != self.handle:
+            win32gui.SetWindowPos(self.handle, win32con.HWND_TOP, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
         try:
             yield got
         finally:
             if previous and previous != self.handle and win32gui.IsWindow(previous):
                 force_foreground(previous)
-            win32gui.SetWindowPos(self.handle, win32con.HWND_BOTTOM, 0, 0, 0, 0,
-                                  win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
+                win32gui.SetWindowPos(self.handle, win32con.HWND_BOTTOM, 0, 0, 0, 0,
+                                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
 
     def click(self, x, y, dwell=0.35, clicks=1):
         import win32con

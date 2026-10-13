@@ -6,6 +6,7 @@
 #include "ZoneExtractor.h"
 #include "BindFile.h"
 #include "ConfigMgr.h"
+#include "Csv.h"
 #include "KiwadArchive.h"
 #include "ObjectSerializer.h"
 #include "SkippedValue.h"
@@ -16,6 +17,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <optional>
@@ -353,6 +355,33 @@ std::size_t ZoneExtraction::GetLocationCount() const noexcept
     for (ExtractedZone const& zone : Zones)
         count += zone.Locations.size();
     return count;
+}
+
+std::string ZoneExtraction::LocationsCsv() const
+{
+    std::string out = "zone_path,location_name\n";
+    for (ExtractedZone const& zone : Zones)
+        for (ExtractedLocation const& location : zone.Locations)
+            out += fmt::format("{},{}\n", Csv::Quote(zone.Path), Csv::Quote(location.Name));
+    return out;
+}
+
+bool ZoneExtraction::WriteLocationsCsv(std::filesystem::path const& file, std::string& error) const
+{
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    if (!out)
+    {
+        error = "the file cannot be opened for writing";
+        return false;
+    }
+    std::string const text = LocationsCsv();
+    out.write(text.data(), static_cast<std::streamsize>(text.size()));
+    if (!out)
+    {
+        error = "the file could not be written";
+        return false;
+    }
+    return true;
 }
 
 std::size_t ZoneExtraction::GetObjectCount() const noexcept

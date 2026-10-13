@@ -13,6 +13,7 @@
 #include "CharacterStats.h"
 #include "CharacterSummary.h"
 #include "ChatMgr.h"
+#include "GoHomeCooldown.h"
 #include "GameEffectHolder.h"
 #include "GameMessages.h"
 #include "GameSessionWorld.h"
@@ -50,6 +51,8 @@
 class InstanceSight;
 struct ChatSpeaker;
 class SocialMgr;
+class PropertyObject;
+class RequirementContext;
 
 struct WorldDeparture
 {
@@ -149,6 +152,11 @@ public:
     void HandleZoneTransferNack(GameMessages::ZoneTransferNack& message);
     void HandleRetryTeleport(GameMessages::RetryTeleport& message);
     bool RequestZoneTransfer(ZoneTransfer transfer, std::string& problem);
+    bool QueueZoneTransfer(ZoneTransfer transfer, std::string& problem);
+    void SendZoneTransferRequest(std::string const& zone);
+    void HandleGoHome(GameMessages::GoHome& message);
+    void HandleWorldTeleportRequest(GameMessages::WorldTeleportRequest& message);
+    void ClearWorldTeleportWizBang();
     bool IsTransferring() const noexcept { return _transfers.Busy(); }
     void HandlePostZoneEventFromClient(GameMessages::PostZoneEventFromClient& message);
     void ArriveInVolumes();
@@ -276,9 +284,11 @@ private:
     friend struct GameSessionEquipmentTestAccess;
     friend struct SocialMgrTestAccess;
     friend struct ChatHandlerTestAccess;
+    friend struct GameSessionTeleporterTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
     bool PatchDownloadsEnabled(std::string_view tag) const;
+    bool CheckTeleporterRequirements(PropertyObject const& requirements, RequirementContext const& context, uint64 objectId);
     SQLOperation::CompletionHandler MakeCompletionHandler();
     void CheckTransferPassKey(LoginKeyClaim claim, std::string passKey, int64 now);
     void ConsumeKey(LoginKeyClaim claim, int64 now);
@@ -294,9 +304,12 @@ private:
     void LoadEquipment(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells,
         std::vector<CharacterItem> items);
     void LoadQuests(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells,
+        std::vector<CharacterItem> items, std::vector<CharacterEquippedItem> equipped, std::vector<std::string> worldUnlocks);
+    void LoadWorldUnlocks(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells,
         std::vector<CharacterItem> items, std::vector<CharacterEquippedItem> equipped);
     void EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells,
-        std::vector<CharacterItem> const& items, std::vector<CharacterEquippedItem> const& equipped, CharacterQuests const& quests);
+        std::vector<CharacterItem> const& items, std::vector<CharacterEquippedItem> const& equipped, std::vector<std::string> worldUnlocks, CharacterQuests const& quests);
+    void SaveWorldUnlock(std::string world);
     void SaveStats();
     void SaveStatsIfDirty();
     void SaveQuestLog();
@@ -335,6 +348,7 @@ private:
     void ShowGameEffectsOf(GameSession const& other);
     bool IsNpcTemplate(uint32 templateId);
     void OfferNpcServices(MapObject const& npc);
+    void ShowTeleportEffect(std::string_view name);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
@@ -375,6 +389,9 @@ private:
     uint64 _worldGuid = 0;
     uint32 _wizBangId = 0;
     std::optional<uint32> _pendingWizBang;
+    std::optional<uint64> _pendingWorldTeleportId;
+    GoHomeCooldown _goHomeCooldown;
+    std::vector<std::string> _unlockedWorlds;
     std::optional<Player> _player;
     uint64 _statsRevision = 0;
     std::optional<PlayerSpellbook> _spellbook;

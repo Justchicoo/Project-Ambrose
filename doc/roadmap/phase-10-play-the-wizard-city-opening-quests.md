@@ -785,8 +785,8 @@ Players can buy items, potions and treasure cards from NPC vendors with gold and
 
 **Acceptance**
 
-- [ ] Unmet teleporter requirement does nothing and notifies
-- [ ] Changing GoHome.CooldownSeconds applies to the next press; a failed `.reload world_hub` keeps the old rows
+- [x] Unmet teleporter requirement does nothing and notifies (RequirementTest.ARejectedTeleporterRequirementNotifiesWithoutQueuingATransfer)
+- [x] Changing GoHome.CooldownSeconds applies to the next press (GoHomeCooldownTest.ReadsTheDurationAtEachPressAndOnlyRecordsAcceptedUses); a failed `.reload world_hub` keeps the old rows (ZoneTeleportDatabaseTest.WorldHubReloadChecksBothDestinationsAndKeepsTheServingRowsOnFailure)
 - [ ] Real client: Spiral Door lists unlocked worlds; Krokotopia loads; Go Home loads WC_Hub, second press within GoHome.CooldownSeconds (default 30) refused
 
 ### Detailed spec from WLD-16: Interactive teleporters and the Spiral Door
@@ -817,8 +817,8 @@ Clicking teleporter objects (Spiral Door, go-home, marked world teleporters) ope
 
 - [ ] Real client: clicking the Spiral Door in Ravenwood opens the world list with only unlocked worlds; choosing Krokotopia loads its arrival zone
 - [ ] Real client: the Go Home button in a WC street plays the teleport effect, then loads WC_Hub; a second press within GoHome.CooldownSeconds (default 30) is refused
-- [ ] Unit: a teleporter with unmet requirements does nothing and sends a notify text
-- [ ] Unit: after `.settings set GoHome.CooldownSeconds 5`, a press 6 s after the last one is accepted without a restart
+- [x] Unit: a teleporter with unmet requirements does nothing and sends a notify text (RequirementTest.ARejectedTeleporterRequirementNotifiesWithoutQueuingATransfer)
+- [x] Unit: after `.settings set GoHome.CooldownSeconds 5`, a press 6 s after the last one is accepted without a restart (GoHomeCooldownTest.ReadsTheDurationAtEachPressAndOnlyRecordsAcceptedUses)
 
 **Risks**
 

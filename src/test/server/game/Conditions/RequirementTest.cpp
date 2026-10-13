@@ -1,15 +1,22 @@
 /*
  * Project Ambrose by Imjustchico
- * Exercises every built-in requirement against a fake wizard context, passing on its own fact and failing the list when that fact does not hold, list operators and nesting, fail-closed unknown types, and both atomic success and failure paths of requirement reloads.
+ * Exercises every built-in requirement against a fake wizard context, passing on its own fact and failing the list when that fact does not hold, list operators and nesting, fail-closed unknown types, the teleporter refusal notification, and both atomic success and failure paths of requirement reloads.
  */
 
+#include "GameMessageTable.h"
+#include "GameTestHarness.h"
 #include "Log.h"
 #include "LogTestConfig.h"
+#include "ObjectViews.h"
+#include "PropertyObject.h"
 #include "RequirementMgr.h"
 #include "ReloadMgr.h"
+#include "StringHash.h"
 #include "TestAppender.h"
+#include "TypeRegistry.h"
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -21,8 +28,61 @@
 #include <utility>
 #include <vector>
 
+struct GameSessionTeleporterTestAccess
+{
+    static bool CheckRequirements(GameSession& session, PropertyObject const& requirements, RequirementContext const& context, uint64 objectId)
+    {
+        return session.CheckTeleporterRequirements(requirements, context, objectId);
+    }
+};
+
 namespace
 {
+    using Json = nlohmann::json;
+
+    struct MessageRegistryReset
+    {
+        ~MessageRegistryReset() { sMessageRegistry.Clear(); }
+    };
+
+    Json Property(std::string const& type, std::string const& name, uint32 id, std::string container = "Static")
+    {
+        bool const pointer = type.ends_with('*');
+        return Json{ { "type", type }, { "id", id }, { "offset", 8 * (id + 1) }, { "flags", 31 }, { "container", container }, { "dynamic", container != "Static" },
+            { "singleton", false }, { "pointer", pointer }, { "hash", StringHash::PropertyHash(type, name) } };
+    }
+
+    void AddClass(Json& classes, std::string const& name, Json bases, Json properties)
+    {
+        classes[std::to_string(StringHash::KiStringHash(name))] =
+            Json{ { "name", name }, { "bases", std::move(bases) }, { "hash", StringHash::KiStringHash(name) }, { "properties", std::move(properties) } };
+    }
+
+    std::string EmbeddedRequirementDump()
+    {
+        Json classes = Json::object();
+        AddClass(classes, "class PropertyClass", Json::array(), Json::object());
+        AddClass(classes, "enum Requirement::Operator", Json::array(), Json::object());
+
+        Json requirement = Json::object();
+        requirement["m_applyNOT"] = Property("bool", "m_applyNOT", 0);
+        requirement["m_operator"] = Property("enum Requirement::Operator", "m_operator", 1);
+        AddClass(classes, "class Requirement", Json::array({ "PropertyClass" }), requirement);
+
+        Json list = Json::object();
+        list["m_applyNOT"] = Property("bool", "m_applyNOT", 0);
+        list["m_operator"] = Property("enum Requirement::Operator", "m_operator", 1);
+        list["m_requirements"] = Property("class Requirement*", "m_requirements", 2, "List");
+        AddClass(classes, "class RequirementList", Json::array({ "PropertyClass" }), list);
+
+        Json hasQuest = Json::object();
+        hasQuest["m_applyNOT"] = Property("bool", "m_applyNOT", 0);
+        hasQuest["m_operator"] = Property("enum Requirement::Operator", "m_operator", 1);
+        hasQuest["m_questName"] = Property("std::string", "m_questName", 2);
+        AddClass(classes, "class ReqHasQuest", Json::array({ "Requirement", "PropertyClass" }), hasQuest);
+        return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
+    }
+
     RequirementRow Requirement(std::string type, std::uint32_t position)
     {
         RequirementRow row;
@@ -281,6 +341,84 @@ TEST_F(RequirementTest, EveryBuiltInTypeUsesItsMatchingWizardFact)
     EXPECT_EQ(context.LastZone, "WizardCity/WC_Hub");
     EXPECT_EQ(context.LastGender, "Female");
     EXPECT_EQ(context.LastBadge, "Badge1");
+}
+
+TEST_F(RequirementTest, EmbeddedTeleporterRequirementsUseTheFailClosedEvaluator)
+{
+    TypedViewRegistry views;
+    ASSERT_TRUE(views.Add(RequirementListView::Definition));
+    TypeRegistry registry(&views);
+    ASSERT_TRUE(registry.LoadFromText(EmbeddedRequirementDump(), "embedded-requirements.json"))
+        << (registry.GetErrors().empty() ? "" : registry.GetErrors().front());
+    TypeCatalogPtr const catalog = registry.GetCatalog();
+    ASSERT_NE(catalog, nullptr);
+
+    PropertyObjectPtr list = PropertyObject::Create(catalog, "class RequirementList");
+    PropertyObjectPtr requirement = PropertyObject::Create(catalog, "class ReqHasQuest");
+    ASSERT_NE(list, nullptr);
+    ASSERT_NE(requirement, nullptr);
+    ASSERT_EQ(requirement->Set("m_questName", "LockedQuest"), PropertySetResult::Ok);
+    PropertyValue::List requirements;
+    requirements.emplace_back(std::move(requirement));
+    ASSERT_EQ(list->Set("m_requirements", std::move(requirements)), PropertySetResult::Ok);
+
+    FakeRequirementContext context;
+    context.Quests["LockedQuest"] = false;
+    EXPECT_FALSE(sRequirementMgr.Evaluate(*list, context));
+
+    ASSERT_EQ(list->Set("m_applyNOT", true), PropertySetResult::Ok);
+    EXPECT_TRUE(sRequirementMgr.Evaluate(*list, context));
+}
+
+TEST_F(RequirementTest, ARejectedTeleporterRequirementNotifiesWithoutQueuingATransfer)
+{
+    TypedViewRegistry views;
+    ASSERT_TRUE(views.Add(RequirementListView::Definition));
+    TypeRegistry registry(&views);
+    ASSERT_TRUE(registry.LoadFromText(EmbeddedRequirementDump(), "embedded-requirements.json"))
+        << (registry.GetErrors().empty() ? "" : registry.GetErrors().front());
+    TypeCatalogPtr const catalog = registry.GetCatalog();
+    ASSERT_NE(catalog, nullptr);
+
+    PropertyObjectPtr list = PropertyObject::Create(catalog, "class RequirementList");
+    PropertyObjectPtr requirement = PropertyObject::Create(catalog, "class ReqHasQuest");
+    ASSERT_NE(list, nullptr);
+    ASSERT_NE(requirement, nullptr);
+    ASSERT_EQ(requirement->Set("m_questName", "LockedQuest"), PropertySetResult::Ok);
+    PropertyValue::List requirements;
+    requirements.emplace_back(std::move(requirement));
+    ASSERT_EQ(list->Set("m_requirements", std::move(requirements)), PropertySetResult::Ok);
+
+    FakeRequirementContext context;
+    context.Quests["LockedQuest"] = false;
+
+    MessageRegistryReset const reset;
+    sMessageRegistry.Clear();
+    std::vector<std::string> declarationErrors;
+    ASSERT_TRUE(sMessageRegistry.Declare<GameMessages::ClientNotifyText>(declarationErrors))
+        << (declarationErrors.empty() ? "" : declarationErrors.front());
+    MessageDefinitionSet definitions;
+    ASSERT_TRUE(definitions.Add(LoginMessageFixtures::GameXml, "FixtureGameMessages.xml"));
+    ASSERT_TRUE(sMessageRegistry.Load(std::move(definitions)))
+        << (sMessageRegistry.GetErrors().empty() ? "" : sMessageRegistry.GetErrors().front().ToString());
+    GameTesting::GameListener server;
+    uint16 sessionId = 0;
+    std::unique_ptr<FakeSessionClient> const client = server.Connect(sessionId);
+    std::shared_ptr<GameSession> session;
+    ASSERT_TRUE(WaitForCondition([&] { session = server.Find(sessionId); return session != nullptr; }));
+    ASSERT_NE(sMessageRegistry.GetCatalog(), nullptr);
+
+    EXPECT_FALSE(GameSessionTeleporterTestAccess::CheckRequirements(*session, *list, context, 42));
+    EXPECT_NE(sMessageRegistry.GetCatalog(), nullptr);
+    EXPECT_FALSE(session->IsTransferring());
+
+    std::optional<DmlMessageData> const reply = ReadNextDml(*client, std::chrono::seconds(2));
+    ASSERT_TRUE(reply);
+    ASSERT_TRUE(GameTesting::Is<GameMessages::ClientNotifyText>(*reply));
+    GameMessages::ClientNotifyText notify;
+    ASSERT_EQ(sMessageRegistry.GetCatalog()->Decode(reply->Body, notify), MessageDecodeStatus::Ok);
+    EXPECT_EQ(notify.NotifyText, "You do not meet the requirements to use this teleporter.");
+    EXPECT_FALSE(session->IsTransferring());
 }
 
 TEST_F(RequirementTest, EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold)

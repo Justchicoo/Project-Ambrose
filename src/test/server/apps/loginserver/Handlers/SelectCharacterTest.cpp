@@ -74,7 +74,9 @@ namespace
             _charactersInfo = *info;
             _charactersInfo.Database = fmt::format("ambrose_pick_{:08x}_characters", suffix);
             ASSERT_TRUE(DBUpdater::Run(_loginInfo, "login", UpdaterSettings{}));
-            ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", UpdaterSettings{}));
+            UpdaterSettings updates;
+            updates.AllowPending = true;
+            ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", updates));
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_loginInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(LoginDatabase.Open(), 0u);
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_charactersInfo.ToConnectionString(), 1, 1));

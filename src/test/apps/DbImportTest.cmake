@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# With AMBROSE_TEST_DB set, runs dbimport to create and update three uniquely named databases twice, then once with a broken update that must exit 1 and name the file, and drops every database it made.
+# With AMBROSE_TEST_DB set, runs dbimport with pending updates enabled to create and update three uniquely named databases twice, then once with a broken update that must exit 1 and name the file, and drops every database it made.
 if(NOT APP OR NOT WORKDIR OR NOT SOURCE)
     message(FATAL_ERROR "APP, WORKDIR and SOURCE must be set")
 endif()
@@ -12,7 +12,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/TestDatabases.cmake")
 file(REMOVE_RECURSE "${WORKDIR}")
 file(MAKE_DIRECTORY "${WORKDIR}")
 get_filename_component(appDir "${APP}" DIRECTORY)
-set(quietOptions --set "LogsDir=${WORKDIR}/logs" --set Appender.Console=1,3,0 --set Appender.DBImport=1,3,0)
+set(quietOptions --set "LogsDir=${WORKDIR}/logs" --set Appender.Console=1,3,0 --set Appender.DBImport=1,3,0 --set=Updates.AllowPending=1)
 ambrose_test_database_info(ambrose_dbimport_login loginInfo)
 ambrose_test_database_info(ambrose_dbimport_characters characterInfo)
 ambrose_test_database_info(ambrose_dbimport_world worldInfo)

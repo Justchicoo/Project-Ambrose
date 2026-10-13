@@ -29,6 +29,7 @@ void ObjectViews::RegisterAll(TypedViewRegistry& registry)
     registry.Add(CombatSigilTemplateView::Definition);
     registry.Add(SigilSubCircleView::Definition);
     registry.Add(RequirementListView::Definition);
+    registry.Add(TeleportProximityBehaviorTemplateView::Definition);
     registry.Add(NamedEffectView::Definition);
     registry.Add(QuickChatEntryView::Definition);
 }

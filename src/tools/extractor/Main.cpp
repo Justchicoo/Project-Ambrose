@@ -87,6 +87,8 @@ Options:
                       door, a trigger holding a ResTeleport, leads; never written
                       to the database, for a person to check before authoring
                       zone_teleport rows
+  --locations <file>  with zones, write every decoded named location as a review
+                      CSV; never written to the database
   --dry-run           extract and check everything, print the counts, write nothing;
                       checks the world tables when a world database is named
   --help              print this text
@@ -106,6 +108,7 @@ database fails, 2 on bad usage.
         std::optional<std::string> WorldDatabase;
         std::optional<std::string> SqlFile;
         std::optional<std::string> ProposalFile;
+        std::optional<std::string> LocationFile;
         bool DryRun = false;
         bool Help = false;
         std::vector<std::string> Words;
@@ -129,7 +132,7 @@ database fails, 2 on bad usage.
                 parsed.Help = true;
             else if (arg == "--dry-run")
                 parsed.DryRun = true;
-            else if (arg == "--client" || arg == "--type-dump" || arg == "--world-db" || arg == "--sql" || arg == "--propose-teleports")
+            else if (arg == "--client" || arg == "--type-dump" || arg == "--world-db" || arg == "--sql" || arg == "--propose-teleports" || arg == "--locations")
             {
                 if (index + 1 >= args.size())
                 {
@@ -142,7 +145,8 @@ database fails, 2 on bad usage.
                     error = fmt::format("{} needs a value, not the option {}", arg, value);
                     return std::nullopt;
                 }
-                (arg == "--client" ? parsed.Client : arg == "--type-dump" ? parsed.TypeDump : arg == "--world-db" ? parsed.WorldDatabase : arg == "--sql" ? parsed.SqlFile : parsed.ProposalFile) = value;
+                (arg == "--client" ? parsed.Client : arg == "--type-dump" ? parsed.TypeDump : arg == "--world-db" ? parsed.WorldDatabase : arg == "--sql" ? parsed.SqlFile :
+                    arg == "--propose-teleports" ? parsed.ProposalFile : parsed.LocationFile) = value;
             }
             else if (arg.starts_with("--"))
             {
@@ -166,6 +170,12 @@ database fails, 2 on bad usage.
             if (!error.empty())
                 break;
         }
+        if (!error.empty())
+            return std::nullopt;
+        if (parsed.LocationFile && !named.contains("zones"))
+            error = "--locations requires the zones command";
+        else if (parsed.DryRun && parsed.LocationFile)
+            error = "--dry-run and --locations cannot be combined";
         if (!error.empty())
             return std::nullopt;
         if (parsed.DryRun && parsed.SqlFile)
@@ -487,6 +497,15 @@ database fails, 2 on bad usage.
                         return Failure;
                     }
                     std::cout << fmt::format("proposed {} door destination(s) for review in {}\n", proposals.size(), *arguments->ProposalFile);
+                }
+                if (arguments->LocationFile && zoneExtraction.Ok())
+                {
+                    if (!zoneExtraction.WriteLocationsCsv(LogConfig::Utf8Path(*arguments->LocationFile), error))
+                    {
+                        std::cerr << fmt::format("extractor: cannot write {}: {}\n", *arguments->LocationFile, error);
+                        return Failure;
+                    }
+                    std::cout << fmt::format("wrote {} named location(s) for review in {}\n", zoneExtraction.GetLocationCount(), *arguments->LocationFile);
                 }
                 Collect<ZoneSqlScript>(zoneExtraction, extracted);
             }

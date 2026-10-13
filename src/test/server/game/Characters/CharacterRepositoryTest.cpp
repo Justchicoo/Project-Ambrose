@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema with the updates still pending and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook; and backpack rows, read in the order they arrived with every field, an item trashed only by its owner, its backpack row going with it, and the highest item id kept after the item is gone; and worn items, which leave the backpack rows for equipment rows naming their slot, come back to the backpack when a slot gives them back or they are taken off, are never worn by a wizard that does not own them, and go with their item when it is trashed; and a quest log counted to 2 of 5 that reloads with the same quest and goal GIDs and count, completing it removing the active row and leaving its Complete entry, older saves landing late changing nothing, and a goal of no quest, a save with no revision and a missing wizard refused.
+ * Tests character persistence for character fields, positions, stats, spells, unlocked worlds, backpack and equipped items, and quest logs, including invalid writes and stale revisions.
  */
 
 #include "CharacterQuestRepository.h"
@@ -466,6 +466,29 @@ TEST_F(CharacterRepositoryDatabaseTest, AWizardsSpellbookRowsReadInTheOrderLearn
     EXPECT_EQ(CharacterRepository::SaveSpell(0, { FireCat, true, 6, 6 }), CharacterOpResult::InvalidData);
     EXPECT_EQ(CharacterRepository::SaveSpell(999, { FireCat, true, 6, 6 }), CharacterOpResult::DatabaseError) << "a spell row needs its wizard";
     EXPECT_EQ(CharacterRepository::LoadSpells(501).Spells.size(), 3u);
+}
+
+TEST_F(CharacterRepositoryDatabaseTest, WorldUnlocksRoundTripInOrderAndAreWrittenIdempotently)
+{
+    std::mt19937 random(20261009);
+    ASSERT_EQ(CharacterRepository::Create(MakeCharacter(random, 801, 7, 1800000801)), CharacterOpResult::Ok);
+
+    CharacterWorldUnlocksLoad const empty = CharacterRepository::LoadWorldUnlocks(801);
+    ASSERT_EQ(empty.Result, CharacterOpResult::Ok);
+    EXPECT_TRUE(empty.Worlds.empty());
+    EXPECT_EQ(CharacterRepository::LoadWorldUnlocks(999).Result, CharacterOpResult::NotFound);
+    EXPECT_EQ(CharacterRepository::LoadWorldUnlocks(0).Result, CharacterOpResult::InvalidData);
+
+    ASSERT_EQ(CharacterRepository::UnlockWorld(801, "KT"), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::UnlockWorld(801, "WizardCity"), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::UnlockWorld(801, "KT"), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::LoadWorldUnlocks(801).Worlds, (std::vector<std::string>{ "KT", "WizardCity" }));
+
+    EXPECT_EQ(CharacterRepository::UnlockWorld(0, "KT"), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::UnlockWorld(801, ""), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::UnlockWorld(801, std::string(65, 'x')), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::UnlockWorld(801, std::string("K\0T", 3)), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::UnlockWorld(999, "KT"), CharacterOpResult::NotFound);
 }
 
 TEST_F(CharacterRepositoryDatabaseTest, BackpackItemsRoundTripAreTrashedOnlyByTheirOwnerAndKeepTheirIdsUsed)

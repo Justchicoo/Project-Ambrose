@@ -75,6 +75,10 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_REP_CHARACTER_SPELL, "CHAR_REP_CHARACTER_SPELL", "INSERT INTO `character_spell` (`guid`, `spell_id`, `known`, `learned`, `revision`) VALUES (?, ?, ?, ?, ?) "
         "ON DUPLICATE KEY UPDATE `known` = IF(VALUES(`revision`) > `revision`, VALUES(`known`), `known`), `learned` = IF(VALUES(`revision`) > `revision`, VALUES(`learned`), `learned`), "
         "`revision` = GREATEST(`revision`, VALUES(`revision`))", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_CHARACTER_WORLD_UNLOCKS, "CHAR_SEL_CHARACTER_WORLD_UNLOCKS", "SELECT c.`guid` IS NOT NULL, u.`world` IS NOT NULL, u.`world` FROM `characters` c "
+        "LEFT JOIN `character_world_unlock` u ON u.`guid` = c.`guid` WHERE c.`guid` = ? ORDER BY u.`world`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_CHARACTER_WORLD_UNLOCK, "CHAR_INS_CHARACTER_WORLD_UNLOCK", "INSERT INTO `character_world_unlock` (`guid`, `world`) VALUES (?, ?) "
+        "ON DUPLICATE KEY UPDATE `world` = VALUES(`world`)", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_CHARACTER_INVENTORY, "CHAR_SEL_CHARACTER_INVENTORY", "SELECT i.`guid` IS NOT NULL, i.`guid`, i.`template`, i.`quantity`, i.`primary_color`, i.`secondary_color`, "
         "i.`pattern`, i.`locked`, i.`flags`, i.`created`, v.`slot` FROM `characters` c LEFT JOIN `character_inventory` v ON v.`guid` = c.`guid` "
         "LEFT JOIN `item_instance` i ON i.`guid` = v.`item` AND i.`owner` = c.`guid` WHERE c.`guid` = ? ORDER BY v.`slot`, v.`item`", ConnectionFlags::Both);

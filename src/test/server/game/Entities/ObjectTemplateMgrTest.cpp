@@ -301,6 +301,14 @@ TEST_F(ObjectTemplateMgrTest, ATemplateIsItsFileArchiveNameAndBehaviorsInOrderWi
     EXPECT_GT(found->Bytes, sizeof(ObjectTemplate));
 }
 
+TEST_F(ObjectTemplateMgrTest, LooksUpBehaviorNamesWithoutDependingOnObjectIdentity)
+{
+    std::shared_ptr<ObjectTemplate const> const found = _store.GetTemplate(7);
+    ASSERT_TRUE(found) << _store.Lookup(7).Error;
+    EXPECT_TRUE(found->HasBehavior("NPCBehavior"));
+    EXPECT_FALSE(found->HasBehavior("UniverseMapBehavior"));
+}
+
 TEST_F(ObjectTemplateMgrTest, ABehaviorWithAnEmptyNameIsLeftOutWhileANullOneKeepsItsSlot)
 {
     std::shared_ptr<ObjectTemplate const> const baboon = _store.GetTemplate(10);

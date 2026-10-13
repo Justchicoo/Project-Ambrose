@@ -67,6 +67,8 @@ namespace
             Accept<&GameSession::HandleInteractNpc>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractNpc");
             Accept<&GameSession::HandleInteractObject>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractObject");
             Accept<&GameSession::HandleInteractOption>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractOption");
+            Accept<&GameSession::HandleGoHome>(inWorld, MessageProcessing::Queued, "GameSession::HandleGoHome");
+            Accept<&GameSession::HandleWorldTeleportRequest>(inWorld, MessageProcessing::Queued, "GameSession::HandleWorldTeleportRequest");
             Accept<&GameSession::HandleCombatMove>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatMove");
             Accept<&GameSession::HandleCombatDraw>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatDraw");
             Accept<&GameSession::HandleCombatAFK>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatAFK");

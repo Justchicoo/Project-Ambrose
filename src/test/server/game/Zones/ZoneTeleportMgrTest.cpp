@@ -9,6 +9,7 @@
 #include "ReloadMgr.h"
 #include "ZoneMgr.h"
 #include "ZoneTeleportMgr.h"
+#include "WorldHubMgr.h"
 #include "ZoneTriggers.h"
 
 #include <fmt/format.h>
@@ -67,6 +68,67 @@ TEST(ZoneTeleportTest, ADoorBehindRequirementsFiresOnlyWhileDoorsMayIgnoreThem)
     ASSERT_EQ(triggers.Post("Enter_Activator Volume (5)", 7, now).size(), 1u) << "a door with no requirements needs no setting";
 }
 
+TEST(WorldHubTest, FindsTheWorldRouteByTheZonePathRoot)
+{
+    WorldHubMgr::Table const routes = {
+        { "WizardCity", "WizardCity", "WizardCity/WC_Hub", "Start", "WizardCity/WC_Ravenwood", "Start" },
+        { "KT", "Krokotopia", "Krokotopia/KT_Hub", "Start", "Krokotopia/KT_A1", "Start" }
+    };
+
+    std::optional<WorldHub> const found = WorldHubMgr::FindForZone(routes, "WizardCity/WC_Ravenwood");
+    ASSERT_TRUE(found);
+    EXPECT_EQ(found->World, "WizardCity");
+    EXPECT_FALSE(WorldHubMgr::FindForZone(routes, "WizardCityExtra/WC_Ravenwood"));
+    EXPECT_FALSE(WorldHubMgr::FindForZone(routes, "Grizzleheim/Gr_Hub"));
+    std::optional<WorldHub> const krokotopia = WorldHubMgr::FindForZone(routes, "Krokotopia/KT_A1");
+    ASSERT_TRUE(krokotopia);
+    EXPECT_EQ(krokotopia->World, "KT");
+}
+
+TEST(WorldHubTest, ResolvesClientWorldNamesToServerWorldKeys)
+{
+    WorldHubMgr::Table const routes = {
+        { "WizardCity", "WizardCity", "WizardCity/WC_Hub", "Start", "WizardCity/WC_Ravenwood", "Start" },
+        { "KT", "Krokotopia", "Krokotopia/KT_Hub", "Start", "Krokotopia/KT_A1", "Start" }
+    };
+
+    std::optional<WorldHub> const krokotopia = WorldHubMgr::FindForClientWorld(routes, "Krokotopia");
+    ASSERT_TRUE(krokotopia);
+    EXPECT_EQ(krokotopia->World, "KT");
+    EXPECT_FALSE(WorldHubMgr::FindForClientWorld(routes, "KT"));
+    EXPECT_FALSE(WorldHubMgr::FindForClientWorld(routes, "Celestia"));
+}
+
+TEST(WorldHubTest, FindsTheUniverseDoorOnlyInsideItsConfiguredZone)
+{
+    WorldHubMgr::Table const routes = {
+        { "WizardCity", "WizardCity", "WizardCity/WC_Hub", "Start", "WizardCity/WC_Ravenwood", "Start" },
+        { "KT", "Krokotopia", "Krokotopia/KT_Hub", "Start", "Krokotopia/KT_A1", "Start" }
+    };
+
+    std::optional<WorldHub> const ravenwood = WorldHubMgr::FindForUniverseZone(routes, "WizardCity/WC_Ravenwood/Interior");
+    ASSERT_TRUE(ravenwood);
+    EXPECT_EQ(ravenwood->World, "WizardCity");
+    EXPECT_FALSE(WorldHubMgr::FindForUniverseZone(routes, "WizardCity/WC_Hub"));
+    EXPECT_FALSE(WorldHubMgr::FindForUniverseZone(routes, "KrokotopiaExtra/KT_A1"));
+}
+
+TEST(WorldHubTest, ListsOnlyUnlockedWorldsOnceInRouteOrder)
+{
+    WorldHubMgr::Table const routes = {
+        { "WizardCity", "WizardCity", "WizardCity/WC_Hub", "Start", "WizardCity/WC_Ravenwood", "Start" },
+        { "KT", "Krokotopia", "Krokotopia/KT_Hub", "Start", "Krokotopia/KT_A1", "Start" },
+        { "KT", "Krokotopia", "Krokotopia/KT_Hub", "Start2", "Krokotopia/KT_A1", "Start2" },
+        { "Celestia", "Celestia", "Celestia/CL_Hub", "Start", "Celestia/CL_A1", "Start" }
+    };
+
+    std::vector<WorldHub> const unlocked = WorldHubMgr::FindUnlocked(routes, { "KT", "WizardCity" });
+    ASSERT_EQ(unlocked.size(), 2u);
+    EXPECT_EQ(unlocked[0].World, "WizardCity");
+    EXPECT_EQ(unlocked[1].World, "KT");
+    EXPECT_EQ(unlocked[1].ClientWorld, "Krokotopia");
+}
+
 namespace
 {
     class ZoneTeleportDatabaseTest : public testing::Test
@@ -88,6 +150,7 @@ namespace
             ASSERT_EQ(WorldDatabase.Open(), 0u);
             _open = true;
             Insert("DELETE FROM `zone_teleport`");
+            Insert("DELETE FROM `world_hub`");
             for (std::string_view zone : { Hub, Ravenwood })
                 Insert(fmt::format("INSERT INTO `zone_template` (`zone_path`, `display_name_key`, `soft_limit`) VALUES ('{}', 'Key', 50)", zone));
             Insert(fmt::format("INSERT INTO `zone_location` (`zone_path`, `name`, `position_x`, `position_y`, `position_z`, `direction`) VALUES ('{}', 'Start', 0, 48, -24, 5.1), "
@@ -96,14 +159,17 @@ namespace
             sReloadMgr.Clear();
             sZoneMgr.Clear();
             sZoneTeleportMgr.Clear();
+            sWorldHubMgr.Clear();
             sZoneMgr.RegisterReloadTargets();
             sZoneTeleportMgr.RegisterReloadTargets();
+            sWorldHubMgr.RegisterReloadTargets();
             ASSERT_TRUE(sZoneMgr.LoadAll().Loaded);
         }
 
         void TearDown() override
         {
             sZoneTeleportMgr.Clear();
+            sWorldHubMgr.Clear();
             sZoneMgr.Clear();
             sReloadMgr.Clear();
             if (_open)
@@ -149,4 +215,24 @@ TEST_F(ZoneTeleportDatabaseTest, AnEditedDestinationTakesHoldAtTheReloadAndABadR
     EXPECT_EQ(bad.Errors.size(), 3u) << "every bad row is reported, not only the first";
     EXPECT_FALSE(sZoneTeleportMgr.Find(Hub, "Lost door")) << "a failed reload keeps the doors that were serving";
     EXPECT_EQ(sZoneTeleportMgr.Find(Hub, "TeleportToRavenwoodTrigger")->DestLocation, ZoneLocations::StartName);
+}
+
+TEST_F(ZoneTeleportDatabaseTest, WorldHubReloadChecksBothDestinationsAndKeepsTheServingRowsOnFailure)
+{
+    Insert(fmt::format("INSERT INTO `world_hub` (`world`, `client_world`, `hub_zone`, `hub_location`, `universe_zone`, `universe_location`) "
+        "VALUES ('WizardCity', 'WizardCity', '{}', 'Start', '{}', 'Target location (Ravenwood Hub Exit)'), "
+        "('WizardCity', 'WizardCity', '{}', 'Start', '{}', 'Start')", Hub, Ravenwood, Ravenwood, Ravenwood));
+    std::vector<std::string> errors;
+    ASSERT_TRUE(sWorldHubMgr.Load(errors)) << (errors.empty() ? std::string() : errors.front());
+    ASSERT_TRUE(sWorldHubMgr.Find("WizardCity"));
+    EXPECT_EQ(sWorldHubMgr.Find("WizardCity")->HubZone, Hub);
+    EXPECT_EQ(sWorldHubMgr.FindAll("WizardCity").size(), 2u) << "distinct client routes for a world are retained";
+
+    Insert(fmt::format("UPDATE `world_hub` SET `universe_location` = 'Missing arrival' WHERE `world` = 'WizardCity' AND `hub_zone` = '{}'", Hub));
+    ReloadOutcome const failed = sReloadMgr.Reload(WorldHubMgr::ReloadTarget);
+    EXPECT_FALSE(failed.Ok);
+    EXPECT_EQ(failed.Errors.size(), 1u);
+    ASSERT_TRUE(sWorldHubMgr.Find("WizardCity"));
+    EXPECT_EQ(sWorldHubMgr.Find("WizardCity")->UniverseLocation, "Target location (Ravenwood Hub Exit)");
+    EXPECT_EQ(sWorldHubMgr.FindAll("WizardCity").size(), 2u);
 }

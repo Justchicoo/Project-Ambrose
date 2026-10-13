@@ -4,6 +4,7 @@
  */
 
 #include "TeleportProposer.h"
+#include "Csv.h"
 
 #include <fmt/format.h>
 
@@ -44,17 +45,6 @@ namespace
             [](ExtractedTriggerResult const& result) { return result.ClassName && *result.ClassName == TeleportProposer::TeleportClass; });
     }
 
-    std::string Quoted(std::string_view text)
-    {
-        std::string out = "\"";
-        for (char c : text)
-        {
-            if (c == '"')
-                out += '"';
-            out += c;
-        }
-        return out + "\"";
-    }
 }
 
 std::set<std::string> TeleportProposer::Words(std::string_view text)
@@ -130,7 +120,7 @@ std::string TeleportProposer::Csv(std::vector<TeleportProposal> const& proposals
 {
     std::string out = "zone,trigger_name,dest_zone,dest_location,score\n";
     for (TeleportProposal const& proposal : proposals)
-        out += fmt::format("{},{},{},{},{}\n", Quoted(proposal.Zone), Quoted(proposal.TriggerName), Quoted(proposal.DestZone), Quoted(proposal.DestLocation), proposal.Score);
+        out += fmt::format("{},{},{},{},{}\n", Csv::Quote(proposal.Zone), Csv::Quote(proposal.TriggerName), Csv::Quote(proposal.DestZone), Csv::Quote(proposal.DestLocation), proposal.Score);
     return out;
 }
 

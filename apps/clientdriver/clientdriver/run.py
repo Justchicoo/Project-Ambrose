@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account at the security level asked for, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, has the login server reload the name tables and creation rows the game server just wrote, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or opens the launcher window and leaves the client to the Play the scenario presses in it, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine but the ones netguard-allow.json declares, starts a companion client the same way for a scenario that shows two wizards to each other, on an account and with a wizard of its own and under the same guard, runs the scenario, then asks each client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
+# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account at the security level asked for, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, has the login server reload the name tables and creation rows the game server just wrote, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or opens the launcher window and leaves the client to the Play the scenario presses in it, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine but the ones netguard-allow.json declares, starts a companion client the same way for a scenario that shows two wizards to each other, on an account and with a wizard of its own and under the same guard, runs the scenario, then asks each client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs with database passwords redacted whether the scenario passed or failed.
 import os
 import re
 import secrets
@@ -24,6 +24,11 @@ def stamp():
 
 def say(message):
     print(f"{time.strftime('%H:%M:%S')} {message}", flush=True)
+
+
+def reported_command(arguments, secret):
+    command = " ".join(arguments)
+    return command.replace(secret, "[REDACTED]") if secret else command
 
 
 def holds(lines, rule):
@@ -118,14 +123,14 @@ class Run:
         engine.listeners = {listener.label: listener for listener in listeners}
         engine.background = options.get("background", True)
         guard = None
-        before = {}
+        before = None
         try:
             self.note("the scratch databases", f"{databases.address} will hold {', '.join(sorted(databases.names.values()))}")
+            before = install.snapshot(self.environment.get("install"))
+            self.note("the install", f"{len(before)} file(s) under {self.environment.get('install')}")
             self.note("dropped anything left from an earlier run", databases.drop())
             self.cleanups.append(("stop the capture", capture.stop))
             self.note("the capture", capture.start())
-            before = install.snapshot(self.environment.get("install"))
-            self.note("the install", f"{len(before)} file(s) under {self.environment.get('install')}")
             self.cleanups.append(("stop the login server", server.stop))
             self.note("the login server", server.start(timeout=options["server_timeout"]))
             self.note("the account", server.ensure_account(variables["user"], password))
@@ -137,6 +142,8 @@ class Run:
                 sql, how = zones.ensure(self.environment["binaries"], self.environment.get("install"), self.environment.get("revision"), databases.info("world"))
                 self.note("the zone rows", how)
                 self.note("the world database", databases.apply_sql("world", sql))
+                if self.scenario.world_hubs:
+                    self.note("the world-hub routes", databases.seed_world_hubs(self.scenario.world_hubs))
                 self.cleanups.append(("stop the game server", game.stop))
                 self.note("the game server", game.start(timeout=options["server_timeout"]))
                 self.note("the login server's name tables", server.reload("names"))
@@ -146,7 +153,7 @@ class Run:
                     wizard = Scratch.read_wizard(options["wizard_from"], options.get("wizard_guid") or 1)
                     self.note("the wizard copied", f"wizard {options.get('wizard_guid') or 1} of {options['wizard_from'].split(';')[-1]}, read and left as it was")
                 if wizard:
-                    guid, name = databases.seed_character(variables["user"], wizard)
+                    guid, name = databases.seed_character(variables["user"], wizard, self.scenario.unlocked_worlds)
                     variables["wizard"] = name
                     variables["wizard_guid"] = str(guid)
                     self.note("the wizard", f"{name}, guid {guid}, in {wizard['zone']}")
@@ -199,8 +206,11 @@ class Run:
             leftovers = kill_leftovers(started, guard.known if guard else ())
             if leftovers:
                 self.failure("processes left running", ", ".join(leftovers))
-            after = install.snapshot(self.environment.get("install"))
-            client_changes = install.split(install.diff(before, after), self.references.client_writes)
+            if before is None:
+                client_changes = ({}, {"snapshot": ["the before-run install snapshot was not captured"]})
+            else:
+                after = install.snapshot(self.environment.get("install"))
+                client_changes = install.split(install.diff(before, after), self.references.client_writes)
             try:
                 self.note("dropped the scratch databases", databases.drop())
                 remaining = databases.existing()
@@ -223,9 +233,9 @@ class Run:
                 "launch": self.scenario.launch,
                 "listeners": [listener.record() for listener in listeners],
                 "references": {"path": self.references.path, "key": self.references.key, "folder": options["refs"]},
-                "server_command": " ".join(server.command()),
+                "server_command": reported_command(server.command(), self.options["db_password"]),
                 "server_log": server.log.path,
-                "game_command": " ".join(game.command()) if game else None,
+                "game_command": reported_command(game.command(), self.options["db_password"]) if game else None,
                 "game_log": game.log.path if game else None,
                 "client_log": client.log.path,
                 "companion": {"client_log": companion.log.path, "run_folder": companion.run_folder, "command": companion.command}
@@ -237,7 +247,7 @@ class Run:
                 "input_turn": slots.input_waits(),
                 "needs_client": self.scenario.needs_client,
                 "install": self.environment.get("install"),
-                "install_files": len(before),
+                "install_files": len(before) if before is not None else None,
                 "install_changes": client_changes[1],
                 "client_writes": client_changes[0],
                 "netguard": guard.record() if guard else None,

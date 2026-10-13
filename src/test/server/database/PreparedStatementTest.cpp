@@ -366,7 +366,9 @@ TEST(PreparedStatementTest, DatabaseConnectionsPrepareTheirStatements)
             connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(created->Database)));
     });
     ASSERT_TRUE(DBUpdater::Run(loginInfo, "login", UpdaterSettings{}));
-    ASSERT_TRUE(DBUpdater::Run(charactersInfo, "characters", UpdaterSettings{}));
+    UpdaterSettings characterUpdates;
+    characterUpdates.AllowPending = true;
+    ASSERT_TRUE(DBUpdater::Run(charactersInfo, "characters", characterUpdates));
     ASSERT_TRUE(DBUpdater::Run(worldInfo, "world", UpdaterSettings{}));
     LoginDatabaseConnection login(loginInfo);
     CharacterDatabaseConnection characters(charactersInfo);

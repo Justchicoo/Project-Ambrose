@@ -33,6 +33,7 @@
 #include "SpellMgr.h"
 #include "ZoneMgr.h"
 #include "ZoneTeleportMgr.h"
+#include "WorldHubMgr.h"
 #include "ZoneTriggerMgr.h"
 #include "CharacterNameScript.h"
 #include "ClientExtractionScript.h"
@@ -421,6 +422,11 @@ namespace
                 for (std::string const& error : teleportErrors)
                     LOG_ERROR("server.world", "Door destinations: {}", error);
             sZoneTeleportMgr.RegisterReloadTargets();
+            std::vector<std::string> hubErrors;
+            if (WorldDatabase.IsOpen() && !sWorldHubMgr.Load(hubErrors))
+                for (std::string const& error : hubErrors)
+                    LOG_ERROR("server.world", "World hubs: {}", error);
+            sWorldHubMgr.RegisterReloadTargets();
             LoadQuests();
             std::vector<std::string> pathErrors;
             if (WorldDatabase.IsOpen() && !sZonePathMgr.Load(pathErrors))

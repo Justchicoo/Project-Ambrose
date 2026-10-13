@@ -32,7 +32,8 @@ def add_common(parser):
     parser.add_argument("--db-host", default=DEFAULT_DB[0], help="host of the scratch database server")
     parser.add_argument("--db-port", type=int, default=DEFAULT_DB[1], help="port of the scratch database server")
     parser.add_argument("--db-user", default=DEFAULT_DB[2], help="user on the scratch database server")
-    parser.add_argument("--db-password", default=DEFAULT_DB[3], help="password on the scratch database server")
+    parser.add_argument("--db-password", default=os.environ.get("AMBROSE_TEST_DB_PASSWORD", DEFAULT_DB[3]),
+                        help="password on the scratch database server (default AMBROSE_TEST_DB_PASSWORD)")
     parser.add_argument("--db-prefix", default=DEFAULT_DB[4], help="name prefix of the databases the run owns; it must start with ambrose_driver_")
     parser.add_argument("--wsl-distro", help="WSL distribution the scratch MariaDB runs in, held for the whole run and started when nothing answers (default AMBROSE_TEST_DB_WSL)")
     parser.add_argument("--references", default=paths.REFERENCES, help="the reference file describing the screens and presses")
@@ -169,7 +170,8 @@ def command_play(args):
         password = getpass.getpass(f"password for {args.user}: ")
     options.update(game_set=list(args.game_set or []), window=args.window, password=password)
     with tempfile.TemporaryDirectory(prefix="ambrose-play-") as folder:
-        install, revision, why = preflight.ask_launcher(binaries, options["host"], options["port"], args.window or "800x600", folder)
+        install, revision, why = preflight.ask_launcher(
+            binaries, options["host"], options["port"], args.window or "800x600", folder, options.get("client"))
     if not install:
         print(f"clientdriver: {why}", file=sys.stderr)
         return FAILED

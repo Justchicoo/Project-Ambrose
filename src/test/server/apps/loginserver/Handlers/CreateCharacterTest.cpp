@@ -61,7 +61,9 @@ namespace
             _worldInfo = *info;
             _worldInfo.Database = fmt::format("ambrose_make_{:08x}_world", suffix);
             ASSERT_TRUE(DBUpdater::Run(_loginInfo, "login", UpdaterSettings{}));
-            ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", UpdaterSettings{}));
+            UpdaterSettings updates;
+            updates.AllowPending = true;
+            ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", updates));
             ASSERT_TRUE(DBUpdater::Run(_worldInfo, "world", UpdaterSettings{}));
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_loginInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(LoginDatabase.Open(), 0u);
