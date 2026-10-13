@@ -855,3 +855,20 @@ export type FileEntry = v.InferOutput<typeof FileEntry>;
 export type FileListing = v.InferOutput<typeof FileListing>;
 export type FileContent = v.InferOutput<typeof FileContent>;
 export type FileRulesAnswer = v.InferOutput<typeof FileRulesAnswer>;
+
+export const MaintenanceAnswer = v.looseObject({
+    active: v.boolean(),
+    reason: v.string(),
+    started_by: v.string(),
+    started_epoch_ms: v.number(),
+    window_start_epoch_ms: v.nullable(v.number()),
+    window_end_epoch_ms: v.nullable(v.number()),
+});
+export interface MaintenanceState {
+    active: boolean;
+    reason: string;
+    started_by: string;
+    started_epoch_ms: number;
+    window_start_epoch_ms: number | null;
+    window_end_epoch_ms: number | null;
+}
