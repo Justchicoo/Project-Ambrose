@@ -2531,7 +2531,7 @@ Changed on 2026-09-27: the characters page moved from 17.21 to 17.177, so this m
 - [ ] An event from each of the four sources appears at the right time in the operator's zone
 - [ ] An event spanning a planned restart is marked as a conflict
 - [ ] Changing a schedule moves its entry without reopening the page
-- [ ] An entry the viewer may not see is not shown
+- [x] An entry the viewer may not see is not shown (PanelOpsCalendar.EntriesTheViewerMayNotSeeAreHidden: an entry needing a permission the viewer lacks is left out while its source still reports available; the route decides each source's permission through PanelAuthorization, and PanelOpsCalendar.AnOwnerWithNoGrantAndAViewerSeeTheMaintenanceEntryThroughTheRoute shows an owner and a viewer both see the maintenance entry)
 - [ ] A schedule's next run is the same time here and on the schedules page
 
 ## 17.97 Daily operations digest
