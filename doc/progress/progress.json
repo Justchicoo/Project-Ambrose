@@ -2,13 +2,13 @@
   "schema": 1,
   "milestones": {
     "done": 161,
-    "total": 469,
+    "total": 470,
     "percent": 34.3
   },
   "checks": {
-    "done": 1232,
-    "total": 2884,
-    "percent": 42.7
+    "done": 1238,
+    "total": 2892,
+    "percent": 42.8
   },
   "game": {
     "label": "Game server",
@@ -32,12 +32,12 @@
     ],
     "milestones": {
       "done": 136,
-      "total": 283,
-      "percent": 48.1
+      "total": 284,
+      "percent": 47.9
     },
     "checks": {
-      "done": 1030,
-      "total": 1771,
+      "done": 1036,
+      "total": 1779,
       "percent": 58.2
     }
   },
@@ -138,9 +138,9 @@
       "phase": 10,
       "title": "Play the wizard city opening quests",
       "milestones_done": 1,
-      "milestones_total": 18,
-      "checks_done": 8,
-      "checks_total": 115
+      "milestones_total": 19,
+      "checks_done": 14,
+      "checks_total": 123
     },
     {
       "phase": 11,
@@ -199,5 +199,5 @@
       "checks_total": 1113
     }
   ],
-  "card": "aadfa32cd0"
+  "card": "aef4832576"
 }

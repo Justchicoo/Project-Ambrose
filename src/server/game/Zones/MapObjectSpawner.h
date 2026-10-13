@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps a zone instance's objects in line with its zone's rows: every row whose object the server sends, as the client builds the static kinds from its own copy of the zone, becomes an object with a runtime global id, the permID its zone, template and object id give it, a mobile id from the instance's object range and the MSG_NEWOBJECT Data it travels as, encoded once; a row that is gone, or no longer the row it was, takes its object with it, and so does a row whose object the classes, tables or templates now build differently, and a row a template or a table cannot build is reported with its zone row and template rather than sent half made. What changed is handed back by global id so the players already in the instance can be told, an object taken away with a despawn effect apart from one simply taken away and one that walked to a new place apart from both, and only the objects the zone's rows placed are kept in line with them, since a spawner's or a game master's are placed one at a time while the instance runs and through the same build, and an object placed while the instance runs may be finished by its caller before it is encoded, given the global id it was handed, as a duel's circle is given its duel, and the global ids of the objects the client waits for are encoded as the CriticalObjectList MSG_LOGINCOMPLETE carries, nothing when there are none. The world's own population reads the zone rows, templates, core object table and behavior classes the server holds, does nothing while an instance already holds the generations of all of them being served, and logs how many objects an instance was given the first time and what came and went on a later refresh.
+ * Keeps a zone instance's objects in line with its zone's rows: every row whose object the server sends, as the client builds the static kinds from its own copy of the zone, becomes an object with a runtime global id, the permID its zone, template and object id give it, a mobile id from the instance's object range and the MSG_NEWOBJECT Data it travels as, encoded once; a row that is gone, or no longer the row it was, takes its object with it, and so does a row whose object the classes, tables or templates now build differently, and a row a template or a table cannot build is reported with its zone row and template rather than sent half made. What changed is handed back by global id so the players already in the instance can be told, an object taken away with a despawn effect apart from one simply taken away and one that walked or was snapped to a new place apart from both, with the states its walkers enter and the zone events they post, and only the objects the zone's rows placed are kept in line with them, since a spawner's or a game master's are placed one at a time while the instance runs and through the same build, and an object placed while the instance runs may be finished by its caller before it is encoded, given the global id it was handed, as a duel's circle is given its duel, and the global ids of the objects the client waits for are encoded as the CriticalObjectList MSG_LOGINCOMPLETE carries, nothing when there are none. The world's own population reads the zone rows, templates, core object table and behavior classes the server holds, does nothing while an instance already holds the generations of all of them being served, and logs how many objects an instance was given the first time and what came and went on a later refresh.
  */
 
 #ifndef AMBROSE_MAPOBJECTSPAWNER_H
@@ -51,6 +51,14 @@ struct MapObjectMove
     PropertyTypes::Vector3D Position = {};
     float Yaw = 0.0f;
     std::optional<int8> State = {};
+    bool Teleport = false;
+};
+
+struct MapObjectState
+{
+    uint64 GlobalId = 0;
+    uint32 State = 0;
+    std::string Data = {};
 };
 
 struct MapObjectChanges
@@ -61,8 +69,10 @@ struct MapObjectChanges
     std::vector<MapObjectDeletion> Deleted = {};
     std::vector<MapObjectProblem> Problems = {};
     std::vector<MapObjectMove> Moved = {};
+    std::vector<MapObjectState> States = {};
+    std::vector<std::string> ZoneEvents = {};
 
-    bool Changed() const noexcept { return !Removed.empty() || !Added.empty() || !Deleted.empty() || !Moved.empty(); }
+    bool Changed() const noexcept { return !Removed.empty() || !Added.empty() || !Deleted.empty() || !Moved.empty() || !States.empty() || !ZoneEvents.empty(); }
     void Absorb(MapObjectChanges other);
 };
 

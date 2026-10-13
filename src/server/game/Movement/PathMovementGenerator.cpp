@@ -153,7 +153,32 @@ PathMovementStep PathMovementGenerator::MakeStep(PathMovementPosition const& bef
         _position != before };
 }
 
-std::optional<PathMovementStep> PathMovementGenerator::Advance(std::chrono::duration<double> elapsed, std::string& error)
+void PathMovementGenerator::Hold(std::chrono::duration<double> time) noexcept
+{
+    if (std::isfinite(time.count()) && time.count() > _waitRemaining)
+        _waitRemaining = time.count();
+}
+
+void PathMovementGenerator::Reverse() noexcept
+{
+    _direction = -_direction;
+    _nextNode = NextNode(_currentNode, _direction);
+}
+
+bool PathMovementGenerator::JumpTo(uint32 nodeId) noexcept
+{
+    for (std::size_t index = 0; index < _nodes.size(); ++index)
+    {
+        if (_nodes[index].Id != nodeId)
+            continue;
+        _position = _nodes[index].Position;
+        Reach(index);
+        return true;
+    }
+    return false;
+}
+
+std::optional<PathMovementStep> PathMovementGenerator::Advance(std::chrono::duration<double> elapsed, std::string& error, bool stopAtNodes)
 {
     double remaining = elapsed.count();
     if (!std::isfinite(remaining) || remaining < 0.0)
@@ -166,6 +191,7 @@ std::optional<PathMovementStep> PathMovementGenerator::Advance(std::chrono::dura
         remaining = std::fmod(remaining, _cycleSeconds);
 
     PathMovementPosition const before = _position;
+    std::optional<uint32> arrived;
     std::size_t transitions = 0;
     while (remaining > 0.0)
     {
@@ -188,6 +214,11 @@ std::optional<PathMovementStep> PathMovementGenerator::Advance(std::chrono::dura
         if (distance == 0.0)
         {
             Reach(_nextNode);
+            if (stopAtNodes)
+            {
+                arrived = _nodes[_currentNode].Id;
+                break;
+            }
             if (++transitions > MaxTransitionsPerUpdate)
             {
                 error = "the path exceeds the per-update node transition limit";
@@ -214,6 +245,11 @@ std::optional<PathMovementStep> PathMovementGenerator::Advance(std::chrono::dura
         if (remaining <= timeTolerance)
             remaining = 0.0;
         Reach(_nextNode);
+        if (stopAtNodes)
+        {
+            arrived = _nodes[_currentNode].Id;
+            break;
+        }
         if (++transitions > MaxTransitionsPerUpdate)
         {
             error = "the path exceeds the per-update node transition limit";
@@ -222,5 +258,9 @@ std::optional<PathMovementStep> PathMovementGenerator::Advance(std::chrono::dura
     }
 
     error.clear();
-    return MakeStep(before);
+    PathMovementStep step = MakeStep(before);
+    step.Arrived = arrived;
+    if (arrived)
+        step.Leftover = std::chrono::duration<double>(remaining);
+    return step;
 }

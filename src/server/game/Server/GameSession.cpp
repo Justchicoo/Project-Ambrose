@@ -1390,7 +1390,7 @@ void GameSession::ArriveInVolumes()
         Ambrose::ForLog(_zonePath, 128), inside, _volumePresence.size(), fired.size());
 }
 
-std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now)
+std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now, bool walkDoors)
 {
     std::vector<ZoneNotifyText> texts;
     std::vector<std::string> doors;
@@ -1409,7 +1409,7 @@ std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std:
         if (Map* const map = sMapMgr.Find(*_mapId))
             sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, fired, _worldGuid, now,
                 std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
-    if (!doors.empty() && event != ZoneTriggerMgr::EnterZoneEvent)
+    if (walkDoors && !doors.empty() && event != ZoneTriggerMgr::EnterZoneEvent)
         WalkThroughDoor(doors);
     return fired;
 }
@@ -1613,7 +1613,17 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
         std::optional<int16> const x = MovementPacking::TryPackLocation(moved.Position.X);
         std::optional<int16> const y = MovementPacking::TryPackLocation(moved.Position.Y);
         std::optional<int16> const z = MovementPacking::TryPackLocation(moved.Position.Z);
-        if (x && y && z)
+        if (x && y && z && moved.Teleport)
+        {
+            GameMessages::ServerTeleport teleport;
+            teleport.LocationX = static_cast<uint16>(*x);
+            teleport.LocationY = static_cast<uint16>(*y);
+            teleport.LocationZ = static_cast<uint16>(*z);
+            teleport.Direction = MovementPacking::PackYaw(moved.Yaw);
+            teleport.MobileId = moved.MobileId;
+            SendDmlMessage(teleport);
+        }
+        else if (x && y && z)
         {
             GameMessages::ServerMove move;
             move.LocationX = static_cast<uint16>(*x);
@@ -1630,6 +1640,25 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
             state.NewState = *moved.State;
             SendDmlMessage(state);
         }
+    }
+    for (MapObjectState const& entered : changes.States)
+    {
+        if (!_sight.IsVisible(entered.GlobalId))
+            continue;
+        GameMessages::EnterState message;
+        message.GameObjectId = entered.GlobalId;
+        message.State = entered.State;
+        message.Data = entered.Data;
+        SendDmlMessage(message);
+    }
+    if (changes.ZoneEvents.empty() || GetStatus() != SessionStatus::InWorld)
+        return;
+    std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
+    for (std::string const& event : changes.ZoneEvents)
+    {
+        std::vector<std::string> const fired = PostZoneEvent(event, now, false);
+        LOG_DEBUG("server.gamesession", "Session {}'s wizard {} was posted the zone event {} in {}, firing {} trigger(s)", GetSessionId(), _worldGuid, Ambrose::ForLog(event, 128),
+            Ambrose::ForLog(_zonePath, 128), fired.size());
     }
 }
 

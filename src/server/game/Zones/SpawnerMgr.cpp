@@ -701,6 +701,10 @@ MapObjectChanges SpawnerMgr::PopulateFromWorld(Map& map, Map::Clock::time_point 
 {
     MapObjectChanges changes = MapObjectSpawner::PopulateFromWorld(map, now, releaseDelay);
     changes.Absorb(sSpawnerMgr.UpdateFromWorld(map, now, releaseDelay));
-    changes.Absorb(PathWalkers::AdvanceFromWorld(map, now));
+    SpawnerContext const context = sSpawnerMgr.WorldContext(now, releaseDelay);
+    std::vector<uint64> despawned;
+    changes.Absorb(PathWalkers::AdvanceFromWorld(map, now, context.Roll, despawned));
+    for (uint64 const id : despawned)
+        Despawn(map, id, std::nullopt, 0, context, changes);
     return changes;
 }

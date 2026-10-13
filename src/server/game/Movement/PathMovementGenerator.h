@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Advances a mobile through ordered path nodes at its template speed and scale, holding at waits and turning or wrapping at the route ends.
+ * Advances a mobile through ordered path nodes at its template speed and scale, holding at waits and turning or wrapping at the route ends, and when asked stops on each node it reaches, handing back the time left over, so the node's path actions can hold it, turn it round or move it to another node before it walks on.
  */
 
 #ifndef AMBROSE_PATHMOVEMENTGENERATOR_H
@@ -49,6 +49,8 @@ struct PathMovementStep
     uint32 NextNodeId = 0;
     bool Moving = false;
     bool Changed = false;
+    std::optional<uint32> Arrived;
+    std::chrono::duration<double> Leftover{ 0.0 };
 };
 
 class PathMovementGenerator
@@ -59,12 +61,16 @@ public:
     static std::optional<PathMovementGenerator> Create(std::vector<PathMovementNode> nodes, std::size_t startNode, float movementSpeed,
         float movementScale, PathTraversalMode traversal, PathInitialDirection direction, std::string& error);
 
-    std::optional<PathMovementStep> Advance(std::chrono::duration<double> elapsed, std::string& error);
+    std::optional<PathMovementStep> Advance(std::chrono::duration<double> elapsed, std::string& error, bool stopAtNodes = false);
+    void Hold(std::chrono::duration<double> time) noexcept;
+    void Reverse() noexcept;
+    bool JumpTo(uint32 nodeId) noexcept;
 
     PathMovementPosition const& GetPosition() const noexcept { return _position; }
     uint32 GetCurrentNodeId() const noexcept { return _nodes[_currentNode].Id; }
     uint32 GetNextNodeId() const noexcept { return _nodes[_nextNode].Id; }
     float GetSpeed() const noexcept { return _speed; }
+    PathInitialDirection GetDirection() const noexcept { return _direction < 0 ? PathInitialDirection::Reverse : PathInitialDirection::Forward; }
 
 private:
     PathMovementGenerator(std::vector<PathMovementNode> nodes, std::size_t startNode, float speed, PathTraversalMode traversal,
