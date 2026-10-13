@@ -52,6 +52,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -1573,8 +1574,8 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
 
 uint64 GameSession::GetSightProgress()
 {
-    std::tuple<uint64, int32, uint32, uint32> const facts{ _questLog ? _questLog->GetChangeCount() : 0, _player ? _player->GetStats().GetLevel() : 0,
-        _player ? _player->GetStats().GetSchoolId() : 0, _mapId.value_or(0) };
+    std::tuple<uint64, int32, uint32, uint32, std::size_t> const facts{ _questLog ? _questLog->GetChangeCount() : 0, _player ? _player->GetStats().GetLevel() : 0,
+        _player ? _player->GetStats().GetSchoolId() : 0, _mapId.value_or(0), std::hash<std::string>{}(sSettings.Get<std::string>("Events.ClassProjects")) };
     if (facts != _sightFacts)
     {
         _sightFacts = facts;

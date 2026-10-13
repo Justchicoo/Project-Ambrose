@@ -179,6 +179,7 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
+| `Events.ClassProjects` | string | empty | at most 4096 bytes | live | gameserver | normal | The class projects this realm runs, by name and separated by commas, read each time a requirement asks, so a change shows or hides objects at the next visibility update; an object or trigger whose ReqClassProjectActive names a project not listed stays hidden or closed. |
 | `Npc.InteractRadiusDefault` | float | 300 world units | from 0 to 100000 world units | live | gameserver | normal | How near a wizard must come to an NPC to be offered its services, unless one of the NPC's providers sets its own radius, read at each move; a wizard is taken out of range 25 world units past it. |
 | `Npc.TestGreeter` | bool | false | none | live | gameserver | normal | Whether the sample npc_test_greeter script offers WC-RAV-NPC06 in Ravenwood a greeting, read at each move; off in play, where an NPC shows a prompt only for a real quest or shop, and on for the client driver's npc-service-menu.json. |
 | `Visibility.Distance` | float | 0 world units | from 0 to 100000 world units | live | gameserver | normal | How near an object must come to a wizard to be shown to it, read at each visibility update; 0 takes the zone's own far clip, and a zone with none shows everything. |

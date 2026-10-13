@@ -147,6 +147,11 @@ std::optional<bool> RequirementContext::HasBadge(std::string_view) const
     return std::nullopt;
 }
 
+std::optional<bool> RequirementContext::IsClassProjectActive(std::string_view) const
+{
+    return std::nullopt;
+}
+
 void RequirementMgr::RegisterReloadTargets()
 {
     sReloadMgr.Register(std::string(Target), [this](std::vector<std::string>& errors) { return Load(errors); });
@@ -489,6 +494,8 @@ std::optional<bool> RequirementMgr::EvaluateRequirement(RequirementRow const& ro
         result = context.IsGender(row.Gender);
     else if (row.Type == "ReqHasBadge")
         result = context.HasBadge(row.BadgeName);
+    else if (row.Type == "ReqClassProjectActive")
+        result = context.IsClassProjectActive(row.ClassProjectName);
     else
     {
         result = sScriptMgr.EvaluateCondition(row, context);
