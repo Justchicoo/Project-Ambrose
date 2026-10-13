@@ -47,8 +47,13 @@ describe("the route table", () => {
         const keys = new Set([...catalog.matchAll(/\{ "[a-z]+", "([a-z.]+)", "/g)].map((match) => match[1]));
         expect(keys.size).toBeGreaterThan(90);
         const unknown = routes
-            .filter((route) => route.view.kind !== "denied" && route.permission !== "none" && !keys.has(route.permission))
-            .map((route) => `${route.path}: ${route.permission}`);
+            .filter((route) => route.view.kind !== "denied" && route.permission !== "none")
+            .flatMap((route) =>
+                route.permission
+                    .split("&")
+                    .filter((permission) => !keys.has(permission))
+                    .map((permission) => `${route.path}: ${permission}`),
+            );
         expect(unknown).toEqual([]);
     });
 
@@ -91,5 +96,14 @@ describe("what a path shows", () => {
         expect(resolve("settings", appSettingsOnly).kind).toBe("refused");
         expect(navigation(appSettingsOnly).some((route) => route.path === "settings")).toBe(false);
         expect(navigation(new Set()).some((route) => route.path === "settings")).toBe(false);
+    });
+
+    it("requires both read and registration control for player registration management", () => {
+        const readOnly = new Set(["accounts.read"]);
+        const registrationOnly = new Set(["accounts.registration"]);
+        const both = new Set(["accounts.read", "accounts.registration"]);
+        expect(resolve("registrations", readOnly).kind).toBe("refused");
+        expect(resolve("registrations", registrationOnly).kind).toBe("refused");
+        expect(resolve("registrations", both).kind).toBe("shown");
     });
 });

@@ -103,14 +103,27 @@
                         <div class="space-y-2">
                             <Label for={setting.key}>{setting.key}</Label>
                             <div class="flex items-center gap-2">
-                                <Input
-                                    id={setting.key}
-                                    type={setting.secret ? "password" : "text"}
-                                    value={values[setting.key] === "***" ? "" : values[setting.key]}
-                                    placeholder={setting.secret ? "Unchanged" : setting.default || "Not set"}
-                                    disabled={setting.locked}
-                                    onchange={(event) => (values[setting.key] = event.currentTarget.value)}
-                                />
+                                {#if setting.key === "Panel.Registration.Enable"}
+                                    <select
+                                        id={setting.key}
+                                        class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                        value={values[setting.key]}
+                                        disabled={setting.locked}
+                                        onchange={(event) => (values[setting.key] = event.currentTarget.value)}
+                                    >
+                                        <option value="0">Disabled</option>
+                                        <option value="1">Enabled</option>
+                                    </select>
+                                {:else}
+                                    <Input
+                                        id={setting.key}
+                                        type={setting.secret ? "password" : "text"}
+                                        value={values[setting.key] === "***" ? "" : values[setting.key]}
+                                        placeholder={setting.secret ? "Unchanged" : setting.default || "Not set"}
+                                        disabled={setting.locked}
+                                        onchange={(event) => (values[setting.key] = event.currentTarget.value)}
+                                    />
+                                {/if}
                                 {#if setting.secret && !setting.locked}
                                     <Button variant="ghost" size="sm" onclick={() => (values[setting.key] = "")}>Clear</Button>
                                 {/if}

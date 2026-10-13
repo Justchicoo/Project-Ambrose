@@ -69,7 +69,7 @@ namespace
     }
 }
 
-PanelMailResult PanelMail::SendTestMail(PanelMailSettings const& settings, std::string_view toAddress)
+PanelMailResult PanelMail::Send(PanelMailSettings const& settings, std::string_view toAddress, std::string_view subject, std::string_view bodyText)
 {
     PanelMailResult result;
     if (settings.SmtpHost.empty() || toAddress.empty() || settings.FromAddress.empty())
@@ -77,9 +77,9 @@ PanelMailResult PanelMail::SendTestMail(PanelMailSettings const& settings, std::
         result.Error = "the SMTP host, the sender and the recipient are all required";
         return result;
     }
-    if (BreaksAHeader(toAddress) || BreaksAHeader(settings.FromAddress) || BreaksAHeader(settings.FromName) || BreaksAHeader(settings.SmtpHost))
+    if (BreaksAHeader(toAddress) || BreaksAHeader(settings.FromAddress) || BreaksAHeader(settings.FromName) || BreaksAHeader(settings.SmtpHost) || BreaksAHeader(subject))
     {
-        result.Error = "the SMTP host, the sender, the sender's name and the recipient may not hold a line break, an angle bracket or a quote";
+        result.Error = "the SMTP host, the sender, the sender's name, the recipient and the subject may not hold a line break, an angle bracket or a quote";
         return result;
     }
     EnsureCurl();
@@ -90,10 +90,9 @@ PanelMailResult PanelMail::SendTestMail(PanelMailSettings const& settings, std::
     std::string const body =
         "From: " + MailboxOf(settings.FromName, settings.FromAddress) + "\r\n"
         "To: <" + std::string(toAddress) + ">\r\n"
-        "Subject: Ambrose panel mail test\r\n"
+        "Subject: " + std::string(subject) + "\r\n"
         "\r\n"
-        "This is a test message from the Ambrose panel's mail settings.\r\n"
-        "If it reached you, the mail settings work.\r\n";
+        + std::string(bodyText);
 
     CURL* const curl = curl_easy_init();
     if (!curl)
@@ -107,9 +106,16 @@ PanelMailResult PanelMail::SendTestMail(PanelMailSettings const& settings, std::
     UploadState upload{ &body, 0 };
     struct curl_slist* recipients = nullptr;
     recipients = curl_slist_append(recipients, ("<" + std::string(toAddress) + ">").c_str());
+    if (!recipients)
+    {
+        curl_easy_cleanup(curl);
+        result.Error = "the mail recipient could not be prepared";
+        return result;
+    }
+    std::string const sender = "<" + settings.FromAddress + ">";
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_MAIL_FROM, ("<" + settings.FromAddress + ">").c_str());
+    curl_easy_setopt(curl, CURLOPT_MAIL_FROM, sender.c_str());
     curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
     if (!settings.Username.empty())
     {
@@ -137,6 +143,7 @@ PanelMailResult PanelMail::SendTestMail(PanelMailSettings const& settings, std::
         result.Sent = true;
         return result;
     }
+
     if (!lastReply.empty())
         result.Error = "the mail server refused the message: " + lastReply;
     else if (errorBuffer[0] != '\0')
@@ -144,4 +151,11 @@ PanelMailResult PanelMail::SendTestMail(PanelMailSettings const& settings, std::
     else
         result.Error = std::string("the mail server could not be reached: ") + curl_easy_strerror(code);
     return result;
+}
+
+PanelMailResult PanelMail::SendTestMail(PanelMailSettings const& settings, std::string_view toAddress)
+{
+    return Send(settings, toAddress, "Ambrose panel mail test",
+        "This is a test message from the Ambrose panel's mail settings.\r\n"
+        "If it reached you, the mail settings work.\r\n");
 }

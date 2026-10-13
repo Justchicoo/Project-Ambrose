@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests username and password rules offline and that a closed login database is an error, and with AMBROSE_TEST_DB set installs the login schema in order and checks account creation, stored and sealed verifiers, duplicates in any case, names that cannot be stored, passwords, security levels, locks, bans and timed mutes.
+ * Tests username and password rules offline and that a closed login database is an error, and with AMBROSE_TEST_DB set installs the login schema in order and checks account creation, email verification state, stored and sealed verifiers, duplicates in any case, names that cannot be stored, passwords, security levels, locks, bans and timed mutes.
  */
 
 #include "AccountMgr.h"
@@ -162,6 +162,22 @@ TEST_F(AccountMgrDatabaseTest, CreatesOnceAndStoresTheClientVerifier)
     EXPECT_EQ(sAccountMgr.CreateAccount("valid", "test", "caf\xC3\xA9@example.com"), AccountOpResult::Ok);
     EXPECT_FALSE(sAccountMgr.GetAccountByName("missing").Account);
     EXPECT_EQ(sAccountMgr.GetAccountByName("missing").Result, AccountOpResult::Ok);
+}
+
+TEST_F(AccountMgrDatabaseTest, PlayerEmailVerificationCanBeRequiredAndChanged)
+{
+    uint64 accountId = 0;
+    ASSERT_EQ(sAccountMgr.CreateAccount("unverified", "test", "player@example.com", &accountId, false), AccountOpResult::Ok);
+    AccountLookup unverified = sAccountMgr.GetAccountById(accountId);
+    ASSERT_EQ(unverified.Result, AccountOpResult::Ok);
+    ASSERT_TRUE(unverified.Account);
+    EXPECT_FALSE(unverified.Account->EmailVerified);
+
+    ASSERT_EQ(sAccountMgr.SetEmailVerified(accountId, true), AccountOpResult::Ok);
+    AccountLookup verified = sAccountMgr.GetAccountById(accountId);
+    ASSERT_EQ(verified.Result, AccountOpResult::Ok);
+    ASSERT_TRUE(verified.Account);
+    EXPECT_TRUE(verified.Account->EmailVerified);
 }
 
 TEST_F(AccountMgrDatabaseTest, SealedVerifiersOpenAfterRotationAndPasswordsChange)

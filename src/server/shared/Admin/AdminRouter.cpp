@@ -328,6 +328,11 @@ void AdminRouter::AddPublic(std::string method, std::string path, Handler handle
     Put(std::move(method), std::move(path), std::move(handler), RouteAccess::Public);
 }
 
+void AdminRouter::AddPublicCosting(std::string method, std::string path, uint32 cost, Handler handler)
+{
+    Put(std::move(method), std::move(path), std::move(handler), RouteAccess::Public, false, cost);
+}
+
 void AdminRouter::SetFiles(Handler files)
 {
     std::unique_lock const lock(_mutex);
@@ -582,6 +587,7 @@ AdminResponse AdminRouter::Answer(AdminRequest& request) const
 
     std::size_t const limit = _maxBodyBytes.load();
     Handler open;
+    uint32 publicCost = 0;
     {
         std::shared_lock const lock(_mutex);
         std::string const method = Ambrose::ToUpper(request.Method);
@@ -590,6 +596,7 @@ AdminResponse AdminRouter::Answer(AdminRequest& request) const
             if (route.Public() && !route.Prefix && route.Path == request.Path && route.Method == method)
             {
                 open = route.Run;
+                publicCost = route.Cost;
                 break;
             }
         }
@@ -598,6 +605,8 @@ AdminResponse AdminRouter::Answer(AdminRequest& request) const
     {
         if (limit != 0 && request.Body.size() > limit)
             return AdminResponse::Problem(413, "payload_too_large", "The admin API takes at most " + std::to_string(limit) + " bytes of request body");
+        if (std::optional<AdminResponse> held = Charge(request, publicCost))
+            return std::move(*held);
         try
         {
             return open(request);

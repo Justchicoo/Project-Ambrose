@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, session keys sealed like verifiers, the one-query validation lookup of an account's bans, lock and session key, extending a session key's expiry and revoking it, an account's own permission bits, deleting an account that is not online, banning an address or a machine and ending those bans by moving their end to now, verifier resealing that never overwrites a changed password, an account's purchased character slots, the realms a player may be sent to, the row a gameserver adds for itself the first time it runs, which never overwrites one an operator has edited, and the beat each gameserver says it is alive with. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, reading a key's newest audit rows, and which verifier keys stored verifiers still use. Both lookups give each kind of ban as the end of the longest one in force, 0 when one never ends, or null when there is none. The realm list also reads each realm's online characters for admission capacity, and the validation lookup the account's security level.
+ * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, email verification, last logins, account, IP and machine bans, the one-query authentication lookup, session keys sealed like verifiers, the one-query validation lookup of an account's bans, lock and session key, extending a session key's expiry and revoking it, an account's own permission bits, deleting an account that is not online, banning an address or a machine and ending those bans by moving their end to now, verifier resealing that never overwrites a changed password, an account's purchased character slots, the realms a player may be sent to, the row a gameserver adds for itself the first time it runs, which never overwrites one an operator has edited, and the beat each gameserver says it is alive with. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, reading a key's newest audit rows, and which verifier keys stored verifiers still use. Both lookups give each kind of ban as the end of the longest one in force, 0 when one never ends, or null when there is none. The realm list also reads each realm's online characters for admission capacity, and the validation lookup the account's security level.
  */
 
 #include "LoginDatabase.h"
@@ -10,11 +10,13 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_SEL_SERVER_TIME, "LOGIN_SEL_SERVER_TIME", "SELECT UNIX_TIMESTAMP()", ConnectionFlags::Both);
     PrepareStatement(LOGIN_INS_LOG, "LOGIN_INS_LOG", "INSERT INTO `logs` (`logged_at`, `realm_id`, `category`, `level`, `message`) VALUES (?, ?, ?, ?, ?)", ConnectionFlags::Async);
 
-    std::string const accountColumns = "SELECT `id`, `username`, `verifier`, `verifier_key_id`, `email`, `security_level`, `chat_mode`, `locked`, `purchased_slots`, `online`, `joindate`, `last_login`, `last_ip`, `last_machine_id`, `permissions` FROM `account`";
+    std::string const accountColumns = "SELECT `id`, `username`, `verifier`, `verifier_key_id`, `email`, `security_level`, `chat_mode`, `locked`, `purchased_slots`, `online`, `joindate`, `last_login`, `last_ip`, `last_machine_id`, `permissions`, `email_verified` FROM `account`";
     PrepareStatement(LOGIN_SEL_ACCOUNT_BY_NAME, "LOGIN_SEL_ACCOUNT_BY_NAME", accountColumns + " WHERE `username` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_ACCOUNT_BY_ID, "LOGIN_SEL_ACCOUNT_BY_ID", accountColumns + " WHERE `id` = ?", ConnectionFlags::Both);
-    PrepareStatement(LOGIN_INS_ACCOUNT, "LOGIN_INS_ACCOUNT", "INSERT INTO `account` (`username`, `verifier`, `verifier_key_id`, `email`, `joindate`) VALUES (?, ?, ?, ?, ?)", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_ACCOUNT_BY_EMAIL, "LOGIN_SEL_ACCOUNT_BY_EMAIL", accountColumns + " WHERE LOWER(`email`) = LOWER(?) LIMIT 1", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_INS_ACCOUNT, "LOGIN_INS_ACCOUNT", "INSERT INTO `account` (`username`, `verifier`, `verifier_key_id`, `email`, `joindate`, `email_verified`) VALUES (?, ?, ?, ?, ?, ?)", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_VERIFIER, "LOGIN_UPD_VERIFIER", "UPDATE `account` SET `verifier` = ?, `verifier_key_id` = ? WHERE `id` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_UPD_ACCOUNT_EMAIL_VERIFIED, "LOGIN_UPD_ACCOUNT_EMAIL_VERIFIED", "UPDATE `account` SET `email_verified` = ? WHERE `id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_SECURITY_LEVEL, "LOGIN_UPD_SECURITY_LEVEL", "UPDATE `account` SET `security_level` = ? WHERE `id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_ACCOUNT_LOCKED, "LOGIN_UPD_ACCOUNT_LOCKED", "UPDATE `account` SET `locked` = ? WHERE `id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_LAST_LOGIN, "LOGIN_UPD_LAST_LOGIN", "UPDATE `account` SET `last_login` = ?, `last_ip` = ?, `last_machine_id` = ? WHERE `id` = ?", ConnectionFlags::Both);
@@ -24,7 +26,7 @@ void LoginDatabaseConnection::DoPrepareStatements()
     std::string const banOrder = " AND (`unbandate` = 0 OR `unbandate` > ?) ORDER BY (`unbandate` = 0) DESC, `unbandate` DESC LIMIT 1";
     PrepareStatement(LOGIN_SEL_ACCOUNT_BANNED, "LOGIN_SEL_ACCOUNT_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `account_banned` WHERE `account_id` = ? AND `active` = 1" + banOrder, ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_ACCOUNT_BY_ID_WITH_MUTE, "LOGIN_SEL_ACCOUNT_BY_ID_WITH_MUTE",
-        "SELECT a.`id`, a.`username`, a.`verifier`, a.`verifier_key_id`, a.`email`, a.`security_level`, a.`chat_mode`, a.`locked`, a.`purchased_slots`, a.`online`, a.`joindate`, a.`last_login`, a.`last_ip`, a.`last_machine_id`, m.`until`, m.`reason`, m.`by` "
+        "SELECT a.`id`, a.`username`, a.`verifier`, a.`verifier_key_id`, a.`email`, a.`security_level`, a.`chat_mode`, a.`locked`, a.`purchased_slots`, a.`online`, a.`joindate`, a.`last_login`, a.`last_ip`, a.`last_machine_id`, a.`permissions`, a.`email_verified`, m.`until`, m.`reason`, m.`by` "
         "FROM `account` a LEFT JOIN `account_muted` m ON m.`account_id` = a.`id` AND m.`until` > ? WHERE a.`id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_REP_ACCOUNT_MUTED, "LOGIN_REP_ACCOUNT_MUTED", "INSERT INTO `account_muted` (`account_id`, `until`, `reason`, `by`) VALUES (?, ?, ?, ?) "
         "ON DUPLICATE KEY UPDATE `until` = VALUES(`until`), `reason` = VALUES(`reason`), `by` = VALUES(`by`)", ConnectionFlags::Both);
@@ -35,7 +37,7 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_SEL_AUTHENTICATION, "LOGIN_SEL_AUTHENTICATION", "SELECT a.`id`, a.`username`, a.`verifier`, a.`verifier_key_id`, a.`locked`, a.`security_level`, "
         "(SELECT IF(MIN(b.`unbandate`) = 0, 0, MAX(b.`unbandate`)) FROM `account_banned` b WHERE b.`account_id` = a.`id` AND b.`active` = 1 AND (b.`unbandate` = 0 OR b.`unbandate` > ?)), "
         "(SELECT IF(MIN(i.`unbandate`) = 0, 0, MAX(i.`unbandate`)) FROM `ip_banned` i WHERE i.`ip` = ? AND (i.`unbandate` = 0 OR i.`unbandate` > ?)), "
-        "(SELECT IF(MIN(m.`unbandate`) = 0, 0, MAX(m.`unbandate`)) FROM `machine_banned` m WHERE m.`machine_id` = ? AND (m.`unbandate` = 0 OR m.`unbandate` > ?)) "
+        "(SELECT IF(MIN(m.`unbandate`) = 0, 0, MAX(m.`unbandate`)) FROM `machine_banned` m WHERE m.`machine_id` = ? AND (m.`unbandate` = 0 OR m.`unbandate` > ?)), a.`email_verified` "
         "FROM (SELECT 1 AS `probe`) AS `p` LEFT JOIN `account` a ON a.`username` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_INS_ACCOUNT_SESSION, "LOGIN_INS_ACCOUNT_SESSION", "INSERT INTO `account_session` (`account_id`, `machine_id`, `session_key`, `session_key_id`, `created`, `renewed`, `expires`) VALUES (?, ?, ?, ?, ?, ?, ?) "
         "ON DUPLICATE KEY UPDATE `machine_id` = ?, `session_key` = ?, `session_key_id` = ?, `created` = ?, `renewed` = ?, `expires` = ?", ConnectionFlags::Both);
