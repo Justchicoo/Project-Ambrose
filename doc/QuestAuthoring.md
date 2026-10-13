@@ -21,7 +21,7 @@ The scaffold creates a quest, its initial persona goal and start-goal relation, 
 
 ## Reference index
 
-Build a local server-class supplement from the user's install with `schemaprobe --client <install> --type-dump <dump> --all-wads --server-classes <classes-file>`. Keep that client-derived file outside the repository. Then run `questtool refs --client <install> --type-dump <dump> --classes <classes-file> --zone <zone-path-fragment>` to list each decoded `ReqHasQuest` and `ReqHasGoal` with its zone, source and goal. The command uses the shared zone extractor and exits nonzero if a relevant trigger, volume, spawner or requirement part cannot be decoded.
+Build a local server-class supplement from the user's install with `schemaprobe --client <install> --type-dump <dump> --all-wads --server-classes <classes-file>`. Keep that client-derived file outside the repository. Then run `questtool refs --client <install> --type-dump <dump> --classes <classes-file> --zone <zone-path-fragment>` to list each decoded `ReqHasQuest`, `ReqHasGoal` and `GoalComplete_<quest>_<goal>` event with its zone, source and goal. The command uses the shared zone extractor and exits nonzero if a relevant trigger, volume, spawner or requirement part cannot be decoded.
 
 ## Authoring rules
 

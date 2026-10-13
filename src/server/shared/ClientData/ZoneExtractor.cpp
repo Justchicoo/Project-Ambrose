@@ -121,6 +121,22 @@ namespace
                 CollectQuestReferences(child, sourceType, sourceName, zone);
     }
 
+    void CollectGoalCompleteEvents(std::vector<std::string> const& events, std::string_view sourceType, std::string_view sourceName, ExtractedZone& zone)
+    {
+        constexpr std::string_view Prefix = "GoalComplete_";
+        for (std::string const& event : events)
+        {
+            if (!event.starts_with(Prefix))
+                continue;
+            std::string_view const names = std::string_view(event).substr(Prefix.size());
+            std::size_t const separator = names.find('_');
+            if (separator == std::string_view::npos || separator == 0 || separator + 1 == names.size())
+                continue;
+            zone.QuestReferences.push_back({ std::string(sourceType), std::string(sourceName), "GoalCompleteEvent",
+                std::string(names.substr(0, separator)), std::string(names.substr(separator + 1)) });
+        }
+    }
+
     std::optional<ExtractedObject> ObjectValues(CoreObjectInfoView const& info, ExtractedZone& zone, std::string_view sourceType, std::string sourceName, std::string& error)
     {
         ExtractedObject row;
@@ -630,6 +646,8 @@ void ZoneExtractor::ReadVolumes(TypeCatalogPtr const& catalog, ExtractedZone& zo
             break;
         }
         CollectQuestReferences(requirements, "volume", volume.Name, zone);
+        CollectGoalCompleteEvents(volume.EnterEvents, "volume_enter_event", volume.Name, zone);
+        CollectGoalCompleteEvents(volume.ExitEvents, "volume_exit_event", volume.Name, zone);
         volumes.push_back(std::move(volume));
     }
     if (!issues.Failure.empty() || !root.GetMissing().empty())
@@ -705,6 +723,9 @@ void ZoneExtractor::ReadTriggers(TypeCatalogPtr const& catalog, ExtractedZone& z
             break;
         }
         CollectQuestReferences(requirements, "trigger", trigger.Name, zone);
+        CollectGoalCompleteEvents(trigger.ActivateEvents, "trigger_activate_event", trigger.Name, zone);
+        CollectGoalCompleteEvents(trigger.FireEvents, "trigger_fire_event", trigger.Name, zone);
+        CollectGoalCompleteEvents(trigger.DeactivateEvents, "trigger_deactivate_event", trigger.Name, zone);
         if (trigger.State && !trigger.State->RequiredQuest.empty())
             zone.QuestReferences.push_back({ "state_trigger", trigger.Name, trigger.ClassName, trigger.State->RequiredQuest, {} });
         triggers.push_back(std::move(trigger));

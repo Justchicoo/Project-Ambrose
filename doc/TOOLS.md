@@ -75,7 +75,7 @@ The one tool that asks the user's own install a question, and the one that grows
 
 ### questtool (building for 7.05)
 
-Scaffolds key-only quest SQL in `data/sql/updates/pending_db_world/` with a giver-bound Prep entry. `questtool refs` uses `ZoneExtractor` and a local `schemaprobe --server-classes` supplement to index `ReqHasQuest` and `ReqHasGoal` references from zone triggers, volumes, placed-object requirements and spawners. The supplement stays outside the repository. Quest validation and CSR import are not implemented yet.
+Scaffolds key-only quest SQL in `data/sql/updates/pending_db_world/` with a giver-bound Prep entry. `questtool refs` uses `ZoneExtractor` and a local `schemaprobe --server-classes` supplement to index `ReqHasQuest` and `ReqHasGoal` references from zone triggers, volumes, placed-object requirements and spawners, plus `GoalComplete_<quest>_<goal>` events in trigger and volume event lists. The supplement stays outside the repository. Quest validation and CSR import are not implemented yet.
 
 ### extractor (built in 3.14)
 
