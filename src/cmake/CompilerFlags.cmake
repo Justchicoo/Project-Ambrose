@@ -34,6 +34,7 @@ else()
         -Wextra
         -Wpedantic
         -Wshadow
+        -Wno-error=shadow
         "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=")
     if(AMBROSE_WARNINGS_AS_ERRORS)
         target_compile_options(ambrose-compile-options INTERFACE -Werror)
