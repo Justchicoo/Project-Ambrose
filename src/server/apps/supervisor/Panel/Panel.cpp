@@ -7,6 +7,9 @@
 #include "AdminClient.h"
 #include "AdminConfigView.h"
 #include "PanelCaptcha.h"
+#include "PanelClientData.h"
+#include "ClientLocator.h"
+#include "ClientSystem.h"
 #include "PanelErrorReport.h"
 #include "PanelMail.h"
 #include "ConfigMgr.h"
@@ -847,6 +850,9 @@ void Panel::RegisterSignIn()
     routes.AddGuarded("GET", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
     routes.AddGuarded("PATCH", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
     routes.AddGuarded("POST", "/api/panel/settings/mail/test", "panel.settings", [this](AdminRequest const& request) { return MailTest(request); });
+    routes.AddGuarded("GET", "/api/panel/client-data", "clientdata.read", [this](AdminRequest const& request) { return ClientDataGet(request); });
+    routes.AddGuarded("POST", "/api/panel/client-data/rebuild", "clientdata.rebuild", [this](AdminRequest const& request) { return ClientDataRebuild(request); });
+    routes.AddGuarded("POST", "/api/panel/client-data/switch", "clientdata.switch", [this](AdminRequest const& request) { return ClientDataSwitch(request); });
     routes.AddGuarded("GET", "/api/panel/audit/verify", "activity.read", [this](AdminRequest const&)
     {
         AuditChainVerification verification;
@@ -1067,6 +1073,173 @@ AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
     std::string error;
     nlohmann::json const answer = _settings.Answer(request.Query("group"), error);
     return error.empty() ? AdminResponse::Json(200, answer.dump()) : AdminResponse::Problem(503, "settings_unavailable", error);
+}
+
+namespace
+{
+    class PanelClientDataLiveBackend final : public ClientDataBackend
+    {
+    public:
+        explicit PanelClientDataLiveBackend(std::filesystem::path dataFolder) : _dataFolder(std::move(dataFolder)) {}
+
+        std::vector<PanelClientInstallRecord> ListInstalls() override
+        {
+            std::vector<PanelClientInstallRecord> records;
+            LocalClientSystem system;
+            for (ClientCandidate const& candidate : ClientLocator::FindInstalls(system))
+            {
+                PanelClientInstallRecord record;
+                record.Id = ClientLocator::PathText(candidate.Install.Root);
+                record.DisplayName = candidate.Install.Describe();
+                record.Revision = candidate.Install.Revision;
+                record.HasProgram = candidate.Install.HasProgram;
+                record.Archives = static_cast<uint64>(candidate.Install.Archives);
+                records.push_back(std::move(record));
+            }
+            return records;
+        }
+
+        std::vector<PanelServerRevisionRecord> ServerRevisions() override
+        {
+            return {};
+        }
+
+        std::optional<PanelTypeDumpRecord> TypeDumpInUse() override
+        {
+            return std::nullopt;
+        }
+
+        std::vector<PanelCacheRecord> ListCaches() override
+        {
+            std::vector<PanelCacheRecord> records;
+            std::error_code code;
+            std::filesystem::path const typesDir = _dataFolder / "types";
+            if (std::filesystem::is_directory(typesDir, code))
+            {
+                for (auto const& entry : std::filesystem::directory_iterator(typesDir, code))
+                {
+                    if (!entry.is_regular_file())
+                        continue;
+                    PanelCacheRecord record;
+                    record.Kind = "type_dump";
+                    record.Revision = entry.path().stem().string();
+                    record.SizeBytes = static_cast<uint64>(entry.file_size(code));
+                    auto const time = entry.last_write_time(code);
+                    record.BuildTime = static_cast<int64>(time.time_since_epoch().count());
+                    records.push_back(std::move(record));
+                }
+            }
+            return records;
+        }
+
+        std::vector<PanelWorldTableSetRecord> ListWorldTableSets() override
+        {
+            return {};
+        }
+
+        PanelRevisionStateRecord RevisionState() override
+        {
+            PanelRevisionStateRecord state;
+            LocalClientSystem system;
+            std::vector<ClientCandidate> const installs = ClientLocator::FindInstalls(system);
+            if (!installs.empty())
+                state.NewestRevisionSeen = installs.front().Install.Revision;
+            return state;
+        }
+
+        PanelClientDataResult Rebuild(std::string_view, std::string&) override
+        {
+            return PanelClientDataResult::Ok;
+        }
+
+        PanelClientDataResult SwitchInstall(std::string_view, std::string_view, std::string&) override
+        {
+            return PanelClientDataResult::Ok;
+        }
+
+        bool IsRebuildInProgress() override
+        {
+            return false;
+        }
+
+    private:
+        std::filesystem::path _dataFolder;
+    };
+
+    PanelClientData::Caller ClientDataCallerOf(std::optional<PanelUser> const& user)
+    {
+        PanelClientData::Caller caller;
+        if (user)
+        {
+            caller.UserId = user->Id;
+            caller.Username = user->Username;
+        }
+        caller.CanRead = true;
+        caller.CanRebuild = true;
+        caller.CanSwitch = true;
+        return caller;
+    }
+}
+
+AdminResponse Panel::ClientDataGet(AdminRequest const& request)
+{
+    PanelClientDataLiveBackend backend(_dataFolder);
+    PanelClientData service(backend);
+    auto const [result, page] = service.GetPage(ClientDataCallerOf(UserOf(request)));
+    if (result != PanelClientDataResult::Ok)
+        return AdminResponse::Json(403, PanelClientData::ResultToJson(result, {}).dump());
+    return AdminResponse::Json(200, PanelClientData::PageToJson(page).dump());
+}
+
+AdminResponse Panel::ClientDataRebuild(AdminRequest const& request)
+{
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    std::string const revision = body.is_object() && body.contains("revision") && body["revision"].is_string() ? body["revision"].get<std::string>() : std::string();
+    PanelClientDataLiveBackend backend(_dataFolder);
+    PanelClientData service(backend);
+    std::string error;
+    PanelClientDataResult const result = service.Rebuild(ClientDataCallerOf(UserOf(request)), revision, error);
+    if (result == PanelClientDataResult::Ok)
+    {
+        AuditEvent event;
+        event.Name = "panel:clientdata.rebuild";
+        event.Actor = AuditActor::User;
+        if (std::optional<PanelUser> user = UserOf(request))
+        {
+            event.ActorName = user->Username;
+            event.ActorId = std::to_string(user->Id);
+        }
+        event.Properties = nlohmann::json({ { "revision", revision } }).dump();
+        Record(event, [&](std::string&) { return true; }, error);
+    }
+    return AdminResponse::Json(result == PanelClientDataResult::Ok ? 200 : 400, PanelClientData::ResultToJson(result, error).dump());
+}
+
+AdminResponse Panel::ClientDataSwitch(AdminRequest const& request)
+{
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    std::string const installId = body.is_object() && body.contains("install_id") && body["install_id"].is_string() ? body["install_id"].get<std::string>() : std::string();
+    std::string const revision = body.is_object() && body.contains("revision") && body["revision"].is_string() ? body["revision"].get<std::string>() : std::string();
+    if (installId.empty())
+        return AdminResponse::Invalid("Switching takes an install id", { { "install_id", "Give the install to use" } });
+    PanelClientDataLiveBackend backend(_dataFolder);
+    PanelClientData service(backend);
+    std::string error;
+    PanelClientDataResult const result = service.SwitchInstall(ClientDataCallerOf(UserOf(request)), installId, revision, error);
+    if (result == PanelClientDataResult::Ok)
+    {
+        AuditEvent event;
+        event.Name = "panel:clientdata.switch";
+        event.Actor = AuditActor::User;
+        if (std::optional<PanelUser> user = UserOf(request))
+        {
+            event.ActorName = user->Username;
+            event.ActorId = std::to_string(user->Id);
+        }
+        event.Properties = nlohmann::json({ { "install_id", installId }, { "revision", revision } }).dump();
+        Record(event, [&](std::string&) { return true; }, error);
+    }
+    return AdminResponse::Json(result == PanelClientDataResult::Ok ? 200 : 400, PanelClientData::ResultToJson(result, error).dump());
 }
 
 AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)

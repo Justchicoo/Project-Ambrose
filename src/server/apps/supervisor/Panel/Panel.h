@@ -187,6 +187,9 @@ private:
     AdminResponse PanelSettingsGet(AdminRequest const& request);
     AdminResponse PanelSettingsUpdate(AdminRequest const& request);
     AdminResponse MailTest(AdminRequest const& request);
+    AdminResponse ClientDataGet(AdminRequest const& request);
+    AdminResponse ClientDataRebuild(AdminRequest const& request);
+    AdminResponse ClientDataSwitch(AdminRequest const& request);
     std::optional<AdminResponse> CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username);
     AdminResponse ClearError(AdminRequest const& request);
     AdminResponse ErrorReport(AdminRequest const& request, bool create);

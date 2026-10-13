@@ -32,6 +32,7 @@ import {
     EventsAnswer,
     PanelSettingsAnswer,
     PanelMailTestAnswer,
+    PanelClientDataAnswer,
     FileContent,
     FileListing,
     FileRootsAnswer,
@@ -159,6 +160,18 @@ export function updatePanelSettings(values: Record<string, string>) {
 
 export function testPanelMail() {
     return request("POST", "api/panel/settings/mail/test", PanelMailTestAnswer, {});
+}
+
+export function panelClientData(signal?: AbortSignal) {
+    return request("GET", "api/panel/client-data", PanelClientDataAnswer, undefined, signal);
+}
+
+export function rebuildClientData(revision: string) {
+    return request("POST", "api/panel/client-data/rebuild", PanelClientDataAnswer, { revision });
+}
+
+export function switchClientInstall(installId: string, revision: string) {
+    return request("POST", "api/panel/client-data/switch", PanelClientDataAnswer, { install_id: installId, revision });
 }
 
 export function errors(signal?: AbortSignal) {
