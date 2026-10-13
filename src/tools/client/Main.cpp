@@ -128,9 +128,10 @@ Commands:
                          (default folder: catalog in the Ambrose data folder)
   requirements [type]... print every requirement class the placed objects of every zone
                          gate their spawning on, nested lists included, with how many
-                         placements and zones use it; given types, such as ReqHasQuest,
-                         also print the placements whose requirements use only those,
-                         with zone and template
+                         placements and zones use it and how many apply it with
+                         m_applyNOT, or with --triggers the zone triggers' requirements;
+                         given types, such as ReqHasQuest, also print the placements whose
+                         requirements use only those, with zone and template
   wizbangs <name>...     print the wizbang markers WizBangs.xml gives the client, each with
                          the id MSG_WIZBANG names it by, the hash of its name, and the
                          model it draws; a name or id it has not is said to draw nothing
@@ -212,6 +213,8 @@ Options:
   --anchor <word>      with --words, also try three words with this one in any place;
                        repeatable, and each makes a match by chance more likely
   --spawners           with requirements, also count the items of each zone's spawners
+  --triggers           with requirements, count the m_requirements of each zone's
+                       triggers instead of the placements' spawn requirements
   --derived            with types, print every class derived from each class named
   --flag <name>        with types, print only the properties that carry a property flag,
                        such as ObjectName, of the classes found
@@ -255,6 +258,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         bool Trailing = false;
         bool Derived = false;
         bool Spawners = false;
+        bool Triggers = false;
         bool Wide = false;
         bool Words = false;
         std::vector<std::string> Types;
@@ -321,6 +325,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             }
             else if (arg == "--spawners")
                 parsed.Spawners = true;
+            else if (arg == "--triggers")
+                parsed.Triggers = true;
             else if (arg == "--derived")
                 parsed.Derived = true;
             else if (arg == "--holding")
@@ -2109,13 +2115,16 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         if (zones.Zones.empty())
             return Failure;
 
-        SpawnRequirementCensus const census = SpawnRequirementCensus::Take(zones, catalog, arguments.Spawners);
-        std::cout << fmt::format("{:<40}  {:>10}  {:>5}\n", "requirement", "placements", "zones");
+        SpawnRequirementCensus const census = arguments.Triggers ? SpawnRequirementCensus::TakeTriggers(zones, catalog)
+                                                                 : SpawnRequirementCensus::Take(zones, catalog, arguments.Spawners);
+        std::string_view const counted = arguments.Triggers ? "triggers" : "placements";
+        std::cout << fmt::format("{:<40}  {:>10}  {:>5}  {:>9}\n", "requirement", counted, "zones", "applyNOT");
         for (RequirementUsage const& usage : census.GetUsage())
-            std::cout << fmt::format("{:<40}  {:>10}  {:>5}\n", usage.Type, usage.Placements, usage.Zones);
-        std::cout << fmt::format("{} of {} {} in {} of {} zones carry spawn requirements; {} do not decode and {} hold an empty list\n", census.GetGated().size(),
-            census.GetPlacementCount(), arguments.Spawners ? "placements and spawn items" : "placements", census.GetGatedZoneCount(), census.GetZoneCount(),
-            census.GetUndecodedCount(), census.GetEmptyCount());
+            std::cout << fmt::format("{:<40}  {:>10}  {:>5}  {:>9}\n", usage.Type, usage.Placements, usage.Zones, usage.Negated);
+        std::string_view const what = arguments.Triggers ? "triggers" : arguments.Spawners ? "placements and spawn items" : "placements";
+        std::cout << fmt::format("{} of {} {} in {} of {} zones carry {}requirements; {} do not decode, {} hold an empty list and {} apply their whole list with m_applyNOT\n",
+            census.GetGated().size(), census.GetPlacementCount(), what, census.GetGatedZoneCount(), census.GetZoneCount(), arguments.Triggers ? "" : "spawn ",
+            census.GetUndecodedCount(), census.GetEmptyCount(), census.GetNegatedListCount());
         if (arguments.Subjects.empty())
             return Success;
 
@@ -2134,6 +2143,11 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             if (manifest && placement.TemplateId <= std::numeric_limits<uint32>::max())
                 if (TemplateLookup const looked = store.Lookup(static_cast<uint32>(placement.TemplateId)); looked.Template)
                     name = looked.Template->ObjectName.empty() ? looked.Template->File : looked.Template->ObjectName;
+            if (!placement.Trigger.empty())
+            {
+                std::cout << fmt::format("{}  trigger {}  {}  uses {}\n", placement.Zone, placement.Trigger, placement.ClassName, fmt::join(placement.Types, ", "));
+                continue;
+            }
             std::string const where = placement.Spawner.empty() ? fmt::format("object {}", placement.ObjectId) : fmt::format("spawner {}", placement.Spawner);
             std::cout << fmt::format("{}  {}  template {} ({})  {}  uses {}\n", placement.Zone, where, placement.TemplateId, name, placement.ClassName,
                 fmt::join(placement.Types, ", "));

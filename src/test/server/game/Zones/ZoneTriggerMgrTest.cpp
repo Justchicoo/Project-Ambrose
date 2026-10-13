@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a trigger's results load in order, one of a class the server does not know left out and one that does not read failing the load; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load. Without a database, Ravenwood POI's result as the client data holds it reads as the WizardPOI_00000001 notify text of type 1, and a cut one does not; an AddDynaMod result reads as the tag and state it names, one with no tag or of another class does not, and a trigger that fires hands back the results it runs, one with requirements firing only for a wizard whose facts meet them.
+ * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a trigger's results load in order, one of a class the server does not know left out and one that does not read failing the load; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load. Without a database, Ravenwood POI's result as the client data holds it reads as the WizardPOI_00000001 notify text of type 1, and a cut one does not; an AddDynaMod result reads as the tag and state it names, one with no tag or of another class does not, though one with no tag passes the load as a kept result that changes nothing, and a trigger that fires hands back the results it runs, one with requirements firing only for a wizard whose facts meet them.
  */
 
 #include "CharacterTypeFixtures.h"
@@ -265,9 +265,13 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
     std::optional<ZoneDynaMod> const mod = ZoneTriggerMgr::DynaModOf(*gate.Object, error);
     ASSERT_TRUE(mod) << error;
     EXPECT_EQ(*mod, (ZoneDynaMod{ "WC_GateCommons_ToUnicornWay", "IdleOpen", false, "" }));
-    EXPECT_FALSE(ZoneTriggerMgr::DynaModOf(*read(ZoneTriggerMgr::DynaModClass, "").Object, error)) << "a mod must name a tag";
+    ResultEntry const untagged = read(ZoneTriggerMgr::DynaModClass, "");
+    EXPECT_FALSE(ZoneTriggerMgr::DynaModOf(*untagged.Object, error)) << "a mod must name a tag";
     EXPECT_FALSE(ZoneTriggerMgr::DynaModOf(*read(ZoneTriggerMgr::NotifyTextClass, "").Object, error));
     EXPECT_NE(error.find("ResClientNotifyText"), std::string::npos) << error;
+    EXPECT_EQ(ZoneTriggerMgr::CheckResult(gate, error), ZoneTriggerMgr::ResultCheck::Good);
+    EXPECT_EQ(ZoneTriggerMgr::CheckResult(untagged, error), ZoneTriggerMgr::ResultCheck::Untagged) << "the client data holds mods that name no tag, and one must not fail the load";
+    EXPECT_EQ(ZoneTriggerMgr::CheckResult(read(ZoneTriggerMgr::NotifyTextClass, ""), error), ZoneTriggerMgr::ResultCheck::Refused);
 
     ZoneTriggerData data;
     data.Triggers.push_back({ 3, "Trigger OpenGateToUW", -1, 0.0f, false, { "GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0" }, false, { gate } });

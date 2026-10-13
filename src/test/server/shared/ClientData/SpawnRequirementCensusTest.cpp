@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the spawn requirement census through a type dump the test writes: requirement classes are counted once per placement and once per zone, nested lists included, an object without requirements counts only as a placement, bytes that do not decode are counted rather than guessed at, a list that holds nothing is counted, spawn items join the placements only when asked, and the placements that use only some classes are picked out.
+ * Tests the spawn requirement census through a type dump the test writes: requirement classes are counted once per placement and once per zone, nested lists included, an object without requirements counts only as a placement, bytes that do not decode are counted rather than guessed at, a list that holds nothing is counted, spawn items join the placements only when asked, the zone triggers' requirements are counted on their own with the classes and lists applied with m_applyNOT split out, and the placements that use only some classes are picked out.
  */
 
 #include "ObjectSerializer.h"
@@ -188,4 +188,47 @@ TEST_F(SpawnRequirementCensusTest, SpawnItemsJoinThePlacementsWhenAskedWithTheir
     EXPECT_EQ(quests[1]->Spawner, "GateGuards");
     EXPECT_EQ(quests[1]->Zone, "WizardCity/WC_Quiet");
     EXPECT_TRUE(quests[0]->Spawner.empty()) << "an entry of the zone's object list names no spawner";
+}
+
+TEST_F(SpawnRequirementCensusTest, CountsTheTriggersRequirementsWithTheClassesAppliedNotSplitOut)
+{
+    auto const negated = [](PropertyObjectPtr object)
+    {
+        EXPECT_EQ(object->Set("m_applyNOT", true), PropertySetResult::Ok);
+        return object;
+    };
+    auto const trigger = [](std::string name, PropertyObjectPtr const& requirements)
+    {
+        ExtractedTrigger made;
+        made.Name = std::move(name);
+        made.ClassName = "class ZoneTriggerTemplate";
+        if (requirements)
+        {
+            EncodeResult const encoded = ObjectSerializer::Encode(requirements.get(), ZoneExtractor::DataOptions());
+            EXPECT_TRUE(encoded.Ok()) << encoded.Detail;
+            made.Requirements = encoded.Bytes;
+        }
+        return made;
+    };
+    ZoneExtraction zones = Zones();
+    zones.Zones[0].Triggers.push_back(trigger("OpenGate", List(Requirement("class ReqHasQuest"), negated(Requirement("class ReqHasBadge")))));
+    zones.Zones[0].Triggers.push_back(trigger("Always", nullptr));
+    zones.Zones[1].Triggers.push_back(trigger("CloseGate", negated(List(negated(Requirement("class ReqHasQuest"))))));
+    zones.Zones[2].Triggers.push_back(trigger("Watcher", List(PropertyObjectPtr())));
+
+    SpawnRequirementCensus const census = SpawnRequirementCensus::TakeTriggers(zones, _types.GetCatalog());
+    EXPECT_EQ(census.GetPlacementCount(), 4u) << "each trigger is counted, the placements are not";
+    EXPECT_EQ(census.GetGated().size(), 3u);
+    EXPECT_EQ(census.GetGatedZoneCount(), 3u);
+    EXPECT_EQ(UsageOf(census, std::string(SpawnRequirementCensus::NullRequirement)).Placements, 1u) << "a list entry that holds no object is counted as such";
+    EXPECT_EQ(census.GetUndecodedCount(), 0u);
+    EXPECT_EQ(census.GetNegatedListCount(), 1u) << "a whole list applied with m_applyNOT is counted";
+    RequirementUsage const quest = UsageOf(census, "ReqHasQuest");
+    EXPECT_EQ(quest.Placements, 2u);
+    EXPECT_EQ(quest.Zones, 2u);
+    EXPECT_EQ(quest.Negated, 1u);
+    EXPECT_EQ(UsageOf(census, "ReqHasBadge").Negated, 1u);
+    EXPECT_EQ(UsageOf(census, "ReqMagicLevel").Placements, 0u) << "the placements' spawn requirements are not counted";
+    ASSERT_EQ(census.UsingOnly({ "ReqHasQuest" }).size(), 1u);
+    EXPECT_EQ(census.UsingOnly({ "ReqHasQuest" })[0]->Trigger, "CloseGate");
 }

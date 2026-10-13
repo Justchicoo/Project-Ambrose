@@ -41,7 +41,10 @@ public:
     static constexpr std::string_view TeleportClass = "class ResTeleport";
     static constexpr std::string_view DynaModClass = "class ResAddDynaMod";
 
+    enum class ResultCheck { Good, Untagged, Refused };
+
     static ZoneTriggerMgr& Instance();
+    static ResultCheck CheckResult(ResultEntry const& result, std::string& error);
     static std::optional<ZoneNotifyText> NotifyTextOf(PropertyObject const& result, std::string& error);
     static std::optional<RequirementTree> ReadRequirements(TypeCatalogPtr const& catalog, std::span<uint8 const> data);
     static std::optional<ZoneDynaMod> DynaModOf(PropertyObject const& result, std::string& error);
