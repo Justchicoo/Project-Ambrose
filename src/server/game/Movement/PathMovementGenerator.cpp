@@ -150,7 +150,7 @@ void PathMovementGenerator::Reach(std::size_t node) noexcept
 PathMovementStep PathMovementGenerator::MakeStep(PathMovementPosition const& before) const noexcept
 {
     return { _position, _nodes[_currentNode].Id, _nodes[_nextNode].Id, _speed > 0.0f && _waitRemaining == 0.0,
-        _position != before };
+        _position != before, std::nullopt, std::chrono::duration<double>{ 0.0 } };
 }
 
 void PathMovementGenerator::Hold(std::chrono::duration<double> time) noexcept
