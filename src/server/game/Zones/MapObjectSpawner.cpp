@@ -9,7 +9,9 @@
 #include "ObjectGuid.h"
 #include "ObjectViews.h"
 #include "PropertyFiller.h"
+#include "RequirementObjects.h"
 #include "TypeRegistry.h"
+#include "ZoneExtractor.h"
 #include "ZoneObjectBuilder.h"
 
 #include <fmt/format.h>
@@ -93,6 +95,31 @@ namespace
         return std::move(encoded.Bytes);
     }
 
+    std::shared_ptr<RequirementTree const> ReadSpawnRequirements(MapObjectSources const& sources, ZoneObjectSpawn const& row, std::string& problem)
+    {
+        if (!row.HasSpawnRequirements)
+            return nullptr;
+        std::optional<RequirementTree> tree;
+        if (row.SpawnRequirements.empty())
+            problem = "its spawn requirements were not read from the world database";
+        else if (!sources.Catalog)
+            problem = "no type dump is loaded to read its spawn requirements";
+        else
+        {
+            DecodeResult const decoded = ObjectSerializer::Decode(sources.Catalog, row.SpawnRequirements, ZoneExtractor::DataOptions());
+            if (!decoded.Ok())
+                problem = fmt::format("its spawn requirements do not decode: {}", decoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(decoded.Status)) : decoded.Detail);
+            else if (!(tree = RequirementObjects::TreeOf(decoded.Object.get())))
+                problem = fmt::format("its spawn requirements are a {}, not a RequirementList", decoded.Object ? decoded.Object->GetClass().Name : std::string("null"));
+        }
+        if (!tree)
+        {
+            tree.emplace();
+            tree->Requirements.push_back(RequirementObjects::RowOf(nullptr));
+        }
+        return std::make_shared<RequirementTree const>(std::move(*tree));
+    }
+
     bool BuildsAlike(Map const& map, MapObject const& object, MapObjectSources const& sources)
     {
         TemplateLookup const found = FindTemplate(sources, object.Spawn);
@@ -165,6 +192,10 @@ std::optional<uint64> MapObjectSpawner::Place(Map& map, ZoneObjectSpawn const& r
         made.MobileId = *mobileId;
         made.Critical = IsCritical(*found.Template);
         made.ExemptFromAoi = IsExemptFromAoi(*found.Template);
+        problem.clear();
+        made.SpawnRequirements = ReadSpawnRequirements(sources, row, problem);
+        if (!problem.empty())
+            Report(changes, row, false, fmt::format("{} with template {} is shown to no wizard, since {}", name, row.TemplateId, problem));
         if (made.ExemptFromAoi)
             LOG_DEBUG("server.zones", "Object {} of zone_object row {} (template {}) at ({}, {}, {}) in {} is exempt from area of interest", *globalId, row.Id, row.TemplateId,
                 row.Position.X, row.Position.Y, row.Position.Z, map.GetZonePath());

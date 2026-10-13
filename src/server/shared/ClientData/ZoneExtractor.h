@@ -6,6 +6,7 @@
 #ifndef AMBROSE_ZONEEXTRACTOR_H
 #define AMBROSE_ZONEEXTRACTOR_H
 
+#include "ObjectSerializer.h"
 #include "PropertyValue.h"
 #include "TypeDumpLoader.h"
 #include "TypeRegistry.h"
@@ -219,6 +220,7 @@ public:
     static constexpr std::string_view PathNodeEntry = "pathNodeData.bin";
     static constexpr std::size_t MaxEntryBytes = 64 * 1024 * 1024;
 
+    static SerializerOptions DataOptions();
     static ZoneExtraction Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, ZoneExtractionProgress const& progress = {});
     static std::optional<ZoneExtraction> ExtractFromInstall(std::filesystem::path const& clientDir, std::filesystem::path const& typeDump, std::string& error,
         ZoneExtractionProgress const& progress = {}, TypeDumpLoader::RawDump supplement = {});

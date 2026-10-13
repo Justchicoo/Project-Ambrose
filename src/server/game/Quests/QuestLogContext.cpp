@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the requirement engine's quest, goal and registry answers out of a quest log.
+ * Reads the requirement engine's quest, goal and registry answers out of a quest log, where a goal the log does not hold is absent rather than unknown, since the log is the whole of what the wizard holds.
  */
 
 #include "QuestLogContext.h"
@@ -16,7 +16,7 @@ std::optional<RequirementGoalStatus> QuestLogContext::GetGoalStatus(std::string_
         return RequirementGoalStatus::Complete;
     if (_log.IsGoalActive(questName, goalName))
         return RequirementGoalStatus::Incomplete;
-    return std::nullopt;
+    return RequirementGoalStatus::Absent;
 }
 
 std::optional<bool> QuestLogContext::HasRegistryEntry(std::string_view questName, std::string_view entryName, bool isQuestRegistry) const

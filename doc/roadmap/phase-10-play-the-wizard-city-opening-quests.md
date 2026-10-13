@@ -178,7 +178,7 @@ Objects show the right animation state, and the world changes a wizard has earne
 
 **Acceptance**
 
-- [ ] Only changed objects resend
+- [x] Only changed objects resend (`SightRequirementsTest.OnlyObjectsWhoseAnswerChangedAreShownOrTakenAway`: a wizard who takes up a quest is sent only the object placed for its holders as new and only the object placed for those without it as removed, an object with no spawn requirements is left alone, and dropping the quest brings the first back as added)
 - [ ] Real client: quest-gated NPC appears without relog
 
 ### Detailed spec from WLD-19: Object states and per-player visibility
@@ -206,7 +206,7 @@ Objects show the right animation state and quest-gated objects appear only to pl
 
 - [ ] Real client: in WC_Hub the Unicorn Way gate shows closed for a fresh character, and after the quest goal named in 'OpenGateToUW' it shows 'IdleOpen' for that player only; player B without the quest still sees it closed
 - [ ] Real client: a quest-gated NPC appears for a player the moment their quest step completes, without a relog
-- [ ] Unit: requirement re-evaluation sends NEWOBJECT/ADDOBJECT or REMOVEOBJECT only for objects whose result changed
+- [x] Unit: requirement re-evaluation sends NEWOBJECT/ADDOBJECT or REMOVEOBJECT only for objects whose result changed (`SightRequirementsTest.OnlyObjectsWhoseAnswerChangedAreShownOrTakenAway`: a wizard who takes up a quest is sent only the object placed for its holders as new and only the object placed for those without it as removed, an object with no spawn requirements is left alone, and dropping the quest brings the first back as added)
 
 **Risks**
 

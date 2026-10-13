@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Loads, validates and evaluates nested world requirement lists, and a flat list a caller builds itself, such as an item's equip requirements, retaining the serving generation on an invalid reload and treating unavailable facts and unrecognized types as false.
+ * Loads, validates and evaluates nested world requirement lists, and a flat list or nested tree a caller builds itself, such as an item's equip requirements or a zone object's spawn requirements, retaining the serving generation on an invalid reload and treating unavailable facts and unrecognized types as false and a goal the wizard does not hold as one it does not have.
  */
 
 #include "RequirementMgr.h"
@@ -387,6 +387,28 @@ bool RequirementMgr::EvaluateRequirements(RequirementListRow const& list, std::v
     return result.value_or(false);
 }
 
+bool RequirementMgr::EvaluateTree(RequirementTree const& tree, RequirementContext const& context) const
+{
+    return EvaluateSubtree(tree, context).value_or(false);
+}
+
+std::optional<bool> RequirementMgr::EvaluateSubtree(RequirementTree const& tree, RequirementContext const& context) const
+{
+    std::optional<bool> result = tree.List.Operator == "AND";
+    for (RequirementRow const& row : tree.Requirements)
+    {
+        std::optional<bool> value = EvaluateRequirement(row, context);
+        if (value && row.ApplyNot)
+            value = !*value;
+        Combine(tree.List.Operator, result, value);
+    }
+    for (RequirementTree const& child : tree.Children)
+        Combine(tree.List.Operator, result, EvaluateSubtree(child, context));
+    if (result && tree.List.ApplyNot)
+        result = !*result;
+    return result;
+}
+
 std::optional<bool> RequirementMgr::EvaluateList(
     RequirementStore const& store,
     std::string_view listId,
@@ -424,7 +446,9 @@ std::optional<bool> RequirementMgr::EvaluateRequirement(RequirementRow const& ro
     else if (row.Type == "ReqHasGoal")
     {
         std::optional<RequirementGoalStatus> const status = context.GetGoalStatus(row.QuestName, row.GoalName);
-        if (status && row.RequiredStatus)
+        if (status && *status == RequirementGoalStatus::Absent)
+            result = false;
+        else if (status && row.RequiredStatus)
         {
             if (*row.RequiredStatus == static_cast<std::uint8_t>(RequirementGoalStatus::DontCare))
                 result = true;
