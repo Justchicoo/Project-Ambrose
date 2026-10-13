@@ -1,10 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a requirement object by property name: its type is its class name without the class prefix, and its m_applyNOT, quest, goal, registry entry, badge, required status, value, comparison, school, target, zone, gender and class project are taken wherever its class has them; a RequirementList inside a list becomes a nested list, read no deeper than a fixed depth, its m_operator 1 being ROP_OR and any other ROP_AND as the type dump gives Requirement::Operator, and a requirement the decode could not name becomes a row of no known type, which the evaluator counts as unmet.
+ * Reads a requirement object by property name: its type is its class name without the class prefix, and its m_applyNOT, quest, goal, registry entry, badge, required status, value, comparison, school, target, zone, gender and class project are taken wherever its class has them; a RequirementList inside a list becomes a nested list, read no deeper than a fixed depth, its m_operator 1 being ROP_OR and any other ROP_AND as the type dump gives Requirement::Operator, and a requirement the decode could not name becomes a row of no known type, which the evaluator counts as unmet; a stored list is decoded with the zone data encoding, and bytes with no type dump to read them, that do not decode or that are not a RequirementList give a list of one such row, so what holds them stays closed, with the reason.
  */
 
 #include "RequirementObjects.h"
+#include "ObjectSerializer.h"
 #include "PropertyObject.h"
+#include "ZoneExtractor.h"
+
+#include <fmt/format.h>
 
 #include <cmath>
 #include <cstddef>
@@ -136,4 +140,24 @@ std::optional<RequirementTree> RequirementObjects::TreeOf(PropertyObject const* 
     if (!list || !list->IsA(ListClass))
         return std::nullopt;
     return TreeAt(*list, 0);
+}
+
+RequirementTree RequirementObjects::Decode(TypeCatalogPtr const& catalog, std::span<uint8 const> bytes, std::string& problem)
+{
+    std::optional<RequirementTree> tree;
+    if (!catalog)
+        problem = "no type dump is loaded to read its requirements";
+    else
+    {
+        DecodeResult const decoded = ObjectSerializer::Decode(catalog, bytes, ZoneExtractor::DataOptions());
+        if (!decoded.Ok())
+            problem = fmt::format("its requirements do not decode: {}", decoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(decoded.Status)) : decoded.Detail);
+        else if (!(tree = TreeOf(decoded.Object.get())))
+            problem = fmt::format("its requirements are a {}, not a RequirementList", decoded.Object ? decoded.Object->GetClass().Name : std::string("null"));
+    }
+    if (tree)
+        return std::move(*tree);
+    RequirementTree closed;
+    closed.Requirements.push_back(RowOf(nullptr));
+    return closed;
 }

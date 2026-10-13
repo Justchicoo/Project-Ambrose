@@ -1,14 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests reading requirement objects through a type dump the test writes: a RequirementList holding a quest requirement and a nested NOT list with a goal requirement reads as a tree with its operators, names and status and survives the zone data encoding the extractor stores it in, a goal the wizard does not hold counts as not held so a NOT over it passes, a class project requirement reads its project's name and passes only while that project runs, and something that is not a RequirementList gives no tree.
+ * Tests reading requirement objects through a type dump the test writes: a RequirementList holding a quest requirement and a nested NOT list with a goal requirement reads as a tree with its operators, names and status and survives the zone data encoding the extractor stores it in, a goal the wizard does not hold counts as not held so a NOT over it passes, a class project requirement reads its project's name and passes only while that project runs, a quest's stored list decodes and gates its offer while bytes with no type dump, that do not decode or that hold no RequirementList close it with the reason, and something that is not a RequirementList gives no tree.
  */
 
 #include "ObjectSerializer.h"
 #include "PropertyObject.h"
+#include "QuestMgr.h"
 #include "RequirementMgr.h"
 #include "RequirementObjects.h"
 #include "StringHash.h"
 #include "TypeRegistry.h"
+#include "TypedView.h"
 #include "ZoneExtractor.h"
 
 #include <gtest/gtest.h>
@@ -19,6 +21,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -116,7 +119,15 @@ namespace
             return list;
         }
 
+        void TearDown() override
+        {
+            sQuestMgr.Clear();
+            sTypeRegistry.Clear();
+            sTypeRegistry.SetViews(&sTypedViewRegistry);
+        }
+
         TypeRegistry _types;
+        TypedViewRegistry _noViews;
     };
 }
 
@@ -174,6 +185,69 @@ TEST_F(RequirementObjectsTest, AClassProjectRequirementReadsItsProjectAndPassesO
     EXPECT_FALSE(sRequirementMgr.EvaluateTree(*tree, realm)) << "no project runs, so the object stays hidden";
     realm.ClassProjects.insert("DuelArena");
     EXPECT_TRUE(sRequirementMgr.EvaluateTree(*tree, realm));
+}
+
+TEST_F(RequirementObjectsTest, StoredBytesThatCannotBeReadGiveAClosedListAndSayWhy)
+{
+    EncodeResult const encoded = ObjectSerializer::Encode(GateList().get(), ZoneExtractor::DataOptions());
+    ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
+    std::string problem;
+    RequirementTree const read = RequirementObjects::Decode(_types.GetCatalog(), encoded.Bytes, problem);
+    EXPECT_TRUE(problem.empty()) << problem;
+    ASSERT_EQ(read.Children.size(), 1u);
+
+    QuestFacts wizard;
+    wizard.Quests.insert("WC-MAIN-C01-001");
+    for (auto const& [catalog, bytes, reason] : { std::tuple{ TypeCatalogPtr(), encoded.Bytes, "no type dump" }, std::tuple{ _types.GetCatalog(), std::vector<uint8>{ 1, 2, 3 }, "do not decode" } })
+    {
+        problem.clear();
+        RequirementTree const closed = RequirementObjects::Decode(catalog, bytes, problem);
+        EXPECT_NE(problem.find(reason), std::string::npos) << problem;
+        EXPECT_FALSE(sRequirementMgr.EvaluateTree(closed, wizard)) << reason;
+    }
+    PropertyObjectPtr const quest = Create("class ReqHasQuest");
+    EncodeResult const single = ObjectSerializer::Encode(quest.get(), ZoneExtractor::DataOptions());
+    ASSERT_TRUE(single.Ok()) << single.Detail;
+    problem.clear();
+    EXPECT_FALSE(sRequirementMgr.EvaluateTree(RequirementObjects::Decode(_types.GetCatalog(), single.Bytes, problem), wizard));
+    EXPECT_NE(problem.find("not a RequirementList"), std::string::npos) << problem;
+}
+
+TEST_F(RequirementObjectsTest, AQuestIsOfferedOnlyWhileItsStoredRequirementsPass)
+{
+    EncodeResult const encoded = ObjectSerializer::Encode(GateList().get(), ZoneExtractor::DataOptions());
+    ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
+    sTypeRegistry.Clear();
+    sTypeRegistry.SetViews(&_noViews);
+    ASSERT_TRUE(sTypeRegistry.LoadFromText(RequirementDump(), "requirements.json")) << sTypeRegistry.GetErrors().front();
+    auto const rows = std::make_shared<QuestRows>();
+    for (auto const& [name, bytes] : { std::pair{ "Gated", encoded.Bytes }, std::pair{ "Unreadable", std::vector<uint8>{ 1, 2, 3 } } })
+    {
+        QuestTemplateRow quest;
+        quest.Name = name;
+        quest.TitleKey = std::string("QuestTitle_") + name;
+        quest.Level = 1;
+        quest.Requirements = bytes;
+        rows->Quests.push_back(std::move(quest));
+    }
+    sQuestMgr.Clear();
+    sQuestMgr.SetRowSource([rows](QuestRows& out, std::vector<std::string>&)
+    {
+        out = *rows;
+        return true;
+    });
+    QuestLoadResult const loaded = sQuestMgr.LoadSkippingInvalid();
+    ASSERT_TRUE(loaded.Loaded);
+    ASSERT_EQ(loaded.Quests, 2u) << (loaded.Errors.empty() ? "" : loaded.Errors.front());
+
+    QuestFacts wizard;
+    EXPECT_FALSE(sQuestMgr.CanOffer("Gated", wizard)) << "a wizard without the quest does not qualify";
+    wizard.Quests.insert("WC-MAIN-C01-001");
+    EXPECT_TRUE(sQuestMgr.CanOffer("Gated", wizard));
+    wizard.CompletedGoals.insert("OpenGate");
+    EXPECT_FALSE(sQuestMgr.CanOffer("Gated", wizard));
+    wizard.CompletedGoals.clear();
+    EXPECT_FALSE(sQuestMgr.CanOffer("Unreadable", wizard)) << "bytes that do not decode keep the quest closed";
 }
 
 TEST_F(RequirementObjectsTest, SomethingThatIsNotARequirementListGivesNoTree)
