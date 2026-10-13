@@ -14,6 +14,7 @@
 #include "QuestOfferProvider.h"
 #include "QuestOffers.h"
 #include "ScriptMgr.h"
+#include "Settings.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
 
