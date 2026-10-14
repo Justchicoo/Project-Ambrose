@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests talk-to goals: a persona goal naming WC-RAV-NPC06 binds to template 38232, whose object name that is, and not to a twin template showing the same display name under another object name; the NPC offers it as a GoalEntryFull carrying the quest's and goal's GIDs while the goal is active, and picking it hands that goal on; and MSG_COMPLETEPERSONA's check refuses a goal the wizard does not hold, one already complete, one that is not a persona goal, a wrong NPC and a wizard out of range, changing nothing.
+ * Tests talk-to goals: a persona goal naming WC-RAV-NPC06 binds to template 38232, whose object name that is, and not to a twin template showing the same display name under another object name; a talk-to goal with no image of its own shows the NPC's portrait icon while an authored image stays; the NPC offers it as a GoalEntryFull carrying the quest's and goal's GIDs while the goal is active, and picking it hands that goal on; and MSG_COMPLETEPERSONA's check refuses a goal the wizard does not hold, one already complete, one that is not a persona goal, a wrong NPC and a wizard out of range, changing nothing.
  */
 
 #include "ObjectGuid.h"
@@ -114,4 +114,29 @@ TEST(PersonaGoalsTest, CompletePersonaIsRefusedForAnyGoalNpcOrPlaceItDoesNotFit)
     EXPECT_EQ(found.HeldGoal->Gid, wizard.Talk);
     ASSERT_TRUE(wizard.Log.CompleteGoal("Errand", "TalkToStudent"));
     EXPECT_EQ(PersonaGoals::Check(*quests, wizard.Log, wizard.Quest, wizard.Talk, StudentId, true, found), PersonaGoals::Verdict::NotActive);
+}
+
+TEST(PersonaGoalsTest, ATalkToGoalWithNoImageShowsItsNpcsPortraitAndOneWithAnImageKeepsIt)
+{
+    QuestRows rows;
+    rows.Objects = { { StudentId, "WC-RAV-NPC06", "GUI/NpcPortraits/Student.dds" }, { TwinId, "WC-RAV-NPC06-Twin", "" } };
+    QuestTemplateRow quest;
+    quest.Name = "Errand";
+    rows.Quests.push_back(quest);
+    for (std::string const name : { "Plain", "Drawn", "Twin" })
+    {
+        QuestGoalRow talk;
+        talk.Quest = "Errand";
+        talk.Goal = name;
+        talk.Type = "persona";
+        talk.PersonaName = name == "Twin" ? "WC-RAV-NPC06-Twin" : "WC-RAV-NPC06";
+        talk.Image1 = name == "Drawn" ? "GUI/NpcPortraits/Authored.dds" : "";
+        rows.Goals.push_back(talk);
+    }
+    std::shared_ptr<QuestStore const> const quests = QuestStore::Build(rows);
+    QuestInfo const* const info = quests->Find("Errand");
+    ASSERT_NE(info, nullptr);
+    EXPECT_EQ(info->Goals.at("Plain").Row.Image1, "GUI/NpcPortraits/Student.dds");
+    EXPECT_EQ(info->Goals.at("Drawn").Row.Image1, "GUI/NpcPortraits/Authored.dds");
+    EXPECT_EQ(info->Goals.at("Twin").Row.Image1, "") << "an NPC with no icon leaves the goal as it was";
 }
