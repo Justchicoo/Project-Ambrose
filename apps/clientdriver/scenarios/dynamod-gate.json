@@ -1,0 +1,605 @@
+{
+  "title": "The Unicorn Way gate opens for the wizard whose quest goal opens it, and for nobody else, and stays open after a relog and a zone change",
+  "include": "parts/common.json",
+  "notes": [
+    "10.03: two fresh wizards enter the Commons and the main account is a game master. Each is stood before WC_GateCommons_ToUnicornWay and sees it closed.",
+    "The game master types .quest add WC-MAIN-C01-003 and .quest goal WC-MAIN-C01-003 WC-MAIN-C01-003_Goal0; the goal posts GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0,",
+    "OpenGateToUW fires and its ResAddDynaMod gives the wizard the gate's Dynamod in IdleOpen, which the server tells the client with MSG_DYNAMODBEHAVIOR_UPDATEMODS and MSG_ENTERSTATE IdleOpen.",
+    "The gate swings open, its bars rising for about a second, and rests IdleOpen: the shot 0.3 seconds after the goal must differ from the closed gate and from the raised one, which a gate that snapped open would match.",
+    "The companion still sees the gate closed. The game master relogs and travels to Ravenwood and back, and each time sees the gate open.",
+    "The driver's world has no WC-MAIN-C01-003 template, so the relog prunes the quest and says so; the gate's mod stays."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000",
+    "Network.PacketLog.Enable=true",
+    "Network.PacketLog.Filter=MSG_DYNAMODBEHAVIOR_UPDATEMODS,MSG_ENTERSTATE,MSG_LEAVESTATE"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added",
+    "pruned wizard \\d+'s quest log: quest WC-MAIN-C01-003 \\(GID \\d+\\) is no longer a quest template"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the main wizard backs away from the start",
+      "vk": "0x53",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard alone",
+      "file": "main-alone",
+      "settle": 1
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the main wizard stands before the Unicorn Way gate, facing it, for a fresh wizard sees the gate closed",
+      "npc": "WC_GateCommons_ToUnicornWay",
+      "wizard": "{wizard_guid}",
+      "distance": 200
+    },
+    {
+      "action": "shot",
+      "name": "a fresh wizard sees the gate closed",
+      "file": "main-gate-closed",
+      "settle": 3
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the companion stands before the Unicorn Way gate, facing it, for the companion sees the gate closed",
+      "npc": "WC_GateCommons_ToUnicornWay",
+      "wizard": "{companion_wizard_guid}",
+      "distance": 200
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the gate closed",
+      "file": "companion-gate-closed",
+      "settle": 3,
+      "client": "companion"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .quest add WC-MAIN-C01-003",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .quest add WC-MAIN-C01-003",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .quest add WC-MAIN-C01-003",
+      "text": ".quest add WC-MAIN-C01-003"
+    },
+    {
+      "action": "char",
+      "name": "send .quest add WC-MAIN-C01-003",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master is given the quest",
+      "pattern": "with wizard {wizard_guid} ran quest add WC-MAIN-C01-003, which (\\S+)",
+      "timeout": 20,
+      "expect": "worked"
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the main wizard steps back from the Unicorn Way gate, facing it, to watch it swing",
+      "npc": "WC_GateCommons_ToUnicornWay",
+      "wizard": "{wizard_guid}",
+      "distance": 200
+    },
+    {
+      "action": "shot",
+      "name": "the gate closed before the goal",
+      "file": "main-gate-before-goal",
+      "settle": 2
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .quest goal WC-MAIN-C01-003 WC-MAIN-C01-003_Goal0",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .quest goal WC-MAIN-C01-003 WC-MAIN-C01-003_Goal0",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .quest goal WC-MAIN-C01-003 WC-MAIN-C01-003_Goal0",
+      "text": ".quest goal WC-MAIN-C01-003 WC-MAIN-C01-003_Goal0"
+    },
+    {
+      "action": "char",
+      "name": "send .quest goal WC-MAIN-C01-003 WC-MAIN-C01-003_Goal0",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard gains the gate's Dynamod",
+      "pattern": "wizard {wizard_guid} added the Dynamod WC_GateCommons_ToUnicornWay in WizardCity/WC_Hub in state (\\S+)",
+      "timeout": 20,
+      "expect": "IdleOpen",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client is told of the added Dynamod",
+      "pattern": "S->C \\S+ MSG_DYNAMODBEHAVIOR_UPDATEMODS .*",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the gate is sent IdleOpen for the wizard",
+      "pattern": "S->C \\S+ MSG_ENTERSTATE \\(\\S+\\) GameObjectID=\\S+ State=(\\d+)",
+      "timeout": 20,
+      "expect": "489440568",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the goal posts its GoalComplete event and OpenGateToUW fires",
+      "pattern": "wizard {wizard_guid} posted GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0 in WizardCity/WC_Hub, which fired (.*)",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the gate rising as the goal completes",
+      "file": "main-gate-rising",
+      "settle": 0.3
+    },
+    {
+      "action": "shot",
+      "name": "the gate up a moment after",
+      "file": "main-gate-up",
+      "settle": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the gate at rest for the game master",
+      "file": "main-gate-open",
+      "settle": 3
+    },
+    {
+      "action": "compare_shots",
+      "name": "the gate moved from closed as the goal completed",
+      "first": "main-gate-before-goal",
+      "second": "main-gate-rising",
+      "region": [
+        0,
+        0,
+        540,
+        540
+      ],
+      "expect": "differ"
+    },
+    {
+      "action": "compare_shots",
+      "name": "the gate was still rising, not snapped up, a moment after the goal",
+      "first": "main-gate-rising",
+      "second": "main-gate-up",
+      "region": [
+        0,
+        0,
+        540,
+        540
+      ],
+      "expect": "differ"
+    },
+    {
+      "action": "shot",
+      "name": "the companion still sees the gate closed",
+      "file": "companion-gate-still-closed",
+      "settle": 1,
+      "client": "companion"
+    },
+    {
+      "action": "restart_client",
+      "name": "the game master quits the client and starts it again",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up, again",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen, again",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in, again",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted, again",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads, again",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen, again",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play, again",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads WizardCity/WC_Hub and the wizard stands in it, again",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the main wizard stands before the Unicorn Way gate, facing it, for the gate after a relog",
+      "npc": "WC_GateCommons_ToUnicornWay",
+      "wizard": "{wizard_guid}",
+      "distance": 200
+    },
+    {
+      "action": "shot",
+      "name": "the gate after a relog",
+      "file": "main-gate-after-relog",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele zone WizardCity/WC_Ravenwood",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele zone WizardCity/WC_Ravenwood",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele zone WizardCity/WC_Ravenwood",
+      "text": ".tele zone WizardCity/WC_Ravenwood"
+    },
+    {
+      "action": "char",
+      "name": "send .tele zone WizardCity/WC_Ravenwood",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads WizardCity/WC_Ravenwood and the wizard stands in it, in Ravenwood",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele zone WizardCity/WC_Hub",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele zone WizardCity/WC_Hub",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele zone WizardCity/WC_Hub",
+      "text": ".tele zone WizardCity/WC_Hub"
+    },
+    {
+      "action": "char",
+      "name": "send .tele zone WizardCity/WC_Hub",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads WizardCity/WC_Hub and the wizard stands in it, back in the Commons",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the main wizard stands before the Unicorn Way gate, facing it, for the gate after a zone change",
+      "npc": "WC_GateCommons_ToUnicornWay",
+      "wizard": "{wizard_guid}",
+      "distance": 200
+    },
+    {
+      "action": "shot",
+      "name": "the gate after a zone change",
+      "file": "main-gate-after-zone-change",
+      "settle": 3
+    }
+  ]
+}

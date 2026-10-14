@@ -130,7 +130,7 @@ Quest start and end, goal activate and complete, tally and trigger results can c
 
 **Acceptance**
 
-- [ ] Real client: after 'OpenGateToUW' the Unicorn Way gate is 'IdleOpen' for that player only
+- [x] Real client: after 'OpenGateToUW' the Unicorn Way gate is 'IdleOpen' for that player only (client driver `dynamod-gate.json`: the game master's gate opens and the companion's stays closed)
 
 ### Detailed spec from WLD-19: Object states and per-player Dynamods
 
@@ -159,8 +159,8 @@ Objects show the right animation state, and the world changes a wizard has earne
 
 **Acceptance**
 
-- [ ] Real client: in WC_Hub the Unicorn Way gate shows closed for a fresh character, and after the quest goal named in 'OpenGateToUW' it plays Open and rests 'IdleOpen' for that player only; player B without the quest still sees it closed
-- [ ] Real client: the gate is still 'IdleOpen' for that player after a relog and a zone change
+- [x] Real client: in WC_Hub the Unicorn Way gate shows closed for a fresh character, and after the quest goal named in 'OpenGateToUW' it plays Open and rests 'IdleOpen' for that player only; player B without the quest still sees it closed (client driver `dynamod-gate.json`: the gate swings open, the shot 0.3 seconds after the goal differing from both the closed and the raised gate, and the companion still sees it closed)
+- [x] Real client: the gate is still 'IdleOpen' for that player after a relog and a zone change (client driver `dynamod-gate.json`: open after the client restarts and after `.tele zone` to Ravenwood and back)
 - [ ] Unit: a character's mods load and save; ResAddDynaMod adds, changes and removes by tag; a quest's mods leave with the quest unless m_existBeyondQuest
 - [x] Unit: MSG_DYNAMODBEHAVIOR_UPDATEMODS carries the whole list at login and one Add or Remove per change (`DynaModMessagesTest.TheFullSetReadsBackAsADynaModListOfEachMod` and `DynaModMessagesTest.AReplacedModDropsTheOldByIndexAndAddsTheNewWhileOthersTellNothing`: the full list reads back as a DynaModList, a replaced mod drops the old by index and adds the new, and a removal or another zone's mod sends nothing)
 
