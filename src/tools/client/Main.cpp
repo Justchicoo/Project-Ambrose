@@ -38,8 +38,13 @@
 #include "PropertyJson.h"
 #include "PropertyOracle.h"
 #include "PropertyWordSearch.h"
+#include "QuestChain.h"
+#include "QuestLoot.h"
 #include "QuestPackage.h"
+#include "QuestWikiData.h"
+#include "SourceFolder.h"
 #include "ServerClassCache.h"
+#include "ServerClassScript.h"
 #include "SkippedValue.h"
 #include "SpawnRequirementCensus.h"
 #include "TemplateExtractor.h"
@@ -172,8 +177,12 @@ Commands:
                          without, read as the field's own rules say, such as MSG_BADGES BadgeInfo
   hex <file>...          print a file's bytes with their offsets, from --from for --count,
                          or with --wad an archive entry's, such as one no class reads yet
-  quests --wad <package> read the QuestData quest templates of a CSR package you kept from
-                         an older client into the world database's quest tables, checked
+  quests [--wad <package>]
+                         read the QuestData quest templates of a CSR package you kept from
+                         an older client, data/quests/CSR.wad unless --wad names another,
+                         into the world database's quest tables with their requirements and
+                         results, gated on the prequests the wiki quest list data/quests/
+                         quests.ndjson (or --data) names when it is there, checked
                          against the install's templates and --locale text and the quest
                          validator, and print how many read and import cleanly, why the rest
                          do not, what the tables have no place for, the requirement and
@@ -187,7 +196,8 @@ Options:
   --type-dump <file>   the type dump made from it (default: AMBROSE_TYPE_DUMP_PATH)
   --supplement <file>  a class file in the type dump's format, such as schemaprobe
                        --server-classes writes, whose classes join the dump in place of
-                       the one the Ambrose data folder holds for the install
+                       the one the Ambrose data folder holds for the install, or with
+                       --world-db join the world's server classes where it lacks them
   --wad <file>         the archive wad and name read (default: Root.wad), and hex when given
   --locale <name>      the locale lang and catalog read (default: en-US)
   --all                print every match rather than the first few
@@ -229,6 +239,11 @@ Options:
                        actors and personas against and --import writes
                        (default: AMBROSE_WORLD_DATABASE_INFO)
   --import             with quests, write the quests that read cleanly into --world-db
+  --data <file>        with quests, the wiki quest list whose prequests gate the quests
+                       and whose givers and rewards are matched (default:
+                       data/quests/quests.ndjson)
+  --catalog <folder>   with quests, the template catalog revision folder givers and reward
+                       items are named through (default: data/catalog/<revision>)
   --flags <n>          read core with exactly these serializer flags rather than trying
                        the plain form and then a stream that opens with its own flags
   --from <n>, --count <n>
@@ -250,6 +265,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::vector<std::string> CoreTypes;
         std::optional<std::string> WorldDatabase;
         std::optional<std::string> Supplement;
+        std::optional<std::string> Data;
+        std::optional<std::string> Catalog;
         std::size_t From = 0;
         std::size_t Count = 0;
         bool List = false;
@@ -400,7 +417,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 }
                 (arg == "--from" ? parsed.From : parsed.Count) = static_cast<std::size_t>(*number);
             }
-            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--world-db" || arg == "--supplement")
+            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--world-db" || arg == "--supplement" || arg == "--data" || arg == "--catalog")
             {
                 std::optional<std::string> const given = value(arg);
                 if (!given)
@@ -409,6 +426,10 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     parsed.Client = *given;
                 else if (arg == "--supplement")
                     parsed.Supplement = *given;
+                else if (arg == "--data")
+                    parsed.Data = *given;
+                else if (arg == "--catalog")
+                    parsed.Catalog = *given;
                 else if (arg == "--type-dump")
                     parsed.TypeDump = *given;
                 else if (arg == "--world-db")
@@ -2355,7 +2376,12 @@ namespace
             std::cout << fmt::format("  {:>6}  {}\n", count, name);
     }
 
-    int RunQuests(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog, std::filesystem::path const& client)
+    std::filesystem::path QuestsFolder()
+    {
+        return Ambrose::FindSourceFolder() / "data" / "quests";
+    }
+
+    int RunQuests(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog, std::filesystem::path const& client, std::string const& revision)
     {
         std::vector<QuestPackageEntry> entries;
         for (std::string const& name : QuestPackage::GetQuestEntries(archive))
@@ -2384,6 +2410,7 @@ namespace
 
         std::string const source = QuestPackage::SourceOf(archive.GetPath().filename().generic_string());
         std::vector<QuestObjectRow> objects;
+        std::vector<QuestPlacement> placements;
         std::set<std::string, std::less<>> heldElsewhere;
         std::optional<MySQLConnectionInfo> database;
         std::unique_ptr<MySQLConnection> connection;
@@ -2407,6 +2434,13 @@ namespace
             if (QueryResult const result = connection->Query("SELECT `template_id`, `object_name` FROM `object_template`"))
                 do
                     objects.push_back(QuestObjectRow{ result->Fetch()[0].Get<uint32>(), result->Fetch()[1].Get<std::string>() });
+                while (result->NextRow());
+            if (QueryResult const result = connection->Query("SELECT `zone_path`, `template_id`, `position_x`, `position_y`, `position_z` FROM `zone_object` WHERE `template_id` <> 0"))
+                do
+                {
+                    Field const* const row = result->Fetch();
+                    placements.push_back(QuestPlacement{ row[0].Get<std::string>(), row[1].Get<uint32>(), row[2].Get<float>(), row[3].Get<float>(), row[4].Get<float>() });
+                }
                 while (result->NextRow());
             if (!connection->Execute("SELECT `source` FROM `quest_template` LIMIT 0"))
             {
@@ -2442,12 +2476,136 @@ namespace
         PrintCounts("classes the type dump does not list", read.UnknownClasses);
         PrintCounts("what the quest tables have no place for, by occurrence", read.NotCarried);
         PrintCounts("what was read another way, by occurrence", read.Adjusted);
+        std::size_t questResults = 0;
+        std::size_t goalResults = 0;
+        for (QuestPackageQuest const& quest : read.Quests)
+            if (quest.IsClean())
+                for (QuestResultRow const& row : quest.Rows.Results)
+                    ++(row.Goal.empty() ? questResults : goalResults);
+        std::cout << fmt::format("quest_result rows of the clean quests: {} on quests, {} on goals\n", questResults, goalResults);
+        PrintCounts("results skipped, since the type dump lists no class for them", read.GetSkippedResults());
+
+        std::filesystem::path const dataFile = arguments.Data ? LogConfig::Utf8Path(*arguments.Data) : QuestsFolder() / ConfigMgr::PathFromUtf8(std::string(QuestWikiData::DefaultFile));
+        std::filesystem::path const catalogFolder = arguments.Catalog ? LogConfig::Utf8Path(*arguments.Catalog) : Ambrose::FindSourceFolder() / "data" / "catalog" / ConfigMgr::PathFromUtf8(revision);
+        std::string catalogError;
+        std::optional<ClientCatalog> templates = ClientCatalog::Read(catalogFolder, catalogError);
+        if (!templates)
+        {
+            std::cerr << fmt::format("client: no giver, reward or turn-in NPC is matched by name, since the template catalog cannot be read: {}; write it with client catalog, or name one with --catalog\n", catalogError);
+            templates.emplace();
+        }
+        std::set<uint32> npcTemplates;
+        for (CatalogCategory const& category : templates->GetCategories())
+            if (category.Name == QuestWikiData::NpcCategory)
+                for (CatalogTemplate const& entry : category.Templates)
+                    npcTemplates.insert(entry.TemplateId);
+        std::erase_if(placements, [&npcTemplates](QuestPlacement const& placement) { return !npcTemplates.contains(placement.TemplateId); });
+        QuestNpcStacks const stacks = QuestNpcStacks::Build(placements);
+        if (database && placements.empty())
+            std::cerr << "client: zone_object places no NPC, so NPCs stacked on one spot are not read as one; run extractor zones on this world database first\n";
+        else if (!placements.empty())
+            std::cout << fmt::format("NPC placements: {}; {} NPC templates sit within {} units of another in the same zone, in {} stacks read as one NPC each\n", placements.size(),
+                stacks.GetStackedTemplates(), QuestNpcStacks::DefaultRadius, stacks.GetStackCount());
+        std::vector<QuestLink> wikiLinks;
+        QuestGiverChoices giverChoices;
+        std::vector<QuestWikiReward> wikiRewards;
+        std::vector<QuestWikiRewardItem> wikiItems;
+        std::error_code missing;
+        if (!std::filesystem::is_regular_file(dataFile, missing))
+        {
+            if (arguments.Data)
+            {
+                std::cerr << fmt::format("client: --data names {}, which is not there\n", ConfigMgr::PathToUtf8(dataFile));
+                return Failure;
+            }
+            std::cerr << fmt::format("client: no wiki quest list at {}; drop {} there to add prequests, givers and rewards\n", ConfigMgr::PathToUtf8(dataFile), QuestWikiData::DefaultFile);
+        }
+        else
+        {
+            std::ifstream in(dataFile, std::ios::binary);
+            std::string const text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            WikiQuestRead const wiki = QuestWikiData::Parse(text);
+            std::shared_ptr<LocaleTable const> const table = sLocaleStore.GetTable(arguments.Locale);
+            QuestWikiData::TextLookup const title = [&table](std::string_view key) -> std::optional<std::string>
+            {
+                std::string const* const found = table ? table->Find(key) : nullptr;
+                return found ? std::optional<std::string>(*found) : std::nullopt;
+            };
+            std::set<uint32> worldTemplates;
+            for (QuestObjectRow const& object : objects)
+                worldTemplates.insert(object.TemplateId);
+            QuestWikiData::TemplateLookup inWorld;
+            if (!worldTemplates.empty())
+                inWorld = [&worldTemplates](uint32 templateId) { return worldTemplates.contains(templateId); };
+            QuestWikiMatch const match = QuestWikiData::Apply(catalog, wiki.Quests, read, title, *templates, inWorld, &stacks);
+            std::cout << fmt::format("{}: {} wiki quests on {} lines, {} not read\n", ConfigMgr::PathToUtf8(dataFile), wiki.Quests.size(), wiki.Lines, wiki.Problems.size());
+            std::cout << fmt::format("matched by title: {} to one quest, {} to school variants, {} to no quest, {} to several that are not school variants, {} quests claimed by more than one\n",
+                match.Matched, match.MatchedVariants, match.Unmatched, match.Ambiguous, match.Contested);
+            std::cout << fmt::format("prequests: {} resolved, {} not; {} quests gated on them, {} of them joined with the package's requirements, {} gates not encoded\n", match.PrequestsResolved,
+                match.PrequestsUnresolved, match.Gated, match.GatedWithPackageRequirements, match.GatesNotEncoded);
+            std::cout << fmt::format("prequests only one school takes, not gating a quest every school takes: {}\n", match.PrequestsOfOneSchool);
+            std::cout << fmt::format("givers: {} to one template, {} to copies of one stacked NPC, {} to none, {} to several; starter_template_id written for {} quests\n", match.GiversResolved,
+                match.GiversStacked, match.GiversUnknown, match.GiversAmbiguous, match.StartersWritten);
+            std::cout << fmt::format("rewards: {} quests with gold or experience, reward items {} to one template, {} to none, {} to several\n",
+                match.Rewards.size(), match.RewardItemsResolved, match.RewardItemsUnknown, match.RewardItemsAmbiguous);
+            std::cout << fmt::format("quests that would have a starter, from a Prep line or a giver: {} of {}\n", match.WithStarter, read.GetCleanCount());
+            wikiLinks = match.Links;
+            giverChoices = match.GiverChoices;
+            wikiRewards = match.Rewards;
+            wikiItems = match.RewardItems;
+        }
+
+        std::vector<QuestPackageEntry> arcEntries;
+        for (std::string const& name : QuestChain::GetArcEntries(archive))
+        {
+            KiwadReadResult const arcFile = archive.Read(name);
+            if (arcFile.Succeeded())
+                arcEntries.push_back(QuestPackageEntry{ name, std::string(arcFile.Data.begin(), arcFile.Data.end()) });
+        }
+        QuestArcRead const arcs = QuestChain::ReadArcs(catalog, arcEntries);
+        PrintCounts("arc files not read", arcs.Unread);
+        std::unordered_map<std::string, std::set<uint32>> objectIds;
+        if (!objects.empty())
+            for (QuestObjectRow const& object : objects)
+                objectIds[object.ObjectName].insert(object.TemplateId);
+        else
+            for (CatalogCategory const& category : templates->GetCategories())
+                for (CatalogTemplate const& entry : category.Templates)
+                    objectIds[entry.ObjectName].insert(entry.TemplateId);
+        QuestChain::ObjectLookup const byObjectName = [&objectIds, &stacks](std::string_view name) -> std::optional<uint32>
+        {
+            auto const found = objectIds.find(std::string(name));
+            if (found == objectIds.end())
+                return std::nullopt;
+            std::vector<uint32> const ids(found->second.begin(), found->second.end());
+            return stacks.OneOf(ids) ? std::optional<uint32>(ids.front()) : std::nullopt;
+        };
+        QuestChainMatch const chain = QuestChain::Apply(catalog, arcs.Arcs, wikiLinks, giverChoices, read, byObjectName, &stacks);
+        std::cout << fmt::format("arcs: {} in {} files, {} stage links, {} between quests that import; the wiki gates {} of those the same way and {} otherwise, and {} more are gated on the stage before ({} not encoded)\n",
+            arcs.Arcs.size(), arcs.Files, chain.ArcLinks, chain.ArcLinksImported, chain.ArcLinksTheWikiAgrees, chain.ArcLinksTheWikiGatesOtherwise, chain.GatesAdded, chain.GatesNotEncoded);
+        std::cout << fmt::format("arc links from a stage only one school takes to one every school takes, not followed: {}\n", chain.ArcLinksFromOneSchool);
+        std::cout << fmt::format("starters from the prior quest's turn-in NPC: {} of {} quests that already have one agree, {} quests without one are given it, {} have priors turned in to different NPCs\n",
+            chain.StartersAgreeing, chain.StartersChecked, chain.StartersFilled, chain.StartersConflicting);
+        std::cout << fmt::format("where the wiki giver names several templates: {} starters are the turn-in NPC among them, {} the one placed in its zone, {} left unset as neither\n",
+            chain.StartersFromGiverChoice, chain.StartersFromGiverZone, chain.StartersLeftToGiver);
+        std::cout << fmt::format("quests that would have a starter, after chaining: {} of {}\n", chain.WithStarter, read.GetCleanCount());
+
+        std::cout << "quests by folder: read, import cleanly, with a starter\n";
+        for (auto const& [folder, counts] : QuestPackage::CountByFolder(read))
+            std::cout << fmt::format("  {:<18} {:>5} {:>5} {:>5}\n", folder.empty() ? std::string_view("(none)") : std::string_view(folder), counts.Read, counts.Clean, counts.Started);
+
+        QuestLootRows const loot = QuestLoot::Apply(catalog, wikiRewards, wikiItems, read, source);
+        std::cout << fmt::format("loot tables: {} quests, {} entries; gold {} written, {} the package gives; experience {} written, {} the package gives; items {} written, {} where the package gives its own; {} ResLoot results not encoded\n",
+            loot.Tables.size(), loot.Entries.size(), loot.GoldWritten, loot.GoldFromPackage, loot.ExperienceWritten, loot.ExperienceFromPackage, loot.ItemsWritten, loot.ItemsFromPackage,
+            loot.ResultsNotEncoded);
 
         if (!arguments.Import)
             return Success;
         connection.reset();
         std::string error;
-        if (!QuestPackage::BuildScript(read, source).Apply(*database, error))
+        WorldSqlScript script = QuestPackage::BuildScript(read, source);
+        script.Append(QuestLoot::BuildScript(loot, source));
+        if (!script.Apply(*database, error))
         {
             std::cerr << fmt::format("client: {}\n", error);
             return Failure;
@@ -2605,12 +2763,47 @@ int main(int argc, char** argv)
     if (world && catalog)
     {
         ObjectSchemaLoadResult const tables = sObjectSchemaMgr.LoadTables();
+        TypeDumpLoader::RawDump worldClasses;
+        std::vector<std::string> worldErrors;
+        bool const worldRead = !arguments->Supplement || ServerClassScript::Read(worldClasses, worldErrors);
         WorldDatabase.Close();
-        if (!tables.Loaded)
+        if (!tables.Loaded || !worldRead)
         {
             for (std::string const& problem : tables.Errors)
                 std::cerr << fmt::format("client: {}\n", problem);
+            for (std::string const& problem : worldErrors)
+                std::cerr << fmt::format("client: {}\n", problem);
             return Failure;
+        }
+        if (arguments->Supplement)
+        {
+            std::filesystem::path const classes = LogConfig::Utf8Path(*arguments->Supplement);
+            TypeDumpLoader::RawDump found;
+            std::string unread;
+            std::vector<std::string> errors;
+            if (!ServerClassCache::Read(classes, found, unread))
+            {
+                std::cerr << fmt::format("client: the class file {} cannot be used: {}\n", ConfigMgr::PathToUtf8(classes), unread);
+                return Failure;
+            }
+            std::set<std::string, std::less<>> held;
+            for (TypeDumpLoader::RawClass const& type : worldClasses.Classes)
+                if (type.Name)
+                    held.insert(*type.Name);
+            std::size_t added = 0;
+            for (TypeDumpLoader::RawClass& type : found.Classes)
+                if (type.Name && !held.contains(*type.Name))
+                {
+                    worldClasses.Classes.push_back(std::move(type));
+                    ++added;
+                }
+            if (!sTypeRegistry.SetSupplement(std::move(worldClasses), std::string(ObjectSchemaMgr::ClassSource), errors))
+            {
+                std::cerr << fmt::format("client: the class file {} cannot be used: {}\n", ConfigMgr::PathToUtf8(classes), errors.empty() ? std::string() : errors.front());
+                return Failure;
+            }
+            catalog = sTypeRegistry.GetCatalog();
+            std::cerr << fmt::format("client: the {} class(es) {} holds that the world database lacks join its classes\n", added, ConfigMgr::PathToUtf8(classes));
         }
     }
     else if (world)
@@ -2701,6 +2894,16 @@ int main(int argc, char** argv)
     std::filesystem::path wad = LogConfig::Utf8Path(arguments->Wad);
     if (!wad.has_parent_path())
         wad = LogConfig::Utf8Path(*arguments->Client) / "Data" / "GameData" / wad;
+    if (command == "quests" && !arguments->WadGiven)
+    {
+        wad = QuestsFolder() / ConfigMgr::PathFromUtf8(std::string(QuestPackage::DefaultPackage));
+        std::error_code missing;
+        if (!std::filesystem::is_regular_file(wad, missing))
+        {
+            std::cerr << fmt::format("client quests reads {} unless --wad names another package; drop your {} there\n", ConfigMgr::PathToUtf8(wad), QuestPackage::DefaultPackage);
+            return Failure;
+        }
+    }
 
     if (command == "lang")
     {
@@ -2856,7 +3059,7 @@ int main(int argc, char** argv)
             std::cerr << "client quests needs a type dump; name one with --type-dump\n";
             return Failure;
         }
-        return RunQuests(*arguments, *archive, catalog, LogConfig::Utf8Path(*arguments->Client));
+        return RunQuests(*arguments, *archive, catalog, LogConfig::Utf8Path(*arguments->Client), revision);
     }
     if (command == "template")
     {

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the CSR package quest reader on classes and quest files the test invents: a quest's keys, its RequirementList, encoded so it decodes back to the list it was and NULL in the script when the quest lists none or an empty list, with an unknown class or property in it failing the quest, goals, adjectives, client tags, tally, logic and Prep dialog with its madlib become quest table rows, logic waiting on two goals is attached to both, dialog tags and results the tables cannot hold are counted rather than failing the quest, unknown classes in results are only counted while one in a goal fails it, a persona named by its _Persona template is read as the object it names, a missing actor template, a missing locale key, a name another source holds and a goal the logic names but the quest lacks each fail their quest, and the script replaces only the rows the package's source marks.
+ * Tests the CSR package quest reader on classes and quest files the test invents: a quest's keys, its RequirementList, encoded so it decodes back to the list it was and NULL in the script when the quest lists none or an empty list, with an unknown class or property in it failing the quest, goals, adjectives, client tags, quest events, tally, logic and Prep dialog with its madlib become quest table rows, logic waiting on two goals is attached to both, dialog tags and results the tables cannot hold are counted rather than failing the quest, a quest's and its goals' completion results are stored in order, a result of a class the dump lacks skipped and counted while one nested inside a result or in a goal fails the quest, a starter template written only when one is set, a persona named by its _Persona template is read as the object it names, a missing actor template, a missing locale key, a name another source holds and a goal the logic names but the quest lacks each fail their quest, and the script replaces only the rows the package's source marks.
  */
 
 #include "ObjectSerializer.h"
@@ -56,6 +56,8 @@ namespace
         add("class ReqHasEntry", Json::array({ "Requirement", "PropertyClass" }), props({ { "std::string", "m_entryName", "Static" } }));
         add("class Result", Json::array({ "PropertyClass" }), Json::object());
         add("class ResultList", Json::array({ "PropertyClass" }), props({ { "class Result*", "m_results", "List" } }));
+        add("class ResAddGold", Json::array({ "Result", "PropertyClass" }), props({ { "int", "m_amount", "Static" } }));
+        add("class ResWrapper", Json::array({ "Result", "PropertyClass" }), props({ { "class Result*", "m_inner", "Static" } }));
         add("class MadlibArg", Json::array({ "PropertyClass" }), props({ { "std::string", "m_madlibToken", "Static" } }));
         add("MadlibArgT<std::string>", Json::array({ "MadlibArg", "PropertyClass" }), props({ { "std::string", "m_madlibToken", "Static" }, { "std::string", "m_madlibArgument", "Static" } }));
         add("class MadlibBlock", Json::array({ "PropertyClass" }), props({ { "class MadlibArg*", "m_madlibs", "List" }, { "std::string", "m_blockToken", "Static" } }));
@@ -72,7 +74,7 @@ namespace
             { "std::string", "m_descriptor2", "Static" }, { "int", "m_count", "Static" } }));
         std::vector<std::tuple<std::string, std::string, std::string>> goal{ { "std::string", "m_goalName", "Static" }, { "unsigned int", "m_goalNameID", "Static" },
             { "std::string", "m_goalTitle", "Static" }, { "std::string", "m_locationName", "Static" }, { "std::string", "m_destinationZone", "Static" },
-            { "std::string", "m_clientTags", "List" }, { "class ActorDialogList*", "m_dialogList", "Static" }, { "enum GoalTemplate::GOAL_TYPE", "m_goalType", "Static" },
+            { "std::string", "m_clientTags", "List" }, { "std::string", "m_genericEvents", "List" }, { "class ActorDialogList*", "m_dialogList", "Static" }, { "enum GoalTemplate::GOAL_TYPE", "m_goalType", "Static" },
             { "class ResultList*", "m_completeResults", "Static" }, { "class TallyCounterTemplate*", "m_tallyCounter", "Static" } };
         Json base = props(goal);
         base["m_goalType"]["enum_options"] = Json{ { "GOAL_TYPE_UNKNOWN", 0 }, { "GOAL_TYPE_BOUNTY", 1 }, { "GOAL_TYPE_PERSONA", 4 }, { "GOAL_TYPE_WAYPOINT", 5 },
@@ -123,7 +125,7 @@ namespace
             "      <m_dialogs><Class Name=\"class ActorDialog\"><m_dialogTag>QuestInfo</m_dialogTag></Class></m_dialogs>\r\n"
             "    </Class></m_dialogList>\r\n"
             "    <m_goals><Class Name=\"class PersonaGoalTemplate\"><m_goalName>Talk</m_goalName><m_goalType>GOAL_TYPE_PERSONA</m_goalType>"
-            "<m_personaName>TestNpc_Persona</m_personaName><m_clientTags>TagA</m_clientTags></Class></m_goals>\r\n"
+            "<m_personaName>TestNpc_Persona</m_personaName><m_clientTags>TagA</m_clientTags><m_genericEvents>Globe_Used</m_genericEvents></Class></m_goals>\r\n"
             "    <m_goals><Class Name=\"class WaypointGoalTemplate\"><m_goalName>Walk</m_goalName><m_goalType>GOAL_TYPE_WAYPOINT</m_goalType>"
             "<m_destinationZone>Test/Zone</m_destinationZone><m_zoneEntry>true</m_zoneEntry></Class></m_goals>\r\n"
             "    <m_goals><Class Name=\"class BountyGoalTemplate\"><m_goalName>Hunt</m_goalName><m_goalType>GOAL_TYPE_BOUNTY</m_goalType>"
@@ -134,6 +136,18 @@ namespace
             "    <m_goalLogic><Class Name=\"class GoalCompleteLogic\"><m_goalsAND>Walk</m_goalsAND><m_goalsAND>Hunt</m_goalsAND><m_completeQuest>true</m_completeQuest></Class></m_goalLogic>\r\n"
             "  </Class>\r\n"
             "</Objects>\r\n";
+    }
+
+    std::string WithEndResults(std::string file, std::string const& results)
+    {
+        std::size_t const start = file.find("    <m_endResults>");
+        std::size_t const end = file.find('\n', start);
+        return file.replace(start, end - start + 1, "    <m_endResults><Class Name=\"class ResultList\">" + results + "</Class></m_endResults>\r\n");
+    }
+
+    std::string Gold(int amount)
+    {
+        return fmt::format("<m_results><Class Name=\"class ResAddGold\"><m_amount>{}</m_amount></Class></m_results>", amount);
     }
 
     std::string WithRequirements(std::string file, std::string const& requirements)
@@ -195,6 +209,8 @@ TEST_F(QuestPackageTest, AQuestFileBecomesQuestTableRows)
     EXPECT_EQ(quest.Rows.Adjectives[1].Position, 1u);
     ASSERT_EQ(quest.Rows.ClientTags.size(), 1u);
     EXPECT_EQ(quest.Rows.ClientTags.front().Tag, "TagA");
+    ASSERT_EQ(quest.Rows.Events.size(), 1u);
+    EXPECT_EQ(quest.Rows.Events.front().Event, "Globe_Used");
 
     ASSERT_EQ(quest.Rows.Logic.size(), 3u);
     EXPECT_EQ(quest.Rows.Logic[0].Goal, "Talk");
@@ -221,6 +237,8 @@ TEST_F(QuestPackageTest, AQuestFileBecomesQuestTableRows)
     EXPECT_EQ(read.RequirementClasses["RequirementList"], 1u);
     EXPECT_EQ(read.RequirementClasses["ReqHasEntry"], 1u);
     EXPECT_EQ(read.UnknownClasses["ResInventedReward"], 1u);
+    EXPECT_EQ(quest.SkippedResults.at("ResInventedReward"), 1u);
+    EXPECT_TRUE(quest.Rows.Results.empty());
     EXPECT_EQ(read.NotCarried["dialog tag QuestInfo"], 1u);
     EXPECT_FALSE(read.NotCarried.contains("m_requirements"));
     EXPECT_EQ(read.NotCarried["negative m_questRepeat"], 1u);
@@ -281,6 +299,8 @@ TEST_F(QuestPackageTest, TheScriptReplacesOnlyThePackagesRowsAndMarksEachWithIts
     std::string const marked = WorldSqlScript::Literal(source);
     for (std::size_t index = 1; index < statements.size(); ++index)
     {
+        if (statements[index].starts_with("INSERT INTO `quest_result`"))
+            continue;
         EXPECT_TRUE(statements[index].starts_with("INSERT INTO")) << statements[index];
         EXPECT_NE(statements[index].find("`source`"), std::string::npos) << statements[index];
         EXPECT_NE(statements[index].find(marked), std::string::npos) << statements[index];
@@ -289,7 +309,7 @@ TEST_F(QuestPackageTest, TheScriptReplacesOnlyThePackagesRowsAndMarksEachWithIts
     EXPECT_NE(all.find(WorldSqlScript::Literal(std::string("TEST-001"))), std::string::npos);
     EXPECT_EQ(all.find(WorldSqlScript::Literal(std::string("TEST-002"))), std::string::npos);
     std::vector<std::string_view> const tables = QuestPackage::GetTables();
-    EXPECT_EQ(tables.size(), 10u);
+    EXPECT_EQ(tables.size(), 12u);
 }
 
 TEST_F(QuestPackageTest, AQuestsRequirementListIsStoredEncodedAndDecodesBack)
@@ -340,4 +360,53 @@ TEST_F(QuestPackageTest, AQuestsRequirementListIsStoredEncodedAndDecodesBack)
     EXPECT_NE(all.find("`requirements`"), std::string::npos);
     EXPECT_NE(all.find(WorldSqlScript::Literal(WorldSqlScript::Value{ std::string(bytes.begin(), bytes.end()) })), std::string::npos);
     EXPECT_EQ(all.find("TEST-UNKNOWN"), std::string::npos);
+}
+
+TEST_F(QuestPackageTest, ResultsAreStoredInOrderAndOnesOfUnknownClassAreSkippedAndCounted)
+{
+    std::string const goalResults = "<m_completeResults><Class Name=\"class ResultList\">" + Gold(2) + "</Class></m_completeResults>";
+    std::string stored = WithEndResults(QuestFile("TEST-RESULTS"), Gold(5) + "<m_results><Class Name=\"class ResInventedReward\"></Class></m_results>" + Gold(7));
+    stored.replace(stored.find("<m_clientTags>TagA</m_clientTags>"), 0, goalResults);
+    std::string const nested = WithEndResults(QuestFile("TEST-NESTED"),
+        "<m_results><Class Name=\"class ResWrapper\"><m_inner><Class Name=\"class ResInventedReward\"></Class></m_inner></Class></m_results>");
+    QuestPackageRead read = QuestPackage::Read(_catalog, { QuestPackageEntry{ "stored.xml", stored }, QuestPackageEntry{ "nested.xml", nested } });
+    QuestPackage::Check(read, Install());
+    ASSERT_EQ(read.Quests.size(), 2u);
+    QuestPackageQuest const& quest = read.Quests[0];
+    ASSERT_TRUE(quest.IsClean()) << quest.Problems.front();
+    EXPECT_EQ(read.Quests[1].Category, "unknown class ResInventedReward");
+
+    ASSERT_EQ(quest.Rows.Results.size(), 3u);
+    std::vector<std::tuple<std::string, uint32, int32>> rows;
+    for (QuestResultRow const& row : quest.Rows.Results)
+    {
+        EXPECT_EQ(row.Quest, "TEST-RESULTS");
+        EXPECT_EQ(row.Class, "class ResAddGold");
+        DecodeResult const decoded = ObjectSerializer::Decode(_catalog, row.Data, ZoneExtractor::DataOptions());
+        ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+        int32 const* const amount = decoded.Object->Get("m_amount")->GetIf<int32>();
+        rows.emplace_back(row.Goal, row.Position, amount ? *amount : -1);
+    }
+    std::sort(rows.begin(), rows.end());
+    EXPECT_EQ(rows, (std::vector<std::tuple<std::string, uint32, int32>>{ { "", 0, 5 }, { "", 1, 7 }, { "Talk", 0, 2 } }));
+    EXPECT_EQ(read.GetSkippedResults(), (QuestPackageRead::Counts{ { "ResInventedReward", 1 } }));
+
+    std::string const all = fmt::format("{}", fmt::join(QuestPackage::BuildScript(read, QuestPackage::SourceOf("Test.wad")).GetStatements(), "\n"));
+    EXPECT_NE(all.find("INSERT INTO `quest_result`"), std::string::npos);
+    EXPECT_EQ(all.find("TEST-NESTED"), std::string::npos);
+}
+
+TEST_F(QuestPackageTest, TheScriptWritesAStarterTemplateOnlyWhenOneIsSet)
+{
+    QuestPackageRead read = QuestPackage::Read(_catalog, { QuestPackageEntry{ "a.xml", QuestFile("TEST-001") }, QuestPackageEntry{ "b.xml", QuestFile("TEST-002") } });
+    QuestPackage::Check(read, Install());
+    ASSERT_EQ(read.GetCleanCount(), 2u);
+    read.Quests[0].Rows.Quests.front().StarterTemplateId = ActorId;
+    std::vector<std::string> const statements = QuestPackage::BuildScript(read, QuestPackage::SourceOf("Test.wad")).GetStatements();
+    auto const quests = std::find_if(statements.begin(), statements.end(), [](std::string const& statement) { return statement.starts_with("INSERT INTO `quest_template`"); });
+    ASSERT_NE(quests, statements.end());
+    EXPECT_NE(quests->find("`starter_template_id`"), std::string::npos);
+    std::string const source = WorldSqlScript::Literal(QuestPackage::SourceOf("Test.wad"));
+    EXPECT_NE(quests->find(fmt::format(", {}, {})", ActorId, source)), std::string::npos) << *quests;
+    EXPECT_NE(quests->find(fmt::format(", NULL, {})", source)), std::string::npos) << *quests;
 }

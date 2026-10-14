@@ -160,6 +160,9 @@ namespace
             for (QuestGoalClientTagRow const& row : _rows.ClientTags)
                 if (NeedQuest(row.Quest, "quest_goal_client_tag") && !HasGoal(row.Quest, row.Goal))
                     Report(row.Quest, fmt::format("quest {}: quest_goal_client_tag names goal {}, which the quest does not have", row.Quest, row.Goal));
+            for (QuestGoalEventRow const& row : _rows.Events)
+                if (NeedQuest(row.Quest, "quest_goal_event") && !HasGoal(row.Quest, row.Goal))
+                    Report(row.Quest, fmt::format("quest {}: quest_goal_event names goal {}, which the quest does not have", row.Quest, row.Goal));
         }
 
         void CheckLogic()
