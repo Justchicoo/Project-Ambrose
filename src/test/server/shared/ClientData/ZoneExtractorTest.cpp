@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing sigil class is read as the CoreObjectInfo it derives from and kept under its own class name with the sigil record name its m_templateName holds, which the zone manager never sends, an entry of a missing class no sigil name proves is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry. A zone's pathData.xml, written as BINd, and the node list its pathNodeData.bin holds as a bare versionable object become paths with their nodes in the order each path names them, which the SQL script writes to zone_path and zone_path_node, and a path naming a node the list lacks, or files given the wrong way round, fail that file alone.
+ * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing sigil class is read as the CoreObjectInfo it derives from and kept under its own class name with the sigil record name its m_templateName holds, which the zone manager never sends, an entry of a missing class no sigil name proves is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, a property the reader's dump does not list is left out and counted while the trigger is still read, and a file whose root is not the list it should hold fails that file alone, counted against its zone. A zone's spawnData.xml, written as BINd through the spawn classes as the dump lays them out, becomes spawners with their counts, respawn times and items, each item's chance, template, place, start node type and path, and a spawner's global requirements kept as bytes that read back as the ReqGlobalRegistryValue they hold, all of which the SQL script writes to zone_spawner and zone_spawner_entry. A zone's pathData.xml, written as BINd, and the node list its pathNodeData.bin holds as a bare versionable object become paths with their nodes in the order each path names them, which the SQL script writes to zone_path and zone_path_node, and a path naming a node the list lacks, or files given the wrong way round, fail that file alone.
  */
 
 #include "BindFile.h"
@@ -140,7 +140,8 @@ namespace
         AddClass(classes, "class Requirement", plain, {});
         AddClass(classes, "class RequirementList", plain, { { "class Requirement*", "m_requirements" } }, { "m_requirements" });
         AddClass(classes, "class Result", plain, {});
-        AddClass(classes, "class ResTeleport", { "class Result", "class PropertyClass" }, {});
+        AddClass(classes, "class ResTeleport", { "class Result", "class PropertyClass" }, withMissingResult ? std::vector<std::pair<std::string, std::string>>{ { "std::string", "m_destinationZone" } }
+            : std::vector<std::pair<std::string, std::string>>{});
         if (withMissingResult)
             AddClass(classes, "class ResMissing", { "class Result", "class PropertyClass" }, { { "std::string", "m_text" } });
         AddClass(classes, "class ResultList", plain, { { "class Result*", "m_results" } }, { "m_results" });
@@ -506,7 +507,7 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
     }
 }
 
-TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeepsItsPlace)
+TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAResultOfAnUnknownClassKeepsItsPlaceAndAnUnknownPropertyIsCounted)
 {
     TypeRegistry writer;
     ASSERT_TRUE(writer.LoadFromText(TriggerDump(true), "writer.json")) << writer.GetErrors().front();
@@ -598,6 +599,9 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
     EXPECT_FALSE(teleport.Results[1].ClassName);
     EXPECT_FALSE(teleport.Results[1].Data);
     EXPECT_TRUE(teleport.CooldownResults.empty());
+    std::pair<uint32, uint32> const destination{ StringHash::KiStringHash("class ResTeleport"), StringHash::PropertyHash("std::string", "m_destinationZone") };
+    ASSERT_EQ(extraction.SkippedProperties.size(), 1u) << "a property the reader's dump does not list is left out and counted, and the trigger is still read";
+    EXPECT_EQ(extraction.SkippedProperties.at(destination), 1u);
 
     ZoneExtraction wrong;
     ExtractedZone other;

@@ -79,8 +79,8 @@ ResultRun ResultMgr::Run(ResultList const& results, ResultContext const& context
         if (result.Class == WaitClass)
         {
             PropertyValue const* const value = result.Object ? result.Object->Get("m_secondsToWait") : nullptr;
-            float const* const seconds = value ? value->GetIf<float>() : nullptr;
-            run.Wait = std::chrono::milliseconds(seconds && *seconds > 0.0f ? static_cast<int64>(*seconds * 1000.0f) : 0);
+            double const* const seconds = value ? value->GetIf<double>() : nullptr;
+            run.Wait = std::chrono::milliseconds(seconds && *seconds > 0.0 ? static_cast<int64>(*seconds * 1000.0) : 0);
             run.Rest.assign(std::next(entry), results.end());
             return run;
         }
