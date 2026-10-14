@@ -7,7 +7,7 @@ Project Ambrose follows the structure and methods of AzerothCore, the open-sourc
 
 ```
 .claude/skills/           Claude Code skills every session in a checkout picks up: milestone work, client decoding, lean token use and pull request stewardship
-apps/                     Repository tooling and operator apps: CI, code style checks, installer, design tokens, dashboard, launcher window, Grafana
+apps/                     Repository tooling and operator apps: CI, code style checks, installer, design tokens, dashboard, launcher window, Studio window, Grafana
   panelui/                The panel program's own screens (17.181)
   packaging/desktop/      Installers and portable archives for the desktop programs (17.183)
 conf/dist/                Build and environment config templates
@@ -32,7 +32,7 @@ src/
     shared/               Code every server uses: network, messages, ObjectProperty, archives, realms
     game/                 Game systems, one folder per subsystem
     scripts/              Content scripts grouped by world, plus Commands and Custom
-  tools/                  Extractors that read a user's own client install, the client launcher, and dbimport
+  tools/                  Extractors that read a user's own client install, the client launcher, the Studio content editor, and dbimport
     shell/                desktop-shell: the web view window, origin rules and profiles the launcher and the panel program share
     panel/                The panel program (17.181)
   test/                   Unit tests mirroring src/
@@ -818,6 +818,7 @@ Settled on 2026-09-27 at the maintainer's standing direction to take the recomme
 | Area | Choice |
 |---|---|
 | The panel program | For 17.181, and through it 17.24, 17.182 to 17.186, 17.105, 17.108 and 3.27. A separate `panel` program, `src/tools/panel` over a `panel-core` library, with its own screens in `apps/panelui` and its data in `PanelApp` in the Ambrose data folder. It shows each panel in a web view window of its own, loaded from that panel's own address, and its list may name panels on other machines. It follows the web view stack the Look and Front-end layout rows settle, the launcher stays a program for players, a program that carries no copy of the dashboard can never fall out of step with a server, and every page a later milestone adds appears in it with no change to the program. It replaces the `apps/desktop/` 17.24 first named, which the Tools rule puts under src/tools |
+| The Studio | Settled on 2026-10-14 at the maintainer's direction, for 16.14 to 16.16. Ambrose Studio is a desktop program, `studio`, over a `studio-core` library in `src/tools/studio`, with its page in `apps/studioui`, shown in the desktop shell's window the launcher uses and served from memory, so it opens no local port. It reads the quest tables through the quest store's own reader, and Root.wad, its locale text and the type dump from the user's own install. It authors content into the development database and pending SQL updates, beside the panel's World tables and World edits pages, which browse and change a running server. A web view over the shared design system was chosen over Qt 6, a second toolkit and licence beside the panel's, and Dear ImGui, which suits debug overlays better than form-heavy editors. A Gamebryo preview stays an optional later part behind a build option pointing at the user's own licensed SDK |
 | Desktop sign-in links | For 17.180. Two kinds of single-use link, both traded for a session through the sign-in path without skipping a second factor, and both kept in one store with 17.46's owner claim and password links, which lets those survive a restart too. A local link is minted through the supervisor's admin API with its token, lasts 60 seconds, is honoured only from loopback, and on a panel with no user yet makes the owner. A pairing link is issued from the remote panel's console, lasts 10 minutes, is refused for a listener serving plain HTTP beyond loopback, and carries the certificate fingerprint, so a remote pin is never trust on first use. Comparing the fingerprint from the log by hand was set aside, because it protects less well against an attacker in the middle |
 | Installer format | For 17.183, and through it 17.105 and 3.27. On Windows, NSIS, under the zlib licence, installing per user with no administrator rights, beside a portable zip; on Linux, a tar.gz whose program installs its own desktop entry, beside a .deb. Inno Setup was the close alternative. MSIX was set aside because sideloading it needs a trusted signing certificate, recent WiX releases for their maintenance-fee terms, and AppImage and Flatpak because bundling WebKitGTK is fragile; those two stay planned opt-ins |
 | Tray | For 17.182. `Shell_NotifyIcon` on Windows, and StatusNotifierItem over GLib's GDBus on Linux, since GLib already comes with WebKitGTK and so no new library is linked. Where the desktop has no tray host, the window stays in the taskbar. libayatana-appindicator3 was the alternative |

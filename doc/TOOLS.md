@@ -6,7 +6,7 @@ The Ambrose tool suite takes the AzerothCore content toolchain and changes it in
 
 One source of truth ties the suite together: the world schema each store declares in C++ where it registers its reload target, with each table's source and key, its column types read from the database and the reference each column carries, which the servers publish from 17.173, inspired by WDE DbDefinitions and Keira field models. The same schema drives the panel's world table and edit forms and pickers (17.173 and 17.34), the gameserver startup and reload validator, the reload-command mapping and generated doc/world/<table>.md pages. It replaced the per-table data/schema/world/<table>.yaml files this list first planned, settled on 2026-09-27 under Desktop programs and client data in doc/ARCHITECTURE.md, so the schema cannot drift from the code that reads the tables.
 
-Current repo state (4.03): src/tools/client is the one tool client questions are asked of and the one that grows; src/tools/bindecode, src/tools/dbimport, src/tools/extractor, src/tools/launcher, src/tools/localetool and src/tools/typeextract are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, clientdriver, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on database, shared and common and that GM commands reload single tables.
+Current repo state (4.03): src/tools/client is the one tool client questions are asked of and the one that grows; src/tools/bindecode, src/tools/dbimport, src/tools/extractor, src/tools/launcher, src/tools/localetool, src/tools/studio and src/tools/typeextract are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, clientdriver, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on database, shared and common and that GM commands reload single tables.
 
 Build order:
 1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload framework (4.15) and its admin API (17.12).
@@ -271,7 +271,7 @@ The main content editor: schema-aware forms over the world database with linked 
 
 Settled on 2026-09-27 under Desktop programs and client data in doc/ARCHITECTURE.md: browsing the world tables and editing the running world database are the panel's World tables and World edits pages (17.173 and 17.34), so the Studio is not a second browser of them, and what stays here is authoring into pending SQL updates for the repository.
 
-- **Form:** Local web app served on localhost (C++ backend in src/tools using shared/database, simple TS/HTML frontend); no client files bundled, since it reads the user's own install at runtime
+- **Form:** A desktop program, `studio`, in the desktop shell's own window like the launcher: a C++ `studio-core` over the quest store's reader, the archive reader and the type dump, and its page in `apps/studioui` built from the shared design system. No local port is opened and no client file is bundled, since it reads the user's own install at runtime. Settled on 2026-10-14 under Desktop programs and client data in doc/ARCHITECTURE.md; milestones 16.14 to 16.16
 - **Inspired by:** Keira3 (EditorService diffQuery/fullQuery, handler services, route guards, unused GUID search); WoW Database Editor (sessions, diff viewer, remote reload)
 - **Lives in:** src/tools/studio/
 - **Needs:** World schema definitions, dbimport/updater, template_extractor index, reload channel, world tables for NPCs/quests/spawns/loot
@@ -291,7 +291,7 @@ Settled on 2026-09-27 under Desktop programs and client data in doc/ARCHITECTURE
 
 Author Wizard101 quest lines end to end: quest template, goals (built from existing client goal classes), givers and turn-ins, prerequisites, rewards, and the NPC dialogue that opens and closes them, with previews that look like the game.
 
-- **Form:** Studio sub-editor (local web app)
+- **Form:** Studio sub-editor
 - **Inspired by:** Keira3 quest editor (template, starter/ender, offer/request text, quest-chain graph, quest preview); Keira SAI comment generator
 - **Lives in:** src/tools/studio/ (features/quest, features/dialogue)
 - **Needs:** Quest engine and quest world tables in game/Quests; NPC and spawn tables; locale index from template_extractor

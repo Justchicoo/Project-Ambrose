@@ -19,6 +19,9 @@
 | 16.11 | Project-owned type dumper spike (OBJ-20 part 1) | M | 3.03 |
 | 16.12 | Type dump v2 emission and validator (OBJ-20 part 2) | M | 16.11, 3.01 |
 | 16.13 | Player launcher that patches from Ambrose (new) | M | 16.06, 16.08, 3.27 |
+| 16.14 | Ambrose Studio: quest and cinematic browser (new) | M | 7.05, 3.26 |
+| 16.15 | Ambrose Studio: quest, reward and loot editing (new) | M | 16.14, 10.07 |
+| 16.16 | Ambrose Studio: link cinematics to quest steps and play them in the client (new) | M | 16.15 |
 
 ## Review notes for this phase
 
@@ -547,3 +550,62 @@ The maintainer's direction on 2026-09-14: WizardLauncher.exe patches the client 
 - A modified KingsIsle executable is never distributed. Redirection comes from data the launcher reads, from Ambrose's own launcher, or, as an experimental opt-in feature planned as a follow-up milestone in this phase, from a patch the user applies locally to their own copy of WizardLauncher.exe (a binary diff, or a hook DLL of Ambrose's own code), never to the pinned development install and at the user's own risk
 - The retail launcher may reach KingsIsle, for example for its news page, before or regardless of its configuration, which leaves the Ambrose launcher path or a local patch
 - Cannot be verified in CI
+
+## 16.14 Ambrose Studio: quest and cinematic browser (new)
+
+**Goal:** A desktop program, `studio`, shows every quest in the world database and every cinematic in the user's own install, and which quest steps play which cinematic.
+
+**Size:** M. **Depends on:** 7.05, 3.26
+
+Added on 2026-10-14 at the maintainer's direction: a full editor program for quests and everything they connect to, not a script. It is the Ambrose Studio doc/TOOLS.md plans, opened in the desktop shell's own window like the launcher, so it is one program to run rather than a page on a local port.
+
+**Deliverables**
+
+- `src/tools/studio`: a `studio-core` library reading the quest tables through the quest store's own reader, Root.wad, its locale text and the type dump, and the channel its window speaks over; the `studio` program opening the window, or printing the channel's answer to one message with `--answer`
+- `apps/studioui`: the window's page, built from the shared design system: a searchable, paged list of quests or cinematics and the chosen one beside it
+- A quest shows its title, level, flags, the quests before and after it, its goals with decoded requirements, its dialog lines with their text, and its results on accept and on completion, decoded
+- A cinematic is decoded from the install and lists every quest result that names it, each a link back to the quest; a result that names a cinematic links to it
+
+**Acceptance**
+
+- [ ] Quests come back sorted, paged, and found by name or by locale title (StudioContentTest.QuestsAreSortedPagedAndFoundByNameOrTitle)
+- [ ] One quest carries its goals, dialog text and results with their timing (StudioContentTest.AQuestCarriesItsGoalsDialogAndResults)
+- [ ] The channel answers each path, 404 for a missing quest or cinematic, and nothing for a message that is not an object (StudioContentTest.TheChannelAnswersEachPathAndRefusesTheRest)
+- [ ] The page asks each path with what it was given and reads a refusal as nothing found (studio.test.ts)
+- [ ] Against the user's install, `studio --answer` lists the install's cinematics and decodes one into its stages and actors
+- [ ] On Windows, the Studio window opens, lists the imported quests, and Unicorn Way shows its goals, dialog and teleport result
+
+## 16.15 Ambrose Studio: quest, reward and loot editing (new)
+
+**Goal:** A quest, its goals, dialog, rewards and loot are edited in the Studio and saved to the development world database and to one pending SQL update.
+
+**Size:** M. **Depends on:** 16.14, 10.07
+
+**Deliverables**
+
+- Forms for quest_template, quest_goal, quest_dialog and quest_result rows, with results such as XP, gold, items and loot tables edited as typed fields from the type dump rather than raw bytes, encoded the way `client encode` does
+- Loot table and loot entry editing with chance totals, and an item and NPC picker by name from the install's templates
+- A change session that writes every edit as one pending_db_world file with a difference shown first, applies it to the development database, and asks the running server to reload the quest tables
+
+**Acceptance**
+
+- [ ] Editing a quest's title, level, goal and reward and saving writes one pending SQL file whose rows load back unchanged
+- [ ] A result edited as fields encodes to the same bytes `client encode` writes for it
+- [ ] The running development server reloads the quest tables after a save, and the edit shows in the real client
+
+## 16.16 Ambrose Studio: link cinematics to quest steps and play them in the client (new)
+
+**Goal:** A cinematic is attached to a quest step in the Studio and played on a GM's wizard in the real client from the Studio.
+
+**Size:** M. **Depends on:** 16.15
+
+**Deliverables**
+
+- Attach a cinematic to a quest's accept, a goal's completion or a dialog line, as the result class that plays it, from either the quest or the cinematic
+- A cinematic's stages, actors and actions drawn as a timeline, with its sync events named
+- Play in client: the Studio asks the development server, through the admin API, to play a cinematic or start a quest on a named GM's wizard
+
+**Acceptance**
+
+- [ ] A cinematic attached to a goal in the Studio plays in the real client when that goal completes
+- [ ] Play in client shows the chosen cinematic on the GM's wizard

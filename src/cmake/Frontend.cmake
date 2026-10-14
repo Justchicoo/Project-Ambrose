@@ -1,8 +1,8 @@
 # Project Ambrose by Imjustchico
-# Builds the panel and the launcher window's page when FRONTEND is on, and says plainly what it left out when it is off, so a machine with no Node still builds the servers.
+# Builds the panel, the launcher window's page and the Studio's page when FRONTEND is on, and says plainly what it left out when it is off, so a machine with no Node still builds the servers.
 function(ambrose_frontend)
     if(NOT FRONTEND)
-        message(STATUS "FRONTEND is off: the panel (apps/dashboard) and the launcher window's page (apps/launcherui) are not built.")
+        message(STATUS "FRONTEND is off: the panel (apps/dashboard), the launcher window's page (apps/launcherui) and the Studio's page (apps/studioui) are not built.")
         message(STATUS "FRONTEND is off: the servers build and run without them, and the supervisor serves a placeholder page.")
         message(STATUS "FRONTEND is off: build them with -DFRONTEND=ON on a machine with Node 24 and npm 11.")
         return()
@@ -22,6 +22,6 @@ function(ambrose_frontend)
         COMMAND "${AMBROSE_NPM}" ${install_flags}
         COMMAND "${AMBROSE_NPM}" run build
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Building the panel and the launcher window's page"
+        COMMENT "Building the panel, the launcher window's page and the Studio's page"
         VERBATIM)
 endfunction()
