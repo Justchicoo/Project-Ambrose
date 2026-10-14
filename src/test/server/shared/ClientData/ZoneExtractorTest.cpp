@@ -425,7 +425,7 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     EXPECT_NE(statements[1].find(WorldSqlScript::Literal(std::string(Hub))), std::string::npos) << statements[1];
     EXPECT_EQ(statements[4], "DELETE FROM `zone_object`");
     EXPECT_NE(statements[5].find("`spawn_requirements`"), std::string::npos) << statements[5];
-    EXPECT_NE(statements[5].find("'', 0, 0, 1, NULL, '')"), std::string::npos) << "the emitter's loading type is 1 and it has no spawn requirements or sigil: " << statements[5];
+    EXPECT_NE(statements[5].find("'', 0, 0, 1, NULL, '', NULL)"), std::string::npos) << "the emitter's loading type is 1 and it has no spawn requirements, sigil or token container: " << statements[5];
     EXPECT_NE(statements[5].find(WorldSqlScript::Literal(std::string(SigilTemplate))), std::string::npos) << statements[5];
     EXPECT_EQ(statements[6], "DELETE FROM `zone_volume`");
     EXPECT_EQ(statements[9], "DELETE FROM `zone_trigger_result`");

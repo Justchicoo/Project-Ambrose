@@ -53,6 +53,7 @@ struct RequirementRow
     std::string ZoneName;
     std::string Gender;
     std::string ClassProjectName;
+    std::string TokenName;
 };
 
 struct RequirementRows
@@ -105,6 +106,7 @@ public:
     virtual std::optional<bool> IsGender(std::string_view gender) const;
     virtual std::optional<bool> HasBadge(std::string_view badgeName) const;
     virtual std::optional<bool> IsClassProjectActive(std::string_view projectName) const;
+    virtual std::optional<bool> HasZoneToken(std::string_view tokenName) const;
 };
 
 class RequirementMgr

@@ -239,6 +239,9 @@ namespace
             Sends<CompleteGoal>();
             Sends<CompleteQuest>();
             Sends<GameMessages::QuestDialog>();
+            Sends<AddZoneToken>();
+            Sends<ModifyZoneToken>();
+            Sends<RemoveZoneToken>();
 
             SystemMessages::AddRules(*this);
         }

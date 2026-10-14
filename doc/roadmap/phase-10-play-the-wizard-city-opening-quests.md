@@ -1132,9 +1132,9 @@ PathBehaviorTemplate carries m_actionList, m_pauseChance and m_timeToPause, whic
 
 **Acceptance**
 
-- [ ] Token definitions read from zone data; a container that does not read is refused whole
-- [ ] Trigger results change a token and ReqZoneToken gates on it
-- [ ] The client is sent each token as it is added, changed and removed
+- [x] Token definitions read from zone data; a container that does not read is refused whole [ZoneTokensTest.ADefinitionReadsTheKindStorageAndBoundsAndRefusesWhatTheServerCannotKeep, ZoneTokenMgrTest.AContainerReadsIntoItsTokensAndIsRefusedWholeWhenOneDoesNotRead, ZoneTokenMgrDatabaseTest.TokensLoadByZoneAndATwiceNamedTokenKeepsTheOldSet]
+- [x] Trigger results change a token and ReqZoneToken gates on it [ZoneTokensTest.StatesMoveAsTheClientsOwnTokensDoAndCountOnlyRealChanges, ZoneTokenMgrDatabaseTest.TokensLoadByZoneAndATwiceNamedTokenKeepsTheOldSet, RequirementObjectsTest.AZoneTokenRequirementReadsItsTokenAndPassesOnlyWhileTheWizardHoldsIt]
+- [x] The client is sent each token as it is added, changed and removed [ZoneTokensTest.AViewAddsMovesAndRemovesTokensAsStatesChangeAndDropsThemAllWhenTheZoneChanges, ZoneTokenMessagesTest.AnAddedTokenCarriesTheStateTheServerKeepsUnderTheTransmitMask, ZoneTokenMessagesTest.MovedAndRemovedTokensAreNamed]
 - [ ] A wizard's own tokens are saved with its character
 - [ ] Real client: the objective tracker shows a token and its count change
 
@@ -1155,9 +1155,9 @@ ZoneTokenBoolean, ZoneTokenCount and ZoneTokenTimer sit in a placement's token c
 
 **Acceptance**
 
-- [ ] Unit: a token definition reads its kind, storage and bounds and a container is refused whole when one token does not read
-- [ ] Unit: token states move as the client's own tokens do, and ReqZoneToken passes only while the wizard holds the token
-- [ ] Unit: a wizard is sent MSG_AddZoneToken, MSG_ModifyZoneToken and MSG_RemoveZoneToken as states change, and its tokens are dropped when its zone changes
+- [x] Unit: a token definition reads its kind, storage and bounds and a container is refused whole when one token does not read [ZoneTokensTest.ADefinitionReadsTheKindStorageAndBoundsAndRefusesWhatTheServerCannotKeep, ZoneTokenMgrTest.AContainerReadsIntoItsTokensAndIsRefusedWholeWhenOneDoesNotRead]
+- [x] Unit: token states move as the client's own tokens do, and ReqZoneToken passes only while the wizard holds the token [ZoneTokensTest.StatesMoveAsTheClientsOwnTokensDoAndCountOnlyRealChanges, RequirementObjectsTest.AZoneTokenRequirementReadsItsTokenAndPassesOnlyWhileTheWizardHoldsIt]
+- [x] Unit: a wizard is sent MSG_AddZoneToken, MSG_ModifyZoneToken and MSG_RemoveZoneToken as states change, and its tokens are dropped when its zone changes [ZoneTokensTest.AViewAddsMovesAndRemovesTokensAsStatesChangeAndDropsThemAllWhenTheZoneChanges, ZoneTokenMessagesTest.AnAddedTokenCarriesTheStateTheServerKeepsUnderTheTransmitMask, ZoneTokenMessagesTest.MovedAndRemovedTokensAreNamed]
 - [ ] Unit: a wizard's own tokens save with its character and come back after a relog
 - [ ] Real client: entering a zone whose triggers count a token shows it in the objective tracker, and the count changes as the trigger fires
 

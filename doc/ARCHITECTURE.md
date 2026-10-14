@@ -892,6 +892,15 @@ Settled on 2026-10-14 for 10.07 with the world and quest import sessions. Quest 
 - A quest or goal gives loot through a `quest_result` row of `class ResLoot`, a result only the server defines, kept in server_class with one property, m_lootTable, the loot_table id. The handler rolls the table for the wizard and gives its gold scaled by `Rate.Gold.Quest`, its experience through `GameSession::GiveExperience` as a quest's, its items into the backpack and its spells into the spellbook, then shows the items with MSG_LOOT. Reagents and treasure cards wait on their bags, so those entries are rolled and logged but not given yet.
 - Tables reload as one generation with `reload loot`; a build with any bad row keeps the serving one and names every row at fault.
 
+### Zone tokens
+
+Settled on 2026-10-14 by the game systems session, from the r806919 data and the client's own token handlers. A zone's tokens are the flags and counters its ZoneTokenInfo placements define, and the server keeps their state, since the client only shows what it is told.
+
+- The extractor keeps each placement's token container as zone_object.token_container, and `sZoneTokenMgr` in src/server/game/Zones reads every zone's tokens from it at start and on `.reload zone_token`, refusing a zone that names a token twice or holds one of a kind the server does not keep. The data holds only ZoneTokenBoolean and ZoneTokenCount, so timers wait for content that places one.
+- A token's state is enabled or not, and set or counted, kept where its m_storage says: a ZTS_Player token with the wizard's session, a ZTS_Zone token with the zone instance, in the manager, dropped when the instance is taken down. Player tokens are not yet saved with the character; they last the session.
+- The trigger results ResZoneTokenEnable, ResZoneTokenDisable and ResZoneTokenModify, and the requirement ReqZoneToken, are server-only classes the type dump lacks, authored in server_class. The results run through the results runner's handlers on the session, moving a token as the client moves its own copy: a flag is set by a delta of one or more and cleared by less, a counter is clamped to its bounds. ReqZoneToken holds while the token is enabled, answered through `RequirementContext::HasZoneToken`, which also refreshes what the wizard is shown.
+- Each tick a session compares the tokens its wizard should see with what its client was told and sends only the difference: MSG_AddZoneToken with the token's own object, enabled and in its state, under the transmit mask; MSG_ModifyZoneToken with the delta since; MSG_RemoveZoneToken for a disabled token and for every token when the wizard leaves the zone, because the client never drops them by itself. MSG_ResetZoneToken is not sent, since nothing in the data resets a token.
+
 ### Still open
 
 Decisions that block later milestones are listed under Decisions needed in doc/ROADMAP.md. Propose them to the maintainer when their milestone is next.

@@ -66,6 +66,7 @@ namespace
         AddClass(classes, "class ReqHasGoal", { "class Requirement", "class PropertyClass" },
             { applyNot, listOperator, { "std::string", "m_questName" }, { "std::string", "m_goalName" }, { "enum GoalStatusRequirement", "m_requiredStatus" } });
         AddClass(classes, "class ReqClassProjectActive", { "class Requirement", "class PropertyClass" }, { applyNot, listOperator, { "std::string", "m_classProjectName" } });
+        AddClass(classes, "class ReqZoneToken", { "class Requirement", "class PropertyClass" }, { applyNot, listOperator, { "std::string", "m_tokenName" } });
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
     }
 
@@ -75,6 +76,7 @@ namespace
         std::set<std::string, std::less<>> Quests;
         std::set<std::string, std::less<>> CompletedGoals;
         std::set<std::string, std::less<>> ClassProjects;
+        std::set<std::string, std::less<>> Tokens;
 
         std::optional<bool> HasQuest(std::string_view questName) const override { return Quests.contains(questName); }
         std::optional<RequirementGoalStatus> GetGoalStatus(std::string_view, std::string_view goalName) const override
@@ -82,6 +84,7 @@ namespace
             return CompletedGoals.contains(goalName) ? RequirementGoalStatus::Complete : RequirementGoalStatus::Absent;
         }
         std::optional<bool> IsClassProjectActive(std::string_view projectName) const override { return ClassProjects.contains(projectName); }
+        std::optional<bool> HasZoneToken(std::string_view tokenName) const override { return Tokens.contains(tokenName); }
     };
 
     class RequirementObjectsTest : public testing::Test
@@ -186,6 +189,26 @@ TEST_F(RequirementObjectsTest, AClassProjectRequirementReadsItsProjectAndPassesO
     EXPECT_FALSE(sRequirementMgr.EvaluateTree(*tree, realm)) << "no project runs, so the object stays hidden";
     realm.ClassProjects.insert("DuelArena");
     EXPECT_TRUE(sRequirementMgr.EvaluateTree(*tree, realm));
+}
+
+TEST_F(RequirementObjectsTest, AZoneTokenRequirementReadsItsTokenAndPassesOnlyWhileTheWizardHoldsIt)
+{
+    PropertyObjectPtr token = Create("class ReqZoneToken");
+    ASSERT_EQ(token->Set("m_tokenName", std::string("ZT_Clue01")), PropertySetResult::Ok);
+    PropertyObjectPtr const list = Create("class RequirementList");
+    PropertyValue::List held;
+    held.emplace_back(std::move(token));
+    ASSERT_EQ(list->Set("m_requirements", std::move(held)), PropertySetResult::Ok);
+
+    std::optional<RequirementTree> const tree = RequirementObjects::TreeOf(list.get());
+    ASSERT_TRUE(tree.has_value());
+    ASSERT_EQ(tree->Requirements.size(), 1u);
+    EXPECT_EQ(tree->Requirements[0].Type, "ReqZoneToken");
+    EXPECT_EQ(tree->Requirements[0].TokenName, "ZT_Clue01");
+    QuestFacts wizard;
+    EXPECT_FALSE(sRequirementMgr.EvaluateTree(*tree, wizard));
+    wizard.Tokens.insert("ZT_Clue01");
+    EXPECT_TRUE(sRequirementMgr.EvaluateTree(*tree, wizard));
 }
 
 TEST_F(RequirementObjectsTest, StoredBytesThatCannotBeReadGiveAClosedListAndSayWhy)
