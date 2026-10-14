@@ -37,6 +37,7 @@
 #include "PropertyFiller.h"
 #include "InstanceSight.h"
 #include "ScriptMgr.h"
+#include "SessionScripts.h"
 #include "Settings.h"
 #include "SpawnerMgr.h"
 #include "SpellMgr.h"
@@ -1458,6 +1459,7 @@ void GameSession::RegisterResultHandlers()
     };
     sResultMgr.Register(SpawnerMgr::SpawnResultClass, spawn);
     sResultMgr.Register(SpawnerMgr::DespawnResultClass, spawn);
+    SessionScripts::Register();
 }
 
 void GameSession::ShowNotifyText(ZoneNotifyText const& text)

@@ -61,6 +61,7 @@
 #include "DatabaseSettingStore.h"
 #include "Environment.h"
 #include "Log.h"
+#include "LuaScriptMgr.h"
 #include "LocaleStore.h"
 #include "ObjectSerializer.h"
 #include "ScriptLoader.h"
@@ -375,7 +376,7 @@ namespace
                 return false;
             }
             ExtractServerClasses(setup, system, *prompt);
-            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadCustomEmotes(setup) || !LoadSigils(setup) || !LoadGameEffects(setup) || !LoadItems(setup) || !ResumeItemGuids() || !ResumeQuestGuids() || !LoadChatFilter(setup) || !LoadChatData(setup))
+            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadCustomEmotes(setup) || !LoadSigils(setup) || !LoadGameEffects(setup) || !LoadItems(setup) || !ResumeItemGuids() || !ResumeQuestGuids() || !LoadChatFilter(setup) || !LoadChatData(setup) || !LoadLuaScripts(setup))
             {
                 _databases.Close();
                 return false;
@@ -652,6 +653,24 @@ namespace
             for (std::string const& problem : errors)
                 LOG_ERROR("server.gameserver", "Chat: {}", problem);
             LOG_ERROR("server.gameserver", "Cannot read the quick chat phrases and animation types from {}", ClientLocator::PathText(setup.Install->Root));
+            return false;
+        }
+
+        bool LoadLuaScripts(ClientSetupResult const& setup)
+        {
+            sLuaScriptMgr.RegisterReloadTargets();
+            if (!setup.Install)
+            {
+                LOG_WARN("server.gameserver", "No Wizard101 install is in use, so no Lua script is read and no ResSyncScript result runs");
+                return true;
+            }
+            sLuaScriptMgr.SetInstall(setup.Install->Root);
+            std::vector<std::string> errors;
+            if (sLuaScriptMgr.Load(errors))
+                return true;
+            for (std::string const& problem : errors)
+                LOG_ERROR("server.gameserver", "Lua scripts: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the Lua scripts from {}", ClientLocator::PathText(setup.Install->Root));
             return false;
         }
 
