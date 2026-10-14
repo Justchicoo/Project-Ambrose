@@ -314,9 +314,9 @@ Defeating mobs whose adjectives match a bounty goal advances its tally ('Defeat 
 
 **Acceptance**
 
-- [ ] 100000 seeded rolls of a 10% entry land in 9.5-10.5%
-- [ ] School-gated spell entry only for that school
-- [ ] With Rate.Drop.Item at 2, the same 10% item entry lands in 19-21% without a restart
+- [x] 100000 seeded rolls of a 10% entry land in 9.5-10.5% (`LootMgrTest.ATenPercentEntryLandsNearTenPercentAndTheSameSeedRollsTheSame`: a 10% item entry is given within 9,500 to 10,500 times in 100,000 rolls, and the same seed gives the same count again)
+- [x] School-gated spell entry only for that school (`LootMgrTest.ASchoolGatedSpellGoesOnlyToThatSchool`: a spell entry whose requirement list is ReqSchoolOfFocus Fire goes to a Fire wizard and not to an Ice one, who still gets the table's gold)
+- [x] With Rate.Drop.Item at 2, the same 10% item entry lands in 19-21% without a restart (`LootMgrTest.RateDropItemOfTwoDoublesAnItemEntryWithoutAReloadAndNeverScalesAGuaranteedOne`: after a live set of Rate.Drop.Item to 2 the entry lands within 19,000 to 21,000 of 100,000 rolls with no reload, a 10% spell entry stays near 10%, and at 0 the item never drops while a guaranteed entry still always does)
 
 ### Detailed spec from QST-19: Loot tables and quest rewards
 
@@ -345,7 +345,7 @@ Quest completion grants gold, XP, items and spells from data-driven loot tables,
 
 **Acceptance**
 
-- [ ] Unit test with a seeded RNG: table rolls are reproducible, and a school-gated spell entry is only granted to that school.
+- [x] Unit test with a seeded RNG: table rolls are reproducible, and a school-gated spell entry is only granted to that school. (`LootMgrTest.ATenPercentEntryLandsNearTenPercentAndTheSameSeedRollsTheSame` and `LootMgrTest.ASchoolGatedSpellGoesOnlyToThatSchool`)
 - [ ] Client: completing a quest with 100 gold, 50 XP and one item shows the reward popup with the gold, XP bar gain and item icon, and the backpack contains the item. A Fire wizard gets the spell cinematic popup for the fire spell only.
 
 **Risks**
@@ -378,8 +378,8 @@ Defeated creatures roll authored drop tables and players receive items, reagents
 
 **Acceptance**
 
-- [ ] Unit test: 100000 seeded rolls of a table with a 10% entry land within 9.5–10.5%
-- [ ] Unit test: after `.settings set Rate.Drop.Item 2`, 100000 seeded rolls of the same 10% item entry land within 19–21% without a restart
+- [x] Unit test: 100000 seeded rolls of a table with a 10% entry land within 9.5–10.5% (`LootMgrTest.ATenPercentEntryLandsNearTenPercentAndTheSameSeedRollsTheSame`)
+- [x] Unit test: after `.settings set Rate.Drop.Item 2`, 100000 seeded rolls of the same 10% item entry land within 19–21% without a restart (`LootMgrTest.RateDropItemOfTwoDoublesAnItemEntryWithoutAReloadAndNeverScalesAGuaranteedOne`)
 - [ ] Real client: after victory the loot popup lists the rolled items with icons, and the items are in the backpack after relog (characters DB)
 
 **Risks**

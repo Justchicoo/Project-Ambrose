@@ -13,6 +13,7 @@ target_link_libraries(gameserver-sessions
         scripting
         spells
         inventory
+        loot
         combat
         zones
         npc)

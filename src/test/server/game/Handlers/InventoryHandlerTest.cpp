@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives a wizard's backpack through a real game session over loopback: an add to a full backpack sends MSG_ITEMDROP naming the template and writes nothing, raising Inventory.ExtraSlots while the server runs lets the next add through, MSG_TRASHINVENTORYITEM for an item the wizard does not hold is refused, logged and leaves every item where it was, and MSG_REQUESTTOGGLELOCKITEM locks an item it holds, answers with the lock bit and stops its trash, while one it does not hold is refused; with AMBROSE_TEST_DB set each also checks the characters database, where the refused add and the refused trash change no row and the allowed add stores the item.
+ * Drives a wizard's backpack through a real game session over loopback: an add to a full backpack sends MSG_ITEMDROP naming the template and writes nothing, raising Inventory.ExtraSlots while the server runs lets the next add through, MSG_TRASHINVENTORYITEM for an item the wizard does not hold is refused, logged and leaves every item where it was, and MSG_REQUESTTOGGLELOCKITEM locks an item it holds, answers with the lock bit and stops its trash, while one it does not hold is refused, and a loot table gives its gold scaled by Rate.Gold.Quest while a reagent and an item no template has are logged and not given; with AMBROSE_TEST_DB set each also checks the characters database, where the refused add and the refused trash change no row and the allowed add stores the item.
  */
 
 #include "CharacterRepository.h"
@@ -11,8 +11,10 @@
 #include "Log.h"
 #include "LogTestConfig.h"
 #include "LogTestDirectory.h"
+#include "LootMgr.h"
 #include "MemorySettingStore.h"
 #include "ObjectGuid.h"
+#include "PlayerStatsFixtures.h"
 #include "Settings.h"
 #include "TestAppender.h"
 #include "World.h"
@@ -40,6 +42,20 @@ struct GameSessionInventoryTestAccess
         session._backpack = PlayerBackpack::FromStored(std::move(items));
         session._itemsAllowed = itemsAllowed;
         session.SetStatus(SessionStatus::InWorld);
+    }
+
+    static void GiveStats(GameSession& session)
+    {
+        std::vector<std::string> errors;
+        std::shared_ptr<PlayerLevelSet const> const levels = PlayerLevelSet::Build(PlayerStatsFixtures::FireLevels(5), errors);
+        CharacterSummary character;
+        character.Guid = session._worldGuid;
+        character.SchoolId = PlayerStatsFixtures::Fire;
+        character.Level = 1;
+        std::string problem;
+        std::optional<PlayerStats> stats = levels ? PlayerStats::Create(character, std::nullopt, *levels, StatEffectSet(), problem) : std::nullopt;
+        ASSERT_TRUE(stats) << problem;
+        session._player.emplace(std::move(*stats));
     }
 };
 
@@ -354,4 +370,46 @@ TEST_F(InventoryHandlerTest, LockingAnItemNotOwnedIsRejectedAndLogged)
         ASSERT_EQ(stored.size(), 1u);
         EXPECT_FALSE(stored.front().Locked) << "the other wizard's item is left as it was";
     }
+}
+
+TEST_F(InventoryHandlerTest, ALootTableGivesItsGoldScaledByRateGoldQuestAndLogsWhatItCannotGiveYet)
+{
+    LootRows rows;
+    rows.Tables = { "quest:Test" };
+    LootEntryRow gold;
+    gold.TableId = "quest:Test";
+    gold.Type = LootType::Gold;
+    gold.MinCount = 100;
+    gold.MaxCount = 100;
+    LootEntryRow reagent;
+    reagent.TableId = "quest:Test";
+    reagent.Position = 1;
+    reagent.Type = LootType::Reagent;
+    reagent.TemplateId = 2002;
+    LootEntryRow item;
+    item.TableId = "quest:Test";
+    item.Position = 2;
+    item.Type = LootType::Item;
+    item.TemplateId = 9999;
+    rows.Entries = { gold, reagent, item };
+    sLootMgr.SetRowSource([rows] { return rows; });
+    std::vector<std::string> errors;
+    ASSERT_TRUE(sLootMgr.Load(errors)) << (errors.empty() ? "" : errors.front());
+    ASSERT_TRUE(sSettings.Set("Rate.Gold.Quest", "2", { "test", 1, "unit_test" }, "double quest gold").Ok());
+
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Enter(client, 10, {});
+    ASSERT_TRUE(session);
+    GameSessionInventoryTestAccess::GiveStats(*session);
+    session->GiveLoot("quest:Test", "the test quest");
+
+    ASSERT_NE(session->GetStats(), nullptr);
+    EXPECT_EQ(session->GetStats()->GetGold(), 200) << "100 gold at Rate.Gold.Quest 2";
+    EXPECT_EQ(Logged("which the server does not give yet"), 1u) << "a reagent is rolled but not given";
+    EXPECT_EQ(Logged("which no item has"), 1u);
+    EXPECT_EQ(session->GetBackpack()->Size(), 0u);
+
+    sLootMgr.SetRowSource([] { return LootRows{}; });
+    ASSERT_TRUE(sLootMgr.Load(errors));
+    sLootMgr.SetRowSource({});
 }
