@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * The NPC service menu: after each move the NPCs a wizard sees, objects whose template carries NPCBehavior, are checked against their service range, only an NPC some provider gives an option counting, as only a quest, a shop or a script's option earns a prompt, and a wizard entering one is sent MSG_SENDNPCOPTIONS with the NPC's global id, as the client finds an NPC by it, and the ServiceMementoBase of its menu, the options every NpcScript serving its template offers, and one leaving is sent MSG_LEAVESERVICERANGE, once per crossing. MSG_INTERACTNPC, a click on a menu, is routed by its flat service index to the provider that owns that option, rebuilt as it was offered with its providers, which the menu's entries point at and so live as long as it does; an empty service name closes a shop, and an NPC the wizard is not in range of, or an index past its menu, is logged and ignored. MSG_INTERACTOPTION on an NPC the wizard is in range of is how the client answers its prompt, its options being InteractableOptions, and is routed the same way by option index; on any other object it, and MSG_INTERACTOBJECT, are logged until a provider offers interactables. MSG_ACCEPTQUEST for an offer that stands gives the wizard the quest with its start goals, which its quest book is then shown. An NPC a talk-to goal names lists the goal first; picking it plays the goal's Completion dialog and completes it, and when that completes the quest the NPC's menu is sent again with Reinteract 2 so its next quest can be offered. MSG_INTERACTCOMPLETEGOAL asks for that dialog and MSG_COMPLETEPERSONA completes the goal, each only for an active persona goal the wizard holds that names this NPC, in range. Every quest dialog shows only the lines whose requirements the wizard meets: accepting plays the quest's Start dialog, completing it by talking plays its Complete dialog, and a giver lists each quest it gave that the wizard holds, picking which, or MSG_INTERACTUNDERWAYQUEST, plays the quest's Underway dialog. MSG_COMPLETEDIALOG fires an entry event of a dialog the wizard is being shown once, for QuestScript and into the zone's triggers, and MSG_REQUESTQUESTDIALOG answers a held quest's name id with its Start dialog, or its Prep dialog when it has none, in MSG_QUESTDIALOG.
+ * The NPC service menu: after each move the NPCs a wizard sees, objects whose template carries NPCBehavior, are checked against their service range, only an NPC some provider gives an option counting, as only a quest, a shop or a script's option earns a prompt, and a wizard entering one is sent MSG_SENDNPCOPTIONS with the NPC's global id, as the client finds an NPC by it, and the ServiceMementoBase of its menu, the options every NpcScript serving its template offers, and one leaving is sent MSG_LEAVESERVICERANGE, once per crossing. MSG_INTERACTNPC, a click on a menu, is routed by its flat service index to the provider that owns that option, rebuilt as it was offered with its providers, which the menu's entries point at and so live as long as it does; an empty service name closes a shop, and an NPC the wizard is not in range of, or an index past its menu, is logged and ignored. MSG_INTERACTOPTION on an NPC the wizard is in range of is how the client answers its prompt, its options being InteractableOptions, and is routed the same way by option index; on any other object it, and MSG_INTERACTOBJECT, are logged until a provider offers interactables. MSG_ACCEPTQUEST for an offer that stands gives the wizard the quest with its start goals, which its quest book is then shown. An NPC a talk-to goal names lists the goal first; picking it plays the goal's Completion dialog and completes it, and when that completes the quest the NPC's menu is sent again with Reinteract 2 so its next quest can be offered. MSG_INTERACTCOMPLETEGOAL asks for that dialog and MSG_COMPLETEPERSONA completes the goal, each only for an active persona goal the wizard holds that names this NPC, in range. Every quest dialog shows only the lines whose requirements the wizard meets: accepting plays the quest's Start dialog, completing it by talking plays its Complete dialog, and a giver lists each quest it gave that the wizard holds, picking which, or MSG_INTERACTUNDERWAYQUEST, plays the quest's Underway dialog. MSG_COMPLETEDIALOG fires an entry event of a dialog the wizard is being shown once, for QuestScript and into the zone's triggers, and MSG_REQUESTQUESTDIALOG answers a held quest's name id with its Start dialog, or its Prep dialog when it has none, in MSG_QUESTDIALOG. Each NPC the wizard sees gets the marker its menu earns, a '?' for a goal to complete over a '!' for a quest to offer, in MSG_WIZBANG when it changes, which a quest the wizard accepts, advances or completes checks at once, and again every Npc.WizbangResendInterval, as one sent while the zone loads can be lost.
  */
 
 #include "GameSession.h"
 #include "Log.h"
 #include "MapMgr.h"
 #include "NpcServiceMemento.h"
+#include "NpcWizBang.h"
 #include "ObjectTemplateMgr.h"
 #include "ObjectViews.h"
 #include "QuestMgr.h"
@@ -15,6 +16,7 @@
 #include "QuestOfferProvider.h"
 #include "QuestOffers.h"
 #include "ScriptMgr.h"
+#include "Settings.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
 
@@ -83,15 +85,19 @@ void GameSession::CheckNpcServices()
     float const radius = NpcServiceRange::ResolveRadius(std::nullopt);
     std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
     std::vector<NpcServiceRange::Npc> npcs;
+    std::map<uint64, NpcWizBang::Marker> markers;
     for (MapObject const& object : map->GetObjects())
     {
         uint32 const templateId = static_cast<uint32>(object.Spawn.TemplateId);
         if (!_sight.IsVisible(object.GlobalId) || !IsNpcTemplate(templateId))
             continue;
         bool const served = !sScriptMgr.GetNpcScripts(templateId).empty() || (quests && (QuestOfferProvider::Serves(*quests, templateId) || PersonaGoalProvider::Serves(*quests, templateId)));
-        bool const offers = served && !MenuFor({ _worldGuid, object.GlobalId, templateId }, QuestProvidersFor(templateId)).Menu.GetEntries().empty();
+        std::optional<ServedMenu> const menu = served ? std::optional<ServedMenu>(MenuFor({ _worldGuid, object.GlobalId, templateId }, QuestProvidersFor(templateId))) : std::nullopt;
+        bool const offers = menu && !menu->Menu.GetEntries().empty();
         npcs.push_back({ object.GlobalId, { object.Spawn.Position.X, object.Spawn.Position.Y, object.Spawn.Position.Z }, radius, offers });
+        markers.emplace(object.GlobalId, NpcWizBang::Marker{ templateId, menu ? NpcWizBang::Of(menu->Menu) : NpcWizBang::None });
     }
+    ShowNpcWizBangs(markers);
     PlayerPosition const& at = _movement.GetPosition();
     NpcServiceRange::Changes const changes = _npcRange.Update({ at.X, at.Y, at.Z }, npcs);
     for (uint64 const left : changes.Left)
@@ -118,6 +124,33 @@ void GameSession::CheckNpcServices()
     for (uint64 const entered : changes.Entered)
         if (MapObject const* const npc = map->FindObject(entered))
             OfferNpcServices(*npc);
+}
+
+void GameSession::ShowNpcWizBangs(std::map<uint64, NpcWizBang::Marker> const& markers)
+{
+    bool const resend = std::exchange(_npcWizBangsDue, false);
+    std::erase_if(_npcWizBangs, [&markers](auto const& shown) { return !markers.contains(shown.first); });
+    for (auto const& [npc, marker] : markers)
+    {
+        auto const shown = _npcWizBangs.find(npc);
+        bool const changed = shown == _npcWizBangs.end() ? marker.WizBang != NpcWizBang::None : shown->second != marker.WizBang;
+        if (!changed && !(resend && marker.WizBang != NpcWizBang::None))
+            continue;
+        _npcWizBangs[npc] = marker.WizBang;
+        ShowWizBangOf(npc, marker.WizBang);
+        if (changed)
+            LOG_INFO("server.gamesession", "Session {}'s wizard {} was shown the {} wizbang over NPC {} (template {})", GetSessionId(), _worldGuid, NpcWizBang::GetName(marker.WizBang), npc,
+                marker.TemplateId);
+    }
+}
+
+void GameSession::RefreshNpcWizBangs(std::chrono::steady_clock::time_point now)
+{
+    if (!_mapId || now - _npcWizBangsSentAt < std::chrono::milliseconds(sSettings.Get<uint32>("Npc.WizbangResendInterval")))
+        return;
+    _npcWizBangsSentAt = now;
+    _npcWizBangsDue = true;
+    CheckNpcServices();
 }
 
 void GameSession::OfferNpcServices(MapObject const& npc, int32 reinteract)

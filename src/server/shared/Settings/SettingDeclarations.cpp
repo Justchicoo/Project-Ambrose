@@ -94,6 +94,8 @@ namespace
                 "The class projects this realm runs, by name and separated by commas, read each time a requirement asks, so a change shows or hides objects at the next visibility update; an object or trigger whose ReqClassProjectActive names a project not listed stays hidden or closed."),
             Float("Npc.InteractRadiusDefault", "300", "0", "100000", "world units", "Zones", Game, Live,
                 "How near a wizard must come to an NPC to be offered its services, unless one of the NPC's providers sets its own radius, read at each move; a wizard is taken out of range 25 world units past it."),
+            Unsigned("Npc.WizbangResendInterval", "1000", "100", "60000", "ms", "Zones", Game, Live,
+                "How often each wizard is sent the markers over the NPCs it sees again, read at each world update, as one sent while the client loads the zone can be lost; a marker that changes is sent at once."),
             Flag("Npc.TestGreeter", "false", "Zones", Game, Live,
                 "Whether the sample npc_test_greeter script offers WC-RAV-NPC06 in Ravenwood a greeting, read at each move; off in play, where an NPC shows a prompt only for a real quest or shop, and on for the client driver's npc-service-menu.json."),
             Unsigned("Zone.MoveIdleIntervals", "2", "1", "100", "", "Zones", Game, NextUse,
