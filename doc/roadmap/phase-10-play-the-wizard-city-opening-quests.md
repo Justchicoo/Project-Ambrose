@@ -394,7 +394,7 @@ Defeated creatures roll authored drop tables and players receive items, reagents
 **Acceptance**
 
 - [ ] Real client: reward popup with 100 gold, 50 XP and item; Fire wizard gets only the fire spell popup
-- [ ] Changing Rate.Gold.Quest or Rate.XP.Quest applies to the next quest reward without a restart
+- [x] Changing Rate.Gold.Quest or Rate.XP.Quest applies to the next quest reward without a restart [QuestRewardsTest.AQuestsGoldAndExperienceFollowTheLiveQuestRatesWithoutARestart: 125 gold and 50 experience become 250 and 75 after setting Rate.Gold.Quest 2 and Rate.XP.Quest 1.5 live]
 
 ### Detailed spec from QST-19: Loot tables and quest rewards
 

@@ -30,6 +30,7 @@
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
 #include "QuestOfferCache.h"
+#include "QuestWireEncoder.h"
 #include "QuestLog.h"
 #include "WizardRequirementContext.h"
 #include "SessionBase.h"
@@ -234,6 +235,7 @@ public:
     QuestLog const* GetQuestLog() const noexcept { return _questLog ? &*_questLog : nullptr; }
     void SaveQuestLogIfDirty();
     bool ShowLoot(std::vector<LootItem> const& items);
+    bool ShowLoot(QuestWireEncoder::LootInfoList const& loot);
     void HandleTrashInventoryItem(GameMessages::TrashInventoryItem& message);
     void HandleRequestToggleLockItem(GameMessages::RequestToggleLockItem& message);
     void HandleItemLock(GameMessages::ItemLock& message);
@@ -360,6 +362,7 @@ private:
     void EraseDynaMods(std::string_view tag);
     static void RegisterResultHandlers();
     void ShowNotifyText(ZoneNotifyText const& text);
+    bool SendLoot(PropertyObject const* list, std::string problem);
     void SendDynaMods();
     void ShowDynaModState(uint64 id, std::string_view tag);
     void ShowGameEffectsOf(GameSession const& other);
@@ -424,6 +427,7 @@ private:
     bool _dynaModsShown = false;
     std::vector<std::string> _resultDoors;
     std::vector<std::string> _resultSpawns;
+    QuestWireEncoder::LootInfoList _resultLoot;
     int64 _itemsAllowed = 0;
     GameEffectHolder _effects;
     std::vector<GameEffectChange> _effectChanges;

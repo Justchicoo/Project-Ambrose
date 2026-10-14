@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A type dump and catalog holding the zone trigger result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport, ResSpawn and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
+ * A type dump and catalog holding the result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport, ResSpawn, the quest rewards ResAddGold and ResAddMagicXP and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
  */
 
 #ifndef AMBROSE_RESULTFIXTURES_H
@@ -38,6 +38,9 @@ namespace ResultFixtures
             { "m_useQuestAsOriginator", Property("bool", "m_useQuestAsOriginator", 1, 7) } });
         AddClass(classes, "class ResTeleport", Json::array({ "PropertyClass" }), {});
         AddClass(classes, "class ResSpawn", Json::array({ "PropertyClass" }), {});
+        AddClass(classes, "class ResAddGold", Json::array({ "PropertyClass" }), { { "m_gold", Property("int", "m_gold", 0, 1) }, { "m_sourceType", Property("std::string", "m_sourceType", 1, 1) } });
+        AddClass(classes, "class ResAddMagicXP", Json::array({ "PropertyClass" }), { { "m_experience", Property("int", "m_experience", 0, 1) },
+            { "m_sourceType", Property("std::string", "m_sourceType", 1, 1) }, { "m_magicSchool", Property("std::string", "m_magicSchool", 2, 1) } });
         AddClass(classes, std::string(FirstTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
         AddClass(classes, std::string(SecondTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
@@ -65,6 +68,25 @@ namespace ResultFixtures
         if (object && !text.empty())
             object->Set(className == "class ResAddDynaMod" || className == "class ResRemoveDynaMod" ? "m_dynaModClientTag" : "m_text", std::string(text));
         return ResultEntry{ std::string(className), std::shared_ptr<PropertyObject const>(std::move(object)), position };
+    }
+
+    inline ResultEntry Gold(int32 gold, uint32 position = 0)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(Catalog(), "class ResAddGold");
+        if (object)
+            object->Set("m_gold", int32{ gold });
+        return ResultEntry{ "class ResAddGold", std::shared_ptr<PropertyObject const>(std::move(object)), position };
+    }
+
+    inline ResultEntry Experience(int32 experience, std::string const& school, uint32 position = 0)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(Catalog(), "class ResAddMagicXP");
+        if (object)
+        {
+            object->Set("m_experience", int32{ experience });
+            object->Set("m_magicSchool", std::string(school));
+        }
+        return ResultEntry{ "class ResAddMagicXP", std::shared_ptr<PropertyObject const>(std::move(object)), position };
     }
 
     inline ResultEntry NotifyText(std::string const& text, int32 type)

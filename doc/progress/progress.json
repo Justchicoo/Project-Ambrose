@@ -6,9 +6,9 @@
     "percent": 34.3
   },
   "checks": {
-    "done": 1259,
+    "done": 1260,
     "total": 2893,
-    "percent": 43.5
+    "percent": 43.6
   },
   "game": {
     "label": "Game server",
@@ -36,7 +36,7 @@
       "percent": 47.9
     },
     "checks": {
-      "done": 1057,
+      "done": 1058,
       "total": 1780,
       "percent": 59.4
     }
@@ -139,7 +139,7 @@
       "title": "Play the wizard city opening quests",
       "milestones_done": 1,
       "milestones_total": 19,
-      "checks_done": 22,
+      "checks_done": 23,
       "checks_total": 124
     },
     {
@@ -199,5 +199,5 @@
       "checks_total": 1113
     }
   ],
-  "card": "cf8dbf99ca"
+  "card": "d961a60672"
 }

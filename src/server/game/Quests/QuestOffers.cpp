@@ -4,6 +4,7 @@
  */
 
 #include "QuestOffers.h"
+#include "QuestRewards.h"
 
 #include <fmt/format.h>
 
@@ -137,6 +138,6 @@ QuestOffers::Encoded QuestOffers::Encode(TypeCatalogPtr const& catalog, QuestInf
     encoded.GoalData = Blob(QuestWireEncoder::BuildGoalCompilation(catalog, BuildStartGoals(quest)), QuestWireEncoder::GoalsAndRewardsMask, "start goals", encoded.Error);
     if (!encoded.Ok())
         return encoded;
-    encoded.Rewards = Blob(QuestWireEncoder::BuildLootInfoList(catalog, {}), QuestWireEncoder::GoalsAndRewardsMask, "rewards", encoded.Error);
+    encoded.Rewards = Blob(QuestWireEncoder::BuildLootInfoList(catalog, QuestRewards::Preview(quest.Results)), QuestWireEncoder::GoalsAndRewardsMask, "rewards", encoded.Error);
     return encoded;
 }

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors and spawns, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns, and quest gold and experience, which it gives at the live quest rates and shows in one MSG_LOOT, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -10,6 +10,7 @@
 #include "CharacterRepository.h"
 #include "DynaModMessages.h"
 #include "QuestMgr.h"
+#include "QuestRewards.h"
 #include "CoreObjectSerializer.h"
 #include "DuelMgr.h"
 #include "Frame.h"
@@ -1417,6 +1418,9 @@ std::size_t GameSession::RunResults(std::vector<ResultSource> const& sources, st
         ran += sResultMgr.Run(source.Results, ResultContext{ this, _worldGuid, _mapId.value_or(0), _zonePath, source.Name, now });
     std::vector<std::string> const spawns = std::exchange(_resultSpawns, {});
     std::vector<std::string> const doors = std::exchange(_resultDoors, {});
+    QuestWireEncoder::LootInfoList const loot = std::exchange(_resultLoot, {});
+    if (!loot.Loot.empty() || loot.GoldInfo)
+        ShowLoot(loot);
     if (!spawns.empty() && _mapId)
         if (Map* const map = sMapMgr.Find(*_mapId))
             sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, spawns, _worldGuid, now, std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
@@ -1458,6 +1462,29 @@ void GameSession::RegisterResultHandlers()
     };
     sResultMgr.Register(SpawnerMgr::SpawnResultClass, spawn);
     sResultMgr.Register(SpawnerMgr::DespawnResultClass, spawn);
+    sResultMgr.Register(QuestRewards::GoldClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::optional<QuestWireEncoder::GoldLootInfo> gold = QuestRewards::GoldOf(result);
+        if (!gold)
+            return;
+        gold->GoldAmount = QuestRewards::ScaleGold(gold->GoldAmount);
+        if (gold->GoldAmount <= 0)
+            return;
+        context.Session->ModifyGold(gold->GoldAmount);
+        QuestRewards::AddGold(context.Session->_resultLoot, gold->GoldAmount);
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} was given {} gold by {}", context.Session->GetSessionId(), context.Wizard, gold->GoldAmount, Ambrose::ForLog(context.Source, 128));
+    });
+    sResultMgr.Register(QuestRewards::ExperienceClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::optional<QuestWireEncoder::MagicXPLootInfo> experience = QuestRewards::ExperienceOf(result);
+        if (!experience)
+            return;
+        XpGrant const grant = context.Session->GiveExperience(experience->Experience, XpSource::Quest);
+        if (grant.Amount <= 0)
+            return;
+        experience->Experience = grant.Amount;
+        context.Session->_resultLoot.Loot.emplace_back(std::move(*experience));
+    });
 }
 
 void GameSession::ShowNotifyText(ZoneNotifyText const& text)
