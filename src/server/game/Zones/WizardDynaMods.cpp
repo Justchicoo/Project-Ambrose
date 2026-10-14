@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps one mod for each zone and tag, the first of any stored twice, replacing a changed one under a fresh index so the client can drop the old by its index and take the new, and leaving an identical one alone; a removal mod hides its tagged objects and any other shows them, and a zone's mods other than removals are the ones its client arms spawners for.
+ * Keeps one mod for each zone and tag, the first of any stored twice, replacing a changed one under a fresh index so the client can drop the old by its index and take the new, and leaving an identical one alone; a removal mod hides its tagged objects and any other shows them, a zone's mods other than removals are the ones its client arms spawners for, and erasing a tag takes every zone's mod of it away without giving its index out again.
  */
 
 #include "WizardDynaMods.h"
@@ -34,6 +34,19 @@ DynaModChange WizardDynaMods::Apply(std::string_view zone, std::string_view tag,
     _mods.push_back(added);
     change.Added = std::move(added);
     return change;
+}
+
+std::vector<DynaMod> WizardDynaMods::Erase(std::string_view tag)
+{
+    std::vector<DynaMod> erased;
+    std::erase_if(_mods, [tag, &erased](DynaMod const& mod)
+    {
+        if (mod.Tag != tag)
+            return false;
+        erased.push_back(mod);
+        return true;
+    });
+    return erased;
 }
 
 DynaMod const* WizardDynaMods::Find(std::string_view zone, std::string_view tag) const

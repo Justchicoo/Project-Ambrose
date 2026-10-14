@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What an NPC offers a wizard and how the offer is shown: the quests whose Prep dialog's first actor is the NPC's template that the wizard does not hold, has not completed unless the quest repeats, and whose requirements it meets, in the order of their title keys; and, for one of them, the Prep dialog as the client's ActorDialog, its start goals as a GoalCompilation and its rewards as a LootInfoList, each encoded bare, as the client reads them by their class hash first, for MSG_ACTORDIALOG and MSG_QUESTOFFER; the offer window shows a goal by its title key and madlibs.
+ * What an NPC offers a wizard and how the offer is shown: the quests whose starter is the NPC's template that the wizard does not hold, has not completed unless the quest repeats, and whose stored requirements and requirement list it meets, in the order of their title keys; and, for one of them, the Prep dialog as the client's ActorDialog, its start goals as a GoalCompilation and its rewards as a LootInfoList, each encoded bare, as the client reads them by their class hash first, for MSG_ACTORDIALOG and MSG_QUESTOFFER; the offer window shows a goal by its title key and madlibs.
  */
 
 #ifndef AMBROSE_QUESTOFFERS_H
@@ -31,6 +31,7 @@ namespace QuestOffers
         bool Ok() const noexcept { return Error.empty(); }
     };
 
+    bool Qualifies(QuestInfo const& quest, RequirementContext const& context);
     std::vector<QuestInfo const*> Available(QuestStore const& quests, uint32 templateId, QuestLog const& log, RequirementContext const& context);
     Dialogs::ActorDialog BuildPrepDialog(QuestInfo const& quest);
     QuestWireEncoder::GoalCompilation BuildStartGoals(QuestInfo const& quest);

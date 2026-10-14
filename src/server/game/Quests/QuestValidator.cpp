@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Walks every quest table row once, collecting each quest's goals, logic entries, dialogs and lines first, and reports every row whose quest, goal, logic entry, dialog or line does not exist, every unknown goal type, dialog owner, tag or logic kind, every logic entry that adds goals and completes the quest at once, every bounty goal without an adjective or a tally count, every actor template and persona object_template does not hold when it holds any, every quest whose Start dialog names an actor but which has no Prep line, and every key the locale text lacks when it is loaded.
+ * Walks every quest table row once, collecting each quest's goals, logic entries, dialogs and lines first, and reports every row whose quest, goal, logic entry, dialog or line does not exist, every unknown goal type, dialog owner, tag or logic kind, every logic entry that adds goals and completes the quest at once, every bounty goal without an adjective or a tally count, every actor template, starter template and persona object_template does not hold when it holds any, every quest whose Start dialog names an actor but which has no Prep line, and every key the locale text lacks when it is loaded.
  */
 
 #include "QuestValidator.h"
@@ -94,6 +94,8 @@ namespace
                 Key(row.Name, "quest_template", "prep_key", row.PrepKey);
                 Key(row.Name, "quest_template", "underway_key", row.UnderwayKey);
                 Key(row.Name, "quest_template", "complete_key", row.CompleteKey);
+                if (row.StarterTemplateId != 0 && _context.HasObjects() && !_context.TemplateIds.contains(row.StarterTemplateId))
+                    Report(row.Name, fmt::format("quest {}: quest_template names starter template {}, which object_template does not hold", row.Name, row.StarterTemplateId));
             }
         }
 

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The rows of the world database's quest tables as plain records, one struct per table, together with each quest's optional requirement-list reference and the encoded RequirementList it may carry from the client's own quest data, and the object_template ids and names they are checked against, gathered into one set that the database reader or a test fills and the validator and the quest store read.
+ * The rows of the world database's quest tables as plain records, one struct per table, together with each quest's optional requirement-list reference and the encoded RequirementList it may carry from the client's own quest data, the template of the NPC that offers it when no Prep line names one, the results a quest or goal runs when it completes, and the object_template ids and names they are checked against, gathered into one set that the database reader or a test fills and the validator and the quest store read.
  */
 
 #ifndef AMBROSE_QUESTROWS_H
@@ -31,6 +31,7 @@ struct QuestTemplateRow
     bool IsHidden = false;
     std::string RequirementListId;
     std::vector<uint8> Requirements;
+    uint32 StarterTemplateId = 0;
 };
 
 struct QuestStartGoalRow
@@ -136,6 +137,15 @@ struct QuestDialogMadlibRow
     std::string Value;
 };
 
+struct QuestResultRow
+{
+    std::string Quest;
+    std::string Goal;
+    uint32 Position = 0;
+    std::string Class;
+    std::vector<uint8> Data;
+};
+
 struct QuestObjectRow
 {
     uint32 TemplateId = 0;
@@ -154,6 +164,7 @@ struct QuestRows
     std::vector<QuestDialogRow> Dialogs;
     std::vector<QuestDialogEntryRow> DialogEntries;
     std::vector<QuestDialogMadlibRow> Madlibs;
+    std::vector<QuestResultRow> Results;
     std::vector<QuestObjectRow> Objects;
 };
 
