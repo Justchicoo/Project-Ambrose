@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A type dump and catalog holding the result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport, ResSpawn, the quest rewards ResAddGold and ResAddMagicXP, the cinematic results ResPostEvent, ResWait and ResStartStagedCinematic and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
+ * A type dump and catalog holding the result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport with the destination quest results write on it, ResSpawn, the quest rewards ResAddGold and ResAddMagicXP, the cinematic results ResPostEvent, ResWait and ResStartStagedCinematic and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
  */
 
 #ifndef AMBROSE_RESULTFIXTURES_H
@@ -36,7 +36,8 @@ namespace ResultFixtures
             { "m_zoneName", Property("std::string", "m_zoneName", 3, 7) } });
         AddClass(classes, "class ResRemoveDynaMod", Json::array({ "PropertyClass" }), { { "m_dynaModClientTag", Property("std::string", "m_dynaModClientTag", 0, 7) },
             { "m_useQuestAsOriginator", Property("bool", "m_useQuestAsOriginator", 1, 7) } });
-        AddClass(classes, "class ResTeleport", Json::array({ "PropertyClass" }), {});
+        AddClass(classes, "class ResTeleport", Json::array({ "PropertyClass" }), { { "m_destinationZone", Property("std::string", "m_destinationZone", 0, 1) },
+            { "m_destinationLoc", Property("std::string", "m_destinationLoc", 1, 1) } });
         AddClass(classes, "class ResSpawn", Json::array({ "PropertyClass" }), {});
         AddClass(classes, "class ResAddGold", Json::array({ "PropertyClass" }), { { "m_gold", Property("int", "m_gold", 0, 1) }, { "m_sourceType", Property("std::string", "m_sourceType", 1, 1) } });
         AddClass(classes, "class ResAddMagicXP", Json::array({ "PropertyClass" }), { { "m_experience", Property("int", "m_experience", 0, 1) },
@@ -120,6 +121,17 @@ namespace ResultFixtures
             object->Set("m_bIncludeAllPlayersInZone", int32{ wholeZone });
         }
         return ResultEntry{ "class ResStartStagedCinematic", std::shared_ptr<PropertyObject const>(std::move(object)), 0 };
+    }
+
+    inline ResultEntry Teleport(std::string const& zone, std::string const& location)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(Catalog(), "class ResTeleport");
+        if (object)
+        {
+            object->Set("m_destinationZone", std::string(zone));
+            object->Set("m_destinationLoc", std::string(location));
+        }
+        return ResultEntry{ "class ResTeleport", std::shared_ptr<PropertyObject const>(std::move(object)), 0 };
     }
 
     inline ResultEntry NotifyText(std::string const& text, int32 type)

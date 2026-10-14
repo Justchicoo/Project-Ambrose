@@ -91,6 +91,7 @@ struct QuestInfo
     uint32 Starter = 0;
     std::shared_ptr<RequirementTree const> Requirements;
     ResultList Results;
+    ResultList StartResults;
 };
 
 class QuestStore

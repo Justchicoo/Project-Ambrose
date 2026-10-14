@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the type dump file, hashes it with SHA-256 for revision pinning, builds and validates a new catalog generation off to the side from the dump and the supplement handed in, binds the typed views of the view registry it was given, which tools and tests can change between loads, to it, and publishes it atomically, logging the load time, size and every problem, and keeping the active catalog when a load fails; it keeps the dump each published catalog was built from, so a new supplement is checked by hash and rebuilt into the next generation without reading the dump again.
+ * Reads the type dump file, hashes it with SHA-256 for revision pinning, builds and validates a new catalog generation off to the side from the dump and the supplement handed in, binds the typed views of the view registry it was given, which tools and tests can change between loads, to it, and publishes it atomically, logging the load time, size and every problem, and keeping the active catalog when a load fails; it keeps the dump each published catalog was built from, so a new supplement is checked by hash and rebuilt into the next generation without reading the dump again; a supplement gives way to the dump on a class both describe, except that it gives its properties to one the dump lists with none, as the client lists a server-only result such as ResTeleport.
  */
 
 #include "TypeRegistry.h"
@@ -19,6 +19,7 @@
 #include <chrono>
 #include <fstream>
 #include <span>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace
@@ -225,15 +226,23 @@ bool TypeRegistry::BuildFrom(RawDumpPtr source, std::string sourceName, std::str
     std::vector<uint32> added;
     if (supplement)
     {
-        std::unordered_set<uint64> described;
-        for (TypeDumpLoader::RawClass const& type : dump.Classes)
-            if (type.Hash)
-                described.insert(*type.Hash);
+        std::unordered_map<uint64, std::size_t> described;
+        for (std::size_t index = 0; index < dump.Classes.size(); ++index)
+            if (dump.Classes[index].Hash)
+                described.emplace(*dump.Classes[index].Hash, index);
         for (TypeDumpLoader::RawClass const& type : supplement->Classes)
         {
-            if (type.Hash && described.contains(*type.Hash))
+            auto const found = type.Hash ? described.find(*type.Hash) : described.end();
+            if (found != described.end())
             {
-                LOG_INFO(LogFilter, "The type dump describes {} itself, so {}'s description of it is not used", type.Name.value_or(type.Key), supplementSource);
+                TypeDumpLoader::RawClass& own = dump.Classes[found->second];
+                if (own.Properties.empty() && !type.Properties.empty())
+                {
+                    own.Properties = type.Properties;
+                    LOG_INFO(LogFilter, "The type dump describes {} with no properties, so it takes the {} {} gives it", type.Name.value_or(type.Key), type.Properties.size(), supplementSource);
+                }
+                else
+                    LOG_INFO(LogFilter, "The type dump describes {} itself, so {}'s description of it is not used", type.Name.value_or(type.Key), supplementSource);
                 continue;
             }
             dump.Classes.push_back(type);
