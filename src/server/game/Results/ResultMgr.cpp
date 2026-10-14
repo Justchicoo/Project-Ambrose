@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Decodes each result row's versionable bytes, refusing one that does not read or holds another class than its row names, and runs a list's results in order through their registered handlers, an empty handler taking a class's away, logging the first result of each class no system handles and counting every one.
+ * Decodes each result row's versionable bytes, refusing one that does not read or holds another class than its row names, and runs a list's results in order through their registered handlers, an empty handler taking a class's away, logging the first result of each class no system handles and counting every one, and stops a list at its first ResWait, handing back the results after it and its m_secondsToWait.
  */
 
 #include "ResultMgr.h"
@@ -10,6 +10,7 @@
 
 #include <fmt/format.h>
 
+#include <iterator>
 #include <utility>
 
 ResultMgr& ResultMgr::Instance()
@@ -69,11 +70,20 @@ void ResultMgr::Register(std::string_view className, ResultHandler handler)
         _handlers.insert_or_assign(std::string(className), std::move(handler));
 }
 
-std::size_t ResultMgr::Run(ResultList const& results, ResultContext const& context)
+ResultRun ResultMgr::Run(ResultList const& results, ResultContext const& context)
 {
-    std::size_t ran = 0;
-    for (ResultEntry const& result : results)
+    ResultRun run;
+    for (auto entry = results.begin(); entry != results.end(); ++entry)
     {
+        ResultEntry const& result = *entry;
+        if (result.Class == WaitClass)
+        {
+            PropertyValue const* const value = result.Object ? result.Object->Get("m_secondsToWait") : nullptr;
+            float const* const seconds = value ? value->GetIf<float>() : nullptr;
+            run.Wait = std::chrono::milliseconds(seconds && *seconds > 0.0f ? static_cast<int64>(*seconds * 1000.0f) : 0);
+            run.Rest.assign(std::next(entry), results.end());
+            return run;
+        }
         ResultHandler handler;
         {
             std::lock_guard const lock(_mutex);
@@ -89,8 +99,8 @@ std::size_t ResultMgr::Run(ResultList const& results, ResultContext const& conte
         if (result.Object)
         {
             handler(*result.Object, context);
-            ++ran;
+            ++run.Ran;
         }
     }
-    return ran;
+    return run;
 }

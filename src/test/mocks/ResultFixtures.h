@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A type dump and catalog holding the result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport, ResSpawn, the quest rewards ResAddGold and ResAddMagicXP and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
+ * A type dump and catalog holding the result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport, ResSpawn, the quest rewards ResAddGold and ResAddMagicXP, the cinematic results ResPostEvent, ResWait and ResStartStagedCinematic and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
  */
 
 #ifndef AMBROSE_RESULTFIXTURES_H
@@ -41,6 +41,11 @@ namespace ResultFixtures
         AddClass(classes, "class ResAddGold", Json::array({ "PropertyClass" }), { { "m_gold", Property("int", "m_gold", 0, 1) }, { "m_sourceType", Property("std::string", "m_sourceType", 1, 1) } });
         AddClass(classes, "class ResAddMagicXP", Json::array({ "PropertyClass" }), { { "m_experience", Property("int", "m_experience", 0, 1) },
             { "m_sourceType", Property("std::string", "m_sourceType", 1, 1) }, { "m_magicSchool", Property("std::string", "m_magicSchool", 2, 1) } });
+        AddClass(classes, "class ResPostEvent", Json::array({ "PropertyClass" }), { { "m_eventName", Property("std::string", "m_eventName", 0, 1) },
+            { "m_subEventName", Property("std::string", "m_subEventName", 1, 1) } });
+        AddClass(classes, "class ResWait", Json::array({ "PropertyClass" }), { { "m_secondsToWait", Property("float", "m_secondsToWait", 0, 1) } });
+        AddClass(classes, "class ResStartStagedCinematic", Json::array({ "PropertyClass" }), { { "m_bIncludeAllPlayersInZone", Property("int", "m_bIncludeAllPlayersInZone", 0, 1) },
+            { "m_cinematicName", Property("std::string", "m_cinematicName", 1, 1) }, { "m_stageName", Property("std::string", "m_stageName", 2, 1) } });
         AddClass(classes, std::string(FirstTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
         AddClass(classes, std::string(SecondTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
@@ -87,6 +92,34 @@ namespace ResultFixtures
             object->Set("m_magicSchool", std::string(school));
         }
         return ResultEntry{ "class ResAddMagicXP", std::shared_ptr<PropertyObject const>(std::move(object)), position };
+    }
+
+    inline ResultEntry PostEvent(std::string const& event)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(Catalog(), "class ResPostEvent");
+        if (object)
+            object->Set("m_eventName", std::string(event));
+        return ResultEntry{ "class ResPostEvent", std::shared_ptr<PropertyObject const>(std::move(object)), 0 };
+    }
+
+    inline ResultEntry Wait(float seconds)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(Catalog(), "class ResWait");
+        if (object)
+            object->Set("m_secondsToWait", float{ seconds });
+        return ResultEntry{ "class ResWait", std::shared_ptr<PropertyObject const>(std::move(object)), 0 };
+    }
+
+    inline ResultEntry StagedCinematic(std::string const& cinematic, std::string const& stage, int32 wholeZone)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(Catalog(), "class ResStartStagedCinematic");
+        if (object)
+        {
+            object->Set("m_cinematicName", std::string(cinematic));
+            object->Set("m_stageName", std::string(stage));
+            object->Set("m_bIncludeAllPlayersInZone", int32{ wholeZone });
+        }
+        return ResultEntry{ "class ResStartStagedCinematic", std::shared_ptr<PropertyObject const>(std::move(object)), 0 };
     }
 
     inline ResultEntry NotifyText(std::string const& text, int32 type)

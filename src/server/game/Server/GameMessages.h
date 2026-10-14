@@ -506,6 +506,28 @@ namespace GameMessages
         }
     };
 
+    struct StartStagedCinematic
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_STARTSTAGEDCINEMATIC";
+
+        std::string CinematicName;
+        std::string InitialStageName;
+        float StartX = 0.0f;
+        float StartY = 0.0f;
+        float StartZ = 0.0f;
+        float Yaw = 0.0f;
+        uint64 DuelId = 0;
+        int8 WinningTeamId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CinematicName", &StartStagedCinematic::CinematicName), DmlField("InitialStageName", &StartStagedCinematic::InitialStageName),
+                DmlField("Start_X", &StartStagedCinematic::StartX), DmlField("Start_Y", &StartStagedCinematic::StartY), DmlField("Start_Z", &StartStagedCinematic::StartZ),
+                DmlField("Yaw", &StartStagedCinematic::Yaw), DmlField("DuelID", &StartStagedCinematic::DuelId), DmlField("WinningTeamID", &StartStagedCinematic::WinningTeamId) };
+        }
+    };
+
     struct AddEffect
     {
         static constexpr uint8 ServiceId = GameService;

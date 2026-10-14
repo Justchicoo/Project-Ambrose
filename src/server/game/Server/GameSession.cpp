@@ -8,6 +8,7 @@
 #include "CharacterNameMgr.h"
 #include "CharacterQuestRepository.h"
 #include "CharacterRepository.h"
+#include "CinematicResults.h"
 #include "DynaModMessages.h"
 #include "ObjectGuid.h"
 #include "QuestMgr.h"
@@ -74,6 +75,7 @@ namespace
     uint16 TransferPort = 0;
     constexpr int64 TransferKeyLifetimeSeconds = 120;
     constexpr std::size_t MaxQuestResultRounds = 16;
+    constexpr std::size_t MaxResultEventDepth = 8;
     std::mutex OnlookerMutex;
     GameSession::OnlookerSource Onlookers;
 
@@ -1420,7 +1422,29 @@ std::size_t GameSession::RunResults(std::vector<ResultSource> const& sources, st
     std::call_once(registered, &GameSession::RegisterResultHandlers);
     std::size_t ran = 0;
     for (ResultSource const& source : sources)
-        ran += sResultMgr.Run(source.Results, ResultContext{ this, _worldGuid, _mapId.value_or(0), _zonePath, source.Name, now });
+    {
+        ResultRun run = sResultMgr.Run(source.Results, ResultContext{ this, _worldGuid, _mapId.value_or(0), _zonePath, source.Name, now });
+        ran += run.Ran;
+        if (run.Rest.empty())
+            continue;
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} waits {} ms before the {} result(s) left in {}", GetSessionId(), _worldGuid, run.Wait.count(), run.Rest.size(),
+            Ambrose::ForLog(source.Name, 128));
+        _waitingResults.push_back({ now + run.Wait, ResultSource{ source.Name, std::move(run.Rest) } });
+    }
+    std::vector<std::string> const events = std::exchange(_resultEvents, {});
+    if (_mapId && _resultEventDepth < MaxResultEventDepth)
+    {
+        ++_resultEventDepth;
+        for (std::string const& event : events)
+        {
+            std::vector<std::string> const fired = PostZoneEvent(event, now, walkDoors);
+            LOG_INFO("server.gamesession", "Session {}'s wizard {} posted {} in {} from a result, which fired {}", GetSessionId(), _worldGuid, Ambrose::ForLog(event, 128),
+                Ambrose::ForLog(_zonePath, 128), fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
+        }
+        --_resultEventDepth;
+    }
+    else if (!events.empty())
+        LOG_WARN("server.gamesession", "Session {}'s wizard {} dropped {} event(s) its results posted, {} results deep", GetSessionId(), _worldGuid, events.size(), _resultEventDepth);
     std::vector<std::string> const spawns = std::exchange(_resultSpawns, {});
     std::vector<std::string> const doors = std::exchange(_resultDoors, {});
     QuestWireEncoder::LootInfoList const loot = std::exchange(_resultLoot, {});
@@ -1434,8 +1458,58 @@ std::size_t GameSession::RunResults(std::vector<ResultSource> const& sources, st
     return ran;
 }
 
+void GameSession::RunWaitingResults(std::chrono::steady_clock::time_point now)
+{
+    if (_waitingResults.empty())
+        return;
+    std::vector<ResultSource> due;
+    std::erase_if(_waitingResults, [&due, now](WaitingResults& waiting)
+    {
+        if (waiting.Due > now)
+            return false;
+        due.push_back(std::move(waiting.Source));
+        return true;
+    });
+    if (!due.empty() && _mapId)
+        RunResults(due, now);
+}
+
+void GameSession::StartStagedCinematic(GameMessages::StartStagedCinematic const& cinematic, bool wholeZone, std::string_view source)
+{
+    SendDmlMessage(cinematic);
+    if (wholeZone)
+        _zoneCinematics.push_back(cinematic);
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} started the staged cinematic {} at stage {} for {} from {}", GetSessionId(), _worldGuid, Ambrose::ForLog(cinematic.CinematicName, 128),
+        Ambrose::ForLog(cinematic.InitialStageName, 128), wholeZone ? "everyone in its zone" : "itself", Ambrose::ForLog(source, 128));
+}
+
+void GameSession::ShowCinematic(GameMessages::StartStagedCinematic const& cinematic)
+{
+    SendDmlMessage(cinematic);
+}
+
 void GameSession::RegisterResultHandlers()
 {
+    sResultMgr.Register(CinematicResults::PostEventClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        if (std::optional<std::string> event = CinematicResults::EventOf(result))
+            context.Session->_resultEvents.push_back(std::move(*event));
+    });
+    sResultMgr.Register(CinematicResults::StagedCinematicClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::optional<StagedCinematicResult> const staged = CinematicResults::StagedCinematicOf(result);
+        if (!staged)
+            return;
+        GameMessages::StartStagedCinematic cinematic;
+        cinematic.CinematicName = staged->Cinematic;
+        cinematic.InitialStageName = staged->Stage;
+        PlayerPosition const& at = context.Session->_movement.GetPosition();
+        cinematic.StartX = at.X;
+        cinematic.StartY = at.Y;
+        cinematic.StartZ = at.Z;
+        cinematic.Yaw = at.Yaw;
+        context.Session->StartStagedCinematic(cinematic, staged->WholeZone, context.Source);
+    });
     sResultMgr.Register(ZoneTriggerMgr::NotifyTextClass, [](PropertyObject const& result, ResultContext const& context)
     {
         std::string error;
