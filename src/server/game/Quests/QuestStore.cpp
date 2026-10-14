@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's stored RequirementList with the type dump it is given, a list it cannot read closing the quest and naming why, reads the results of each quest and goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog, and fills the lookups by template, object name, tag, adjective and zone.
+ * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's stored RequirementList with the type dump it is given, a list it cannot read closing the quest and naming why, reads the results of each quest and goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog or else from its stored starter template, and fills the lookups by template, object name, tag, adjective and zone.
  */
 
 #include "QuestStore.h"
@@ -225,6 +225,8 @@ void QuestStore::Index()
         auto const prep = info.Dialogs.find(TagPrep);
         if (prep != info.Dialogs.end() && !prep->second.Lines.empty())
             info.Starter = prep->second.Lines.front().Row.ActorTemplateId;
+        if (info.Starter == 0)
+            info.Starter = info.Row.StarterTemplateId;
         if (info.Starter != 0)
             _starterByTemplateId[info.Starter].push_back(name);
         for (auto const& [goalName, goal] : info.Goals)

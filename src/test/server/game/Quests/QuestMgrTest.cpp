@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the quest manager over hand-written rows it reads from an in-memory source: a Prep dialog whose lines are spoken by template 38232 and then template 0 makes the quest offered by 38232 alone, the goal lookups find each goal by persona, tag, adjective and zone, the validator refuses goalsToAdd naming a missing goal, a bounty goal without adjectives or a tally count, a persona no object is named, a logic entry that both completes the quest and adds goals, a starter without a Prep dialog and a key the locale text lacks, a start skips the bad quests and logs how many quests, goals and validation errors it found, a reload of quest_template swaps in an added quest with its starter while one that brings errors keeps the quests serving, and a quest registry requirement gates availability until its Q1 entry is present.
+ * Tests the quest manager over hand-written rows it reads from an in-memory source: a Prep dialog whose lines are spoken by template 38232 and then template 0 makes the quest offered by 38232 alone, a stored starter template offers a quest with no Prep line but never replaces the one a Prep line names, and one object_template does not hold is refused, the goal lookups find each goal by persona, tag, adjective and zone, the validator refuses goalsToAdd naming a missing goal, a bounty goal without adjectives or a tally count, a persona no object is named, a logic entry that both completes the quest and adds goals, a starter without a Prep dialog and a key the locale text lacks, a start skips the bad quests and logs how many quests, goals and validation errors it found, a reload of quest_template swaps in an added quest with its starter while one that brings errors keeps the quests serving, and a quest registry requirement gates an NPC's offers until its Q1 entry is present.
  */
 
 #include "Log.h"
 #include "LogTestConfig.h"
 #include "QuestMgr.h"
+#include "QuestOffers.h"
 #include "QuestValidator.h"
 #include "ReloadMgr.h"
 #include "RequirementMgr.h"
@@ -188,6 +189,25 @@ namespace
 
         std::shared_ptr<QuestRows> _rows;
     };
+}
+
+TEST_F(QuestMgrTest, AStoredStarterOffersAQuestWithNoPrepLineAndNeverOverridesOne)
+{
+    QuestTemplateRow stored = Quest("WikiQuest");
+    stored.StarterTemplateId = GammaId;
+    _rows->Quests.push_back(stored);
+    _rows->Quests.front().StarterTemplateId = GammaId;
+    std::vector<std::string> errors;
+    ASSERT_TRUE(sQuestMgr.Load(errors)) << (errors.empty() ? "" : errors.front());
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    EXPECT_EQ(quests->GetQuestsOfferedBy(GammaId), std::vector<std::string>{ "WikiQuest" });
+    EXPECT_EQ(quests->GetQuestsOfferedBy(HeadmasterId), std::vector<std::string>{ "PrepQuest" }) << "the Prep line names the starter, so the stored one is not used";
+
+    QuestRows unknown = Fixture();
+    QuestTemplateRow missing = Quest("MissingStarter");
+    missing.StarterTemplateId = 99999;
+    unknown.Quests.push_back(missing);
+    EXPECT_TRUE(Holds(Check(unknown), "quest MissingStarter: quest_template names starter template 99999, which object_template does not hold"));
 }
 
 TEST_F(QuestMgrTest, PrepEntriesIndexAsOfferedByTheFirstSpeakerOnly)
@@ -397,13 +417,14 @@ TEST_F(QuestMgrTest, QuestRegistryCompletionGatesQuestAvailability)
     ASSERT_TRUE(outcome.Ok) << (outcome.Errors.empty() ? "" : outcome.Errors.front());
 
     QuestRegistryContext context;
-    EXPECT_FALSE(sQuestMgr.CanOffer("PrepQuest", context));
-    EXPECT_TRUE(sQuestMgr.GetQuestsOfferedBy(HeadmasterId, context).empty());
+    QuestLog const log;
+    EXPECT_TRUE(QuestOffers::Available(*sQuestMgr.GetQuests(), HeadmasterId, log, context).empty());
     EXPECT_EQ(context.LastQuest, "Q1");
     EXPECT_EQ(context.LastEntry, "Complete");
     EXPECT_TRUE(context.LastIsQuestRegistry);
 
     context.Complete = true;
-    EXPECT_TRUE(sQuestMgr.CanOffer("PrepQuest", context));
-    EXPECT_EQ(sQuestMgr.GetQuestsOfferedBy(HeadmasterId, context), std::vector<std::string>{ "PrepQuest" });
+    std::vector<QuestInfo const*> const offered = QuestOffers::Available(*sQuestMgr.GetQuests(), HeadmasterId, log, context);
+    ASSERT_EQ(offered.size(), 1u);
+    EXPECT_EQ(offered.front()->Row.Name, "PrepQuest");
 }

@@ -6,6 +6,7 @@
 #include "ObjectSerializer.h"
 #include "PropertyObject.h"
 #include "QuestMgr.h"
+#include "QuestOffers.h"
 #include "RequirementMgr.h"
 #include "RequirementObjects.h"
 #include "StringHash.h"
@@ -240,14 +241,19 @@ TEST_F(RequirementObjectsTest, AQuestIsOfferedOnlyWhileItsStoredRequirementsPass
     ASSERT_TRUE(loaded.Loaded);
     ASSERT_EQ(loaded.Quests, 2u) << (loaded.Errors.empty() ? "" : loaded.Errors.front());
 
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    QuestInfo const* const gated = quests->Find("Gated");
+    QuestInfo const* const unreadable = quests->Find("Unreadable");
+    ASSERT_NE(gated, nullptr);
+    ASSERT_NE(unreadable, nullptr);
     QuestFacts wizard;
-    EXPECT_FALSE(sQuestMgr.CanOffer("Gated", wizard)) << "a wizard without the quest does not qualify";
+    EXPECT_FALSE(QuestOffers::Qualifies(*gated, wizard)) << "a wizard without the quest does not qualify";
     wizard.Quests.insert("WC-MAIN-C01-001");
-    EXPECT_TRUE(sQuestMgr.CanOffer("Gated", wizard));
+    EXPECT_TRUE(QuestOffers::Qualifies(*gated, wizard));
     wizard.CompletedGoals.insert("OpenGate");
-    EXPECT_FALSE(sQuestMgr.CanOffer("Gated", wizard));
+    EXPECT_FALSE(QuestOffers::Qualifies(*gated, wizard));
     wizard.CompletedGoals.clear();
-    EXPECT_FALSE(sQuestMgr.CanOffer("Unreadable", wizard)) << "bytes that do not decode keep the quest closed";
+    EXPECT_FALSE(QuestOffers::Qualifies(*unreadable, wizard)) << "bytes that do not decode keep the quest closed";
 }
 
 TEST_F(RequirementObjectsTest, SomethingThatIsNotARequirementListGivesNoTree)
