@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The character group: what a game master changes about a wizard. 'gold', 'mana', 'heal' and 'potion' change the caller's wizard live, so its client's globes, gold counter and potions update at once and the change is saved; 'level' and 'xp' still say what they would set and refuse politely. 'deleted list' shows the newest deleted wizards, of one account or all, 'deleted restore' gives one back to the account it was deleted from, which sees it on its select screen at its next list, and 'rename' makes a wizard choose a new name at its next login.
+ * The character group: what a game master changes about a wizard. 'gold', 'mana', 'heal', 'potion', 'xp' and 'level' change the caller's wizard live, so its client's globes, gold counter, potions, experience bar and level update at once and the change is saved; 'xp' gives experience as a quest would, without a rate, and 'level' moves the wizard to a level its school reaches at full health and mana. 'deleted list' shows the newest deleted wizards, of one account or all, 'deleted restore' gives one back to the account it was deleted from, which sees it on its select screen at its next list, and 'rename' makes a wizard choose a new name at its next login.
  */
 
 #include "AccountMgr.h"
@@ -110,14 +110,45 @@ namespace
         return true;
     }
 
-    bool NotInWorldYet(CommandCaller& caller, std::string what, std::vector<std::string> const& arguments)
+    bool GiveXp(CommandCaller& caller, std::vector<std::string> const& arguments)
     {
-        std::optional<int64> const value = ReadValue(caller, what, arguments);
+        std::optional<int64> const value = ReadValue(caller, "xp", arguments);
         if (!value)
             return false;
-        if (!InWorldSession(caller))
+        if (*value < 1 || *value > std::numeric_limits<int32>::max())
+        {
+            caller.Reply(fmt::format("Experience to give must be between 1 and {}.", std::numeric_limits<int32>::max()));
             return false;
-        caller.Reply(fmt::format("Setting {} to {} is not implemented yet", what, *value));
+        }
+        GameSession* const session = InWorldSession(caller);
+        if (!session)
+            return false;
+        XpGrant const grant = session->GiveExperience(static_cast<int32>(*value), XpSource::Command);
+        PlayerStats const* const stats = session->GetStats();
+        caller.Reply(grant.Progress.LeveledUp()
+            ? fmt::format("Gave {} experience: level {} reached with {} experience, {} training point(s) gained and {} overflow.", grant.Amount, stats->GetLevel(), stats->GetExperience(),
+                grant.Progress.TrainingPointsGained, stats->GetOverflowXp())
+            : fmt::format("Gave {} experience: level {} with {} experience and {} overflow.", grant.Amount, stats->GetLevel(), stats->GetExperience(), stats->GetOverflowXp()));
+        return true;
+    }
+
+    bool SetLevel(CommandCaller& caller, std::vector<std::string> const& arguments)
+    {
+        std::optional<int64> const value = ReadValue(caller, "level", arguments);
+        if (!value)
+            return false;
+        GameSession* const session = InWorldSession(caller);
+        if (!session)
+            return false;
+        std::optional<LevelProgress> const progress = *value >= 1 && *value <= std::numeric_limits<int32>::max() ? session->SetLevel(static_cast<int32>(*value)) : std::nullopt;
+        if (!progress)
+        {
+            caller.Reply(fmt::format("Level {} is not one this wizard's school reaches.", *value));
+            return false;
+        }
+        PlayerStats const* const stats = session->GetStats();
+        caller.Reply(fmt::format("Level is now {} with {} experience, {} training point(s) and {} of {} health.", stats->GetLevel(), stats->GetExperience(), stats->GetTrainingPoints(),
+            stats->GetHitpoints(), stats->GetMaxHitpoints()));
         return true;
     }
 
@@ -200,18 +231,14 @@ namespace
 
         std::vector<ChatCommand> GetCommands() const override
         {
-            auto const sets = [](char const* what)
-            {
-                return [what](CommandCaller& caller, std::vector<std::string> const& arguments) { return NotInWorldYet(caller, what, arguments); };
-            };
             return {
                 { .Name = "character", .SecurityLevel = SEC_GAMEMASTER, .Help = "change a wizard", .Children = {
-                    { .Name = "level", .SecurityLevel = SEC_GAMEMASTER, .Help = "set a wizard's level", .Run = sets("level") },
+                    { .Name = "level", .SecurityLevel = SEC_GAMEMASTER, .Help = "set the current wizard's level", .Run = SetLevel },
                     { .Name = "gold", .SecurityLevel = SEC_GAMEMASTER, .Help = "set the current wizard's gold", .Run = SetGold },
                     { .Name = "mana", .SecurityLevel = SEC_GAMEMASTER, .Help = "set the current wizard's mana", .Run = SetMana },
                     { .Name = "heal", .SecurityLevel = SEC_GAMEMASTER, .Help = "restore the current wizard to full health", .Run = Heal },
                     { .Name = "potion", .SecurityLevel = SEC_GAMEMASTER, .Help = "set the current wizard's potion capacity and fill it", .Run = SetPotion },
-                    { .Name = "xp", .SecurityLevel = SEC_GAMEMASTER, .Help = "set a wizard's experience", .Run = sets("experience") },
+                    { .Name = "xp", .SecurityLevel = SEC_GAMEMASTER, .Help = "give the current wizard experience", .Run = GiveXp },
                     { .Name = "deleted", .SecurityLevel = SEC_GAMEMASTER, .Help = "deleted wizards", .Children = {
                         { .Name = "list", .SecurityLevel = SEC_GAMEMASTER, .Help = "list the newest deleted wizards: [username]", .Run = DeletedList },
                         { .Name = "restore", .SecurityLevel = SEC_GAMEMASTER, .Help = "give a deleted wizard back to its account: <character id>", .Run = DeletedRestore },

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Applies live stat changes to a wizard, persists only character-backed values, consumes a potion only when it holds a full charge, and schedules each later refill with the current interval.
+ * Applies live stat changes to a wizard, persists only character-backed values, marking its level and experience for their own save when experience moves them, consumes a potion only when it holds a full charge, and schedules each later refill with the current interval.
  */
 
 #include "Player.h"
@@ -94,6 +94,33 @@ bool Player::SetShadowPipRating(float value) noexcept
 bool Player::SetShowItemLock(bool value) noexcept
 {
     bool const changed = _stats.SetShowItemLock(value);
+    _dirtyStats = _dirtyStats || changed;
+    return changed;
+}
+
+LevelProgress Player::GiveExperience(int32 amount, PlayerLevelSet const& levels) noexcept
+{
+    LevelProgress const progress = _stats.GiveExperience(amount, levels);
+    bool const moved = progress.NewExperience != progress.OldExperience || progress.LeveledUp();
+    _dirtyProgress = _dirtyProgress || moved;
+    _dirtyStats = _dirtyStats || moved || progress.OverflowGained != 0;
+    return progress;
+}
+
+std::optional<LevelProgress> Player::SetLevel(int32 level, PlayerLevelSet const& levels) noexcept
+{
+    std::optional<LevelProgress> const progress = _stats.SetLevel(level, levels);
+    if (progress)
+    {
+        _dirtyProgress = true;
+        _dirtyStats = true;
+    }
+    return progress;
+}
+
+bool Player::SetLevelLocked(bool locked) noexcept
+{
+    bool const changed = _stats.SetLevelLocked(locked);
     _dirtyStats = _dirtyStats || changed;
     return changed;
 }

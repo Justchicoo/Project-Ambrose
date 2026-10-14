@@ -62,6 +62,7 @@ namespace
             Accept<&GameSession::HandleIgnoreAdd>(entered, MessageProcessing::Queued, "GameSession::HandleIgnoreAdd");
             Accept<&GameSession::HandleIgnoreDrop>(entered, MessageProcessing::Queued, "GameSession::HandleIgnoreDrop");
             Accept<&GameSession::HandleUsePotion>(inWorld, MessageProcessing::Queued, "GameSession::HandleUsePotion");
+            Accept<&GameSession::HandleLockLevel>(inWorld, MessageProcessing::Queued, "GameSession::HandleLockLevel");
 
             Accept<&GameSession::HandlePlayerWizBang>(inWorld, MessageProcessing::Queued, "GameSession::HandlePlayerWizBang");
             Accept<&GameSession::HandleInteractNpc>(inWorld, MessageProcessing::Queued, "GameSession::HandleInteractNpc");
