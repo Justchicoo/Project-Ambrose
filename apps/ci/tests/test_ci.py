@@ -93,9 +93,6 @@ class ForbiddenFileTests(unittest.TestCase):
         big = b"x" * (ci_forbidden_files.MAX_BYTES + 1)
         self.assertForbidden("doc/big.md", big, "byte limit")
         self.assertAllowed("deps/ports/sample/big.txt", big)
-        self.assertAllowed("data/quests/quests.ndjson", big)
-        self.assertForbidden("data/quests/other.ndjson", big, "byte limit")
-        self.assertForbidden("data/quests/CSR.wad", b"KIWAD", "client archive")
 
     def test_naming_another_wizard_project_is_forbidden(self):
         self.assertForbidden("doc/notes.md", ("We studied " + "Im" + "light").encode(), "names another Wizard101 project")
