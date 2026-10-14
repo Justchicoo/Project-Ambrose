@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors and spawns, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -1442,6 +1442,17 @@ void GameSession::RegisterResultHandlers()
         if (mod->Zone.empty())
             mod->Zone = context.Zone;
         context.Session->ApplyDynaMods({ *mod });
+    });
+    sResultMgr.Register(LootMgr::ResultClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        PropertyValue const* const value = result.Get("m_lootTable");
+        std::string const* const table = value ? value->GetIf<std::string>() : nullptr;
+        if (!table || table->empty())
+        {
+            LOG_WARN("server.gamesession", "{} runs a ResLoot that names no loot table, so it gives nothing", context.Source);
+            return;
+        }
+        context.Session->GiveLoot(*table, context.Source);
     });
     sResultMgr.Register(ZoneTriggerMgr::TeleportClass, [](PropertyObject const&, ResultContext const& context) { context.Session->_resultDoors.push_back(context.Source); });
     auto const spawn = [](PropertyObject const&, ResultContext const& context)

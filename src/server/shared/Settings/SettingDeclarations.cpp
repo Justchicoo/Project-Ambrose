@@ -197,7 +197,10 @@ namespace
             Float("Rate.XP.Kill", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the experience a defeated creature gives."),
             Float("Rate.Gold.Quest", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the gold a quest gives."),
             Float("Rate.Gold.Kill", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the gold a defeated creature drops."),
-            Float("Rate.Drop.Item", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the chance of each item a defeated creature may drop."),
+            Float("Rate.Drop.Item", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the chance of each item a loot table may give, from a defeated creature or a quest."),
+            Float("Rate.Drop.Spell", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the chance of each spell a loot table may give."),
+            Float("Rate.Drop.Reagent", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the chance of each reagent a loot table may give."),
+            Float("Rate.Drop.TreasureCard", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the chance of each treasure card a loot table may give."),
             Float("Rate.Respawn", "1", "0.1", "100", "times", "Rates", Game, Live, "Multiplies how long a defeated creature takes to return."),
 
             Unsigned("Account.UsernameMinLength", "3", "1", "32", "characters", "Accounts", Login, NextUse, "The shortest username a new account may use."),

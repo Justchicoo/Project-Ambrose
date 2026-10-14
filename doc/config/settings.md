@@ -137,7 +137,10 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
-| `Rate.Drop.Item` | float | 1 times | from 0 to 100 times | live | gameserver | normal | Multiplies the chance of each item a defeated creature may drop. |
+| `Rate.Drop.Item` | float | 1 times | from 0 to 100 times | live | gameserver | normal | Multiplies the chance of each item a loot table may give, from a defeated creature or a quest. |
+| `Rate.Drop.Reagent` | float | 1 times | from 0 to 100 times | live | gameserver | normal | Multiplies the chance of each reagent a loot table may give. |
+| `Rate.Drop.Spell` | float | 1 times | from 0 to 100 times | live | gameserver | normal | Multiplies the chance of each spell a loot table may give. |
+| `Rate.Drop.TreasureCard` | float | 1 times | from 0 to 100 times | live | gameserver | normal | Multiplies the chance of each treasure card a loot table may give. |
 | `Rate.Gold.Kill` | float | 1 times | from 0 to 100 times | live | gameserver | normal | Multiplies the gold a defeated creature drops. |
 | `Rate.Gold.Quest` | float | 1 times | from 0 to 100 times | live | gameserver | normal | Multiplies the gold a quest gives. |
 | `Rate.Respawn` | float | 1 times | from 0.1 to 100 times | live | gameserver | normal | Multiplies how long a defeated creature takes to return. |

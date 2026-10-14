@@ -881,6 +881,16 @@ Settled on 2026-10-13 with the world and Dynamod sessions. One results runner, `
 - A wizard's lists run through `GameSession::RunResults`, which fills the context every handler gets: the session, the wizard, its map, its zone and the trigger or quest that holds the list. Doors and spawn results are gathered while a list runs and acted on once after it, so a door never moves the wizard before the rest of its list has run.
 - A trigger's requirements gate the whole trigger before its results run, per wizard, as 10.03 settled.
 
+### Loot
+
+Settled on 2026-10-14 for 10.07 with the world and quest import sessions. Quest rewards and creature drops share one set of world tables, read by `sLootMgr` in src/server/game/Loot; there is no separate quest reward table.
+
+- `loot_table` names a table. Its id is free text: a creature's m_lootTable name or a name such as `quest:<quest>`.
+- `loot_entry` lists what a table may give: its kind (GOLD, XP, ITEM, SPELL, REAGENT, TREASURE_CARD), the template it gives, how many from and to, its chance from above 0 to 1, its group and an optional requirement list. A chance of 1 is always given and never scaled. Any lower chance is multiplied by its kind's live `Rate.Drop.*` setting and capped at 1; gold and XP have no drop rate. Group 0 entries roll one by one, and the entries of any other group give at most one of them on a single roll over their chances. An entry whose requirement list the wizard fails is never given, which is how a school's item or spell is given only to that school.
+- `creature_loot` gives a creature template its tables, as many as it needs.
+- A quest or goal gives loot through a `quest_result` row of `class ResLoot`, a result only the server defines, kept in server_class with one property, m_lootTable, the loot_table id. The handler rolls the table for the wizard and gives its gold scaled by `Rate.Gold.Quest`, its items into the backpack and its spells into the spellbook, then shows the items with MSG_LOOT. XP waits on the experience call 8.02 adds, and reagents and treasure cards wait on their bags, so those entries are rolled and logged but not given yet.
+- Tables reload as one generation with `reload loot`; a build with any bad row keeps the serving one and names every row at fault.
+
 ### Still open
 
 Decisions that block later milestones are listed under Decisions needed in doc/ROADMAP.md. Propose them to the maintainer when their milestone is next.
