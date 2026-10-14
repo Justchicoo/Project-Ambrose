@@ -882,6 +882,16 @@ Settled on 2026-10-13 with the world and Dynamod sessions. One results runner, `
 - A trigger's requirements gate the whole trigger before its results run, per wizard, as 10.03 settled.
 - A result class only the server runs, which the client program registers by name but gives no layout, is an authored server class with the evidence the data gives. ResRemoveDynaMod, held only by quest results, carries a tag and no zone, so its handler takes the wizard's mod of that tag away in every zone, and the client is told to drop each armed one by its index. ResAddGold and ResAddMagicXP, the quest rewards, are authored the same way from the quest data's own elements; their handlers give the amount through the live quest rate when the result runs, gold summed into the LootInfoList's m_goldInfo and experience as a MagicXPLootInfo in m_loot, shown once per run in MSG_LOOT.
 
+### Loot
+
+Settled on 2026-10-14 for 10.07 with the world and quest import sessions. Quest rewards and creature drops share one set of world tables, read by `sLootMgr` in src/server/game/Loot; there is no separate quest reward table.
+
+- `loot_table` names a table. Its id is free text: a creature's m_lootTable name or a name such as `quest:<quest>`.
+- `loot_entry` lists what a table may give: its kind (GOLD, XP, ITEM, SPELL, REAGENT, TREASURE_CARD), the template it gives, how many from and to, its chance from above 0 to 1, its group and an optional requirement list. A chance of 1 is always given and never scaled. Any lower chance is multiplied by its kind's live `Rate.Drop.*` setting and capped at 1; gold and XP have no drop rate. Group 0 entries roll one by one, and the entries of any other group give at most one of them on a single roll over their chances. An entry whose requirement list the wizard fails is never given, which is how a school's item or spell is given only to that school.
+- `creature_loot` gives a creature template its tables, as many as it needs.
+- A quest or goal gives loot through a `quest_result` row of `class ResLoot`, a result only the server defines, kept in server_class with one property, m_lootTable, the loot_table id. The handler rolls the table for the wizard and gives its gold scaled by `Rate.Gold.Quest`, its experience through `GameSession::GiveExperience` as a quest's, its items into the backpack and its spells into the spellbook, then shows the items with MSG_LOOT. Reagents and treasure cards wait on their bags, so those entries are rolled and logged but not given yet.
+- Tables reload as one generation with `reload loot`; a build with any bad row keeps the serving one and names every row at fault.
+
 ### Still open
 
 Decisions that block later milestones are listed under Decisions needed in doc/ROADMAP.md. Propose them to the maintainer when their milestone is next.

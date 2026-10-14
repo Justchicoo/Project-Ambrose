@@ -25,6 +25,9 @@
 | 10.17 | Wizard City chain real-client playthrough (QST-23 part 2) | M | 10.16, 10.03 |
 | 10.18 | Quest helper extras (QST-24) | M | 7.11, 7.06 |
 | 10.19 | Path actions (WLD-17 part 2) | M | 10.14 |
+| 10.20 | Zone tokens | M | 10.01, 7.04 |
+| 10.21 | Interactive world objects | M | 10.01, 10.03, 10.04, 10.07, 13.04 |
+| 10.22 | Lua script host | L | 10.01, 6.16 |
 
 ## Review notes for this phase
 
@@ -311,9 +314,9 @@ Defeating mobs whose adjectives match a bounty goal advances its tally ('Defeat 
 
 **Acceptance**
 
-- [ ] 100000 seeded rolls of a 10% entry land in 9.5-10.5%
-- [ ] School-gated spell entry only for that school
-- [ ] With Rate.Drop.Item at 2, the same 10% item entry lands in 19-21% without a restart
+- [x] 100000 seeded rolls of a 10% entry land in 9.5-10.5% (`LootMgrTest.ATenPercentEntryLandsNearTenPercentAndTheSameSeedRollsTheSame`: a 10% item entry is given within 9,500 to 10,500 times in 100,000 rolls, and the same seed gives the same count again)
+- [x] School-gated spell entry only for that school (`LootMgrTest.ASchoolGatedSpellGoesOnlyToThatSchool`: a spell entry whose requirement list is ReqSchoolOfFocus Fire goes to a Fire wizard and not to an Ice one, who still gets the table's gold)
+- [x] With Rate.Drop.Item at 2, the same 10% item entry lands in 19-21% without a restart (`LootMgrTest.RateDropItemOfTwoDoublesAnItemEntryWithoutAReloadAndNeverScalesAGuaranteedOne`: after a live set of Rate.Drop.Item to 2 the entry lands within 19,000 to 21,000 of 100,000 rolls with no reload, a 10% spell entry stays near 10%, and at 0 the item never drops while a guaranteed entry still always does)
 
 ### Detailed spec from QST-19: Loot tables and quest rewards
 
@@ -342,7 +345,7 @@ Quest completion grants gold, XP, items and spells from data-driven loot tables,
 
 **Acceptance**
 
-- [ ] Unit test with a seeded RNG: table rolls are reproducible, and a school-gated spell entry is only granted to that school.
+- [x] Unit test with a seeded RNG: table rolls are reproducible, and a school-gated spell entry is only granted to that school. (`LootMgrTest.ATenPercentEntryLandsNearTenPercentAndTheSameSeedRollsTheSame` and `LootMgrTest.ASchoolGatedSpellGoesOnlyToThatSchool`)
 - [ ] Client: completing a quest with 100 gold, 50 XP and one item shows the reward popup with the gold, XP bar gain and item icon, and the backpack contains the item. A Fire wizard gets the spell cinematic popup for the fire spell only.
 
 **Risks**
@@ -375,8 +378,8 @@ Defeated creatures roll authored drop tables and players receive items, reagents
 
 **Acceptance**
 
-- [ ] Unit test: 100000 seeded rolls of a table with a 10% entry land within 9.5–10.5%
-- [ ] Unit test: after `.settings set Rate.Drop.Item 2`, 100000 seeded rolls of the same 10% item entry land within 19–21% without a restart
+- [x] Unit test: 100000 seeded rolls of a table with a 10% entry land within 9.5–10.5% (`LootMgrTest.ATenPercentEntryLandsNearTenPercentAndTheSameSeedRollsTheSame`)
+- [x] Unit test: after `.settings set Rate.Drop.Item 2`, 100000 seeded rolls of the same 10% item entry land within 19–21% without a restart (`LootMgrTest.RateDropItemOfTwoDoublesAnItemEntryWithoutAReloadAndNeverScalesAGuaranteedOne`)
 - [ ] Real client: after victory the loot popup lists the rolled items with icons, and the items are in the backpack after relog (characters DB)
 
 **Risks**
@@ -1118,3 +1121,131 @@ PathBehaviorTemplate carries m_actionList, m_pauseChance and m_timeToPause, whic
 
 - An action's m_nNodeID is matched to the node's m_id, as a spawn's specific start node is; the real-client check confirms it.
 - Priority is taken as order only; every shipped action has priority 100.
+
+## 10.20 Zone tokens
+
+**Goal:** Zones and wizards keep the zone tokens their zone data defines, triggers change and test them, and the client's objective tracker shows them.
+
+**Size:** M. **Depends on:** 10.01, 7.04
+
+**Client messages:** MSG_AddZoneToken, MSG_ModifyZoneToken, MSG_RemoveZoneToken
+
+**Acceptance**
+
+- [ ] Token definitions read from zone data; a container that does not read is refused whole
+- [ ] Trigger results change a token and ReqZoneToken gates on it
+- [ ] The client is sent each token as it is added, changed and removed
+- [ ] A wizard's own tokens are saved with its character
+- [ ] Real client: the objective tracker shows a token and its count change
+
+### Detailed spec: Zone tokens
+
+ZoneTokenBoolean, ZoneTokenCount and ZoneTokenTimer sit in a placement's token container, each with a storage that keeps it per wizard or per zone instance, and fire events on set, change, empty, full or expiry. Trigger results ResZoneTokenEnable, ResZoneTokenDisable and ResZoneTokenModify change them, ReqZoneToken tests them, and the client's AddZoneToken, ModifyZoneToken, RemoveZoneToken and ResetZoneToken handlers draw the zone objective tracker a dungeon or event shows.
+
+**Deliverables**
+
+- Token definitions read from zone_object.token_container, with kind, storage and bounds, refusing what the server cannot keep.
+- Token state per wizard and per zone instance, moved by the three trigger results through the results runner, and ReqZoneToken in the requirement engine.
+- The token view a wizard is sent, adding, moving and removing tokens as their state changes and dropping them all when the zone changes.
+- A wizard's own tokens saved with its character and loaded when it enters the zone.
+
+**Data sources**
+
+- Zone placements' token containers and the triggers that name their tokens, which `client` counts per zone
+
+**Acceptance**
+
+- [ ] Unit: a token definition reads its kind, storage and bounds and a container is refused whole when one token does not read
+- [ ] Unit: token states move as the client's own tokens do, and ReqZoneToken passes only while the wizard holds the token
+- [ ] Unit: a wizard is sent MSG_AddZoneToken, MSG_ModifyZoneToken and MSG_RemoveZoneToken as states change, and its tokens are dropped when its zone changes
+- [ ] Unit: a wizard's own tokens save with its character and come back after a relog
+- [ ] Real client: entering a zone whose triggers count a token shows it in the objective tracker, and the count changes as the trigger fires
+
+**Risks**
+
+- ZoneTokenTimer and the token hook lists are filled by no shipped zone in r806919, so they are read but have no real-client check here.
+
+## 10.21 Interactive world objects
+
+**Goal:** Ritual objects, hot-and-cold objects, proximity and area behaviors, timed despawns and effect timers work for each wizard.
+
+**Size:** M. **Depends on:** 10.01, 10.03, 10.04, 10.07, 13.04
+
+**Client messages:** MSG_CASTRITUAL, MSG_CANTRIPHOTCOLD, MSG_ENTERSTATE
+
+**Acceptance**
+
+- [ ] A ritual cantrip cast at a ritual object gives its loot and state to a wizard who meets its requirements
+- [ ] The server sends hot-and-cold the distance band
+- [ ] Area, proximity, timed despawn and effect timer behaviors run
+- [ ] Real client: a ritual object is used and changes state for that wizard only
+
+### Detailed spec: Interactive world objects
+
+RitualObjectBehavior has 82 placements in 10 zones, each with requirements, results, loot, states and a required cantrip or school. A ritual starts when the wizard casts a ritual cantrip at the object, which the client sends as MSG_CASTRITUAL, so casting cantrips (13.04) comes first. Every shipped ritual's result list is null, so a ritual's effect is its loot and its state change. HotColdObjectBehavior has the server send MSG_CANTRIPHOTCOLD, BeneficialProximityBehavior applies an effect near the object, AreaBehavior turns on behind m_enableReqs, DespawnTimedBehavior removes an object after its time, GameEffectTimerDisplayBehavior (43 placements in 9 zones) shows a timer, and ZoneTickEffectTemplate is the environmental damage a zone ticks.
+
+**Deliverables**
+
+- Each behavior read from its template with the fields the server runs.
+- A ritual cast with MSG_CASTRITUAL: its requirements through the requirement engine, its loot through LootMgr, its state change for that wizard through its Dynamods, and its result list through the results runner should a zone fill one.
+- MSG_CANTRIPHOTCOLD sent by the server as a wizard nears or leaves a hot-and-cold object.
+- Hot-and-cold, proximity, area, timed despawn, effect timer and zone tick behaviors run in the zone's update.
+
+**Data sources**
+
+- ObjectData templates holding these behaviors, which `client template --holding <class>` lists
+- Zone placements of those templates
+
+**Acceptance**
+
+- [ ] Unit: every behavior class here is read with the fields the server runs
+- [ ] Unit: a MSG_CASTRITUAL from a wizard who meets a ritual object's requirements and casts its cantrip or school gives its loot and state; one who does not is refused and nothing changes
+- [ ] Unit: the server sends MSG_CANTRIPHOTCOLD with the band of the wizard's distance to the object as it moves
+- [ ] Unit: an area behavior turns on only for wizards meeting m_enableReqs, a proximity effect applies inside its range only, a timed despawn removes its object on time, and a zone tick effect damages on its period
+- [ ] Real client: casting a ritual cantrip at a ritual object plays its state change and gives its loot to that wizard, while a second client sees it unchanged
+
+**Risks**
+
+- Rituals wait on 13.04's cantrip casting; the other behaviors here do not.
+
+## 10.22 Lua script host
+
+**Goal:** The server runs the install's own Lua scripts for objects, quests and results.
+
+**Size:** L. **Depends on:** 10.01, 6.16
+
+**Client messages:** MSG_ENTERSTATE, MSG_CLIENTNOTIFYTEXT
+
+**Acceptance**
+
+- [ ] Scripts load from the install in a sandbox
+- [ ] Every script API function the scripts call is listed, and the host binds them or names the missing ones
+- [ ] Object, quest and result scripts run
+- [ ] Real client: an object with a server script runs it
+
+### Detailed spec: Lua script host
+
+Root.wad ships 158 Scripts/*.lua: a Server.lua, Client.lua and Messages.lua for each of the ten kiosk minigames, 32 tutorial scripts, and a script API. ScriptBehaviorTemplate (m_scriptFilename, m_clientScriptFilename) sits on objects in 11 zones, quests carry m_onStartQuestScript and m_onEndQuestScript, ResAsyncScript and ResSyncScript are quest results, and the client has a ScriptDebugger service of 20 messages. A host that runs these scripts gives phase 13's minigames and phase 14's tutorial their server logic instead of a rewrite of each.
+
+**Deliverables**
+
+- `client` lists every global function the install's scripts call, and which script calls it.
+- A Lua host that reads scripts through the archive reader, with no file, process or network access, one state per running script, and a limit on the instructions each call may run.
+- The script API the server-side scripts call, bound to the game's systems, with a call to a function not bound yet logged once by name.
+- ScriptBehaviorTemplate objects start their server script when they spawn; m_onStartQuestScript and m_onEndQuestScript run as a quest starts and ends; ResAsyncScript and ResSyncScript run through the results runner.
+
+**Data sources**
+
+- Root.wad Scripts/*.lua
+- ObjectData templates holding ScriptBehaviorTemplate, quests' script fields
+
+**Acceptance**
+
+- [ ] Unit: a script loads from a fixture archive, cannot open files or start processes, and a call that runs past its limit is stopped and logged
+- [ ] Unit: `client` lists each function the install's scripts call; the host binds them or logs the first call to one it lacks by name
+- [ ] Unit: a ScriptBehavior object starts its script on spawn, a quest's start and end scripts run, and ResAsyncScript and ResSyncScript run in order with the rest of a result list
+- [ ] Real client: an object with a ScriptBehavior in one of the 11 zones that place one does what its server script says, seen on the client
+
+**Risks**
+
+- The Lua version the scripts are written for decides the library; it is settled under Decisions in doc/ARCHITECTURE.md when this milestone starts.

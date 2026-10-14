@@ -19,6 +19,7 @@
 #include "ItemTemplateRecord.h"
 #include "LoginKeyValidator.h"
 #include "LootListBuilder.h"
+#include "LootMgr.h"
 #include "MapObjectSpawner.h"
 #include "MovementRelay.h"
 #include "NpcServiceRange.h"
@@ -236,6 +237,8 @@ public:
     void SaveQuestLogIfDirty();
     bool ShowLoot(std::vector<LootItem> const& items);
     bool ShowLoot(QuestWireEncoder::LootInfoList const& loot);
+    std::vector<LootDrop> RollLoot(std::string_view tableId) const;
+    void GiveLoot(std::string_view tableId, std::string_view source);
     void HandleTrashInventoryItem(GameMessages::TrashInventoryItem& message);
     void HandleRequestToggleLockItem(GameMessages::RequestToggleLockItem& message);
     void HandleItemLock(GameMessages::ItemLock& message);

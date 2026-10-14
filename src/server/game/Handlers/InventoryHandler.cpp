@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Changes a wizard's backpack on the world thread: an item is added only while the backpack has room for it under the capacity read at that moment, and an add to a full one sends MSG_ITEMDROP naming the template and stores nothing; an added item is stored with its instance and backpack row together and shown with GAME MSG_INVENTORYBEHAVIOR_ADDITEM; an item taken away or trashed is deleted only from the wizard that owns it and shown gone with MSG_INVENTORYBEHAVIOR_REMOVEITEM; MSG_TRASHINVENTORYITEM for an item the wizard does not hold, of another template, or locked is refused and logged; MSG_REQUESTTOGGLELOCKITEM locks or unlocks an item the wizard holds, stores it, and answers with the item's pattern word carrying the lock in its top bit; and MSG_LOOT shows the wizard the items it was given, or the gold and experience a quest gave it.
+ * Changes a wizard's backpack on the world thread: an item is added only while the backpack has room for it under the capacity read at that moment, and an add to a full one sends MSG_ITEMDROP naming the template and stores nothing; an added item is stored with its instance and backpack row together and shown with GAME MSG_INVENTORYBEHAVIOR_ADDITEM; an item taken away or trashed is deleted only from the wizard that owns it and shown gone with MSG_INVENTORYBEHAVIOR_REMOVEITEM; MSG_TRASHINVENTORYITEM for an item the wizard does not hold, of another template, or locked is refused and logged; MSG_REQUESTTOGGLELOCKITEM locks or unlocks an item the wizard holds, stores it, and answers with the item's pattern word carrying the lock in its top bit; a loot table is rolled for the wizard by its own facts and its gold, experience, items and spells given, its gold scaled by Rate.Gold.Quest and its experience as a quest's, while reagents and treasure cards are logged as not given yet; and MSG_LOOT shows the wizard the items it was given, or the gold and experience a quest gave it.
  */
 
 #include "CharacterRepository.h"
@@ -16,6 +16,9 @@
 #include <fmt/format.h>
 
 #include <chrono>
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -178,6 +181,58 @@ bool GameSession::SendLoot(PropertyObject const* list, std::string problem)
     loot.GlobalId = _worldGuid;
     loot.LootList = *encoded;
     return SendDmlMessage(loot);
+}
+
+std::vector<LootDrop> GameSession::RollLoot(std::string_view tableId) const
+{
+    if (!_player)
+        return {};
+    static QuestLog const NoQuests;
+    return sLootMgr.Roll(tableId, RequirementFacts(_questLog ? *_questLog : NoQuests));
+}
+
+void GameSession::GiveLoot(std::string_view tableId, std::string_view source)
+{
+    std::shared_ptr<ItemTemplateStore const> const items = sItemMgr.GetItems();
+    std::vector<LootItem> shown;
+    for (LootDrop const& drop : RollLoot(tableId))
+    {
+        switch (drop.Type)
+        {
+            case LootType::Gold:
+                ModifyGold(std::llround(drop.Count * static_cast<double>(sSettings.Get<float>("Rate.Gold.Quest"))));
+                break;
+            case LootType::Item:
+            {
+                ItemTemplateRecord const* const item = items ? items->Find(drop.TemplateId) : nullptr;
+                if (!item)
+                {
+                    LOG_ERROR(InventoryLog, "{} gives wizard {} item template {} from loot table {}, which no item has", source, _worldGuid, drop.TemplateId, tableId);
+                    break;
+                }
+                uint32 given = 0;
+                while (given < drop.Count && AddItem(*item, 1).Result == BackpackAddResult::Added)
+                    ++given;
+                if (given > 0)
+                    shown.push_back({ drop.TemplateId, given });
+                if (given < drop.Count)
+                    LOG_WARN(InventoryLog, "{} gave wizard {} {} of {} {} from loot table {}, since its backpack is full", source, _worldGuid, given, drop.Count, item->ObjectName, tableId);
+                break;
+            }
+            case LootType::Xp:
+                GiveExperience(static_cast<int32>(std::min<uint32>(drop.Count, std::numeric_limits<int32>::max())), XpSource::Quest);
+                break;
+            case LootType::Spell:
+                LearnSpell(drop.TemplateId);
+                break;
+            default:
+                LOG_WARN(InventoryLog, "{} rolls {} {} of template {} for wizard {} from loot table {}, which the server does not give yet", source, drop.Count, LootMgr::TypeName(drop.Type),
+                    drop.TemplateId, _worldGuid, tableId);
+                break;
+        }
+    }
+    if (!shown.empty())
+        ShowLoot(shown);
 }
 
 void GameSession::SaveNewItem(CharacterItem const& item)
