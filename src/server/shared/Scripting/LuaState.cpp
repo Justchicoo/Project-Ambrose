@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens the sandboxed state, counts every block its allocator hands out against the cap, stops a call that runs past its instruction cap from the count hook, turns an error into its message and traceback, refuses precompiled bytecode, and runs the census: unknown globals answer a do-nothing function so a script's top level runs, then the bytecode of every chunk it loaded, its nested functions included, is read through jit.util for the names each GGET reads and each GSET writes, the instruction numbers taken from two probe chunks rather than assumed.
+ * Opens the sandboxed state, counts every block its allocator hands out against the cap, stops a call that runs past its instruction cap from the count hook, turns an error into its message and traceback, refuses precompiled bytecode, and runs the census: unknown globals answer a do-nothing function so a script's top level runs, a vararg function that names arg is handed its arguments as Lua 5.1 did, then the bytecode of every chunk it loaded, its nested functions included, is read through jit.util for the names each GGET reads and each GSET writes, the instruction numbers taken from two probe chunks rather than assumed.
  */
 
 #include "LuaState.h"
@@ -18,6 +18,7 @@ namespace
 {
     constexpr char const* StateKey = "ambrose.state";
     constexpr char const* ChunksKey = "ambrose.chunks";
+    constexpr char const* FallbackKey = "ambrose.fallback";
     constexpr int HookStep = 1000;
 
     constexpr std::string_view CensusReader = R"lua(
@@ -212,6 +213,12 @@ bool LuaState::Open(bool census, std::string& error)
     lua_register(_state, "Log", &LuaState::LuaLog);
     lua_newtable(_state);
     lua_setfield(_state, LUA_REGISTRYINDEX, ChunksKey);
+    lua_pushvalue(_state, LUA_GLOBALSINDEX);
+    lua_newtable(_state);
+    lua_pushcfunction(_state, &LuaState::GlobalIndex);
+    lua_setfield(_state, -2, "__index");
+    lua_setmetatable(_state, -2);
+    lua_pop(_state, 1);
     lua_sethook(_state, &LuaState::CountHook, LUA_MASKCOUNT, HookStep);
     return true;
 }
@@ -264,6 +271,7 @@ bool LuaState::Include(std::string_view name, std::string& error)
         char const* const message = lua_tolstring(_state, -1, &length);
         error = message ? std::string(message, length) : fmt::format("{} does not compile", chunkName.substr(1));
         lua_pop(_state, 1);
+        _compileFailed = true;
         return false;
     }
     if (_census)
@@ -291,6 +299,35 @@ int LuaState::LuaInclude(lua_State* state)
     if (!included)
         return lua_error(state);
     return 0;
+}
+
+void LuaState::SetGlobalFallback()
+{
+    lua_setfield(_state, LUA_REGISTRYINDEX, FallbackKey);
+}
+
+int LuaState::GlobalIndex(lua_State* state)
+{
+    std::size_t length = 0;
+    char const* const key = lua_type(state, 2) == LUA_TSTRING ? lua_tolstring(state, 2, &length) : nullptr;
+    lua_Debug caller;
+    if (key && std::string_view(key, length) == "arg" && lua_getstack(state, 1, &caller))
+    {
+        lua_newtable(state);
+        int count = 0;
+        while (lua_getlocal(state, &caller, -(count + 1)))
+            lua_rawseti(state, -2, ++count);
+        lua_pushinteger(state, count);
+        lua_setfield(state, -2, "n");
+        return 1;
+    }
+    lua_getfield(state, LUA_REGISTRYINDEX, FallbackKey);
+    if (lua_isnil(state, -1))
+        return 1;
+    lua_pushvalue(state, 1);
+    lua_pushvalue(state, 2);
+    lua_call(state, 2, 1);
+    return 1;
 }
 
 int LuaState::LuaLog(lua_State* state)
@@ -326,29 +363,29 @@ LuaScriptCensus LuaState::Census(SourceReader reader, std::string_view name, Lua
     if (!state.Open(true, census.Error))
         return census;
     lua_State* const lua = state._state;
-    lua_pushvalue(lua, LUA_GLOBALSINDEX);
-    lua_newtable(lua);
     lua_pushcfunction(lua, AnswerDoNothing);
-    lua_setfield(lua, -2, "__index");
-    lua_setmetatable(lua, -2);
-    lua_pop(lua, 1);
+    state.SetGlobalFallback();
     census.Loaded = state.Include(name, census.Error);
     census.Files = state._included;
+    census.Compiled = !state._compileFailed;
     std::string error;
-    if (luaL_loadbuffer(lua, CensusReader.data(), CensusReader.size(), "=census") != 0)
-    {
-        census.Error = lua_tostring(lua, -1);
-        return census;
-    }
-    lua_getfield(lua, LUA_REGISTRYINDEX, "_LOADED");
+    luaL_loadbuffer(lua, CensusReader.data(), CensusReader.size(), "=census");
+    lua_getfield(lua, LUA_REGISTRYINDEX, "_PRELOAD");
     lua_getfield(lua, -1, "jit.util");
     lua_remove(lua, -2);
+    if (!lua_isfunction(lua, -1) || lua_pcall(lua, 0, 1, 0) != 0 || !lua_istable(lua, -1))
+    {
+        census.Loaded = false;
+        census.Error = "LuaJIT was built without jit.util, so no bytecode can be read";
+        return census;
+    }
     lua_getfield(lua, LUA_REGISTRYINDEX, ChunksKey);
     luaL_loadbuffer(lua, "return ambrose_probe_read", 25, "=probe");
     luaL_loadbuffer(lua, "ambrose_probe_write = 1", 23, "=probe");
     state._instructions = 0;
     if (!state.Protected(4, 2, error))
     {
+        census.Loaded = false;
         census.Error = error;
         return census;
     }
@@ -357,7 +394,7 @@ LuaScriptCensus LuaState::Census(SourceReader reader, std::string_view name, Lua
     lua_pop(lua, 2);
     for (std::string const& read : reads)
     {
-        if (writes.contains(read))
+        if (writes.contains(read) || read == "arg")
             continue;
         lua_pushlstring(lua, read.data(), read.size());
         lua_rawget(lua, LUA_GLOBALSINDEX);

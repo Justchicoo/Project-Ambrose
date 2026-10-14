@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the install's Lua scripts reach a wizard's session through: the ResSyncScript result, which calls m_function of m_script for the wizard the result runs for and saves the quest log the script changed, and the script functions bound to the quest log, ScriptCompleteQuest, which finishes one quest, giving it first when the wizard lacks it, and CompleteQuestChain, which finishes every quest the server holds whose name continues the chain's, as the install's WorldBuilding scripts call them; each takes the wizard by the CharacterID or GameObjectID the call was handed, and the completions run their own results as any other does.
+ * What the install's Lua scripts reach a wizard's session through: the ResSyncScript result, which calls m_function of m_script for the wizard the result runs for and saves the quest log the script changed, and the script functions bound to the quest log, ScriptCompleteQuest, which finishes one quest, giving it first when the wizard lacks it, CompleteQuestChain, which finishes every quest the server holds whose name continues the chain's, and GrantXP, which gives experience as a quest does, as the install's WorldBuilding scripts call them; each takes the wizard by the CharacterID or GameObjectID the call was handed, and the completions run their own results as any other does.
  */
 
 #ifndef AMBROSE_SESSIONSCRIPTS_H

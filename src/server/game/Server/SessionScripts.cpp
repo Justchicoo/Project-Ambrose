@@ -7,6 +7,7 @@
 #include "GameSession.h"
 #include "Log.h"
 #include "ObjectGuid.h"
+#include "PlayerLevel.h"
 #include "PropertyObject.h"
 #include "QuestLog.h"
 #include "QuestMgr.h"
@@ -17,6 +18,7 @@
 #include <fmt/format.h>
 
 #include <chrono>
+#include <limits>
 #include <memory>
 
 namespace
@@ -35,14 +37,32 @@ namespace
         return text ? *text : std::string();
     }
 
-    QuestLog* WizardLog(lua_State* state, LuaScriptCall const& call)
+    GameSession* Wizard(lua_State* state, LuaScriptCall const& call)
     {
         lua_Number const wizard = luaL_checknumber(state, 1);
         bool const named = wizard == static_cast<lua_Number>(call.CharacterId) || wizard == static_cast<lua_Number>(call.GameObjectId);
-        QuestLog* const log = named && call.Session ? call.Session->GetQuestLog() : nullptr;
+        if (!named || !call.Session)
+            luaL_error(state, "the script names a wizard this call does not run for");
+        return call.Session;
+    }
+
+    QuestLog* WizardLog(lua_State* state, LuaScriptCall const& call)
+    {
+        QuestLog* const log = Wizard(state, call)->GetQuestLog();
         if (!log)
-            luaL_error(state, "the script names a wizard whose quest log this call does not hold");
+            luaL_error(state, "the wizard this call runs for has no quest log loaded");
         return log;
+    }
+
+    int GrantXP(lua_State* state, LuaScriptCall const& call)
+    {
+        GameSession* const session = Wizard(state, call);
+        lua_Number const amount = luaL_checknumber(state, 2);
+        if (amount < 1 || amount > static_cast<lua_Number>(std::numeric_limits<int32>::max()))
+            return luaL_error(state, "GrantXP takes a positive amount of experience");
+        XpGrant const grant = session->GiveExperience(static_cast<int32>(amount), XpSource::Quest);
+        lua_pushnumber(state, static_cast<lua_Number>(grant.Amount));
+        return 1;
     }
 
     int ScriptCompleteQuest(lua_State* state, LuaScriptCall const& call)
@@ -115,6 +135,7 @@ void SessionScripts::Register()
 {
     sLuaScriptMgr.RegisterFunction("ScriptCompleteQuest", ScriptCompleteQuest);
     sLuaScriptMgr.RegisterFunction("CompleteQuestChain", CompleteQuestChain);
+    sLuaScriptMgr.RegisterFunction("GrantXP", GrantXP);
     sResultMgr.Register(SyncScriptClass, [](PropertyObject const& result, ResultContext const& context)
     {
         std::string error;

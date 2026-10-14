@@ -1218,8 +1218,8 @@ RitualObjectBehavior has 82 placements in 10 zones, each with requirements, resu
 
 **Acceptance**
 
-- [ ] Scripts load from the install in a sandbox
-- [ ] Every script API function the scripts call is listed, and the host binds them or names the missing ones
+- [x] Scripts load from the install in a sandbox [LuaStateTest.TheSandboxLeavesOutFilesTheSystemAndBytecode, LuaScriptMgrTest.ItReadsTheInstallsScriptsAndTheReloadTargetSwapsInAnEditedRootWad, LuaScriptClientTest.EveryInstallScriptButOneShippedBrokenCompilesAndRunsItsTopLevel]
+- [x] Every script API function the scripts call is listed, and the host binds them or names the missing ones [LuaStateTest.TheCensusNamesTheGlobalsAScriptAndItsIncludesReadAndNeverSet, LuaScriptMgrTest.AGlobalNobodyDefinesIsLoggedOnceByName, LuaScriptClientTest.TheServerReachesItsOwnBindingOfTheWorldBuildingScriptsFunctions]
 - [ ] Object, quest and result scripts run
 - [ ] Real client: an object with a server script runs it
 
@@ -1241,8 +1241,8 @@ Root.wad ships 158 Scripts/*.lua: a Server.lua, Client.lua and Messages.lua for 
 
 **Acceptance**
 
-- [ ] Unit: a script loads from a fixture archive, cannot open files or start processes, and a call that runs past its limit is stopped and logged
-- [ ] Unit: `client` lists each function the install's scripts call; the host binds them or logs the first call to one it lacks by name
+- [x] Unit: a script loads from a fixture archive, cannot open files or start processes, and a call that runs past its limit is stopped and logged [LuaScriptLibraryTest.OnlyTheLuaEntriesOfTheScriptsFolderAreKeptByTheirNameUnderIt, LuaStateTest.TheSandboxLeavesOutFilesTheSystemAndBytecode, LuaStateTest.ACallPastItsInstructionCapStopsAndTheStateStaysUsable, LuaStateTest.ACallPastItsMemoryCapStopsWithTheReason]
+- [x] Unit: `client` lists each function the install's scripts call; the host binds them or logs the first call to one it lacks by name [LuaStateTest.TheCensusNamesTheGlobalsAScriptAndItsIncludesReadAndNeverSet, LuaScriptMgrTest.ACallRunsTheFunctionWithTheArgumentsAndRegisteredFunctionsGetTheCall, LuaScriptMgrTest.AGlobalNobodyDefinesIsLoggedOnceByName]
 - [ ] Unit: a ScriptBehavior object starts its script on spawn, a quest's start and end scripts run, and ResAsyncScript and ResSyncScript run in order with the rest of a result list
 - [ ] Real client: an object with a ScriptBehavior in one of the 11 zones that place one does what its server script says, seen on the client
 

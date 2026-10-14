@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A type dump and catalog holding the zone trigger result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport, ResSpawn and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
+ * A type dump and catalog holding the zone trigger result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport, ResSpawn, ResSyncScript and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
  */
 
 #ifndef AMBROSE_RESULTFIXTURES_H
@@ -38,6 +38,8 @@ namespace ResultFixtures
             { "m_useQuestAsOriginator", Property("bool", "m_useQuestAsOriginator", 1, 7) } });
         AddClass(classes, "class ResTeleport", Json::array({ "PropertyClass" }), {});
         AddClass(classes, "class ResSpawn", Json::array({ "PropertyClass" }), {});
+        AddClass(classes, "class ResSyncScript", Json::array({ "PropertyClass" }), { { "m_script", Property("std::string", "m_script", 0, 7) },
+            { "m_function", Property("std::string", "m_function", 1, 7) } });
         AddClass(classes, std::string(FirstTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
         AddClass(classes, std::string(SecondTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();

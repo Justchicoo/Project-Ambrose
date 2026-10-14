@@ -132,14 +132,10 @@ bool LuaScriptMgr::Call(LuaScriptCall const& call, std::string& error) const
         lua_pushcclosure(lua, &LuaScriptMgr::Dispatch, 2);
         lua_setglobal(lua, name.c_str());
     }
-    lua_pushvalue(lua, LUA_GLOBALSINDEX);
-    lua_newtable(lua);
     lua_pushlightuserdata(lua, const_cast<LuaScriptMgr*>(this));
     lua_pushlightuserdata(lua, const_cast<LuaScriptCall*>(&call));
     lua_pushcclosure(lua, &LuaScriptMgr::Unbound, 2);
-    lua_setfield(lua, -2, "__index");
-    lua_setmetatable(lua, -2);
-    lua_pop(lua, 1);
+    state->SetGlobalFallback();
     if (!state->Include(script, error))
         return false;
     lua_getglobal(lua, call.Function.c_str());
