@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A type dump and catalog holding the zone trigger result classes tests run, ResClientNotifyText, ResAddDynaMod, ResTeleport, ResSpawn and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
+ * A type dump and catalog holding the zone trigger result classes tests run, ResClientNotifyText, ResAddDynaMod, ResRemoveDynaMod, ResTeleport, ResSpawn and two classes only tests use, with decoded results of them built ready to run and encoded as zone_trigger_result holds them.
  */
 
 #ifndef AMBROSE_RESULTFIXTURES_H
@@ -34,6 +34,8 @@ namespace ResultFixtures
         AddClass(classes, "class ResAddDynaMod", Json::array({ "PropertyClass" }), { { "m_dynaModClientTag", Property("std::string", "m_dynaModClientTag", 0, 7) },
             { "m_dynaModRemove", Property("bool", "m_dynaModRemove", 1, 7) }, { "m_dynaModState", Property("std::string", "m_dynaModState", 2, 7) },
             { "m_zoneName", Property("std::string", "m_zoneName", 3, 7) } });
+        AddClass(classes, "class ResRemoveDynaMod", Json::array({ "PropertyClass" }), { { "m_dynaModClientTag", Property("std::string", "m_dynaModClientTag", 0, 7) },
+            { "m_useQuestAsOriginator", Property("bool", "m_useQuestAsOriginator", 1, 7) } });
         AddClass(classes, "class ResTeleport", Json::array({ "PropertyClass" }), {});
         AddClass(classes, "class ResSpawn", Json::array({ "PropertyClass" }), {});
         AddClass(classes, std::string(FirstTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
@@ -61,7 +63,7 @@ namespace ResultFixtures
     {
         PropertyObjectPtr object = PropertyObject::Create(Catalog(), className);
         if (object && !text.empty())
-            object->Set(className == "class ResAddDynaMod" ? "m_dynaModClientTag" : "m_text", std::string(text));
+            object->Set(className == "class ResAddDynaMod" || className == "class ResRemoveDynaMod" ? "m_dynaModClientTag" : "m_text", std::string(text));
         return ResultEntry{ std::string(className), std::shared_ptr<PropertyObject const>(std::move(object)), position };
     }
 

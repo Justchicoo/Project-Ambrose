@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests one wizard's Dynamods: a new mod takes the next index, the same mod again changes nothing, a changed one replaces the old under a fresh index, a removal hides its tag and an add shows it while an untagged or unnamed object is left to its requirements, a stored set keeps the first of a twice-stored mod and counts on from the highest index it kept, and a zone's armed mods leave out removals and other zones.
+ * Tests one wizard's Dynamods: a new mod takes the next index, the same mod again changes nothing, a changed one replaces the old under a fresh index, a removal hides its tag and an add shows it while an untagged or unnamed object is left to its requirements, a stored set keeps the first of a twice-stored mod and counts on from the highest index it kept, a zone's armed mods leave out removals and other zones, and erasing a tag takes every zone's mod of it away and keeps its index from being given out again.
  */
 
 #include "WizardDynaMods.h"
@@ -53,4 +53,22 @@ TEST(WizardDynaModsTest, AStoredSetKeepsTheFirstOfATwiceStoredModAndCountsOnFrom
     ASSERT_EQ(armed.size(), 2u);
     EXPECT_EQ(armed[0].Tag, "PetParkGate");
     EXPECT_EQ(armed[1].Tag, "Ultra_Rattlebones_40");
+}
+
+TEST(WizardDynaModsTest, ErasingATagTakesEveryZonesModOfItAwayAndKeepsItsIndexSpent)
+{
+    WizardDynaMods mods;
+    mods.Apply(Hub, "AV-QuestLight-KnightsHall", "On", false, 9);
+    mods.Apply("Avalon/AV_Z00_Hub", "AV-QuestLight-KnightsHall", "On", false, 9);
+    mods.Apply(Hub, "PetParkCollision", "", true, 9);
+    std::vector<DynaMod> const erased = mods.Erase("AV-QuestLight-KnightsHall");
+    ASSERT_EQ(erased.size(), 2u);
+    EXPECT_EQ(erased[0].Zone, Hub);
+    EXPECT_EQ(erased[1].Zone, "Avalon/AV_Z00_Hub");
+    EXPECT_EQ(erased[1].Index, 2);
+    ASSERT_EQ(mods.All().size(), 1u);
+    EXPECT_EQ(mods.Find(Hub, "AV-QuestLight-KnightsHall"), nullptr);
+    EXPECT_EQ(mods.Visibility(Hub, "AV-QuestLight-KnightsHall"), std::nullopt) << "with no mod left, the object's requirements decide";
+    EXPECT_TRUE(mods.Erase("AV-QuestLight-KnightsHall").empty()) << "a tag with no mod erases nothing";
+    EXPECT_EQ(mods.Apply(Hub, "AV-QuestLight-KnightsHall", "On", false, 9).Added->Index, 4) << "an erased mod's index is not given out again";
 }

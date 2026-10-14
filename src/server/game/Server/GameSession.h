@@ -348,6 +348,7 @@ private:
     void FollowReloadedVolumes();
     void WalkThroughDoor(std::vector<std::string> const& doors);
     void ApplyDynaMods(std::vector<ZoneDynaMod> const& mods);
+    void EraseDynaMods(std::string_view tag);
     static void RegisterResultHandlers();
     void ShowNotifyText(ZoneNotifyText const& text);
     void SendDynaMods();

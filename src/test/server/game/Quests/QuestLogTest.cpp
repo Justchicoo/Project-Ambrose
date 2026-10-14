@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests a wizard's quest log without a database: a quest taken, its goal started and counted to 2 of 5, turned into rows and read back keeps its GIDs and count; completing a quest takes it out of the log and leaves 'Complete' = 1 in its registry, so the wizard has completed it; and on load a quest whose template is gone, with its goals, and a goal its quest no longer has are dropped with a warning each, while a quest store that is not there drops nothing; a completed goal hands out its GoalComplete event once, and a wizard's Dynamods mark its progress changed and come back whole from its rows.
+ * Tests a wizard's quest log without a database: a quest taken, its goal started and counted to 2 of 5, turned into rows and read back keeps its GIDs and count; completing a quest takes it out of the log and leaves 'Complete' = 1 in its registry, so the wizard has completed it; and on load a quest whose template is gone, with its goals, and a goal its quest no longer has are dropped with a warning each, while a quest store that is not there drops nothing; a completed goal hands out its GoalComplete event once, and a wizard's Dynamods mark its progress changed, come back whole from its rows, and leave by tag when a quest result takes them away.
  */
 
 #include "ObjectGuid.h"
@@ -168,4 +168,15 @@ TEST(QuestLogTest, ACompletedGoalPublishesItsEventOnceAndAWizardsDynamodsComeBac
     EXPECT_TRUE(warnings.empty());
     EXPECT_EQ(loaded.GetDynaMods().All(), log.GetDynaMods().All());
     EXPECT_EQ(loaded.GetDynaMods().Visibility("WizardCity/WC_Hub", "PetParkCollision"), false);
+
+    log.MarkSaved();
+    uint64 const kept = log.GetChangeCount();
+    EXPECT_TRUE(log.EraseDynaMods("WC_GateCommons_ToPetPark").empty());
+    EXPECT_FALSE(log.IsDirty());
+    EXPECT_EQ(log.GetChangeCount(), kept) << "erasing a tag with no mod changes nothing";
+    ASSERT_EQ(log.EraseDynaMods("PetParkCollision").size(), 1u);
+    EXPECT_TRUE(log.IsDirty());
+    EXPECT_GT(log.GetChangeCount(), kept) << "a dropped mod moves the wizard's progress, so what it sees is asked again";
+    EXPECT_EQ(log.ToStored(3).DynaMods.size(), 1u);
+    EXPECT_EQ(log.GetDynaMods().Visibility("WizardCity/WC_Hub", "PetParkCollision"), std::nullopt);
 }

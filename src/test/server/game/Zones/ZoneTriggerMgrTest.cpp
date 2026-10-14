@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a trigger's results load in order, one of a class the server does not know left out and one that does not read failing the load; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load. Without a database, Ravenwood POI's result as the client data holds it reads as the WizardPOI_00000001 notify text of type 1, and a cut one does not; an AddDynaMod result reads as the tag and state it names, one with no tag or of another class does not, though one with no tag passes the load as a kept result that changes nothing, and a trigger that fires hands back the results it runs, one with requirements firing only for a wizard whose facts meet them.
+ * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a trigger's results load in order, one of a class the server does not know left out and one that does not read failing the load, and a ResRemoveDynaMod reads the tag it takes away or refuses; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load. Without a database, Ravenwood POI's result as the client data holds it reads as the WizardPOI_00000001 notify text of type 1, and a cut one does not; an AddDynaMod result reads as the tag and state it names, one with no tag or of another class does not, though one with no tag passes the load as a kept result that changes nothing, and a trigger that fires hands back the results it runs, one with requirements firing only for a wizard whose facts meet them.
  */
 
 #include "CharacterTypeFixtures.h"
@@ -231,6 +231,8 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
     AddClass(classes, "class ResAddDynaMod", Json::array({ "PropertyClass" }), { { "m_dynaModClientTag", Property("std::string", "m_dynaModClientTag", 0, 7) },
         { "m_dynaModRemove", Property("bool", "m_dynaModRemove", 1, 7) }, { "m_dynaModState", Property("std::string", "m_dynaModState", 2, 7) },
         { "m_zoneName", Property("std::string", "m_zoneName", 3, 7) } });
+    AddClass(classes, "class ResRemoveDynaMod", Json::array({ "PropertyClass" }), { { "m_dynaModClientTag", Property("std::string", "m_dynaModClientTag", 0, 7) },
+        { "m_useQuestAsOriginator", Property("bool", "m_useQuestAsOriginator", 1, 7) } });
     AddClass(classes, "class ResClientNotifyText", Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
     TypeRegistry registry;
     ASSERT_TRUE(registry.LoadFromText(Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump(), "dynamod.json")) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
@@ -248,6 +250,8 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
             EXPECT_EQ(result->Set("m_dynaModClientTag", std::string(tag)), PropertySetResult::Ok);
             EXPECT_EQ(result->Set("m_dynaModState", std::string("IdleOpen")), PropertySetResult::Ok);
         }
+        else if (className == ZoneTriggerMgr::RemoveDynaModClass)
+            EXPECT_EQ(result->Set("m_dynaModClientTag", std::string(tag)), PropertySetResult::Ok);
         EncodeResult const encoded = ObjectSerializer::Encode(result.get(), options);
         EXPECT_TRUE(encoded.Ok()) << encoded.Detail;
         return encoded.Bytes;
@@ -272,6 +276,12 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
     EXPECT_EQ(ZoneTriggerMgr::CheckResult(gate, error), ZoneTriggerMgr::ResultCheck::Good);
     EXPECT_EQ(ZoneTriggerMgr::CheckResult(untagged, error), ZoneTriggerMgr::ResultCheck::Untagged) << "the client data holds mods that name no tag, and one must not fail the load";
     EXPECT_EQ(ZoneTriggerMgr::CheckResult(read(ZoneTriggerMgr::NotifyTextClass, ""), error), ZoneTriggerMgr::ResultCheck::Refused);
+
+    ResultEntry const dropped = read(ZoneTriggerMgr::RemoveDynaModClass, "AV-QuestLight-KnightsHall");
+    EXPECT_EQ(ZoneTriggerMgr::RemoveDynaModTagOf(*dropped.Object, error), "AV-QuestLight-KnightsHall");
+    EXPECT_FALSE(ZoneTriggerMgr::RemoveDynaModTagOf(*read(ZoneTriggerMgr::RemoveDynaModClass, "").Object, error)) << "a removal must name the tag it takes away";
+    EXPECT_FALSE(ZoneTriggerMgr::RemoveDynaModTagOf(*gate.Object, error));
+    EXPECT_NE(error.find("ResAddDynaMod"), std::string::npos) << error;
 
     ZoneTriggerData data;
     data.Triggers.push_back({ 3, "Trigger OpenGateToUW", -1, 0.0f, false, { "GoalComplete_WC-MAIN-C01-003_WC-MAIN-C01-003_Goal0" }, false, { gate } });

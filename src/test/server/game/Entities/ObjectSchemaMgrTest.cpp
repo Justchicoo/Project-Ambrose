@@ -228,7 +228,7 @@ TEST_F(ObjectSchemaMgrTest, EveryAuthoredClassAndPropertyHashesAsItsNameSays)
         }
     }
     for (std::string_view const name : { "class TriggerList", "class Trigger", "class StateTrigger", "class TriggerObjectInfo", "class TriggerVolumeList", "class TriggerVolume", "class TriggerGroupList",
-             "class TriggerGroup", "class ResClientNotifyText", "class ResAddDynaMod", "class ResActorDialog", "class ResDownloadPackage" })
+             "class TriggerGroup", "class ResClientNotifyText", "class ResAddDynaMod", "class ResRemoveDynaMod", "class ResActorDialog", "class ResDownloadPackage" })
         EXPECT_NE(std::find(names.begin(), names.end(), name), names.end()) << name;
     EXPECT_EQ(StringHash::KiStringHash("class TriggerList"), 0x06DAAC43u) << "the root of every triggers.xml";
     EXPECT_EQ(StringHash::KiStringHash("class Trigger"), 0x068C265Bu);

@@ -139,7 +139,7 @@ Objects show the right animation state, and the world changes a wizard has earne
 **Deliverables**
 
 - GameObject state: m_startState on spawn, else the state set's start state; map-wide MSG_ENTERSTATE and MSG_LEAVESTATE for shared changes.
-- Dynamods: each character keeps a list of mods, one per (zone, client tag), holding the tag, zone name, state, remove flag, index and originator. A mod is added or changed by the ResAddDynaMod trigger result (m_dynaModRemove true hides the tagged object instead) and by a quest or encounter template's QuestDynaModInfo list, which is dropped when the quest ends unless m_existBeyondQuest is set. The index is the server's handle for the mod and is unique within the character's list.
+- Dynamods: each character keeps a list of mods, one per (zone, client tag), holding the tag, zone name, state, remove flag, index and originator. A mod is added or changed by the ResAddDynaMod trigger result (m_dynaModRemove true hides the tagged object instead), taken away by tag in every zone by the ResRemoveDynaMod quest result, which the server defines since the client gives it no layout, and by a quest or encounter template's QuestDynaModInfo list, which is dropped when the quest ends unless m_existBeyondQuest is set. The index is the server's handle for the mod and is unique within the character's list.
 - Applying a mod is the server's job: the client never changes an object's state or visibility from a mod. For each object in the wizard's view whose m_zoneTag matches a mod for the current zone, the server sends that wizard alone MSG_ENTERSTATE with the mod's state (or omits or removes the object for a hide), on zone entry and the moment the mod changes. A mod whose state set has a transition state (IdleClosed to IdleOpen through Open) plays the transition when it changes live and lands on the final state on zone entry.
 - MSG_DYNAMODBEHAVIOR_UPDATEMODS on the wizard's player object, which alone carries DynaModBehavior: UpdateAll with the whole list at login, then Add and Remove as mods change, so the client arms and clears its own spawners named by each tag. MSG_DYNAMODDUMP is debug only and is not sent.
 - Tags that name no object in the zone (WC_Hub's PetParkGate and PetParkCollision) are kept and applied to nothing, and reported once when content loads.
@@ -166,7 +166,7 @@ Objects show the right animation state, and the world changes a wizard has earne
 
 **Risks**
 
-- Three ResAddDynaMod bools are unnamed in the type dump, and what they change is unknown.
+- One ResAddDynaMod bool is still unnamed; the quest files name the other two, m_useQuestAsOriginator and m_bShowsObject, whose hashes prove the names, and what m_bShowsObject changes when it is 0 is unverified: the server shows every tagged object a non-removal mod names.
 - Behavior of IgnoreIfCurrentStateIsOff and the Data (EmoteStateOverrideInfo) field is unverified.
 
 ## 10.04 Requirement-gated visibility (WLD-19 part 2)

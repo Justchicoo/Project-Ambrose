@@ -1443,6 +1443,12 @@ void GameSession::RegisterResultHandlers()
             mod->Zone = context.Zone;
         context.Session->ApplyDynaMods({ *mod });
     });
+    sResultMgr.Register(ZoneTriggerMgr::RemoveDynaModClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::string error;
+        if (std::optional<std::string> const tag = ZoneTriggerMgr::RemoveDynaModTagOf(result, error))
+            context.Session->EraseDynaMods(*tag);
+    });
     sResultMgr.Register(ZoneTriggerMgr::TeleportClass, [](PropertyObject const&, ResultContext const& context) { context.Session->_resultDoors.push_back(context.Source); });
     auto const spawn = [](PropertyObject const&, ResultContext const& context)
     {
@@ -1515,6 +1521,26 @@ void GameSession::ApplyDynaMods(std::vector<ZoneDynaMod> const& mods)
                         ShowDynaModState(object.GlobalId, object.Spawn.Tag);
     }
     SaveQuestLogIfDirty();
+}
+
+void GameSession::EraseDynaMods(std::string_view tag)
+{
+    if (!_questLog)
+        return;
+    std::vector<DynaMod> const erased = _questLog->EraseDynaMods(tag);
+    for (DynaMod const& mod : erased)
+    {
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} dropped the Dynamod {} in {}", GetSessionId(), _worldGuid, Ambrose::ForLog(mod.Tag, 128), Ambrose::ForLog(mod.Zone, 128));
+        if (!_dynaModsShown)
+            continue;
+        std::string problem;
+        DynaModChange change;
+        change.Removed = mod;
+        if (std::optional<GameMessages::DynaModBehaviorUpdateMods> const message = DynaModMessages::Change(sTypeRegistry.GetCatalog(), _worldGuid, _zonePath, change, problem))
+            SendDmlMessage(*message);
+    }
+    if (!erased.empty())
+        SaveQuestLogIfDirty();
 }
 
 void GameSession::SendDynaMods()
