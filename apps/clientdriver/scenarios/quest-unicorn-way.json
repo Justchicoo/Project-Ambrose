@@ -3,7 +3,7 @@
   "include": "parts/common.json",
   "notes": [
     "The new-player start: Merle Ambrose, template 38168 (WC-HUB-NPC01), offers WC-COMMONS-MAIN-001 with its three Prep lines, and To Ravenwood! (WC-MAIN-C01-001) waits for it,",
-    "as authored in data/sql/updates/pending_db_world/rev_1792006207_unicorn-way.sql. ACCEPT runs the quest's start ResTeleport, which asks the client to leave for",
+    "as authored in data/sql/updates/db_world/2026_10_14_12.sql. ACCEPT runs the quest's start ResTeleport, which asks the client to leave for",
     "WizardCity/WC_Streets/WC_Unicorn, and the quest's Start dialog, Ambrose's farewell and Gamma pointing at Private Connelly, plays once the wizard stands there."
   ],
   "requires": {
