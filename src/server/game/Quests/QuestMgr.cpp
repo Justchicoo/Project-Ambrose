@@ -128,9 +128,9 @@ bool QuestMgr::ReadWorldRows(QuestRows& rows, std::vector<std::string>& errors)
     {
         rows.Results.push_back(QuestResultRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<std::string>(), f[4].Get<std::vector<uint8>>(), f[5].Get<uint8>() != 0 });
     });
-    ok &= Select("object_template", "SELECT `template_id`, `object_name` FROM `object_template`", errors, [&rows](Field const* f)
+    ok &= Select("object_template", "SELECT `template_id`, `object_name`, `icon` FROM `object_template`", errors, [&rows](Field const* f)
     {
-        rows.Objects.push_back(QuestObjectRow{ f[0].Get<uint32>(), f[1].Get<std::string>() });
+        rows.Objects.push_back(QuestObjectRow{ f[0].Get<uint32>(), f[1].Get<std::string>(), f[2].Get<std::string>() });
     });
     return ok;
 }

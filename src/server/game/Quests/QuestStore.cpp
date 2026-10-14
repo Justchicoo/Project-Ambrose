@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's and each dialog line's stored RequirementList with the type dump it is given, a list it cannot read closing the quest or hiding the line and naming why, reads the results of each quest's start and end and of each goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog or else from its stored starter template, and fills the lookups by template, object name, tag, adjective and zone.
+ * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's and each dialog line's stored RequirementList with the type dump it is given, a list it cannot read closing the quest or hiding the line and naming why, reads the results of each quest's start and end and of each goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog or else from its stored starter template, shows a talk-to goal with no image of its own the portrait icon of the NPC it names, and fills the lookups by template, object name, tag, adjective and zone.
  */
 
 #include "QuestStore.h"
@@ -235,7 +235,14 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
     store->Index();
     for (QuestObjectRow const& row : rows.Objects)
         if (auto const named = store->_personaGoalsByObjectName.find(row.ObjectName); named != store->_personaGoalsByObjectName.end())
+        {
             store->_personaGoalsByTemplateId[row.TemplateId] = named->second;
+            if (row.Icon.empty())
+                continue;
+            for (QuestGoalRef const& ref : named->second)
+                if (QuestGoal* const found = goal(ref.Quest, ref.Goal); found && found->Row.Image1.empty())
+                    found->Row.Image1 = row.Icon;
+        }
     return store;
 }
 

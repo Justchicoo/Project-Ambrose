@@ -163,6 +163,7 @@ struct QuestObjectRow
 {
     uint32 TemplateId = 0;
     std::string ObjectName;
+    std::string Icon = {};
 };
 
 struct QuestRows
