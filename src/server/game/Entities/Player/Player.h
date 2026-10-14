@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A live wizard whose stats change on the world thread, whose potion refill is timed there, and whose dirty character stats are saved by its session.
+ * A live wizard whose stats change on the world thread, whose potion refill is timed there, and whose dirty character stats, and the level and experience its character row keeps, are saved by its session.
  */
 
 #ifndef AMBROSE_PLAYER_H
@@ -22,6 +22,8 @@ public:
     PlayerStats const& GetStats() const noexcept { return _stats; }
     bool HasDirtyStats() const noexcept { return _dirtyStats; }
     void ClearDirtyStats() noexcept { _dirtyStats = false; }
+    bool HasDirtyProgress() const noexcept { return _dirtyProgress; }
+    void ClearDirtyProgress() noexcept { _dirtyProgress = false; }
 
     bool SetHealth(int32 value) noexcept;
     bool SetMana(int32 value) noexcept;
@@ -34,11 +36,15 @@ public:
     bool SetPowerPip(float value) noexcept;
     bool SetShadowPipRating(float value) noexcept;
     bool SetShowItemLock(bool value) noexcept;
+    LevelProgress GiveExperience(int32 amount, PlayerLevelSet const& levels) noexcept;
+    std::optional<LevelProgress> SetLevel(int32 level, PlayerLevelSet const& levels) noexcept;
+    bool SetLevelLocked(bool locked) noexcept;
 
 private:
     PlayerStats _stats;
     std::optional<Clock::time_point> _nextPotionRefill;
     bool _dirtyStats = false;
+    bool _dirtyProgress = false;
 };
 
 #endif

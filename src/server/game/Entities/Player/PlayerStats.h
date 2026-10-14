@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A wizard's stats while it plays: its level, experience and school from its character row, what character_stats keeps, and what its school's row for its level gives, the base health, mana, gold pouch, energy, power pip chance, shadow pip rating, archmastery and pip conversion rating, with the stat configuration's shadow pip limit; live health, mana, gold, power pip and potion changes are clamped to those bases; it fills the WizGameStats the player object carries and the ClientMagicSchoolBehavior that holds the level, experience and training points, and gives back the row a save writes.
+ * A wizard's stats while it plays: its level, experience and school from its character row, what character_stats keeps, and what its school's row for its level gives, the base health, mana, gold pouch, energy, power pip chance, shadow pip rating, archmastery and pip conversion rating, with the stat configuration's shadow pip limit; live health, mana, gold, power pip and potion changes are clamped to those bases; experience it gains carries it up as many levels as its school's rows reach, each one giving its training points and new bases at full health and mana, while experience past the level cap, or past the next level while its level is locked, goes to its overflow; it fills the WizGameStats the player object carries and the ClientMagicSchoolBehavior that holds the level, experience and training points, and gives back the row a save writes.
  */
 
 #ifndef AMBROSE_PLAYERSTATS_H
@@ -16,6 +16,18 @@
 #include <optional>
 #include <string>
 #include <string_view>
+
+struct LevelProgress
+{
+    int32 OldLevel = 0;
+    int32 NewLevel = 0;
+    int32 OldExperience = 0;
+    int32 NewExperience = 0;
+    int32 TrainingPointsGained = 0;
+    int32 OverflowGained = 0;
+
+    bool LeveledUp() const noexcept { return NewLevel != OldLevel; }
+};
 
 class PlayerStats
 {
@@ -42,6 +54,7 @@ public:
     float GetPowerPip() const noexcept { return _powerPip; }
     float GetShadowPipRating() const noexcept { return _shadowPipRating; }
     int32 GetTrainingPoints() const noexcept { return _stored.TrainingPoints; }
+    int32 GetOverflowXp() const noexcept { return _stored.OverflowXp; }
     std::array<uint32, 3> const& GetPurchasedCustomEmotes() const noexcept { return _stored.PurchasedCustomEmotes; }
     std::array<uint32, 3> const& GetPurchasedCustomTeleportEffects() const noexcept { return _stored.PurchasedCustomTeleportEffects; }
     bool GetShowItemLock() const noexcept { return _stored.ShowItemLock; }
@@ -56,11 +69,16 @@ public:
     bool SetPowerPip(float value) noexcept;
     bool SetShadowPipRating(float value) noexcept;
     bool SetShowItemLock(bool value) noexcept;
+    LevelProgress GiveExperience(int32 amount, PlayerLevelSet const& levels) noexcept;
+    std::optional<LevelProgress> SetLevel(int32 level, PlayerLevelSet const& levels) noexcept;
+    bool SetLevelLocked(bool locked) noexcept;
     CharacterStats ToStored() const;
     bool WriteGameStats(PropertyObject& gameStats, std::string& problem) const;
     bool WriteSchool(PropertyObject& behavior, std::string& problem) const;
 
 private:
+    void EnterLevel(PlayerLevelInfo const& row) noexcept;
+
     uint32 _schoolId = 0;
     int32 _level = 0;
     int32 _experience = 0;

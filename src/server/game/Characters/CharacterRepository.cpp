@@ -515,6 +515,19 @@ CharacterRepository::Statement CharacterRepository::PrepareLoadStats(uint64 guid
     return statement;
 }
 
+CharacterRepository::Statement CharacterRepository::PrepareSaveProgress(uint64 guid, int32 level, int32 experience, uint64 revision)
+{
+    Statement statement = Prepare(CHAR_UPD_PROGRESS);
+    if (!statement)
+        return statement;
+    statement->SetData(0, level);
+    statement->SetData(1, experience);
+    statement->SetData(2, revision);
+    statement->SetData(3, guid);
+    statement->SetData(4, revision);
+    return statement;
+}
+
 CharacterRepository::Statement CharacterRepository::PrepareSaveStats(uint64 guid, CharacterStats const& stats)
 {
     Statement statement = Prepare(CHAR_REP_CHARACTER_STATS);
