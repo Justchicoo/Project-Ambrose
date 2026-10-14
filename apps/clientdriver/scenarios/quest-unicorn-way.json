@@ -231,17 +231,17 @@
       "attempts": 2,
       "until": {
         "action": "wait_game_log",
-        "pattern": "wizard {wizard_guid} accepted quest (\\S+) from NPC \\d+ with 1 start goal",
+        "pattern": "asked its client to leave \\S+ for (\\S+)",
         "timeout": 10,
-        "expect": "WC-COMMONS-MAIN-001"
+        "expect": "WizardCity/WC_Streets/WC_Unicorn"
       }
     },
     {
       "action": "wait_game_log",
-      "name": "accepting sends the wizard toward Unicorn Way",
-      "pattern": "asked its client to leave \\S+ for (\\S+)",
+      "name": "the quest is accepted after its start results send the wizard toward Unicorn Way",
+      "pattern": "wizard {wizard_guid} accepted quest (\\S+) from NPC \\d+ with 1 start goal",
       "timeout": 20,
-      "expect": "WizardCity/WC_Streets/WC_Unicorn"
+      "expect": "WC-COMMONS-MAIN-001"
     },
     {
       "action": "wait_game_log",

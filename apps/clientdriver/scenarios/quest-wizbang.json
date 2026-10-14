@@ -144,18 +144,18 @@
     },
     {
       "action": "wait_game_log",
-      "name": "the client loads the zone and the wizard stands in it",
-      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
-      "timeout": 300,
-      "expect": "WizardCity/Interiors/WC_Headmistress_House"
-    },
-    {
-      "action": "wait_game_log",
       "name": "Merle Ambrose shows a '!' to the new wizard",
       "pattern": "wizard {wizard_guid} was shown the (\\S+) wizbang over NPC \\d+ \\(template 38168\\)",
       "timeout": 20,
       "expect": "StartQuest",
       "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/Interiors/WC_Headmistress_House"
     },
     {
       "action": "shot",
@@ -309,18 +309,18 @@
     },
     {
       "action": "wait_game_log",
-      "name": "the client loads Ravenwood",
-      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
-      "timeout": 300,
-      "expect": "WizardCity/WC_Ravenwood"
-    },
-    {
-      "action": "wait_game_log",
       "name": "Mr. Lincoln shows a '?' for the goal",
       "pattern": "wizard {wizard_guid} was shown the (\\S+) wizbang over NPC \\d+ \\(template 39088\\)",
       "timeout": 20,
       "expect": "CompleteQuestGoal",
       "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads Ravenwood",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood"
     },
     {
       "action": "go_to_npc",
