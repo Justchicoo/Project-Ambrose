@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests one wizard's Dynamods: a new mod takes the next index, the same mod again changes nothing, a changed one replaces the old under a fresh index, a removal hides its tag and an add shows it while an untagged or unnamed object is left to its requirements, a stored set keeps the first of a twice-stored mod and counts on from the highest index it kept, a zone's armed mods leave out removals and other zones, and erasing a tag takes every zone's mod of it away and keeps its index from being given out again.
+ * Tests one wizard's Dynamods: a new mod takes the next index after the placeholder, the same mod again changes nothing, a changed one replaces the old under a fresh index, a removal hides its tag and an add shows it while an untagged or unnamed object is left to its requirements, a stored set keeps the first of a twice-stored mod and counts on from the highest index it kept, a zone's armed mods leave out removals and other zones, and erasing a tag takes every zone's mod of it away and keeps its index from being given out again.
  */
 
 #include "WizardDynaMods.h"
@@ -18,13 +18,13 @@ TEST(WizardDynaModsTest, AChangedModReplacesTheOldUnderAFreshIndex)
     DynaModChange const opened = mods.Apply(Hub, "WC_GateCommons_ToUnicornWay", "IdleOpen", false, 9);
     ASSERT_TRUE(opened.Added);
     EXPECT_FALSE(opened.Removed);
-    EXPECT_EQ(opened.Added->Index, 1);
+    EXPECT_EQ(opened.Added->Index, 2) << "index 1 is the placeholder the full list opens with";
     EXPECT_FALSE(mods.Apply(Hub, "WC_GateCommons_ToUnicornWay", "IdleOpen", false, 9).Changed());
 
     DynaModChange const closed = mods.Apply(Hub, "WC_GateCommons_ToUnicornWay", "IdleClosed", false, 9);
     ASSERT_TRUE(closed.Removed && closed.Added);
-    EXPECT_EQ(closed.Removed->Index, 1);
-    EXPECT_EQ(closed.Added->Index, 2);
+    EXPECT_EQ(closed.Removed->Index, 2);
+    EXPECT_EQ(closed.Added->Index, 3);
     ASSERT_EQ(mods.All().size(), 1u);
     EXPECT_EQ(mods.Find(Hub, "WC_GateCommons_ToUnicornWay")->State, "IdleClosed");
     EXPECT_EQ(mods.Find("WizardCity/WC_Ravenwood", "WC_GateCommons_ToUnicornWay"), nullptr);
@@ -65,10 +65,10 @@ TEST(WizardDynaModsTest, ErasingATagTakesEveryZonesModOfItAwayAndKeepsItsIndexSp
     ASSERT_EQ(erased.size(), 2u);
     EXPECT_EQ(erased[0].Zone, Hub);
     EXPECT_EQ(erased[1].Zone, "Avalon/AV_Z00_Hub");
-    EXPECT_EQ(erased[1].Index, 2);
+    EXPECT_EQ(erased[1].Index, 3);
     ASSERT_EQ(mods.All().size(), 1u);
     EXPECT_EQ(mods.Find(Hub, "AV-QuestLight-KnightsHall"), nullptr);
     EXPECT_EQ(mods.Visibility(Hub, "AV-QuestLight-KnightsHall"), std::nullopt) << "with no mod left, the object's requirements decide";
     EXPECT_TRUE(mods.Erase("AV-QuestLight-KnightsHall").empty()) << "a tag with no mod erases nothing";
-    EXPECT_EQ(mods.Apply(Hub, "AV-QuestLight-KnightsHall", "On", false, 9).Added->Index, 4) << "an erased mod's index is not given out again";
+    EXPECT_EQ(mods.Apply(Hub, "AV-QuestLight-KnightsHall", "On", false, 9).Added->Index, 5) << "an erased mod's index is not given out again";
 }

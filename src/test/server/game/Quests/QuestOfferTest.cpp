@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the quest offer without a client: an accept is refused for a quest never offered, for one offered by an NPC the wizard has walked away from and for one declined since, and taken once for an offer that stands; an NPC whose template is only a later actor of a quest's Prep dialog offers nothing, while the first actor offers it until the wizard holds it or has completed it, unless it repeats, in the order of the quests' title keys, as Prep options; and the offer's Prep dialog keeps its lines in order with their actors and its start goals carry their keys, persona and tally.
+ * Tests the quest offer without a client: an accept is refused for a quest never offered, for one offered by an NPC the wizard has walked away from and for one declined since, and taken once for an offer that stands; an NPC whose template is only a later actor of a quest's Prep dialog offers nothing, while the first actor offers it until the wizard holds it or has completed it, unless it repeats, in the order of the quests' title keys, as Prep options; a quest held or completed answers ReqHasQuest; and the offer's Prep dialog keeps its lines in order with their actors and its start goals carry their keys, persona and tally.
  */
 
 #include "NpcServiceMemento.h"
@@ -140,6 +140,9 @@ TEST(QuestOfferTest, OnlyTheFirstPrepActorOffersAQuestAndOnlyWhileTheWizardCanTa
     ASSERT_TRUE(log.CompleteQuest("Second"));
     EXPECT_EQ(Names(QuestOffers::Available(*quests, GiverId, log, context)), (std::vector<std::string>{ "Daily" }))
         << "a quest held is not offered again, nor one completed, unless it repeats";
+    EXPECT_EQ(context.HasQuest("First"), true);
+    EXPECT_EQ(context.HasQuest("Second"), true) << "a completed quest still answers ReqHasQuest, which the client's data pairs with its Complete entry";
+    EXPECT_EQ(context.HasQuest("Third"), false);
 
     std::vector<QuestInfo const*> offered;
     QuestOfferProvider provider(quests, log, [&offered](NpcServiceTarget const&, QuestInfo const& quest) { offered.push_back(&quest); });

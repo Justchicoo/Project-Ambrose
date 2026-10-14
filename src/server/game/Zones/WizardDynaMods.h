@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The Dynamods one wizard's progress has made to the world it sees, one for each zone and client tag: a state its tagged objects stand in, or their removal, with the index its client knows the mod by and the GID of what made it, so the server can show that wizard alone the gate its quest opened, arm in its client the spawners a zone's mods name, and take a mod away again by its tag when a quest result asks.
+ * The Dynamods one wizard's progress has made to the world it sees, one for each zone and client tag: a state its tagged objects stand in, or their removal, with the index its client knows the mod by, counted on from the placeholder its client's full list opens with, and the GID of what made it, so the server can show that wizard alone the gate its quest opened, arm in its client the spawners a zone's mods name, and take a mod away again by its tag when a quest result asks.
  */
 
 #ifndef AMBROSE_WIZARDDYNAMODS_H
@@ -36,6 +36,8 @@ struct DynaModChange
 class WizardDynaMods
 {
 public:
+    static constexpr int32 PlaceholderIndex = 1;
+
     WizardDynaMods() = default;
     explicit WizardDynaMods(std::vector<DynaMod> mods);
 
@@ -49,7 +51,7 @@ public:
 
 private:
     std::vector<DynaMod> _mods;
-    int32 _lastIndex = 0;
+    int32 _lastIndex = PlaceholderIndex;
 };
 
 #endif

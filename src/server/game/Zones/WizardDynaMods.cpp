@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps one mod for each zone and tag, the first of any stored twice, replacing a changed one under a fresh index so the client can drop the old by its index and take the new, and leaving an identical one alone; a removal mod hides its tagged objects and any other shows them, a zone's mods other than removals are the ones its client arms spawners for, and erasing a tag takes every zone's mod of it away without giving its index out again.
+ * Keeps one mod for each zone and tag, the first of any stored twice, giving each new mod the next index after the client's placeholder and replacing a changed one under a fresh index so the client can drop the old by its index and take the new, and leaving an identical one alone; a removal mod hides its tagged objects and any other shows them, a zone's mods other than removals are the ones its client arms spawners for, and erasing a tag takes every zone's mod of it away without giving its index out again.
  */
 
 #include "WizardDynaMods.h"
