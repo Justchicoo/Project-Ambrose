@@ -131,7 +131,7 @@ QuestLootRows QuestLoot::Apply(TypeCatalogPtr const& catalog, std::vector<QuestW
         for (QuestResultRow const& row : quest.Rows.Results)
             if (row.Goal.empty())
                 position = std::max(position, row.Position + 1);
-        quest.Rows.Results.push_back(QuestResultRow{ name, {}, position, std::string(ResultClass), std::move(encoded.Bytes) });
+        quest.Rows.Results.push_back(QuestResultRow{ name, {}, position, std::string(ResultClass), std::move(encoded.Bytes), false });
         loot.Tables.push_back(table);
         for (std::size_t index = 0; index < entries.size(); ++index)
         {

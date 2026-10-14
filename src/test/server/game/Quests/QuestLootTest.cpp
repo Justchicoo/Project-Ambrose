@@ -46,7 +46,7 @@ namespace
         quest.Rows.Quests.push_back(row);
         uint32 position = 0;
         for (std::string const& result : results)
-            quest.Rows.Results.push_back(QuestResultRow{ name, {}, position++, result, {} });
+            quest.Rows.Results.push_back(QuestResultRow{ name, {}, position++, result, {}, false });
         return quest;
     }
 }

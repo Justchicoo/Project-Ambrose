@@ -29,7 +29,7 @@ namespace
 
     QuestResultRow Row(std::string goal, uint32 position, std::string_view className, std::vector<uint8> data)
     {
-        return QuestResultRow{ "Chain", std::move(goal), position, std::string(className), std::move(data) };
+        return QuestResultRow{ "Chain", std::move(goal), position, std::string(className), std::move(data), false };
     }
 }
 
