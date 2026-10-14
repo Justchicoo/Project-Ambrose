@@ -86,7 +86,7 @@ def check_file(relpath, raw):
             problems.append("content looks like a client type dump; the dump loads at runtime from the user's machine")
 
     if len(raw) > MAX_BYTES:
-        if name != "combatdecks.db" and not relpath.startswith("deps/"):
+        if name != "combatdecks.db" and relpath != "data/quests/quests.ndjson" and not relpath.startswith("deps/"):
             problems.append(f"file is {len(raw)} bytes, over the {MAX_BYTES} byte limit")
 
     return problems

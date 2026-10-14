@@ -284,6 +284,9 @@ class VendoredAssetTests(unittest.TestCase):
     def test_the_creature_deck_file_is_exempt(self):
         self.assertEqual(check("data/combatdecks.db", b"SQLite format 3\x00"), [])
 
+    def test_the_quest_data_file_is_exempt(self):
+        self.assertEqual(check("data/quests/quests.ndjson", b'{"name": "A quest"}\n'), [])
+
     def test_another_database_file_has_no_rule(self):
         self.assertEqual([issue.rule for issue in check("data/other.db", b"SQLite format 3\x00")], ["unknown-type"])
 
