@@ -29,6 +29,11 @@ namespace
 {
     constexpr std::string_view NpcBehavior = "NPCBehavior";
 
+    std::size_t VoicedLines(Dialogs::ActorDialog const& dialog)
+    {
+        return static_cast<std::size_t>(std::count_if(dialog.Entries.begin(), dialog.Entries.end(), [](Dialogs::ActorDialogEntry const& entry) { return !entry.Sound.empty(); }));
+    }
+
     std::vector<std::unique_ptr<NpcServiceProvider>> ProvidersFor(uint32 templateId)
     {
         std::vector<std::unique_ptr<NpcServiceProvider>> providers;
@@ -245,9 +250,9 @@ void GameSession::OfferQuest(NpcServiceTarget const& target, QuestInfo const& qu
     _questOffers.Offer(quest.Row.Name, target.Npc);
     Dialogs::ActorDialog const prep = QuestOffers::BuildPrepDialog(quest, facts);
     _questDialogs.Play(target.Npc, QuestOffers::CompletionType, quest.Row.Name, prep);
-    LOG_INFO("server.gamesession", "Session {} offered wizard {} quest {} ({}, level {}) from NPC {} (template {}) with its Prep dialog of {} line(s) and {} start goal(s)", GetSessionId(),
+    LOG_INFO("server.gamesession", "Session {} offered wizard {} quest {} ({}, level {}) from NPC {} (template {}) with its Prep dialog of {} line(s), {} with a voice line, and {} start goal(s)", GetSessionId(),
         _worldGuid, quest.Row.Name, Ambrose::ForLog(quest.Row.TitleKey, 64), quest.Row.Level, target.Npc, target.TemplateId, prep.Entries.size(),
-        quest.StartGoals.size());
+        VoicedLines(prep), quest.StartGoals.size());
 }
 
 void GameSession::HandleInteractAvailableQuest(GameMessages::InteractAvailableQuest& message)
@@ -333,6 +338,8 @@ bool GameSession::PlayQuestDialog(uint64 mobile, std::string_view completionType
     dialog.RangeCheck = 1;
     SendDmlMessage(dialog);
     _questDialogs.Play(mobile, completionType, quest.Row.Name, lines);
+    LOG_INFO("server.gamesession", "Session {} showed wizard {} the {} dialog of quest {} from NPC {} as {}: {} line(s), {} with a voice line", GetSessionId(), _worldGuid, tag,
+        Ambrose::ForLog(quest.Row.Name, 128), mobile, completionType, lines.Entries.size(), VoicedLines(lines));
     return true;
 }
 
