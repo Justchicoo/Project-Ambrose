@@ -55,7 +55,7 @@ QuestLog QuestLog::FromStored(CharacterQuests const& stored, QuestStore const* t
     std::vector<DynaMod> mods;
     mods.reserve(stored.DynaMods.size());
     for (CharacterDynaModRow const& row : stored.DynaMods)
-        mods.push_back({ row.ZoneName, row.ClientTag, row.State, row.Remove, row.Index, row.Originator });
+        mods.push_back({ row.ZoneName, row.ClientTag, row.State, row.Remove, row.Index, row.Originator, row.ShowsObject });
     log._dynaMods = WizardDynaMods(std::move(mods));
     return log;
 }
@@ -77,7 +77,7 @@ CharacterQuests QuestLog::ToStored(uint64 revision) const
         stored.Registry.push_back({ {}, entry, value });
     stored.Hidden.assign(_hidden.begin(), _hidden.end());
     for (DynaMod const& mod : _dynaMods.All())
-        stored.DynaMods.push_back({ mod.Zone, mod.Tag, mod.State, mod.Remove, mod.Index, mod.Originator });
+        stored.DynaMods.push_back({ mod.Zone, mod.Tag, mod.State, mod.Remove, mod.Index, mod.Originator, mod.ShowsObject });
     return stored;
 }
 
@@ -228,9 +228,9 @@ std::string QuestLog::GoalCompleteEvent(std::string_view quest, std::string_view
     return fmt::format("GoalComplete_{}_{}", quest, goal);
 }
 
-DynaModChange QuestLog::ApplyDynaMod(std::string_view zone, std::string_view tag, std::string_view state, bool remove, uint64 originator)
+DynaModChange QuestLog::ApplyDynaMod(std::string_view zone, std::string_view tag, std::string_view state, bool remove, uint64 originator, bool showsObject)
 {
-    DynaModChange change = _dynaMods.Apply(zone, tag, state, remove, originator);
+    DynaModChange change = _dynaMods.Apply(zone, tag, state, remove, originator, showsObject);
     if (change.Changed())
         MarkChanged();
     return change;

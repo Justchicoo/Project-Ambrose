@@ -101,7 +101,7 @@ namespace
             if (row[0].Get<uint32>() == 0)
                 continue;
             quests.DynaMods.push_back({ row[1].Get<std::string>(), row[2].Get<std::string>(), row[3].Get<std::string>(), row[4].Get<uint32>() != 0, row[5].Get<int32>(),
-                row[6].Get<uint64>() });
+                row[6].Get<uint64>(), row[7].Get<uint32>() != 0 });
         } while (result.NextRow());
     }
 
@@ -268,8 +268,9 @@ CharacterRepository::CreateTransaction CharacterQuestRepository::PrepareSave(uin
             insert->SetData(3, static_cast<uint8>(mod.Remove ? 1 : 0));
             insert->SetData(4, mod.Index);
             insert->SetData(5, mod.Originator);
-            insert->SetData(6, guid);
-            insert->SetData(7, quests.Revision);
+            insert->SetData(6, static_cast<uint8>(mod.ShowsObject ? 1 : 0));
+            insert->SetData(7, guid);
+            insert->SetData(8, quests.Revision);
         }
     if (highest != 0)
         if (auto* const sequence = add(CHAR_INS_ID_SEQUENCE))

@@ -1,13 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the requirement engine's quest, goal and registry answers out of a quest log, where a goal the log does not hold is absent rather than unknown, since the log is the whole of what the wizard holds.
+ * Reads the requirement engine's quest, goal and registry answers out of a quest log, where a goal the log does not hold is absent rather than unknown, since the log is the whole of what the wizard holds, and a quest completed still counts as held, since the client's data pairs ReqHasQuest with the quest's Complete entry.
  */
 
 #include "QuestLogContext.h"
 
 std::optional<bool> QuestLogContext::HasQuest(std::string_view questName) const
 {
-    return _log.HasQuest(questName);
+    return _log.HasQuest(questName) || _log.HasCompletedQuest(questName);
 }
 
 std::optional<RequirementGoalStatus> QuestLogContext::GetGoalStatus(std::string_view questName, std::string_view goalName) const

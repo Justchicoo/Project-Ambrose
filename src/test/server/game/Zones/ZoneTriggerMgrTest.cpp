@@ -230,7 +230,7 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
     AddClass(classes, "class PropertyClass", Json::array(), {});
     AddClass(classes, "class ResAddDynaMod", Json::array({ "PropertyClass" }), { { "m_dynaModClientTag", Property("std::string", "m_dynaModClientTag", 0, 7) },
         { "m_dynaModRemove", Property("bool", "m_dynaModRemove", 1, 7) }, { "m_dynaModState", Property("std::string", "m_dynaModState", 2, 7) },
-        { "m_zoneName", Property("std::string", "m_zoneName", 3, 7) } });
+        { "m_zoneName", Property("std::string", "m_zoneName", 3, 7) }, { "m_bShowsObject", Property("bool", "m_bShowsObject", 4, 7) } });
     AddClass(classes, "class ResRemoveDynaMod", Json::array({ "PropertyClass" }), { { "m_dynaModClientTag", Property("std::string", "m_dynaModClientTag", 0, 7) },
         { "m_useQuestAsOriginator", Property("bool", "m_useQuestAsOriginator", 1, 7) } });
     AddClass(classes, "class ResClientNotifyText", Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
@@ -241,7 +241,7 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
     SerializerOptions options;
     options.Versionable = true;
     options.Mask = 0;
-    auto const encode = [&](std::string_view className, std::string const& tag)
+    auto const encode = [&](std::string_view className, std::string const& tag, bool shows)
     {
         PropertyObjectPtr const result = PropertyObject::Create(catalog, className);
         EXPECT_TRUE(result);
@@ -249,6 +249,7 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
         {
             EXPECT_EQ(result->Set("m_dynaModClientTag", std::string(tag)), PropertySetResult::Ok);
             EXPECT_EQ(result->Set("m_dynaModState", std::string("IdleOpen")), PropertySetResult::Ok);
+            EXPECT_EQ(result->Set("m_bShowsObject", shows), PropertySetResult::Ok);
         }
         else if (className == ZoneTriggerMgr::RemoveDynaModClass)
         {
@@ -259,10 +260,10 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
         return encoded.Bytes;
     };
 
-    auto const read = [&](std::string_view className, std::string const& tag)
+    auto const read = [&](std::string_view className, std::string const& tag, bool shows = true)
     {
         std::string problem;
-        std::shared_ptr<PropertyObject const> result = ResultMgr::Decode(catalog, encode(className, tag), problem);
+        std::shared_ptr<PropertyObject const> result = ResultMgr::Decode(catalog, encode(className, tag, shows), problem);
         EXPECT_TRUE(result) << problem;
         return ResultEntry{ std::string(className), std::move(result), 0 };
     };
@@ -270,7 +271,10 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
     ResultEntry const gate = read(ZoneTriggerMgr::DynaModClass, "WC_GateCommons_ToUnicornWay");
     std::optional<ZoneDynaMod> const mod = ZoneTriggerMgr::DynaModOf(*gate.Object, error);
     ASSERT_TRUE(mod) << error;
-    EXPECT_EQ(*mod, (ZoneDynaMod{ "WC_GateCommons_ToUnicornWay", "IdleOpen", false, "" }));
+    EXPECT_EQ(*mod, (ZoneDynaMod{ "WC_GateCommons_ToUnicornWay", "IdleOpen", false, "", true }));
+    std::optional<ZoneDynaMod> const stateOnly = ZoneTriggerMgr::DynaModOf(*read(ZoneTriggerMgr::DynaModClass, "AV-QuestLight-KnightsHall", false).Object, error);
+    ASSERT_TRUE(stateOnly) << error;
+    EXPECT_FALSE(stateOnly->ShowsObject) << "a mod whose m_bShowsObject is clear only sets its objects' state";
     ResultEntry const untagged = read(ZoneTriggerMgr::DynaModClass, "");
     EXPECT_FALSE(ZoneTriggerMgr::DynaModOf(*untagged.Object, error)) << "a mod must name a tag";
     EXPECT_FALSE(ZoneTriggerMgr::DynaModOf(*read(ZoneTriggerMgr::NotifyTextClass, "").Object, error));

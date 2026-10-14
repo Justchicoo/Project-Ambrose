@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers the requirement engine's quest and registry questions from a wizard's quest log: whether it holds a quest, a goal's status, whether a per-quest or global registry entry is set and its value. Everything else it does not know, so those requirements fail closed.
+ * Answers the requirement engine's quest and registry questions from a wizard's quest log: whether it holds or has completed a quest, a goal's status, whether a per-quest or global registry entry is set and its value. Everything else it does not know, so those requirements fail closed.
  */
 
 #ifndef AMBROSE_QUESTLOGCONTEXT_H

@@ -1502,7 +1502,7 @@ void GameSession::ApplyDynaMods(std::vector<ZoneDynaMod> const& mods)
         return;
     for (ZoneDynaMod const& mod : mods)
     {
-        DynaModChange const change = _questLog->ApplyDynaMod(mod.Zone, mod.Tag, mod.State, mod.Remove, GetCharacterId());
+        DynaModChange const change = _questLog->ApplyDynaMod(mod.Zone, mod.Tag, mod.State, mod.Remove, GetCharacterId(), mod.ShowsObject);
         if (!change.Changed())
             continue;
         LOG_INFO("server.gamesession", "Session {}'s wizard {} {} the Dynamod {} in {}{}", GetSessionId(), _worldGuid, mod.Remove ? "removed" : "added", Ambrose::ForLog(mod.Tag, 128),

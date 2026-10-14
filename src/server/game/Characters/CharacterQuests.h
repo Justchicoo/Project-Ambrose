@@ -48,6 +48,7 @@ struct CharacterDynaModRow
     bool Remove = false;
     int32 Index = 0;
     uint64 Originator = 0;
+    bool ShowsObject = true;
 
     bool operator==(CharacterDynaModRow const&) const = default;
 };

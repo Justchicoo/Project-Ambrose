@@ -74,7 +74,7 @@ public:
     bool IsHidden(std::string_view quest) const { return _hidden.contains(quest); }
     void SetHidden(std::string_view quest, bool hidden);
     WizardDynaMods const& GetDynaMods() const noexcept { return _dynaMods; }
-    DynaModChange ApplyDynaMod(std::string_view zone, std::string_view tag, std::string_view state, bool remove, uint64 originator);
+    DynaModChange ApplyDynaMod(std::string_view zone, std::string_view tag, std::string_view state, bool remove, uint64 originator, bool showsObject = true);
     std::vector<DynaMod> EraseDynaMods(std::string_view tag);
     std::vector<std::string> TakeEvents();
     std::vector<QuestCompletion> TakeCompletions();

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds each mod as a DynaMod with its client tag, originator and index, the fields the transmit mask selects, and the full set as a DynaModList, both written in the binary format under the transmit mask as the client reads them; a change tells the client only of armed mods in the zone it stands in, dropping the old one before adding the new, and a mod names a state only when its state is not empty.
+ * Builds each mod as a DynaMod with its client tag, originator and index, the fields the transmit mask selects, or as a DynaModDelta that adds the string id of the state it names, and the full set as a DynaModList opening with an empty placeholder mod at index 1, both written in the binary format under the transmit mask as the client reads them; a change tells the client only of armed mods in the zone it stands in, dropping the old one before adding the new, and a mod names a state only when its state is not empty.
  */
 
 #include "DynaModMessages.h"
@@ -17,13 +17,17 @@ namespace
 {
     PropertyObjectPtr Build(TypeCatalogPtr const& catalog, DynaMod const& mod, std::string& problem)
     {
-        PropertyObjectPtr object = catalog ? PropertyObject::Create(catalog, DynaModMessages::ModClass) : nullptr;
+        std::string_view const className = mod.State.empty() ? DynaModMessages::ModClass : DynaModMessages::DeltaClass;
+        PropertyObjectPtr object = catalog ? PropertyObject::Create(catalog, className) : nullptr;
         if (!object)
         {
-            problem = fmt::format("the type dump has no {}", DynaModMessages::ModClass);
+            problem = fmt::format("the type dump has no {}", className);
             return nullptr;
         }
-        PropertyFiller(*object, problem).Set("m_clientTag", mod.Tag).Set("m_originator", mod.Originator).Set("m_index", mod.Index);
+        PropertyFiller filler(*object, problem);
+        filler.Set("m_clientTag", mod.Tag).Set("m_originator", mod.Originator).Set("m_index", mod.Index);
+        if (!mod.State.empty())
+            filler.Set("m_stateID", StringHash::StringId(mod.State));
         return problem.empty() ? std::move(object) : nullptr;
     }
 
@@ -48,7 +52,13 @@ std::optional<GameMessages::DynaModBehaviorUpdateMods> DynaModMessages::All(Type
         return std::nullopt;
     }
     PropertyValue::List built;
-    built.reserve(mods.size());
+    built.reserve(mods.size() + 1);
+    DynaMod placeholder;
+    placeholder.Index = WizardDynaMods::PlaceholderIndex;
+    PropertyObjectPtr first = Build(catalog, placeholder, problem);
+    if (!first)
+        return std::nullopt;
+    built.emplace_back(std::move(first));
     for (DynaMod const& mod : mods)
     {
         PropertyObjectPtr object = Build(catalog, mod, problem);
