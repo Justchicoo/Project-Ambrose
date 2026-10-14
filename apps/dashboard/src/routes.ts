@@ -190,7 +190,7 @@ export const routes: Route[] = [
         permission: "accounts.read",
         nav: true,
         group: "Game",
-        view: { kind: "arrives", milestone: "17.21", preview: list },
+        view: { kind: "page", load: () => import("./pages/Accounts.svelte") },
     },
     {
         path: "registrations",

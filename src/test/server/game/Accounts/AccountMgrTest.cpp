@@ -393,3 +393,50 @@ TEST(AccountMgrTest, AClosedLoginDatabaseIsReportedAsAnError)
     EXPECT_FALSE(sAccountMgr.GetActiveBan(1, &banResult));
     EXPECT_EQ(banResult, AccountOpResult::DatabaseError);
 }
+
+TEST_F(AccountMgrDatabaseTest, AddressAndMachineBansWriteRowsTheSignInCheckReads)
+{
+    sAccountMgr.SetSettings(SettingsWithKey(1));
+    EXPECT_EQ(sAccountMgr.BanAddress("203.0.113.77", std::chrono::hours(2), "gamemaster", "botting"), AccountOpResult::Ok);
+    QueryResult banned = LoginDatabase.Query("SELECT `bannedby`, `reason`, `bandate`, `unbandate` FROM `ip_banned` WHERE `ip` = '203.0.113.77' AND (`unbandate` = 0 OR `unbandate` > UNIX_TIMESTAMP())");
+    ASSERT_TRUE(banned);
+    EXPECT_EQ((*banned)[0].Get<std::string>(), "gamemaster");
+    EXPECT_EQ((*banned)[1].Get<std::string>(), "botting");
+    EXPECT_GT((*banned)[2].Get<uint64>(), 0u);
+    EXPECT_GT((*banned)[3].Get<uint64>(), (*banned)[2].Get<uint64>());
+    EXPECT_EQ(sAccountMgr.BanMachine(4242, std::chrono::hours(3), "gamemaster", "cheating"), AccountOpResult::Ok);
+    QueryResult mbanned = LoginDatabase.Query("SELECT `bannedby`, `reason` FROM `machine_banned` WHERE `machine_id` = 4242 AND (`unbandate` = 0 OR `unbandate` > UNIX_TIMESTAMP())");
+    ASSERT_TRUE(mbanned);
+    EXPECT_EQ((*mbanned)[0].Get<std::string>(), "gamemaster");
+    EXPECT_EQ((*mbanned)[1].Get<std::string>(), "cheating");
+    EXPECT_EQ(sAccountMgr.UnbanAddress("203.0.113.77"), AccountOpResult::Ok);
+    QueryResult unbanned = LoginDatabase.Query("SELECT COUNT(*) FROM `ip_banned` WHERE `ip` = '203.0.113.77' AND (`unbandate` = 0 OR `unbandate` > UNIX_TIMESTAMP())");
+    ASSERT_TRUE(unbanned);
+    EXPECT_EQ((*unbanned)[0].Get<uint64>(), 0u);
+    EXPECT_EQ(sAccountMgr.UnbanMachine(4242), AccountOpResult::Ok);
+    QueryResult munbanned = LoginDatabase.Query("SELECT COUNT(*) FROM `machine_banned` WHERE `machine_id` = 4242 AND (`unbandate` = 0 OR `unbandate` > UNIX_TIMESTAMP())");
+    ASSERT_TRUE(munbanned);
+    EXPECT_EQ((*munbanned)[0].Get<uint64>(), 0u);
+}
+
+TEST_F(AccountMgrDatabaseTest, PasswordResetSealsVerifierClearsSessionsAndStaysOutOfLogs)
+{
+    sAccountMgr.SetSettings(SettingsWithKey(1));
+    uint64 id = 0;
+    ASSERT_EQ(sAccountMgr.CreateAccount("resetme", "oldpassword", "", &id), AccountOpResult::Ok);
+    std::string const before = StoredVerifier("resetme");
+    ASSERT_FALSE(before.empty());
+    ASSERT_EQ(sAccountMgr.ChangePassword(id, "brandnewpassword123"), AccountOpResult::Ok);
+    std::string const after = StoredVerifier("resetme");
+    EXPECT_FALSE(after.empty());
+    EXPECT_NE(after, before);
+    AccountLookup const lookup = sAccountMgr.GetAccountById(id);
+    ASSERT_TRUE(lookup.Account);
+    EXPECT_EQ(lookup.Account->VerifierKeyId, 1u);
+    EXPECT_EQ(sAccountMgr.GetVerifier(*lookup.Account), ClientKey::HashPassword("brandnewpassword123"));
+    QueryResult remaining = LoginDatabase.Query("SELECT COUNT(*) FROM `account_session`");
+    if (remaining)
+    {
+        EXPECT_EQ((*remaining)[0].Get<uint64>(), 0u);
+    }
+}
