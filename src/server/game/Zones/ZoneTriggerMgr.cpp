@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the volumes, triggers, their events, each trigger's results in order, a ResClientNotifyText that names no text refused, a ResAddDynaMod that names no tag, which the client data holds a few of, kept and counted, since it changes nothing when it runs, each trigger's requirements as a requirement tree, and which of them are doors, holding a ResTeleport, zone by zone, a result read through the server classes and refused when it does not decode, taking a volume with no shape and only a radius as a sphere, refusing a volume whose shape is unknown or whose size or place is not a usable number, a trigger whose cooldown is not, and an event that names a trigger the zone does not hold; swaps a whole good set in at once, dropping each instance's counts and cooldowns with it, and keeps each zone instance's trigger state until its map is forgotten.
+ * Reads the volumes, triggers, their events, each trigger's results in order, a ResClientNotifyText that names no text refused, a ResAddDynaMod that names no tag, which the client data holds a few of, kept and counted, since it changes nothing when it runs, and a ResRemoveDynaMod, which only quest results hold, read for the tag it takes away, each trigger's requirements as a requirement tree, and which of them are doors, holding a ResTeleport, zone by zone, a result read through the server classes and refused when it does not decode, taking a volume with no shape and only a radius as a sphere, refusing a volume whose shape is unknown or whose size or place is not a usable number, a trigger whose cooldown is not, and an event that names a trigger the zone does not hold; swaps a whole good set in at once, dropping each instance's counts and cooldowns with it, and keeps each zone instance's trigger state until its map is forgotten.
  */
 
 #include "ZoneTriggerMgr.h"
@@ -65,6 +65,23 @@ std::optional<ZoneDynaMod> ZoneTriggerMgr::DynaModOf(PropertyObject const& resul
     PropertyValue const* const remove = result.Get("m_dynaModRemove");
     bool const* const removes = remove ? remove->GetIf<bool>() : nullptr;
     return ZoneDynaMod{ std::move(tag), text("m_dynaModState"), removes && *removes, text("m_zoneName") };
+}
+
+std::optional<std::string> ZoneTriggerMgr::RemoveDynaModTagOf(PropertyObject const& result, std::string& error)
+{
+    if (!result.IsA(RemoveDynaModClass))
+    {
+        error = fmt::format("it holds a {}", result.GetClass().Name);
+        return std::nullopt;
+    }
+    PropertyValue const* const value = result.Get("m_dynaModClientTag");
+    std::string const* const tag = value ? value->GetIf<std::string>() : nullptr;
+    if (!tag || tag->empty())
+    {
+        error = "its m_dynaModClientTag is empty";
+        return std::nullopt;
+    }
+    return *tag;
 }
 
 ZoneTriggerMgr::ResultCheck ZoneTriggerMgr::CheckResult(ResultEntry const& result, std::string& error)
