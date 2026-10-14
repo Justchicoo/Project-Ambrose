@@ -36,6 +36,7 @@ Tools build into `build/<configure preset>/bin/<config>/`, for example `build/li
 | Who calls, reads or jumps to an address | `client xrefs <address or text>` |
 | A function's code | `client disasm <address or text>`, `client decompile <address>` (uses the user's own Ghidra), `client functions <log name>` |
 | A virtual table, slot by slot | `client vtable <address>` |
+| What sessions already learned about a function, and recording what you learn | `client notes [text]` before digging, then `client note <address> <what it does> --milestone <id>` once you know |
 | The class the client builds for a behavior | `client behaviors <name>` |
 | Every BINd entry of an archive, or what fails to decode | `bindecode --wad <file> --list`, `--sweep`, or `--text` for XML and other text entries |
 | Objects of a class the dump doesn't know | `schemaprobe` names classes from the program's strings, and property hashes through the property oracle |

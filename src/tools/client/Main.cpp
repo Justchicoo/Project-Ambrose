@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `field` reads a message field's object from a file, as its own rules say. `hash` gives the hash the client gives a class or school name, or a property's hash from its type and name, with no install. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and a behavior's handler goes in under a key such as RidableBehavior_MSG_RidersList, found the same way with its plain name read after the key, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe; for a name it registers nothing under, it says whether the program holds that name at all, since a name the program never holds is one it cannot key a factory by, which is how a behavior only the server runs is told from one the tool cannot follow yet. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `requirements` counts the requirement classes placed objects gate their spawning on, so the server knows which ones it must understand first. `tokens` counts the zone tokens ZoneTokenInfo placements hold, the results their hooks fire, the classes zone triggers use and the properties that name a token. `template --holding` prints every template that holds an object of a class anywhere inside it with how many, which is how 10.19 found the path actions the shipped walkers carry. `catalog` writes every template id the manifest lists, sorted by its class and the behaviors that mark it a mob, an NPC, a piece of equipment, furniture, a pet or a mount into one category file each and grouped by the folder that holds it, with its English name, and every zone with its locations and the templates it places, so people and the panel can find an id without asking the install one at a time. `wizbangs` prints the markers WizBangs.xml gives the client, each under the id a MSG_WIZBANG names it by, the string hash of its name, which the client's SetWizBang looks the template up by, and the model it draws, and says of a name or id no marker has that it draws nothing, which is how 6.02 found the client has no spellbook marker. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `name` names a property hash the way the property oracle does, from every type and name the dump lists, every property name the client program holds or prints and every one the install's text files spell out, `--wide` adding every class the dump lists as a type, plain, pointed to and shared, and it says how often a random hash is named by the same sources, so a lone answer from a wide search is read as the chance it is. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `quests` reads the quest templates of a CSR package the user kept from an older client into the world database's quest tables, checks them against the install and the quest validator, counts why the rest do not import and what the tables have no place for, and with --import writes the clean ones into the user's own world database under the package's name as their source. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a core type, a template type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads which class each core type builds from the world database's core_object_type when it is given the world database, and when a core type builds a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --core-type or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there; without it, the classes the install holds that its dump does not describe join the dump from the class file schemaprobe builds for the install's revision in the Ambrose data folder, when there is one, so a template shows every behavior it holds as the game server reads it. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `field` reads a message field's object from a file, as its own rules say. `hash` gives the hash the client gives a class or school name, or a property's hash from its type and name, with no install. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and a behavior's handler goes in under a key such as RidableBehavior_MSG_RidersList, found the same way with its plain name read after the key, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe; for a name it registers nothing under, it says whether the program holds that name at all, since a name the program never holds is one it cannot key a factory by, which is how a behavior only the server runs is told from one the tool cannot follow yet. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `requirements` counts the requirement classes placed objects gate their spawning on, so the server knows which ones it must understand first. `tokens` counts the zone tokens ZoneTokenInfo placements hold, the results their hooks fire, the classes zone triggers use and the properties that name a token. `template --holding` prints every template that holds an object of a class anywhere inside it with how many, which is how 10.19 found the path actions the shipped walkers carry. `catalog` writes every template id the manifest lists, sorted by its class and the behaviors that mark it a mob, an NPC, a piece of equipment, furniture, a pet or a mount into one category file each and grouped by the folder that holds it, with its English name, and every zone with its locations and the templates it places, so people and the panel can find an id without asking the install one at a time. `wizbangs` prints the markers WizBangs.xml gives the client, each under the id a MSG_WIZBANG names it by, the string hash of its name, which the client's SetWizBang looks the template up by, and the model it draws, and says of a name or id no marker has that it draws nothing, which is how 6.02 found the client has no spellbook marker. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `note` keeps what a person or session learned about a function, keyed by the address the function starts at and the milestone that needed it, per revision in the Ambrose data folder, and disasm, xrefs, functions and handlers print each note beside the function, so nobody works the same function out twice; `notes` lists them and counts how many of the functions the program registers as message handlers are noted, the share of the client's message handling the project understands. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `name` names a property hash the way the property oracle does, from every type and name the dump lists, every property name the client program holds or prints and every one the install's text files spell out, `--wide` adding every class the dump lists as a type, plain, pointed to and shared, and it says how often a random hash is named by the same sources, so a lone answer from a wide search is read as the chance it is. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `quests` reads the quest templates of a CSR package the user kept from an older client into the world database's quest tables, checks them against the install and the quest validator, counts why the rest do not import and what the tables have no place for, and with --import writes the clean ones into the user's own world database under the package's name as their source. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a core type, a template type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads which class each core type builds from the world database's core_object_type when it is given the world database, and when a core type builds a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --core-type or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there; without it, the classes the install holds that its dump does not describe join the dump from the class file schemaprobe builds for the install's revision in the Ambrose data folder, when there is one, so a template shows every behavior it holds as the game server reads it. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
 #include "ArchiveText.h"
@@ -8,6 +8,7 @@
 #include "BindFile.h"
 #include "CodeAnnotator.h"
 #include "CodeIndex.h"
+#include "FunctionNotes.h"
 #include "GhidraDecompiler.h"
 #include "Hex.h"
 #include "LogNames.h"
@@ -161,6 +162,14 @@ Commands:
   functions <name>...    print the functions that log under a name holding the text, such
                          as CoreObject::OnPostLoad, or the names the function holding an
                          address logs under, found from the client's own log lines
+  note <address> <text>...
+                         keep a note of what the function holding an address does, with
+                         --milestone naming the milestone that needed it, for this install's
+                         revision in the Ambrose data folder, replacing an earlier note;
+                         --remove drops it; disasm, xrefs, functions and handlers show it
+  notes [text]           print every note kept for this revision, or those whose words or
+                         milestone hold the text, and how many of the functions the client
+                         program registers as message handlers are noted
   vtable <address>...    print a virtual table slot by slot, from its address, 0x hex, or
                          from the class it belongs to, a behavior's class or the name the
                          program's run-time type information gives, naming each function,
@@ -235,6 +244,8 @@ Options:
   --derived            with types, print every class derived from each class named
   --flag <name>        with types, print only the properties that carry a property flag,
                        such as ObjectName, of the classes found
+  --milestone <id>     with note, the milestone that needed what the note says, such as 8.05
+  --remove             with note, drop the note on the function rather than keep one
   --ghidra <dir>       the Ghidra install decompile runs (default: AMBROSE_GHIDRA_DIR)
   --ghidra-project <file>
                        the Ghidra project decompile reads, its .gpr file (default:
@@ -291,6 +302,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::optional<std::string> Flag;
         std::optional<std::string> Ghidra;
         std::optional<std::string> GhidraProject;
+        std::optional<std::string> Milestone;
+        bool Remove = false;
         std::optional<uint32> Flags;
         std::optional<uint32> Mask;
         bool Help = false;
@@ -360,13 +373,15 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     return std::nullopt;
                 parsed.Holding = given->starts_with("class ") ? *given : "class " + *given;
             }
-            else if (arg == "--flag" || arg == "--ghidra" || arg == "--ghidra-project")
+            else if (arg == "--flag" || arg == "--ghidra" || arg == "--ghidra-project" || arg == "--milestone")
             {
                 std::optional<std::string> const given = value(arg);
                 if (!given)
                     return std::nullopt;
-                (arg == "--flag" ? parsed.Flag : arg == "--ghidra" ? parsed.Ghidra : parsed.GhidraProject) = *given;
+                (arg == "--flag" ? parsed.Flag : arg == "--ghidra" ? parsed.Ghidra : arg == "--milestone" ? parsed.Milestone : parsed.GhidraProject) = *given;
             }
+            else if (arg == "--remove")
+                parsed.Remove = true;
             else if (arg == "--core-type")
             {
                 std::optional<std::string> const given = value(arg);
@@ -1037,14 +1052,41 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 registrations.size(), ConfigMgr::PathToUtf8(path));
     }
 
-    std::string DescribeRegistration(MessageHandlerRegistration const& registration)
+    std::vector<MessageHandlerRegistration> FindHandlers(PeImage const& image, CodeIndex const& code, std::filesystem::path const& dataFolder, std::string const& revision)
+    {
+        std::vector<MessageHandlerRegistration> registrations = MessageHandlers::Find(image, code);
+        if (!revision.empty() && !registrations.empty())
+            WriteHandlerCache(HandlerCachePath(dataFolder, revision), registrations);
+        return registrations;
+    }
+
+    FunctionNotes ReadNotes(std::filesystem::path const& dataFolder, std::string const& revision)
+    {
+        FunctionNotes notes;
+        if (revision.empty())
+            return notes;
+        std::filesystem::path const path = FunctionNotes::PathFor(dataFolder, revision);
+        std::string error;
+        if (!notes.Read(path, error))
+            std::cerr << fmt::format("client: the notes in {} are not read: {}\n", ConfigMgr::PathToUtf8(path), error);
+        return notes;
+    }
+
+    std::string NoteText(FunctionNote const& note)
+    {
+        return note.Milestone.empty() ? note.Text : fmt::format("{} ({})", note.Text, note.Milestone);
+    }
+
+    std::string DescribeRegistration(MessageHandlerRegistration const& registration, FunctionNotes const& notes)
     {
         if (registration.Address == 0)
             return fmt::format("  {}::{}  registered at 0x{:x}; no function address is loaded before it", registration.Owner, registration.Handler, registration.Site);
-        return fmt::format("  {}::{}  handler 0x{:x}, registered at 0x{:x}", registration.Owner, registration.Handler, registration.Address, registration.Site);
+        FunctionNote const* const note = notes.Find(registration.Address);
+        return fmt::format("  {}::{}  handler 0x{:x}, registered at 0x{:x}{}", registration.Owner, registration.Handler, registration.Address, registration.Site,
+            note == nullptr ? std::string() : "; noted: " + NoteText(*note));
     }
 
-    int RunHandlers(Arguments const& arguments, std::vector<CachedMessage> const& messages, std::vector<MessageHandlerRegistration> const& registrations)
+    int RunHandlers(Arguments const& arguments, std::vector<CachedMessage> const& messages, std::vector<MessageHandlerRegistration> const& registrations, FunctionNotes const& notes)
     {
         if (arguments.List)
         {
@@ -1054,7 +1096,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             {
                 if (!pattern.empty() && Ambrose::ToLower(registration.Owner + "::" + registration.Handler).find(pattern) == std::string::npos)
                     continue;
-                std::cout << DescribeRegistration(registration).substr(2) << "\n";
+                std::cout << DescribeRegistration(registration, notes).substr(2) << "\n";
                 ++shown;
             }
             std::cerr << fmt::format("client: {} of the {} handler registrations in the client program match\n", shown, registrations.size());
@@ -1079,7 +1121,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     if (registration.Handler != message.Handler)
                         continue;
                     registered = true;
-                    std::cout << DescribeRegistration(registration) << "\n";
+                    std::cout << DescribeRegistration(registration, notes) << "\n";
                 }
                 if (!registered)
                     std::cout << "  no Class::MSG_Name or Behavior_MSG_Name registration in the client program names it; the client only sends it or registers it some other way, which this tool does not find yet\n";
@@ -1092,7 +1134,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     && Ambrose::ToLower(registration.Owner + "::" + registration.Handler) != wanted)
                     continue;
                 answered = true;
-                std::cout << DescribeRegistration(registration).substr(2) << "\n";
+                std::cout << DescribeRegistration(registration, notes).substr(2) << "\n";
             }
             if (!answered)
             {
@@ -1572,7 +1614,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return fmt::format("{}  in {}", text, FunctionText(program, reference.Function));
     }
 
-    std::unordered_map<uint64, std::string> KnownNames(ClientProgram const& program, std::filesystem::path const& dataFolder, std::string const& revision)
+    std::unordered_map<uint64, std::string> KnownNames(ClientProgram const& program, std::filesystem::path const& dataFolder, std::string const& revision, FunctionNotes const& notes)
     {
         std::unordered_map<uint64, std::string> names;
         for (FunctionLogNames const& function : program.Named)
@@ -1587,6 +1629,15 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             names.insert_or_assign(factory.GetType, fmt::format("{}::GetType", factory.ClassName));
             names.insert_or_assign(factory.ObjectVtable, fmt::format("the vtable of {}", factory.ClassName));
             names.insert_or_assign(factory.FactoryVtable, fmt::format("the vtable of the {} factory", factory.Behavior));
+        }
+        for (FunctionNote const* const note : notes.Matching(""))
+        {
+            std::string const noted = "noted: " + NoteText(*note);
+            auto const found = names.find(note->Function);
+            if (found == names.end())
+                names.emplace(note->Function, noted);
+            else
+                found->second += "; " + noted;
         }
         return names;
     }
@@ -1620,8 +1671,13 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return status;
     }
 
-    int RunFunctions(Arguments const& arguments, ClientProgram const& program)
+    int RunFunctions(Arguments const& arguments, ClientProgram const& program, FunctionNotes const& notes)
     {
+        auto const noted = [&notes](uint64 function)
+        {
+            FunctionNote const* const note = notes.Find(function);
+            return note == nullptr ? std::string() : "; noted: " + NoteText(*note);
+        };
         int status = Success;
         for (std::string const& subject : arguments.Subjects)
         {
@@ -1636,7 +1692,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     continue;
                 }
                 for (std::string const& name : *names)
-                    std::cout << fmt::format("0x{:x}  {}\n", *function, name);
+                    std::cout << fmt::format("0x{:x}  {}{}\n", *function, name, noted(*function));
                 continue;
             }
             std::string const wanted = Ambrose::ToLower(subject);
@@ -1648,7 +1704,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             std::sort(matches.begin(), matches.end());
             std::size_t const shown = arguments.All ? matches.size() : std::min(matches.size(), ListedByDefault);
             for (std::size_t index = 0; index < shown; ++index)
-                std::cout << fmt::format("0x{:x}  {}\n", matches[index].second, matches[index].first);
+                std::cout << fmt::format("0x{:x}  {}{}\n", matches[index].second, matches[index].first, noted(matches[index].second));
             if (shown < matches.size())
                 std::cout << fmt::format("... {} more; pass --all to print them\n", matches.size() - shown);
             std::cerr << fmt::format("client: {} of the names the {} functions that log use hold {}\n", matches.size(), program.Named.size(), subject);
@@ -1768,6 +1824,82 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             }
         }
         return status;
+    }
+
+    int RunNote(Arguments const& arguments, ClientProgram const& program, FunctionNotes& notes, std::filesystem::path const& path)
+    {
+        std::optional<uint64> const address = AddressOf(arguments.Subjects.front());
+        if (!address)
+        {
+            std::cerr << fmt::format("client note takes the address of a function, 0x hex, then what it does\n{}", Usage);
+            return BadUsage;
+        }
+        if (arguments.Remove == (arguments.Subjects.size() > 1))
+        {
+            std::cerr << fmt::format("client note takes what the function does after its address, or --remove alone\n{}", Usage);
+            return BadUsage;
+        }
+        std::optional<uint64> const function = program.Code->FunctionStart(*address);
+        if (!function)
+        {
+            std::cerr << fmt::format("{}: no function the exception table lists holds it, so there is nothing to note\n", arguments.Subjects.front());
+            return Failure;
+        }
+        if (arguments.Remove && !notes.Remove(*function))
+        {
+            std::cerr << fmt::format("{}: {} has no note\n", arguments.Subjects.front(), FunctionText(program, function));
+            return Failure;
+        }
+        if (!arguments.Remove)
+            notes.Set({ *function, fmt::format("{}", fmt::join(arguments.Subjects.begin() + 1, arguments.Subjects.end(), " ")), arguments.Milestone.value_or(std::string()) });
+        std::string error;
+        if (!notes.Write(path, error))
+        {
+            std::cerr << fmt::format("client: the notes cannot be written to {}: {}\n", ConfigMgr::PathToUtf8(path), error);
+            return Failure;
+        }
+        FunctionNote const* const note = notes.Find(*function);
+        std::cout << fmt::format("{}  {}\n", FunctionText(program, function), note == nullptr ? std::string("is no longer noted") : "noted: " + NoteText(*note));
+        std::cerr << fmt::format("client: {} notes are kept in {}\n", notes.Size(), ConfigMgr::PathToUtf8(path));
+        return Success;
+    }
+
+    int RunNotes(Arguments const& arguments, ClientProgram const& program, FunctionNotes const& notes, std::filesystem::path const& dataFolder, std::string const& revision)
+    {
+        std::unordered_map<uint64, std::string> const names = KnownNames(program, dataFolder, revision, FunctionNotes());
+        std::string const pattern = arguments.Subjects.empty() ? std::string() : arguments.Subjects.front();
+        std::vector<FunctionNote const*> const matches = notes.Matching(pattern);
+        std::size_t const shown = arguments.All ? matches.size() : std::min(matches.size(), ListedByDefault);
+        for (std::size_t index = 0; index < shown; ++index)
+        {
+            auto const name = names.find(matches[index]->Function);
+            std::cout << fmt::format("0x{:x}  {}{}\n", matches[index]->Function, NoteText(*matches[index]), name == names.end() ? std::string() : "  [" + name->second + "]");
+        }
+        if (shown < matches.size())
+            std::cout << fmt::format("... {} more; pass --all to print them\n", matches.size() - shown);
+        std::cerr << fmt::format("client: {} of the {} notes kept for {} match\n", matches.size(), notes.Size(), revision);
+
+        std::vector<MessageHandlerRegistration> registrations = ReadHandlerCache(HandlerCachePath(dataFolder, revision));
+        if (registrations.empty())
+            registrations = FindHandlers(*program.Image, *program.Code, dataFolder, revision);
+        std::set<uint64> handlers;
+        std::set<uint64> notedHandlers;
+        std::set<std::string> handlerNames;
+        std::set<std::string> notedNames;
+        for (MessageHandlerRegistration const& registration : registrations)
+        {
+            if (registration.Address == 0)
+                continue;
+            handlers.insert(registration.Address);
+            handlerNames.insert(registration.Handler);
+            if (notes.Find(registration.Address) == nullptr)
+                continue;
+            notedHandlers.insert(registration.Address);
+            notedNames.insert(registration.Handler);
+        }
+        std::cerr << fmt::format("client: {} of the {} functions the client program registers as message handlers are noted, handling {} of the {} message names they register\n",
+            notedHandlers.size(), handlers.size(), notedNames.size(), handlerNames.size());
+        return matches.empty() ? Failure : Success;
     }
 
     int RunDecompile(Arguments const& arguments, ClientProgram const& program, std::filesystem::path const& dataFolder, std::string const& revision)
@@ -1978,15 +2110,25 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             revision = install->Revision;
         std::filesystem::path const dataFolder = ClientLocator::GetDataFolder(system);
         LoadLogNames(program, dataFolder, revision);
+        FunctionNotes notes = ReadNotes(dataFolder, revision);
+        if ((command == "note" || command == "notes") && revision.empty())
+        {
+            std::cerr << fmt::format("client {} cannot tell the revision of {}, which its notes are kept under\n", command, *arguments.Client);
+            return Failure;
+        }
+        if (command == "note")
+            return RunNote(arguments, program, notes, FunctionNotes::PathFor(dataFolder, revision));
+        if (command == "notes")
+            return RunNotes(arguments, program, notes, dataFolder, revision);
         if (command == "functions")
-            return RunFunctions(arguments, program);
+            return RunFunctions(arguments, program, notes);
         if (command == "strings")
             return RunStrings(arguments, program);
         if (command == "decompile")
             return RunDecompile(arguments, program, dataFolder, revision);
         if (command == "vtable")
             FindBehaviors(program, dataFolder, revision);
-        CodeAnnotator const names(*program.Image, KnownNames(program, dataFolder, revision));
+        CodeAnnotator const names(*program.Image, KnownNames(program, dataFolder, revision, notes));
         if (command == "vtable")
             return RunVtable(arguments, program, names, ReadBehaviorCache(BehaviorCachePath(dataFolder, revision)));
         if (command == "xrefs")
@@ -2730,13 +2872,14 @@ int main(int argc, char** argv)
 
     if (command != "hex" && command != "types" && command != "name" && command != "messages" && command != "handlers" && command != "behaviors" && command != "template" && command != "wad" && command != "lang"
         && command != "wizbangs" && command != "catalog" && command != "requirements" && command != "quests" && command != "tokens"
-        && command != "core" && command != "field" && command != "strings" && command != "xrefs" && command != "disasm" && command != "decompile" && command != "functions" && command != "vtable")
+        && command != "core" && command != "field" && command != "strings" && command != "xrefs" && command != "disasm" && command != "decompile" && command != "functions" && command != "vtable"
+        && command != "note" && command != "notes")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
         return BadUsage;
     }
 
-    if (arguments->Subjects.empty() && !arguments->List && command != "catalog" && command != "requirements" && command != "quests" && command != "tokens" && !(command == "template" && arguments->Holding))
+    if (arguments->Subjects.empty() && !arguments->List && command != "catalog" && command != "requirements" && command != "quests" && command != "tokens" && command != "notes" && !(command == "template" && arguments->Holding))
     {
         std::cerr << fmt::format("client {} needs something to look for; pass one, or --list to see what there is\n{}", command, Usage);
         return BadUsage;
@@ -2957,7 +3100,8 @@ int main(int argc, char** argv)
         std::cerr << "client needs an install; name one with --client or AMBROSE_CLIENT_DIR\n";
         return Failure;
     }
-    if (command == "strings" || command == "xrefs" || command == "disasm" || command == "decompile" || command == "functions" || command == "vtable")
+    if (command == "strings" || command == "xrefs" || command == "disasm" || command == "decompile" || command == "functions" || command == "vtable" || command == "note"
+        || command == "notes")
         return RunProgram(*arguments, command, system);
     std::filesystem::path wad = LogConfig::Utf8Path(arguments->Wad);
     if (!wad.has_parent_path())
@@ -3102,16 +3246,14 @@ int main(int argc, char** argv)
                 std::cerr << fmt::format("{}: {}\n", ConfigMgr::PathToUtf8(program), error);
                 return Failure;
             }
-            registrations = MessageHandlers::Find(*image, CodeIndex(*image));
-            if (!revision.empty() && !registrations.empty())
-                WriteHandlerCache(HandlerCachePath(ClientLocator::GetDataFolder(system), revision), registrations);
+            registrations = FindHandlers(*image, CodeIndex(*image), ClientLocator::GetDataFolder(system), revision);
         }
         if (registrations.empty())
         {
             std::cerr << "the client program registers no message handler this tool can find\n";
             return Failure;
         }
-        return RunHandlers(*arguments, messages, registrations);
+        return RunHandlers(*arguments, messages, registrations, ReadNotes(ClientLocator::GetDataFolder(system), revision));
     }
     if (command == "wizbangs")
     {
