@@ -11,7 +11,7 @@ if(NOT helpResult EQUAL 0 OR NOT helpOutput MATCHES "Usage: studio" OR NOT helpO
     message(FATAL_ERROR "studio --help exited ${helpResult}: ${helpOutput}${helpError}")
 endif()
 
-foreach(arguments IN ITEMS "--bogus" "--answer" "extra")
+foreach(arguments IN ITEMS "--bogus" "--answer" "extra" "--client;--answer;{}")
     execute_process(COMMAND "${APP}" ${arguments} RESULT_VARIABLE usageResult OUTPUT_VARIABLE usageOutput ERROR_VARIABLE usageError TIMEOUT 30)
     if(NOT usageResult EQUAL 2 OR NOT usageError MATCHES "studio: .*Usage: studio")
         message(FATAL_ERROR "studio with arguments '${arguments}' exited ${usageResult} instead of 2: ${usageOutput}${usageError}")
@@ -37,10 +37,10 @@ if("$ENV{AMBROSE_CLIENT_DIR}" STREQUAL "" OR "$ENV{AMBROSE_TYPE_DUMP_PATH}" STRE
 endif()
 
 execute_process(COMMAND "${APP}" --client "$ENV{AMBROSE_CLIENT_DIR}" --type-dump "$ENV{AMBROSE_TYPE_DUMP_PATH}"
-    --answer "{\"id\":2,\"path\":\"/studio/cinematics\",\"body\":{\"search\":\"Unicorn\"}}"
-    --answer "{\"id\":3,\"path\":\"/studio/cinematic\",\"body\":{\"name\":\"Cinematic_UnicornActor\"}}"
+    --answer "{\"id\":2,\"path\":\"/studio/cinematics\",\"body\":{\"search\":\"Mellori\"}}"
+    --answer "{\"id\":3,\"path\":\"/studio/cinematic\",\"body\":{\"name\":\"EM-MelloriRavenCinematic\"}}"
     RESULT_VARIABLE installResult OUTPUT_VARIABLE installOutput ERROR_VARIABLE installError TIMEOUT 300)
-if(NOT installResult EQUAL 0 OR NOT installOutput MATCHES "\"id\":2,\"status\":200" OR NOT installOutput MATCHES "Cinematics/[^\"]*Unicorn"
+if(NOT installResult EQUAL 0 OR NOT installOutput MATCHES "\"id\":2,\"status\":200" OR NOT installOutput MATCHES "Cinematics/EM-MelloriRavenCinematic.xml"
     OR NOT installOutput MATCHES "\"id\":3,\"status\":200" OR NOT installOutput MATCHES "\"m_stages\"" OR NOT installOutput MATCHES "\"m_actors\"")
     message(FATAL_ERROR "studio against the install exited ${installResult}: ${installOutput}${installError}")
 endif()

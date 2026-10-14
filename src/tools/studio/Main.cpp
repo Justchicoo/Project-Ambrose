@@ -81,7 +81,7 @@ Exit status: 0 on success, 1 when the window or the content cannot be opened, 2 
                 error = fmt::format("there is no option {}", arg);
                 return std::nullopt;
             }
-            if (i + 1 >= args.size())
+            if (i + 1 >= args.size() || args[i + 1].starts_with("--"))
             {
                 error = fmt::format("{} needs a value", arg);
                 return std::nullopt;
