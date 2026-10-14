@@ -169,7 +169,7 @@ Objects show the right animation state, and the world changes a wizard has earne
 
 **Risks**
 
-- One ResAddDynaMod bool is still unnamed; the quest files name the other two, m_useQuestAsOriginator and m_bShowsObject, whose hashes prove the names, and what m_bShowsObject changes when it is 0 is unverified: the server shows every tagged object a non-removal mod names.
+- One ResAddDynaMod bool is still unnamed; the quest files name the other two, m_useQuestAsOriginator and m_bShowsObject, whose hashes prove the names, and m_bShowsObject is now kept with each mod: one that sets it shows its tagged objects, and one that clears it only sets their state and leaves them to their requirements. How the zone data sets it is unverified until `client results ResAddDynaMod` runs on an install that holds the zone archives.
 - Behavior of IgnoreIfCurrentStateIsOff and the Data (EmoteStateOverrideInfo) field is unverified.
 
 ## 10.04 Requirement-gated visibility (WLD-19 part 2)

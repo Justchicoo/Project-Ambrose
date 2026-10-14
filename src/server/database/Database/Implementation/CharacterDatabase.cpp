@@ -107,7 +107,7 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_SEL_CHARACTER_QUEST_HIDDEN, "CHAR_SEL_CHARACTER_QUEST_HIDDEN", "SELECT h.`guid` IS NOT NULL, h.`quest_name` FROM `characters` c "
         "LEFT JOIN `character_quest_hidden` h ON h.`guid` = c.`guid` WHERE c.`guid` = ? ORDER BY h.`quest_name`", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_CHARACTER_DYNAMODS, "CHAR_SEL_CHARACTER_DYNAMODS", "SELECT d.`guid` IS NOT NULL, d.`zone_name`, d.`client_tag`, d.`state`, d.`removed`, d.`mod_index`, "
-        "d.`originator` FROM `characters` c LEFT JOIN `character_dynamod` d ON d.`guid` = c.`guid` WHERE c.`guid` = ? ORDER BY d.`mod_index`", ConnectionFlags::Both);
+        "d.`originator`, d.`shows_object` FROM `characters` c LEFT JOIN `character_dynamod` d ON d.`guid` = c.`guid` WHERE c.`guid` = ? ORDER BY d.`mod_index`", ConnectionFlags::Both);
     PrepareStatement(CHAR_UPD_CHARACTER_QUEST_REVISION, "CHAR_UPD_CHARACTER_QUEST_REVISION", "INSERT INTO `character_quest_revision` (`guid`, `revision`) VALUES (?, ?) "
         "ON DUPLICATE KEY UPDATE `revision` = GREATEST(`revision`, VALUES(`revision`))", ConnectionFlags::Both);
     for (auto const& [id, name, table] : { std::tuple{ CHAR_DEL_CHARACTER_QUESTS, "CHAR_DEL_CHARACTER_QUESTS", "character_quest" },
@@ -129,7 +129,7 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_INS_CHARACTER_QUEST_HIDDEN, "CHAR_INS_CHARACTER_QUEST_HIDDEN", "INSERT INTO `character_quest_hidden` (`guid`, `quest_name`) "
         "SELECT r.`guid`, ? FROM `character_quest_revision` r WHERE r.`guid` = ? AND r.`revision` = ?", ConnectionFlags::Both);
     PrepareStatement(CHAR_INS_CHARACTER_DYNAMOD, "CHAR_INS_CHARACTER_DYNAMOD", "INSERT INTO `character_dynamod` (`guid`, `zone_name`, `client_tag`, `state`, `removed`, `mod_index`, "
-        "`originator`) SELECT r.`guid`, ?, ?, ?, ?, ?, ? FROM `character_quest_revision` r WHERE r.`guid` = ? AND r.`revision` = ?", ConnectionFlags::Both);
+        "`originator`, `shows_object`) SELECT r.`guid`, ?, ?, ?, ?, ?, ?, ? FROM `character_quest_revision` r WHERE r.`guid` = ? AND r.`revision` = ?", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_MAX_QUEST_GUID, "CHAR_SEL_MAX_QUEST_GUID", "SELECT GREATEST(COALESCE((SELECT MAX(`quest_gid`) FROM `character_quest`), 0), "
         "COALESCE((SELECT MAX(`goal_gid`) FROM `character_quest_goal`), 0), COALESCE((SELECT `highest` FROM `id_sequences` WHERE `name` = 'quest'), 0))", ConnectionFlags::Both);
 

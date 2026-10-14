@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests one wizard's Dynamods: a new mod takes the next index after the placeholder, the same mod again changes nothing, a changed one replaces the old under a fresh index, a removal hides its tag and an add shows it while an untagged or unnamed object is left to its requirements, a stored set keeps the first of a twice-stored mod and counts on from the highest index it kept, a zone's armed mods leave out removals and other zones, and erasing a tag takes every zone's mod of it away and keeps its index from being given out again.
+ * Tests one wizard's Dynamods: a new mod takes the next index after the placeholder, the same mod again changes nothing, a changed one replaces the old under a fresh index, a removal hides its tag, an add that shows its object shows it and one that only sets a state leaves it to its requirements while an untagged or unnamed object is left to its requirements, a stored set keeps the first of a twice-stored mod and counts on from the highest index it kept, a zone's armed mods leave out removals and other zones, and erasing a tag takes every zone's mod of it away and keeps its index from being given out again.
  */
 
 #include "WizardDynaMods.h"
@@ -39,6 +39,12 @@ TEST(WizardDynaModsTest, ARemovalHidesItsTagAndAnAddShowsIt)
     EXPECT_EQ(mods.Visibility(Hub, "Ultra_Rattlebones_40"), true);
     EXPECT_EQ(mods.Visibility(Hub, "WC_GateCommons_ToPetPark"), std::nullopt);
     EXPECT_EQ(mods.Visibility(Hub, ""), std::nullopt);
+
+    mods.Apply(Hub, "AV-QuestLight-KnightsHall", "On", false, 9, false);
+    EXPECT_EQ(mods.Visibility(Hub, "AV-QuestLight-KnightsHall"), std::nullopt) << "a mod that only sets a state leaves its objects to their requirements";
+    DynaModChange const shown = mods.Apply(Hub, "AV-QuestLight-KnightsHall", "On", false, 9, true);
+    EXPECT_TRUE(shown.Removed && shown.Added) << "showing its objects is a change of the mod";
+    EXPECT_EQ(mods.Visibility(Hub, "AV-QuestLight-KnightsHall"), true);
 }
 
 TEST(WizardDynaModsTest, AStoredSetKeepsTheFirstOfATwiceStoredModAndCountsOnFromItsHighestIndex)

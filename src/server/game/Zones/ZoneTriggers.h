@@ -29,6 +29,7 @@ struct ZoneDynaMod
     std::string State;
     bool Remove = false;
     std::string Zone;
+    bool ShowsObject = true;
 
     bool operator==(ZoneDynaMod const&) const = default;
 };

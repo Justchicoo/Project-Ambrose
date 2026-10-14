@@ -582,8 +582,10 @@ TEST_F(CharacterRepositoryDatabaseTest, AQuestLogCountedToTwoOfFiveReloadsWithTh
     log.SetHidden("KeptQuest", true);
     log.ApplyDynaMod("WizardCity/WC_Hub", "WC_GateCommons_ToUnicornWay", "IdleOpen", false, 601);
     log.ApplyDynaMod("WizardCity/WC_Hub", "PetParkCollision", "", true, 601);
+    log.ApplyDynaMod("Avalon/AV_Z00_Hub", "AV-QuestLight-KnightsHall", "On", false, 601, false);
     CharacterQuests const accepted = log.ToStored(1);
-    ASSERT_EQ(accepted.DynaMods.size(), 2u);
+    ASSERT_EQ(accepted.DynaMods.size(), 3u);
+    EXPECT_FALSE(accepted.DynaMods[2].ShowsObject);
     ASSERT_EQ(CharacterQuestRepository::Save(601, accepted), CharacterOpResult::Ok);
 
     CharacterQuestsLoad const reloaded = CharacterQuestRepository::Load(601);
