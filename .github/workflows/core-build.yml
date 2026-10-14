@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache, which pull requests restore and only pushes to main, the schedule and manual runs save, each build banking its vcpkg and compiler caches even when a newer push cancels it, and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, the panel's end-to-end specs against its supervisor, relinked with the panel just built, and patchserver, keeping a failed run's Playwright results as an artifact, and the login and game servers booted with no client install against scratch databases.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on pull requests, and on every push that touches a tool they test or a file the checks read, and beside the checks, without waiting for them, builds and tests, with every leg compiling through its own ccache cache, which pull requests restore and pushes to main, the schedule and manual runs save, as does a pull request's Linux GCC leg, replacing its own older one, so its next push restores its own objects before main's, each build banking its vcpkg and compiler caches even when a newer push cancels it, and Windows building with Ninja from the MSVC developer environment so it can, the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a small select job from a push or pull request that touches the code, the data the tests read or the build definition, the schedule, a label, or a manual run, and after the Linux GCC leg's tests the dev run boots what the change touches from the binaries that leg built, the panel's end-to-end specs against its supervisor, relinked with the panel just built, and patchserver, keeping a failed run's Playwright results as an artifact, and the login and game servers booted with no client install against scratch databases.
 name: core-build
 
 on:
@@ -217,6 +217,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    permissions:
+      contents: read
+      actions: write
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -297,8 +300,16 @@ jobs:
         env:
           CCACHE_DIR: ${{ runner.temp }}/ccache
         run: ccache --show-stats
+      - name: Drop this pull request's older compiler cache
+        if: ${{ always() && github.event_name == 'pull_request' && matrix.leg == 'linux-gcc' && steps.configure.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh cache list --ref "refs/pull/${{ github.event.pull_request.number }}/merge" --key "ccache-${{ matrix.configure }}-" --limit 100 --json id --jq '.[].id' | xargs -r -n1 gh cache delete
       - name: Save compiler cache
-        if: ${{ always() && github.event_name != 'pull_request' && steps.configure.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        if: ${{ always() && (github.event_name != 'pull_request' || matrix.leg == 'linux-gcc') && steps.configure.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
