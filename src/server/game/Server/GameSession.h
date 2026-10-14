@@ -170,6 +170,9 @@ public:
     void CheckVolumes();
     void CheckNpcServices();
     void RefreshNpcWizBangs(std::chrono::steady_clock::time_point now);
+    void RunWaitingResults(std::chrono::steady_clock::time_point now);
+    std::vector<GameMessages::StartStagedCinematic> TakeZoneCinematics() noexcept { return std::exchange(_zoneCinematics, {}); }
+    void ShowCinematic(GameMessages::StartStagedCinematic const& cinematic);
     void HandleInteractNpc(GameMessages::InteractNpc& message);
     void HandleInteractObject(GameMessages::InteractObject& message);
     void HandleInteractOption(GameMessages::InteractOption& message);
@@ -374,6 +377,7 @@ private:
     void ApplyDynaMods(std::vector<ZoneDynaMod> const& mods);
     void EraseDynaMods(std::string_view tag);
     static void RegisterResultHandlers();
+    void StartStagedCinematic(GameMessages::StartStagedCinematic const& cinematic, bool wholeZone, std::string_view source);
     void ShowNotifyText(ZoneNotifyText const& text);
     bool SendLoot(PropertyObject const* list, std::string problem);
     void SendDynaMods();
@@ -457,6 +461,15 @@ private:
     std::vector<std::string> _resultDoors;
     std::vector<std::string> _resultSpawns;
     QuestWireEncoder::LootInfoList _resultLoot;
+    std::vector<std::string> _resultEvents;
+    std::size_t _resultEventDepth = 0;
+    struct WaitingResults
+    {
+        std::chrono::steady_clock::time_point Due;
+        ResultSource Source;
+    };
+    std::vector<WaitingResults> _waitingResults;
+    std::vector<GameMessages::StartStagedCinematic> _zoneCinematics;
     int64 _itemsAllowed = 0;
     GameEffectHolder _effects;
     std::vector<GameEffectChange> _effectChanges;

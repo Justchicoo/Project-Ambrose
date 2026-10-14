@@ -166,7 +166,28 @@ namespace
         std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
         for (std::shared_ptr<GameSession> const& session : sessions)
             if (session->IsOpen())
+            {
+                session->RunWaitingResults(now);
                 session->RefreshNpcWizBangs(now);
+            }
+    }
+
+    void RelayZoneCinematics(std::vector<std::shared_ptr<GameSession>> const& sessions)
+    {
+        for (std::shared_ptr<GameSession> const& sender : sessions)
+        {
+            std::vector<GameMessages::StartStagedCinematic> const cinematics = sender->TakeZoneCinematics();
+            if (cinematics.empty() || !sender->IsOpen())
+                continue;
+            std::optional<uint32> const mapId = sender->GetMapId();
+            for (std::shared_ptr<GameSession> const& viewer : sessions)
+            {
+                if (viewer == sender || !viewer->IsOpen() || !viewer->IsShown() || viewer->GetMapId() != mapId)
+                    continue;
+                for (GameMessages::StartStagedCinematic const& cinematic : cinematics)
+                    viewer->ShowCinematic(cinematic);
+            }
+        }
     }
 
     void RelayDuels(std::vector<std::shared_ptr<GameSession>> const& sessions)
@@ -656,6 +677,7 @@ void World::Update(std::chrono::milliseconds diff)
     RelayJumps(sessions);
     RelayWizBangs(sessions);
     RefreshNpcWizBangs(sessions);
+    RelayZoneCinematics(sessions);
     RelayLevelUps(sessions);
     RelayGameEffects(sessions);
     RelayDuels(sessions);
