@@ -251,7 +251,9 @@ TEST(ZoneTriggerResultTest, AnAddDynaModResultReadsAsTheModItMakesAndAFiredTrigg
             EXPECT_EQ(result->Set("m_dynaModState", std::string("IdleOpen")), PropertySetResult::Ok);
         }
         else if (className == ZoneTriggerMgr::RemoveDynaModClass)
+        {
             EXPECT_EQ(result->Set("m_dynaModClientTag", std::string(tag)), PropertySetResult::Ok);
+        }
         EncodeResult const encoded = ObjectSerializer::Encode(result.get(), options);
         EXPECT_TRUE(encoded.Ok()) << encoded.Detail;
         return encoded.Bytes;
