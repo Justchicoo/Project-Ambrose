@@ -92,9 +92,9 @@ Health, mana, gold, power-pip and potion changes on the server show up immediate
 
 **Acceptance**
 
-- [ ] 2.5 levels from level 1 ends at 3 with remainder and training points
-- [ ] Max level goes to overflow_xp; locked level does not change
-- [ ] `.settings set Rate.XP.Quest 2` doubles the next quest XP grant without a restart
+- [x] 2.5 levels from level 1 ends at 3 with remainder and training points [PlayerLevelTest.TwoAndAHalfLevelsFromLevelOneEndAtLevelThreeWithTheRemainderAndEachLevelsTrainingPoints: 292 experience from level 1 ends at level 3 with 292 kept and the points of levels 2 and 3 gained]
+- [x] Max level goes to overflow_xp; locked level does not change [PlayerLevelTest.AtTheLevelCapEveryPointGoesToOverflowAndTheLevelStands and ALockedLevelFillsItsBarAndSendsTheRestToOverflowUntilUnlocked]
+- [x] `.settings set Rate.XP.Quest 2` doubles the next quest XP grant without a restart [PlayerLevelTest.AQuestGrantFollowsRateXpQuestLiveWhileACommandGrantDoesNot: 100 becomes 200 after the set, with no restart]
 - [ ] Real client: level-up effect seen by a second client
 
 ### Detailed spec from WIZ-7: Experience and level-up
@@ -124,11 +124,13 @@ Gaining XP fills the XP bar, crossing a threshold levels the wizard up with a fu
 
 **Acceptance**
 
-- [ ] Unit test: GiveXP enough for 2.5 levels from level 1 ends at level 3 with the right remainder and training points gained for both levels
-- [ ] Unit test: at max level the XP goes to overflow_xp and no LEVELUP is sent
-- [ ] Unit test: a locked level accrues no level changes
-- [ ] Unit test: after `.settings set Rate.XP.Quest 2`, GiveXP(100, Quest) grants 200 without a restart
+- [x] Unit test: GiveXP enough for 2.5 levels from level 1 ends at level 3 with the right remainder and training points gained for both levels [PlayerLevelTest.TwoAndAHalfLevelsFromLevelOneEndAtLevelThreeWithTheRemainderAndEachLevelsTrainingPoints]
+- [x] Unit test: at max level the XP goes to overflow_xp and no LEVELUP is sent [PlayerLevelTest.AtTheLevelCapEveryPointGoesToOverflowAndTheLevelStands: 100 points at the cap all reach the overflow and the progress reports no level change, which is what queues a LEVELUP]
+- [x] Unit test: a locked level accrues no level changes [PlayerLevelTest.ALockedLevelFillsItsBarAndSendsTheRestToOverflowUntilUnlocked]
+- [x] Unit test: after `.settings set Rate.XP.Quest 2`, GiveXP(100, Quest) grants 200 without a restart [PlayerLevelTest.AQuestGrantFollowsRateXpQuestLiveWhileACommandGrantDoesNot]
 - [ ] Real client: '.character xp <amount>' fills the XP bar. Crossing the threshold plays the level-up effect and sound, the level number on the character sheet goes up, and health and mana refill to the new maximums. A second client nearby sees the level-up effect on the first.
+
+**Built on 2026-10-14:** experience is the total a wizard holds, and `m_xpToLevel` of its level's row is the total that reaches the next, as the client's `CheckXPCapPerLevel` reads it; a grant carries the wizard up as many levels as its school's rows reach, each giving its training points and bases at full health and mana, and a point past the level cap, or past the next level while the level is locked, goes to overflow; r806919's type dump has no `m_xpPercentIncrease`, so no bonus percentage is applied; MSG_PARTYLEVELUP goes from a zone server to a chat server, which this project has no counterpart of, and PET MSG_PETENERGYMAX waits for 13.01, so neither is sent; MSG_UPDATEXP carries the grant and the old total and MSG_LEVELUP's Data is '0000000000', as the risks below describe and as the real-client check will settle.
 
 **Risks**
 

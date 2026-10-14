@@ -241,6 +241,16 @@ void ScriptMgr::OnHealthChanged(Player& player, int32 oldValue, int32 newValue)
     ForEachPlayer("OnHealthChanged", [&player, oldValue, newValue](PlayerScript* script) { script->OnHealthChanged(player, oldValue, newValue); });
 }
 
+void ScriptMgr::OnGiveXp(Player& player, int32 amount, XpSource source)
+{
+    ForEachPlayer("OnGiveXp", [&player, amount, source](PlayerScript* script) { script->OnGiveXp(player, amount, source); });
+}
+
+void ScriptMgr::OnLevelChanged(Player& player, int32 oldLevel, int32 newLevel)
+{
+    ForEachPlayer("OnLevelChanged", [&player, oldLevel, newLevel](PlayerScript* script) { script->OnLevelChanged(player, oldLevel, newLevel); });
+}
+
 void ScriptMgr::OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot)
 {
     ForEachPlayer("OnEquip", [&player, itemGuid, templateId, slot](PlayerScript* script) { script->OnEquip(player, itemGuid, templateId, slot); });

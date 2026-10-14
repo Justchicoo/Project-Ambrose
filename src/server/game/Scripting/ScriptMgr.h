@@ -17,6 +17,7 @@
 #include <vector>
 
 class Player;
+enum class XpSource : uint8;
 struct RequirementRow;
 class RequirementContext;
 
@@ -70,6 +71,8 @@ class PlayerScript : public ScriptObject
 public:
     virtual void OnGoldChanged(Player& player, int32 oldValue, int32 newValue) { (void)player; (void)oldValue; (void)newValue; }
     virtual void OnHealthChanged(Player& player, int32 oldValue, int32 newValue) { (void)player; (void)oldValue; (void)newValue; }
+    virtual void OnGiveXp(Player& player, int32 amount, XpSource source) { (void)player; (void)amount; (void)source; }
+    virtual void OnLevelChanged(Player& player, int32 oldLevel, int32 newLevel) { (void)player; (void)oldLevel; (void)newLevel; }
     virtual void OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot) { (void)player; (void)itemGuid; (void)templateId; (void)slot; }
     virtual void OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot) { (void)player; (void)itemGuid; (void)templateId; (void)slot; }
 
@@ -168,6 +171,8 @@ public:
     void OnTriggerFired(std::string_view zone, uint32 mapId, std::string_view trigger, uint64 wizard);
     void OnGoldChanged(Player& player, int32 oldValue, int32 newValue);
     void OnHealthChanged(Player& player, int32 oldValue, int32 newValue);
+    void OnGiveXp(Player& player, int32 amount, XpSource source);
+    void OnLevelChanged(Player& player, int32 oldLevel, int32 newLevel);
     void OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot);
     void OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot);
     std::optional<bool> EvaluateCondition(RequirementRow const& requirement, RequirementContext const& context) const;
