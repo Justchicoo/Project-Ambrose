@@ -1970,6 +1970,62 @@ namespace GameMessages
         }
     };
 
+    struct CompleteDialog
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_COMPLETEDIALOG";
+
+        uint64 MobileId = 0;
+        std::string CompletionType;
+        std::string EntryEvent;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MobileID", &CompleteDialog::MobileId), DmlField("CompletionType", &CompleteDialog::CompletionType), DmlField("EntryEvent", &CompleteDialog::EntryEvent) };
+        }
+    };
+
+    struct InteractUnderwayQuest
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_INTERACTUNDERWAYQUEST";
+
+        uint64 MobileId = 0;
+        uint64 QuestId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MobileID", &InteractUnderwayQuest::MobileId), DmlField("QuestID", &InteractUnderwayQuest::QuestId) };
+        }
+    };
+
+    struct RequestQuestDialog
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_REQUESTQUESTDIALOG";
+
+        uint32 QuestNameId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("QuestNameID", &RequestQuestDialog::QuestNameId) };
+        }
+    };
+
+    struct QuestDialog
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_QUESTDIALOG";
+
+        uint32 QuestNameId = 0;
+        std::string Dialog;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("QuestNameID", &QuestDialog::QuestNameId), DmlField("ActorDialog", &QuestDialog::Dialog) };
+        }
+    };
+
     struct CompletePersona
     {
         static constexpr uint8 ServiceId = QuestService;

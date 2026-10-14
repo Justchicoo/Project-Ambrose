@@ -609,9 +609,11 @@ The NPC named by a persona goal shows '?', offers the goal in its menu, and talk
 
 **Acceptance**
 
-- [ ] Failing-requirement entry is omitted
-- [ ] EntryEvent fires OnDialogEvent once
+- [x] Failing-requirement entry is omitted (`QuestOfferTest.APrepLineWhoseRequirementTheWizardFailsIsLeftOut`: a Prep line gated on the Fire school is left out for an Ice wizard and kept for a Fire one)
+- [x] EntryEvent fires OnDialogEvent once (`QuestDialogsTest.AnEntryEventInCompleteDialogFiresOnDialogEventExactlyOnce`: the event of a played line fires QuestScript::OnDialogEvent once, a repeat or an event no line carries fires nothing)
 - [ ] Real client: Start dialog on accept; quest-book review; underway reminder line
+
+Built in src/server/game/Quests/QuestDialogs.cpp, with QuestBook::Dialog filtering lines by their requirements and GameSession's PlayQuestDialog, RemindOfQuest and its MSG_COMPLETEDIALOG, MSG_INTERACTUNDERWAYQUEST and MSG_REQUESTQUESTDIALOG handlers in NpcHandler.cpp, rather than a Dialogs/DialogMgr, as the quest dialogs are the only dialogs so far. quest_dialog_entry gains requirements, carried by `client quests --import`. Accepting plays the quest's Start dialog, completing it by talking plays its Complete dialog, and a giver lists each quest it gave that the wizard holds as an UnderwayEntry whose pick plays the Underway dialog. An entry event fires QuestScript::OnDialogEvent and is posted into the zone's triggers. The quest-book review answers with the Start dialog, or Prep when there is none. A goal's Prep dialog on activation, deferred results and MSG_ENCOUNTERDIALOG wait for an NPC to play it from, a quest that defers results and groups (12.04); the completion types of the Start, Underway and Complete dialogs are unverified until the batched real-client run.
 
 ### Detailed spec from QST-14: Actor dialog lifecycle and quest-book dialog review
 
@@ -639,8 +641,8 @@ Quest start, goal prep, underway, completion and quest-complete dialogs play at 
 
 **Acceptance**
 
-- [ ] Unit test: a Prep dialog whose second entry has a failing requirement sends only the first entry.
-- [ ] Unit test: an EntryEvent in MSG_COMPLETEDIALOG fires QuestScript::OnDialogEvent exactly once.
+- [x] Unit test: a Prep dialog whose second entry has a failing requirement sends only the first entry. (`QuestOfferTest.APrepLineWhoseRequirementTheWizardFailsIsLeftOut`)
+- [x] Unit test: an EntryEvent in MSG_COMPLETEDIALOG fires QuestScript::OnDialogEvent exactly once. (`QuestDialogsTest.AnEntryEventInCompleteDialogFiresOnDialogEventExactlyOnce`)
 - [ ] Client: accepting plays the Start dialog. Opening the quest book and pressing the dialog-review button shows the quest's dialog text. Talking to a giver about an underway quest shows its reminder line instead of the offer.
 
 **Risks**

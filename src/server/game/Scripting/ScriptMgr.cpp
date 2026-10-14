@@ -25,6 +25,11 @@ PlayerScript::PlayerScript(std::string name) : ScriptObject(std::move(name))
     sScriptMgr.Register(this);
 }
 
+QuestScript::QuestScript(std::string name) : ScriptObject(std::move(name))
+{
+    sScriptMgr.Register(this);
+}
+
 ConditionScript::ConditionScript(std::string name) : ScriptObject(std::move(name))
 {
     sScriptMgr.Register(this);
@@ -69,6 +74,11 @@ void ScriptMgr::Register(ZoneScript* script)
 void ScriptMgr::Register(PlayerScript* script)
 {
     _playerScripts.push_back(script);
+}
+
+void ScriptMgr::Register(QuestScript* script)
+{
+    _questScripts.push_back(script);
 }
 
 void ScriptMgr::Register(ConditionScript* script)
@@ -133,6 +143,9 @@ void ScriptMgr::Unload()
     for (PlayerScript* script : _playerScripts)
         delete script;
     _playerScripts.clear();
+    for (QuestScript* script : _questScripts)
+        delete script;
+    _questScripts.clear();
     for (ConditionScript* script : _conditionScripts)
         delete script;
     _conditionScripts.clear();
@@ -147,7 +160,7 @@ void ScriptMgr::Unload()
 
 std::size_t ScriptMgr::GetScriptCount() const
 {
-    return _worldScripts.size() + _zoneScripts.size() + _playerScripts.size() + _conditionScripts.size() + _npcScripts.size() + _commandScripts.size() + _serverScripts.size();
+    return _worldScripts.size() + _zoneScripts.size() + _playerScripts.size() + _questScripts.size() + _conditionScripts.size() + _npcScripts.size() + _commandScripts.size() + _serverScripts.size();
 }
 
 std::vector<std::string> ScriptMgr::GetScriptNames() const
@@ -159,6 +172,8 @@ std::vector<std::string> ScriptMgr::GetScriptNames() const
     for (ZoneScript const* script : _zoneScripts)
         names.push_back(script->GetName());
     for (PlayerScript const* script : _playerScripts)
+        names.push_back(script->GetName());
+    for (QuestScript const* script : _questScripts)
         names.push_back(script->GetName());
     for (ConditionScript const* script : _conditionScripts)
         names.push_back(script->GetName());
@@ -259,6 +274,25 @@ void ScriptMgr::OnEquip(Player& player, uint64 itemGuid, uint32 templateId, std:
 void ScriptMgr::OnUnequip(Player& player, uint64 itemGuid, uint32 templateId, std::string_view slot)
 {
     ForEachPlayer("OnUnequip", [&player, itemGuid, templateId, slot](PlayerScript* script) { script->OnUnequip(player, itemGuid, templateId, slot); });
+}
+
+void ScriptMgr::OnDialogEvent(uint64 wizard, std::string_view quest, std::string_view event)
+{
+    for (QuestScript* script : _questScripts)
+    {
+        try
+        {
+            script->OnDialogEvent(wizard, quest, event);
+        }
+        catch (std::exception const& failure)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from OnDialogEvent: {}", script->GetName(), failure.what());
+        }
+        catch (...)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from OnDialogEvent for a reason it did not say", script->GetName());
+        }
+    }
 }
 
 std::optional<bool> ScriptMgr::EvaluateCondition(RequirementRow const& requirement, RequirementContext const& context) const

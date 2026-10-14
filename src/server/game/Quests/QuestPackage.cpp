@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements and each goal's m_goalRequirements encoded as zone data holds requirements and failing the quest when any of those lists does not read, attaching each goal-complete logic entry, with the count of its OR goals it needs, to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
+ * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements, each goal's m_goalRequirements and each dialog line's m_requirements encoded as zone data holds requirements and failing the quest when any of those lists does not read, attaching each goal-complete logic entry, with the count of its OR goals it needs, to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
  */
 
 #include "QuestPackage.h"
@@ -411,7 +411,8 @@ namespace
                         NotCarried("second dialog animation");
                     QuestDialogEntryRow line{ _quest.Name, owner, goal, tag, static_cast<uint32>(index), static_cast<uint32>(entry.Whole("m_actorTemplateID")),
                         Key(entry.Text("m_dialog")), entry.Text("m_picture"), entry.Text("m_soundFile"), entry.Text("m_action"), entry.Text("m_dialogEvent"),
-                        animations.empty() ? std::string() : animations.front() };
+                        animations.empty() ? std::string() : animations.front(), {} };
+                    Gate(entry.Object("m_requirements"), line.Requirements);
                     _quest.Rows.DialogEntries.push_back(std::move(line));
                 }
                 for (PropertyObject const* madlib : fields.Objects("m_madlibs"))
@@ -771,10 +772,10 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
         return WorldSqlScript::Row{ row.Quest, row.Owner, row.Goal, row.Tag };
     }));
     script.InsertRows("quest_dialog_entry", { "quest", "owner", "goal_name", "tag", "position", "actor_template_id", "dialog_key", "picture", "sound", "action", "dialog_event", "animation",
-        "source" }, convert(rows.DialogEntries, [&](QuestDialogEntryRow const& row)
+        "requirements", "source" }, convert(rows.DialogEntries, [&](QuestDialogEntryRow const& row)
     {
         return WorldSqlScript::Row{ row.Quest, row.Owner, row.Goal, row.Tag, number(row.Position), number(row.ActorTemplateId), row.DialogKey, row.Picture, row.Sound, row.Action,
-            row.DialogEvent, row.Animation };
+            row.DialogEvent, row.Animation, row.Requirements.empty() ? Value{ std::monostate{} } : Value{ std::string(row.Requirements.begin(), row.Requirements.end()) } };
     }));
     script.InsertRows("quest_dialog_madlib", { "quest", "owner", "goal_name", "tag", "entry", "identifier", "value", "source" }, convert(rows.Madlibs, [&](QuestDialogMadlibRow const& row)
     {

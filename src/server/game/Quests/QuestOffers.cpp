@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Picks the quests an NPC can offer a wizard and builds the blobs of their offer.
+ * Picks the quests an NPC can offer a wizard and the ones it gave that the wizard holds, and builds the blobs of their offer.
  */
 
 #include "QuestOffers.h"
@@ -37,9 +37,22 @@ std::vector<QuestInfo const*> QuestOffers::Available(QuestStore const& quests, u
     return available;
 }
 
-Dialogs::ActorDialog QuestOffers::BuildPrepDialog(QuestInfo const& quest)
+std::vector<QuestInfo const*> QuestOffers::Underway(QuestStore const& quests, uint32 templateId, QuestLog const& log)
 {
-    return QuestBook::Dialog(quest.Dialogs, QuestStore::TagPrep);
+    std::vector<QuestInfo const*> underway;
+    for (std::string const& name : quests.GetQuestsOfferedBy(templateId))
+        if (QuestInfo const* const quest = quests.Find(name); quest && log.HasQuest(name))
+            underway.push_back(quest);
+    std::ranges::sort(underway, [](QuestInfo const* left, QuestInfo const* right)
+    {
+        return std::tie(left->Row.TitleKey, left->Row.Name) < std::tie(right->Row.TitleKey, right->Row.Name);
+    });
+    return underway;
+}
+
+Dialogs::ActorDialog QuestOffers::BuildPrepDialog(QuestInfo const& quest, RequirementContext const& facts)
+{
+    return QuestBook::Dialog(quest.Dialogs, QuestStore::TagPrep, facts);
 }
 
 QuestWireEncoder::GoalCompilation QuestOffers::BuildStartGoals(QuestInfo const& quest)
@@ -71,10 +84,10 @@ QuestWireEncoder::GoalCompilation QuestOffers::BuildStartGoals(QuestInfo const& 
     return compilation;
 }
 
-QuestOffers::Encoded QuestOffers::Encode(TypeCatalogPtr const& catalog, QuestInfo const& quest)
+QuestOffers::Encoded QuestOffers::Encode(TypeCatalogPtr const& catalog, QuestInfo const& quest, RequirementContext const& facts)
 {
     Encoded encoded;
-    encoded.Dialog = QuestBook::Blob(QuestWireEncoder::BuildActorDialog(catalog, BuildPrepDialog(quest)), QuestWireEncoder::ActorDialogMask, "Prep dialog", encoded.Error);
+    encoded.Dialog = QuestBook::Blob(QuestWireEncoder::BuildActorDialog(catalog, BuildPrepDialog(quest, facts)), QuestWireEncoder::ActorDialogMask, "Prep dialog", encoded.Error);
     if (!encoded.Ok())
         return encoded;
     encoded.GoalData = QuestBook::Blob(QuestWireEncoder::BuildGoalCompilation(catalog, BuildStartGoals(quest)), QuestWireEncoder::GoalsAndRewardsMask, "start goals", encoded.Error);

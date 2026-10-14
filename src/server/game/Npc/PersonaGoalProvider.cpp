@@ -39,7 +39,7 @@ std::vector<NpcServiceOption> PersonaGoalProvider::GetServiceOptions(NpcServiceT
         goal.Image1 = row.Image1;
         goal.Image2 = row.Image2;
         goal.ClientTags = active.Goal->ClientTags;
-        options.push_back({ std::string(PersonaGoals::ServiceName), std::string(PersonaGoals::CompleteIcon), active.Quest->Row.TitleKey, std::nullopt, std::move(goal) });
+        options.push_back({ std::string(PersonaGoals::ServiceName), std::string(PersonaGoals::CompleteIcon), active.Quest->Row.TitleKey, std::nullopt, std::move(goal), std::nullopt });
     }
     return options;
 }

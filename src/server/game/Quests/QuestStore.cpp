@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's stored RequirementList with the type dump it is given, a list it cannot read closing the quest and naming why, reads the results of each quest and goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog or else from its stored starter template, and fills the lookups by template, object name, tag, adjective and zone.
+ * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's and each dialog line's stored RequirementList with the type dump it is given, a list it cannot read closing the quest or hiding the line and naming why, reads the results of each quest and goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog or else from its stored starter template, and fills the lookups by template, object name, tag, adjective and zone.
  */
 
 #include "QuestStore.h"
@@ -171,8 +171,17 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
         if (!owned)
             continue;
         auto const found = owned->find(row.Tag);
-        if (found != owned->end())
-            found->second.Lines.push_back(QuestDialogLine{ row, {} });
+        if (found == owned->end())
+            continue;
+        QuestDialogLine line{ row, {}, nullptr };
+        if (!row.Requirements.empty())
+        {
+            std::string problem;
+            line.Requirements = std::make_shared<RequirementTree const>(RequirementObjects::Decode(catalog, row.Requirements, problem));
+            if (!problem.empty())
+                store->_problems.push_back(fmt::format("line {} of the {} dialog of quest {} is shown to no wizard, since {}", row.Position, row.Tag, row.Quest, problem));
+        }
+        found->second.Lines.push_back(std::move(line));
     }
     for (QuestDialogMadlibRow const& row : rows.Madlibs)
     {

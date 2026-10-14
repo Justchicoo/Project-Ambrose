@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Uses the user's client type dump to check that the ServiceMementoBase MSG_SENDNPCOPTIONS carries is the bare object, its class hash first, as the client reads it, and that a talk-to goal's option goes in it as a GoalEntryFull.
+ * Uses the user's client type dump to check that the ServiceMementoBase MSG_SENDNPCOPTIONS carries is the bare object, its class hash first, as the client reads it, and that a talk-to goal's option goes in it as a GoalEntryFull and a quest underway as an UnderwayEntry.
  */
 
 #include "Environment.h"
@@ -34,7 +34,11 @@ namespace
             goal.GoalTitle = "WizardQuestGoals_TalkNPC";
             goal.PersonaName = "WC-RAV-NPC06";
             goal.Type = Quests::GoalType::Persona;
-            return { { "Talk", "", "Talk_Key", std::nullopt, std::nullopt }, { "QuestPersonaGoalService", "Complete", "QuestTitle_Errand", std::nullopt, goal } };
+            QuestWireEncoder::UnderwayEntry underway;
+            underway.UnderwayText = "QuestUnderway_Errand";
+            underway.QuestId = 100;
+            return { { "Talk", "", "Talk_Key", std::nullopt, std::nullopt, std::nullopt }, { "QuestPersonaGoalService", "Complete", "QuestTitle_Errand", std::nullopt, goal, std::nullopt },
+                { "QuestOfferService", "Underway", "QuestTitle_Errand", std::nullopt, std::nullopt, underway } };
         }
 
         void OnServiceInteraction(NpcServiceTarget const& target, uint32 index) override
@@ -77,14 +81,21 @@ TEST(NpcServiceMementoClientTest, TheMenuIsSentAsTheBareObjectWithItsClassHashFi
     ASSERT_NE(decoded.Object, nullptr);
     EXPECT_EQ(decoded.Object->GetClass().Hash, memento->Hash);
 
+    auto const carries = [&encoded](uint32 classHash)
+    {
+        for (std::size_t at = 0; at + sizeof(uint32) <= encoded.Bytes.size(); ++at)
+        {
+            uint32 hash = 0;
+            std::memcpy(&hash, encoded.Bytes.data() + at, sizeof(hash));
+            if (hash == classHash)
+                return true;
+        }
+        return false;
+    };
     ClassInfo const* const goalEntry = catalog->FindClass("class GoalEntryFull");
     ASSERT_NE(goalEntry, nullptr);
-    bool carriesGoal = false;
-    for (std::size_t at = 0; at + sizeof(uint32) <= encoded.Bytes.size() && !carriesGoal; ++at)
-    {
-        uint32 hash = 0;
-        std::memcpy(&hash, encoded.Bytes.data() + at, sizeof(hash));
-        carriesGoal = hash == goalEntry->Hash;
-    }
-    EXPECT_TRUE(carriesGoal) << "a talk-to goal's option is sent as a GoalEntryFull";
+    EXPECT_TRUE(carries(goalEntry->Hash)) << "a talk-to goal's option is sent as a GoalEntryFull";
+    ClassInfo const* const underwayEntry = catalog->FindClass("class UnderwayEntry");
+    ASSERT_NE(underwayEntry, nullptr);
+    EXPECT_TRUE(carries(underwayEntry->Hash)) << "a quest underway is sent as an UnderwayEntry";
 }

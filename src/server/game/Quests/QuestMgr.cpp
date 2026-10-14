@@ -106,11 +106,12 @@ bool QuestMgr::ReadWorldRows(QuestRows& rows, std::vector<std::string>& errors)
     {
         rows.Dialogs.push_back(QuestDialogRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<std::string>(), f[3].Get<std::string>() });
     });
-    ok &= Select("quest_dialog_entry", "SELECT `quest`, `owner`, `goal_name`, `tag`, `position`, `actor_template_id`, `dialog_key`, `picture`, `sound`, `action`, `dialog_event`, `animation` "
-        "FROM `quest_dialog_entry` ORDER BY `quest`, `owner`, `goal_name`, `tag`, `position`", errors, [&rows](Field const* f)
+    ok &= Select("quest_dialog_entry", "SELECT `quest`, `owner`, `goal_name`, `tag`, `position`, `actor_template_id`, `dialog_key`, `picture`, `sound`, `action`, `dialog_event`, `animation`, "
+        "`requirements` FROM `quest_dialog_entry` ORDER BY `quest`, `owner`, `goal_name`, `tag`, `position`", errors, [&rows](Field const* f)
     {
         rows.DialogEntries.push_back(QuestDialogEntryRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<std::string>(), f[3].Get<std::string>(), f[4].Get<uint32>(),
-            f[5].Get<uint32>(), f[6].Get<std::string>(), f[7].Get<std::string>(), f[8].Get<std::string>(), f[9].Get<std::string>(), f[10].Get<std::string>(), f[11].Get<std::string>() });
+            f[5].Get<uint32>(), f[6].Get<std::string>(), f[7].Get<std::string>(), f[8].Get<std::string>(), f[9].Get<std::string>(), f[10].Get<std::string>(), f[11].Get<std::string>(),
+            f[12].IsNull() ? std::vector<uint8>() : f[12].Get<std::vector<uint8>>() });
     });
     ok &= Select("quest_dialog_madlib", "SELECT `quest`, `owner`, `goal_name`, `tag`, `entry`, `identifier`, `value` FROM `quest_dialog_madlib` "
         "ORDER BY `quest`, `owner`, `goal_name`, `tag`, `entry`, `identifier`", errors, [&rows](Field const* f)

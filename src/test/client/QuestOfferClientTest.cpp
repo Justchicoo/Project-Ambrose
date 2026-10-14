@@ -6,6 +6,7 @@
 #include "Environment.h"
 #include "LogConfig.h"
 #include "ObjectSerializer.h"
+#include "QuestLogContext.h"
 #include "QuestOffers.h"
 #include "TypeRegistry.h"
 
@@ -83,7 +84,8 @@ TEST(QuestOfferClientTest, TheOfferBlobsAreTheBareObjectsTheClientReads)
     QuestInfo const* const info = store->Find(quest.Name);
     ASSERT_NE(info, nullptr);
 
-    QuestOffers::Encoded const encoded = QuestOffers::Encode(catalog, *info);
+    QuestLog const log;
+    QuestOffers::Encoded const encoded = QuestOffers::Encode(catalog, *info, QuestLogContext(log));
     ASSERT_TRUE(encoded.Ok()) << encoded.Error;
     ExpectBare(catalog, encoded.Dialog, "class ActorDialog", QuestWireEncoder::ActorDialogMask);
     ExpectBare(catalog, encoded.GoalData, "class GoalCompilation", QuestWireEncoder::GoalsAndRewardsMask);

@@ -30,6 +30,7 @@
 #include "PlayerLevel.h"
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
+#include "QuestDialogs.h"
 #include "QuestOfferCache.h"
 #include "QuestWireEncoder.h"
 #include "QuestLog.h"
@@ -175,6 +176,9 @@ public:
     void HandleAcceptQuest(GameMessages::AcceptQuest& message);
     void HandleInteractCompleteGoal(GameMessages::InteractCompleteGoal& message);
     void HandleCompletePersona(GameMessages::CompletePersona& message);
+    void HandleCompleteDialog(GameMessages::CompleteDialog& message);
+    void HandleInteractUnderwayQuest(GameMessages::InteractUnderwayQuest& message);
+    void HandleRequestQuestDialog(GameMessages::RequestQuestDialog& message);
     NpcServiceRange const& GetNpcRange() const noexcept { return _npcRange; }
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
@@ -384,6 +388,9 @@ private:
     void CompletePersonaGoal(NpcServiceTarget const& target, PersonaGoals::Active const& goal);
     void SendGoalDialog(NpcServiceTarget const& target, PersonaGoals::Active const& goal);
     void OfferQuest(NpcServiceTarget const& target, QuestInfo const& quest);
+    void RemindOfQuest(NpcServiceTarget const& target, QuestInfo const& quest, QuestLogQuest const& held);
+    bool PlayQuestDialog(uint64 mobile, std::string_view completionType, QuestInfo const& quest, std::map<std::string, QuestDialog, std::less<>> const& dialogs, std::string_view tag,
+        uint64 questGid, uint64 goalGid);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
@@ -400,6 +407,7 @@ private:
     std::vector<VolumePresence> _volumePresence;
     NpcServiceRange _npcRange;
     QuestOfferCache _questOffers;
+    QuestDialogs _questDialogs;
     std::map<uint32, bool> _npcTemplates;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Maps a quest's goal types to the client's, builds a goal's madlibs, encodes a built object bare, gathers the worlds a quest's goals lead to, and turns a stored dialog's lines into an ActorDialog.
+ * Maps a quest's goal types to the client's, builds a goal's madlibs, encodes a built object bare, gathers the worlds a quest's goals lead to, and turns the lines of a stored dialog a wizard meets the requirements of into an ActorDialog.
  */
 
 #include "QuestBook.h"
@@ -64,7 +64,7 @@ std::vector<std::string> QuestBook::AssociatedWorlds(QuestInfo const& quest)
     return worlds;
 }
 
-Dialogs::ActorDialog QuestBook::Dialog(std::map<std::string, QuestDialog, std::less<>> const& dialogs, std::string_view tag)
+Dialogs::ActorDialog QuestBook::Dialog(std::map<std::string, QuestDialog, std::less<>> const& dialogs, std::string_view tag, RequirementContext const& facts)
 {
     Dialogs::ActorDialog dialog;
     dialog.Tag = std::string(tag);
@@ -73,6 +73,8 @@ Dialogs::ActorDialog QuestBook::Dialog(std::map<std::string, QuestDialog, std::l
         return dialog;
     for (QuestDialogLine const& line : found->second.Lines)
     {
+        if (line.Requirements && !sRequirementMgr.EvaluateTree(*line.Requirements, facts))
+            continue;
         Dialogs::ActorDialogEntry entry;
         entry.ActorTemplateId = line.Row.ActorTemplateId;
         entry.DialogKey = line.Row.DialogKey;
