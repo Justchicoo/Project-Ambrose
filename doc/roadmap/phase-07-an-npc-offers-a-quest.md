@@ -513,9 +513,11 @@ Accepting adds the quest to the client's quest book and quest helper with correc
 
 **Acceptance**
 
-- [ ] Linear, AND, OR(requiredORCount=2), failing school requirement skipped
-- [ ] Last goal emits COMPLETEGOAL, COMPLETEQUEST, REMOVEQUEST in order
+- [x] Linear, AND, OR(requiredORCount=2), failing school requirement skipped (`GoalLogicTest.ALinearChainStartsItsNextGoalAndCompletesTheQuestAfterItsLast`, `GoalLogicTest.AndWaitsForEveryGoalAndOrForItsRequiredCount`, `GoalLogicTest.AnEntryThatCompletesTheQuestWinsOverOneThatAddsAGoal` and `GoalLogicTest.AGoalWhoseSchoolRequirementTheWizardFailsIsNeverStarted`, on quests built from rows through QuestStore; a logic row that both adds goals and completes the quest was already refused at load by the quest validator)
+- [x] Last goal emits COMPLETEGOAL, COMPLETEQUEST, REMOVEQUEST in order (`QuestBookWireTest.TheLastGoalShowsItsCompletionThenTheQuestsThenTakesTheQuestOut` turns the quest log's changes into the three messages in that order with the quest's and goal's GIDs and complete texts, and encodes MSG_COMPLETEGOAL in the fixture's layout; `GoalLogicTest.TheLastGoalHandsTheQuestBookItsCompletionThenTheQuestsThenItsRemoval`)
 - [ ] Real client: .quest goal complete shows popups and next goal
+
+Built in src/server/game/Quests/GoalLogic.cpp, with QuestBookMessages turning the quest log's changes into MSG_COMPLETEGOAL, MSG_COMPLETEQUEST and MSG_REMOVEQUEST. GameSession runs a completed goal's results, then its logic, so `.quest goal`, persona talks and every other goal event advance a quest the same way. quest_goal gains requirements and quest_goal_logic required_or_count, both carried by `client quests --import`. QuestScript hooks and activate results are left for when a quest needs them.
 
 ### Detailed spec from QST-12: Goal logic engine and quest completion
 
@@ -541,8 +543,8 @@ Completing a goal advances the quest through its GoalCompleteLogic chain, activa
 
 **Acceptance**
 
-- [ ] Unit tests on GoalLogic: linear A->B->complete; parallel AND(A,B)->C; OR(A,B,C) with requiredORCount=2; a logic row both adding and completing is rejected at load (QST-5); a goal with a failing school requirement is skipped.
-- [ ] Unit test: completing the last goal emits COMPLETEGOAL, COMPLETEQUEST, REMOVEQUEST in that order.
+- [x] Unit tests on GoalLogic: linear A->B->complete; parallel AND(A,B)->C; OR(A,B,C) with requiredORCount=2; a logic row both adding and completing is rejected at load (QST-5); a goal with a failing school requirement is skipped.
+- [x] Unit test: completing the last goal emits COMPLETEGOAL, COMPLETEQUEST, REMOVEQUEST in that order.
 - [ ] Client: .quest goal complete on a 2-goal chain. A goal-complete popup appears, then the second goal shows in the quest helper. Completing the second removes the quest from the book with the quest-complete banner.
 
 **Risks**

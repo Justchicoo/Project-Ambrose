@@ -7,7 +7,6 @@
 #include "QuestRewards.h"
 #include "QuestBook.h"
 
-
 #include <algorithm>
 #include <tuple>
 #include <utility>

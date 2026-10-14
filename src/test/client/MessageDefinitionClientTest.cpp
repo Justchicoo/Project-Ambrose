@@ -160,6 +160,8 @@ TEST_F(MessageDefinitionClientTest, OrdinalSpotChecks)
     EXPECT_EQ(Get(52, "MSG_SENDQUEST").Order, 18);
     EXPECT_EQ(Get(52, "MSG_SENDGOAL").Order, 16);
     EXPECT_EQ(Get(52, "MSG_REMOVEQUEST").Order, 15);
+    EXPECT_EQ(Get(52, "MSG_COMPLETEGOAL").Order, 3);
+    EXPECT_EQ(Get(52, "MSG_COMPLETEQUEST").Order, 5);
     EXPECT_EQ(_set->Find(5, 7)->Tag, "MSG_ATTACH");
     EXPECT_EQ(_set->Find(7, 27)->Tag, "MSG_USER_AUTHEN_V3");
 }

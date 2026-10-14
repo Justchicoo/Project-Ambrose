@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements encoded as zone data holds requirements and failing the quest when any of that list does not read, attaching each goal-complete logic entry to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
+ * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements and each goal's m_goalRequirements encoded as zone data holds requirements and failing the quest when any of those lists does not read, attaching each goal-complete logic entry, with the count of its OR goals it needs, to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
  */
 
 #include "QuestPackage.h"
@@ -30,10 +30,10 @@ namespace
         std::string_view("m_activateResults"), std::string_view("m_tallyResults"), std::string_view("m_prepRequirements"),
         std::string_view("m_pruneRequirements"), std::string_view("m_goalRequirements"), std::string_view("m_dynaMods"), std::string_view("m_questEffectInfoList"),
         std::string_view("m_behaviors") };
-    constexpr std::array<std::string_view, 66> ReadProperties{ "m_questName", "m_questNameID", "m_questTitle", "m_questInfo", "m_questPrep", "m_questUnderway", "m_questComplete",
+    constexpr std::array<std::string_view, 67> ReadProperties{ "m_questName", "m_questNameID", "m_questTitle", "m_questInfo", "m_questPrep", "m_questUnderway", "m_questComplete",
         "m_questLevel", "m_questRepeat", "m_mainline", "m_noQuestHelper", "m_skipQHAutoSelect", "m_activityType", "m_prepAlways", "m_isHidden", "m_startGoals", "m_dialogList", "m_goals",
         "m_goalLogic", "m_goalName", "m_goalNameID", "m_goalTitle", "m_goalUnderway", "m_completeText", "m_locationName", "m_destinationZone", "m_displayImage1", "m_displayImage2",
-        "m_personaName", "m_usePatron", "m_zoneEntry", "m_zoneExit", "m_zoneTag", "m_proximityTag", "m_rank", "m_hideGoalFloatyText", "m_tallyCounter", "m_count", "m_percentChance",
+        "m_personaName", "m_usePatron", "m_zoneEntry", "m_zoneExit", "m_zoneTag", "m_proximityTag", "m_rank", "m_schoolName", "m_hideGoalFloatyText", "m_tallyCounter", "m_count", "m_percentChance",
         "m_descriptor", "m_descriptor2", "m_bountyTotal", "m_itemTotal", "m_goalType", "m_npcAdjectives", "m_itemAdjectives", "m_clientTags", "m_goalsAND", "m_goalsOR", "m_goalsToAdd",
         "m_completeQuest", "m_dialogs", "m_dialogTag", "m_dialogEntries", "m_actorTemplateID", "m_dialog", "m_picture", "m_soundFile", "m_action", "m_dialogEvent",
         "m_dialogAnimationList", "m_madlibs", "m_index", "m_madlibBlock", "m_madlibToken", "m_madlibArgument" };
@@ -202,7 +202,7 @@ namespace
 
             for (std::string const& goal : fields.Texts("m_startGoals"))
                 _quest.Rows.StartGoals.push_back(QuestStartGoalRow{ row.Name, goal });
-            Gate(fields.Object("m_requirements"), _quest.Rows.Quests.back());
+            Gate(fields.Object("m_requirements"), _quest.Rows.Quests.back().Requirements);
             for (std::string_view const list : { "m_prepRequirements", "m_pruneRequirements" })
                 Requirements(fields.Object(list), list);
             for (std::string_view const results : { "m_startResults", "m_endResults" })
@@ -249,7 +249,7 @@ namespace
             CountRequirements(*list);
         }
 
-        void Gate(PropertyObject const* list, QuestTemplateRow& row)
+        void Gate(PropertyObject const* list, std::vector<uint8>& bytes)
         {
             if (!list)
                 return;
@@ -262,7 +262,7 @@ namespace
                 Fail("requirements that do not encode", encoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(encoded.Status)) : std::move(encoded.Detail));
                 return;
             }
-            row.Requirements = std::move(encoded.Bytes);
+            bytes = std::move(encoded.Bytes);
         }
 
         void CountRequirements(PropertyObject const& requirement)
@@ -315,6 +315,7 @@ namespace
             row.ZoneTag = fields.Text("m_zoneTag");
             row.ProximityTag = fields.Text("m_proximityTag");
             row.Rank = static_cast<uint32>(std::max<int64>(0, fields.Whole("m_rank")));
+            row.School = fields.Text("m_schoolName");
             row.HideFloatyText = fields.Flag("m_hideGoalFloatyText");
             if (PropertyObject const* const tally = fields.Object("m_tallyCounter"))
             {
@@ -338,7 +339,7 @@ namespace
                 NotCarried("m_requiresMagicWeavingSchool");
             if (!fields.Texts("m_genericEvents").empty())
                 NotCarried("m_genericEvents");
-            Requirements(fields.Object("m_goalRequirements"), "m_goalRequirements");
+            Gate(fields.Object("m_goalRequirements"), row.Requirements);
             for (std::string_view const results : { "m_completeResults", "m_activateResults" })
                 Results(fields.Object(results), results);
             _quest.Rows.Goals.push_back(row);
@@ -360,8 +361,6 @@ namespace
             std::vector<std::string> const any = fields.Texts("m_goalsOR");
             std::vector<std::string> const adds = fields.Texts("m_goalsToAdd");
             bool const completes = fields.Flag("m_completeQuest");
-            if (fields.Whole("m_requiredORCount") > 1)
-                NotCarried("m_requiredORCount");
             std::set<std::string, std::less<>> owners(all.begin(), all.end());
             owners.insert(any.begin(), any.end());
             if (owners.empty())
@@ -371,7 +370,7 @@ namespace
             }
             for (std::string const& owner : owners)
             {
-                _quest.Rows.Logic.push_back(QuestGoalLogicRow{ _quest.Name, owner, position, completes });
+                _quest.Rows.Logic.push_back(QuestGoalLogicRow{ _quest.Name, owner, position, completes, static_cast<uint32>(std::max<int64>(1, fields.Whole("m_requiredORCount"))) });
                 auto const members = [&](std::string_view kind, std::vector<std::string> const& goals)
                 {
                     for (std::size_t index = 0; index < goals.size(); ++index)
@@ -491,7 +490,7 @@ namespace
             { "underway_key", row.UnderwayKey, TextColumn }, { "complete_key", row.CompleteKey, TextColumn }, { "location_key", row.LocationKey, TextColumn },
             { "destination_zone", row.DestinationZone, TextColumn }, { "image1", row.Image1, TextColumn }, { "image2", row.Image2, TextColumn }, { "persona_name", row.PersonaName, TextColumn },
             { "tally_descriptor_key", row.TallyDescriptorKey, TextColumn }, { "tally_descriptor2_key", row.TallyDescriptor2Key, TextColumn }, { "zone_tag", row.ZoneTag, TextColumn },
-            { "proximity_tag", row.ProximityTag, TextColumn } }; });
+            { "proximity_tag", row.ProximityTag, TextColumn }, { "school", row.School, NameColumn } }; });
         Lengths(quest, rows.Adjectives, "quest_goal_adjective", [](QuestGoalAdjectiveRow const& row) { return std::vector<Column>{ { "adjective", row.Adjective, TextColumn } }; });
         Lengths(quest, rows.ClientTags, "quest_goal_client_tag", [](QuestGoalClientTagRow const& row) { return std::vector<Column>{ { "tag", row.Tag, TextColumn } }; });
         Lengths(quest, rows.LogicMembers, "quest_goal_logic_member", [](QuestGoalLogicMemberRow const& row) { return std::vector<Column>{ { "goal_name", row.Goal, NameColumn },
@@ -744,11 +743,12 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
     }));
     script.InsertRows("quest_goal", { "quest", "goal_name", "name_id", "type", "title_key", "underway_key", "complete_key", "location_key", "destination_zone", "image1", "image2",
         "persona_name", "use_patron", "tally_count", "tally_percent", "tally_descriptor_key", "tally_descriptor2_key", "zone_entry", "zone_exit", "zone_tag", "proximity_tag", "rank",
-        "hide_floaty_text", "hide_location", "source" }, convert(rows.Goals, [&](QuestGoalRow const& row)
+        "hide_floaty_text", "hide_location", "requirements", "school", "source" }, convert(rows.Goals, [&](QuestGoalRow const& row)
     {
         return WorldSqlScript::Row{ row.Quest, row.Goal, number(row.NameId), row.Type, row.TitleKey, row.UnderwayKey, row.CompleteKey, row.LocationKey, row.DestinationZone, row.Image1,
             row.Image2, row.PersonaName, number(row.UsePatron), number(row.TallyCount), number(row.TallyPercent), row.TallyDescriptorKey, row.TallyDescriptor2Key, number(row.ZoneEntry),
-            number(row.ZoneExit), row.ZoneTag, row.ProximityTag, number(row.Rank), number(row.HideFloatyText), number(row.HideLocation) };
+            number(row.ZoneExit), row.ZoneTag, row.ProximityTag, number(row.Rank), number(row.HideFloatyText), number(row.HideLocation),
+            row.Requirements.empty() ? Value{ std::monostate{} } : Value{ std::string(row.Requirements.begin(), row.Requirements.end()) }, row.School };
     }));
     script.InsertRows("quest_goal_adjective", { "quest", "goal_name", "position", "adjective", "source" }, convert(rows.Adjectives, [&](QuestGoalAdjectiveRow const& row)
     {
@@ -758,9 +758,9 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
     {
         return WorldSqlScript::Row{ row.Quest, row.Goal, number(row.Position), row.Tag };
     }));
-    script.InsertRows("quest_goal_logic", { "quest", "goal_name", "position", "complete_quest", "source" }, convert(rows.Logic, [&](QuestGoalLogicRow const& row)
+    script.InsertRows("quest_goal_logic", { "quest", "goal_name", "position", "complete_quest", "required_or_count", "source" }, convert(rows.Logic, [&](QuestGoalLogicRow const& row)
     {
-        return WorldSqlScript::Row{ row.Quest, row.Goal, number(row.Position), number(row.CompleteQuest) };
+        return WorldSqlScript::Row{ row.Quest, row.Goal, number(row.Position), number(row.CompleteQuest), number(row.RequiredOrCount) };
     }));
     script.InsertRows("quest_goal_logic_member", { "quest", "goal_name", "logic", "kind", "position", "member_goal", "source" }, convert(rows.LogicMembers, [&](QuestGoalLogicMemberRow const& row)
     {

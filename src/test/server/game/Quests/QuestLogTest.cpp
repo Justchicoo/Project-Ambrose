@@ -196,7 +196,7 @@ TEST(QuestLogTest, EveryChangeTheQuestBookShowsIsHandedOutOnceInTheOrderItHappen
 
     std::vector<QuestLogChange> const changes = log.TakeChanges();
     std::vector<QuestLogChangeKind> const kinds = { QuestLogChangeKind::QuestAdded, QuestLogChangeKind::GoalStarted, QuestLogChangeKind::GoalProgressed,
-        QuestLogChangeKind::GoalCompleted, QuestLogChangeKind::QuestRemoved };
+        QuestLogChangeKind::GoalCompleted, QuestLogChangeKind::QuestCompleted, QuestLogChangeKind::QuestRemoved };
     ASSERT_EQ(changes.size(), kinds.size()) << "a registry entry is not shown in the quest book";
     for (std::size_t index = 0; index < kinds.size(); ++index)
     {
@@ -206,6 +206,8 @@ TEST(QuestLogTest, EveryChangeTheQuestBookShowsIsHandedOutOnceInTheOrderItHappen
     }
     EXPECT_TRUE(changes[0].Goal.empty());
     EXPECT_EQ(changes[1].Goal, "DefeatUndead");
+    EXPECT_NE(changes[3].GoalGid, 0u);
+    EXPECT_EQ(changes[3].GoalGid, changes[1].GoalGid);
     EXPECT_TRUE(log.TakeChanges().empty());
 
     std::vector<std::string> warnings;

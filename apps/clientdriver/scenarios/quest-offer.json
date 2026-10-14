@@ -221,7 +221,7 @@
       "attempts": 2,
       "until": {
         "action": "wait_game_log",
-        "pattern": "wizard {wizard_guid} accepted quest (\\S+) from NPC \\d+, an offer that stands",
+        "pattern": "wizard {wizard_guid} accepted quest (\\S+) from NPC \\d+ with 1 start goal",
         "timeout": 10,
         "expect": "WC-MAIN-C01-001"
       }

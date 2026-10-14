@@ -78,12 +78,12 @@ bool QuestMgr::ReadWorldRows(QuestRows& rows, std::vector<std::string>& errors)
     });
     ok &= Select("quest_goal", "SELECT `quest`, `goal_name`, `name_id`, `type`, `title_key`, `underway_key`, `complete_key`, `location_key`, `destination_zone`, `image1`, `image2`, "
         "`persona_name`, `use_patron`, `tally_count`, `tally_percent`, `tally_descriptor_key`, `tally_descriptor2_key`, `zone_entry`, `zone_exit`, `zone_tag`, `proximity_tag`, `rank`, "
-        "`hide_floaty_text`, `hide_location` FROM `quest_goal` ORDER BY `quest`, `goal_name`", errors, [&rows](Field const* f)
+        "`hide_floaty_text`, `hide_location`, `requirements`, `school` FROM `quest_goal` ORDER BY `quest`, `goal_name`", errors, [&rows](Field const* f)
     {
         rows.Goals.push_back(QuestGoalRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<std::string>(), f[4].Get<std::string>(),
             f[5].Get<std::string>(), f[6].Get<std::string>(), f[7].Get<std::string>(), f[8].Get<std::string>(), f[9].Get<std::string>(), f[10].Get<std::string>(),
             f[11].Get<std::string>(), f[12].Get<bool>(), f[13].Get<uint32>(), f[14].Get<uint32>(), f[15].Get<std::string>(), f[16].Get<std::string>(), f[17].Get<bool>(),
-            f[18].Get<bool>(), f[19].Get<std::string>(), f[20].Get<std::string>(), f[21].Get<uint32>(), f[22].Get<bool>(), f[23].Get<bool>() });
+            f[18].Get<bool>(), f[19].Get<std::string>(), f[20].Get<std::string>(), f[21].Get<uint32>(), f[22].Get<bool>(), f[23].Get<bool>(), f[24].Get<std::vector<uint8>>(), f[25].Get<std::string>() });
     });
     ok &= Select("quest_goal_adjective", "SELECT `quest`, `goal_name`, `position`, `adjective` FROM `quest_goal_adjective` ORDER BY `quest`, `goal_name`, `position`", errors, [&rows](Field const* f)
     {
@@ -93,9 +93,9 @@ bool QuestMgr::ReadWorldRows(QuestRows& rows, std::vector<std::string>& errors)
     {
         rows.ClientTags.push_back(QuestGoalClientTagRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<std::string>() });
     });
-    ok &= Select("quest_goal_logic", "SELECT `quest`, `goal_name`, `position`, `complete_quest` FROM `quest_goal_logic` ORDER BY `quest`, `goal_name`, `position`", errors, [&rows](Field const* f)
+    ok &= Select("quest_goal_logic", "SELECT `quest`, `goal_name`, `position`, `complete_quest`, `required_or_count` FROM `quest_goal_logic` ORDER BY `quest`, `goal_name`, `position`", errors, [&rows](Field const* f)
     {
-        rows.Logic.push_back(QuestGoalLogicRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<bool>() });
+        rows.Logic.push_back(QuestGoalLogicRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<bool>(), f[4].Get<uint32>() });
     });
     ok &= Select("quest_goal_logic_member", "SELECT `quest`, `goal_name`, `logic`, `kind`, `position`, `member_goal` FROM `quest_goal_logic_member` "
         "ORDER BY `quest`, `goal_name`, `logic`, `kind`, `position`", errors, [&rows](Field const* f)
