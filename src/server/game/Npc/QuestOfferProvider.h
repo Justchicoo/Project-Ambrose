@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The NPC service provider of quest givers: an NPC whose template is the first actor of a quest's Prep dialog offers the wizard each quest it can take there, as a Prep option titled by the quest's title key, ahead of any script's options, and picking one hands that quest to the session to offer.
+ * The NPC service provider of quest givers: an NPC whose template is the first actor of a quest's Prep dialog offers the wizard each quest it can take there, judged by the facts the session knows of it, its school among them, as a Prep option titled by the quest's title key, ahead of any script's options, and picking one hands that quest to the session to offer.
  */
 
 #ifndef AMBROSE_QUESTOFFERPROVIDER_H
@@ -9,6 +9,7 @@
 #include "NpcServiceProvider.h"
 #include "QuestLog.h"
 #include "QuestStore.h"
+#include "RequirementMgr.h"
 
 #include <functional>
 #include <memory>
@@ -20,7 +21,7 @@ public:
 
     static constexpr int32 Priority = 100;
 
-    QuestOfferProvider(std::shared_ptr<QuestStore const> quests, QuestLog const& log, OfferSink offer);
+    QuestOfferProvider(std::shared_ptr<QuestStore const> quests, QuestLog const& log, std::shared_ptr<RequirementContext const> facts, OfferSink offer);
 
     static bool Serves(QuestStore const& quests, uint32 templateId);
 
@@ -34,6 +35,7 @@ private:
 
     std::shared_ptr<QuestStore const> _quests;
     QuestLog const& _log;
+    std::shared_ptr<RequirementContext const> _facts;
     OfferSink _offer;
 };
 

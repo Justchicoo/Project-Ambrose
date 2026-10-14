@@ -9,7 +9,6 @@
 #include "NpcServiceMemento.h"
 #include "ObjectTemplateMgr.h"
 #include "ObjectViews.h"
-#include "QuestLogContext.h"
 #include "QuestMgr.h"
 #include "PersonaGoalProvider.h"
 #include "QuestBook.h"
@@ -208,7 +207,7 @@ std::vector<std::unique_ptr<NpcServiceProvider>> GameSession::QuestProvidersFor(
     if (PersonaGoalProvider::Serves(*quests, templateId))
         providers.push_back(std::make_unique<PersonaGoalProvider>(quests, *_questLog, [this](NpcServiceTarget const& target, PersonaGoals::Active const& goal) { CompletePersonaGoal(target, goal); }));
     if (QuestOfferProvider::Serves(*quests, templateId))
-        providers.push_back(std::make_unique<QuestOfferProvider>(std::move(quests), *_questLog, [this](NpcServiceTarget const& target, QuestInfo const& quest) { OfferQuest(target, quest); }));
+        providers.push_back(std::make_unique<QuestOfferProvider>(std::move(quests), *_questLog, std::make_shared<WizardRequirementContext const>(RequirementFacts(*_questLog)), [this](NpcServiceTarget const& target, QuestInfo const& quest) { OfferQuest(target, quest); }));
     return providers;
 }
 
@@ -254,7 +253,7 @@ void GameSession::HandleInteractAvailableQuest(GameMessages::InteractAvailableQu
         return;
     }
     uint32 const templateId = static_cast<uint32>(npc->Spawn.TemplateId);
-    QuestLogContext const context(*_questLog);
+    WizardRequirementContext const context = RequirementFacts(*_questLog);
     std::vector<QuestInfo const*> const available = QuestOffers::Available(*quests, templateId, *_questLog, context);
     auto const found = std::ranges::find_if(available, [&message](QuestInfo const* quest) { return quest->Row.Name == message.QuestName; });
     if (found == available.end())

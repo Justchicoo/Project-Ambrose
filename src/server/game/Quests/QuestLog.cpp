@@ -142,6 +142,7 @@ bool QuestLog::CompleteQuest(std::string_view quest)
     _changeFeed.push_back({ QuestLogChangeKind::QuestCompleted, name, held->Gid, {}, 0 });
     Remove(name);
     SetQuestRegistry(name, CompleteEntry, 1.0);
+    SetRegistry(CompletedEntry(name), 1.0);
     _completions.push_back(QuestCompletion{ name, {} });
     return true;
 }
@@ -229,6 +230,11 @@ void QuestLog::SetHidden(std::string_view quest, bool hidden)
     else
         _hidden.erase(found);
     MarkChanged();
+}
+
+std::string QuestLog::CompletedEntry(std::string_view quest)
+{
+    return fmt::format("{}_{}", quest, CompleteEntry);
 }
 
 std::string QuestLog::GoalCompleteEvent(std::string_view quest, std::string_view goal)
