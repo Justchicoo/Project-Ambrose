@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests a wizard's quest log without a database: a quest taken, its goal started and counted to 2 of 5, turned into rows and read back keeps its GIDs and count; completing a quest takes it out of the log and leaves 'Complete' = 1 in its registry, so the wizard has completed it; and on load a quest whose template is gone, with its goals, and a goal its quest no longer has are dropped with a warning each, while a quest store that is not there drops nothing; a completed goal hands out its GoalComplete event once, and a wizard's Dynamods mark its progress changed, come back whole from its rows, and leave by tag when a quest result takes them away.
+ * Tests a wizard's quest log without a database: a quest taken, its goal started and counted to 2 of 5, turned into rows and read back keeps its GIDs and count; completing a quest takes it out of the log and leaves 'Complete' = 1 in its registry, so the wizard has completed it; and on load a quest whose template is gone, with its goals, and a goal its quest no longer has are dropped with a warning each, while a quest store that is not there drops nothing; a completed goal hands out its GoalComplete event once, and a wizard's Dynamods mark its progress changed, come back whole from its rows, and leave by tag when a quest result takes them away; and each quest gained or lost and goal started, moved or completed is handed to the quest book once, in order, by the GID the client knows it by.
  */
 
 #include "ObjectGuid.h"
@@ -179,4 +179,36 @@ TEST(QuestLogTest, ACompletedGoalPublishesItsEventOnceAndAWizardsDynamodsComeBac
     EXPECT_GT(log.GetChangeCount(), kept) << "a dropped mod moves the wizard's progress, so what it sees is asked again";
     EXPECT_EQ(log.ToStored(3).DynaMods.size(), 1u);
     EXPECT_EQ(log.GetDynaMods().Visibility("WizardCity/WC_Hub", "PetParkCollision"), std::nullopt);
+}
+
+TEST(QuestLogTest, EveryChangeTheQuestBookShowsIsHandedOutOnceInTheOrderItHappened)
+{
+    GuidGenerator gids(ObjectGuid::QuestBase);
+    QuestLog log;
+    QuestLogQuest const* const quest = log.Add("KeptQuest", gids, Now);
+    ASSERT_NE(quest, nullptr);
+    uint64 const questGid = quest->Gid;
+    ASSERT_NE(log.StartGoal("KeptQuest", "DefeatUndead", gids), nullptr);
+    EXPECT_EQ(log.IncrementGoal("KeptQuest", "DefeatUndead"), 1u);
+    EXPECT_TRUE(log.CompleteGoal("KeptQuest", "DefeatUndead"));
+    log.SetRegistry("Unrelated", 1.0);
+    EXPECT_TRUE(log.CompleteQuest("KeptQuest"));
+
+    std::vector<QuestLogChange> const changes = log.TakeChanges();
+    std::vector<QuestLogChangeKind> const kinds = { QuestLogChangeKind::QuestAdded, QuestLogChangeKind::GoalStarted, QuestLogChangeKind::GoalProgressed,
+        QuestLogChangeKind::GoalCompleted, QuestLogChangeKind::QuestRemoved };
+    ASSERT_EQ(changes.size(), kinds.size()) << "a registry entry is not shown in the quest book";
+    for (std::size_t index = 0; index < kinds.size(); ++index)
+    {
+        EXPECT_EQ(changes[index].Kind, kinds[index]) << index;
+        EXPECT_EQ(changes[index].Quest, "KeptQuest") << index;
+        EXPECT_EQ(changes[index].QuestGid, questGid) << "a removed quest is still named by the GID the client knows it by";
+    }
+    EXPECT_TRUE(changes[0].Goal.empty());
+    EXPECT_EQ(changes[1].Goal, "DefeatUndead");
+    EXPECT_TRUE(log.TakeChanges().empty());
+
+    std::vector<std::string> warnings;
+    QuestLog loaded = QuestLog::FromStored(log.ToStored(1), Templates().get(), warnings);
+    EXPECT_TRUE(loaded.TakeChanges().empty()) << "a log read from its rows has nothing new to show";
 }

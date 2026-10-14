@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps a wizard's quests, goals, registry, hidden quests and Dynamods, and converts them to and from the stored rows; a goal that completes publishes its GoalComplete event, named as the zones' triggers spell it, and each goal and quest that completes is kept for its results to run.
+ * Keeps a wizard's quests, goals, registry, hidden quests and Dynamods, and converts them to and from the stored rows; a goal that completes publishes its GoalComplete event, named as the zones' triggers spell it, and each goal and quest that completes is kept for its results to run, and every change the client's quest book shows is kept until its session sends it.
  */
 
 #include "QuestLog.h"
@@ -89,6 +89,7 @@ QuestLogQuest const* QuestLog::Add(std::string_view quest, GuidGenerator& gids, 
     if (!gid)
         return nullptr;
     _quests.push_back({ *gid, std::string(quest), now, {} });
+    _changeFeed.push_back({ QuestLogChangeKind::QuestAdded, std::string(quest), *gid, {} });
     MarkChanged();
     return &_quests.back();
 }
@@ -102,6 +103,7 @@ QuestLogGoal const* QuestLog::StartGoal(std::string_view quest, std::string_view
     if (!gid)
         return nullptr;
     entry->Goals.push_back({ *gid, std::string(goal), false, 0 });
+    _changeFeed.push_back({ QuestLogChangeKind::GoalStarted, entry->Name, entry->Gid, std::string(goal) });
     MarkChanged();
     return &entry->Goals.back();
 }
@@ -113,6 +115,7 @@ std::optional<uint32> QuestLog::IncrementGoal(std::string_view quest, std::strin
         return std::nullopt;
     uint32 constexpr most = std::numeric_limits<uint32>::max();
     entry->Count = by > most - entry->Count ? most : entry->Count + by;
+    _changeFeed.push_back({ QuestLogChangeKind::GoalProgressed, std::string(quest), Find(quest)->Gid, std::string(goal) });
     MarkChanged();
     return entry->Count;
 }
@@ -125,6 +128,7 @@ bool QuestLog::CompleteGoal(std::string_view quest, std::string_view goal)
     entry->Complete = true;
     _events.push_back(GoalCompleteEvent(quest, goal));
     _completions.push_back(QuestCompletion{ std::string(quest), std::string(goal) });
+    _changeFeed.push_back({ QuestLogChangeKind::GoalCompleted, std::string(quest), Find(quest)->Gid, std::string(goal) });
     MarkChanged();
     return true;
 }
@@ -144,6 +148,7 @@ bool QuestLog::Remove(std::string_view quest)
     auto const found = std::ranges::find(_quests, quest, &QuestLogQuest::Name);
     if (found == _quests.end())
         return false;
+    _changeFeed.push_back({ QuestLogChangeKind::QuestRemoved, found->Name, found->Gid, {} });
     _quests.erase(found);
     MarkChanged();
     return true;
@@ -252,6 +257,11 @@ std::vector<std::string> QuestLog::TakeEvents()
 std::vector<QuestCompletion> QuestLog::TakeCompletions()
 {
     return std::exchange(_completions, {});
+}
+
+std::vector<QuestLogChange> QuestLog::TakeChanges()
+{
+    return std::exchange(_changeFeed, {});
 }
 
 QuestLogQuest* QuestLog::FindMutable(std::string_view quest)

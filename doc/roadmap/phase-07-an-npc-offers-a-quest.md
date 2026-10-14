@@ -464,9 +464,11 @@ What the r806919 client does with an offer, read from its own code (`client hand
 
 **Acceptance**
 
-- [ ] SENDQUEST encoding matches QuestMessages.xml field order
+- [x] SENDQUEST encoding matches QuestMessages.xml field order (`QuestBookWireTest.SendQuestIsWrittenInTheFieldOrderAndTypesOfQuestMessagesXml` reads an encoded MSG_SENDQUEST back field by field in the fixture's QuestMessages.xml order and types, and `GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled` resolves the declaration against the r806919 client's own XML; `QuestBookClientTest.AnAcceptedQuestAndItsStartGoalAreShownAsTheClientReadsThem` checks the quest's and goal's fields and that every blob is the bare object the client's type dump decodes)
 - [ ] Real client: 'To Ravenwood!' with 'Talk To ...' and 'Wizard City|Ravenwood'; helper points to zone
 - [ ] Relog keeps progress; .quest remove drops it
+
+Built in src/server/game/Quests/QuestBook.cpp, src/server/game/Server/QuestBookMessages.cpp and GameSession's SendQuestBook and SyncQuestBook. The quest log keeps every quest gained or lost and goal started, moved or completed until the session sends it, so `.quest` commands, accepts and later goal events all reach the book the same way. Every start goal is started; goal requirements are left to 7.11. GoalStatus and SendType follow the spec's reading (0 resume, 1 start, 2 progress) and wait on the real client.
 
 ### Detailed spec from QST-11: Accept quest and quest book sync
 
@@ -492,7 +494,7 @@ Accepting adds the quest to the client's quest book and quest helper with correc
 
 **Acceptance**
 
-- [ ] Unit test: the SENDQUEST encoding of a fixture quest has field order and types matching QuestMessages.xml (GID, UINT, UINT, INT, STR, ...).
+- [x] Unit test: the SENDQUEST encoding of a fixture quest has field order and types matching QuestMessages.xml (GID, UINT, UINT, INT, STR, ...).
 - [ ] Client: after Accept, the quest book shows 'To Ravenwood!' and its goal 'Talk To ...' with location 'Wizard City|Ravenwood', and the quest helper arrow points to the destination zone.
 - [ ] Client: log out and back in. The same quest and goal show with the same progress. .quest remove drops it from the book immediately.
 

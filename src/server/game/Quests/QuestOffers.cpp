@@ -5,46 +5,12 @@
 
 #include "QuestOffers.h"
 #include "QuestRewards.h"
+#include "QuestBook.h"
 
-#include <fmt/format.h>
 
 #include <algorithm>
 #include <tuple>
 #include <utility>
-
-namespace
-{
-    Quests::GoalType WireType(QuestGoalType type) noexcept
-    {
-        switch (type)
-        {
-            case QuestGoalType::Persona: return Quests::GoalType::Persona;
-            case QuestGoalType::Waypoint: return Quests::GoalType::Waypoint;
-            case QuestGoalType::Bounty: return Quests::GoalType::Bounty;
-            case QuestGoalType::BountyCollect: return Quests::GoalType::BountyCollect;
-            case QuestGoalType::Scavenge: return Quests::GoalType::Scavenge;
-            case QuestGoalType::Usage: return Quests::GoalType::Usage;
-            case QuestGoalType::AchieveRank: return Quests::GoalType::AchieveRank;
-        }
-        return Quests::GoalType::Unknown;
-    }
-
-    std::string Blob(QuestWireEncoder::ObjectBuildResult const& built, uint32 mask, std::string_view what, std::string& error)
-    {
-        if (!built.Ok())
-        {
-            error = fmt::format("its {} could not be built: {}", what, built.Error);
-            return {};
-        }
-        QuestWireEncoder::BlobEncodeResult const encoded = QuestWireEncoder::EncodeBare(*built.Object, mask);
-        if (!encoded.Ok())
-        {
-            error = fmt::format("its {} could not be encoded: {}", what, encoded.Error);
-            return {};
-        }
-        return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
-    }
-}
 
 bool QuestOffers::Qualifies(QuestInfo const& quest, RequirementContext const& context)
 {
@@ -108,7 +74,7 @@ QuestWireEncoder::GoalCompilation QuestOffers::BuildStartGoals(QuestInfo const& 
         goal.DisplayKey = row.TitleKey;
         goal.GoalTitle = row.TitleKey;
         goal.PersonaName = row.PersonaName;
-        goal.Type = WireType(found->second.Type);
+        goal.Type = QuestBook::WireType(found->second.Type);
         goal.Total = static_cast<int32>(row.TallyCount);
         goal.UseTally = row.TallyCount > 0;
         goal.TallyText = row.TallyDescriptorKey;
@@ -118,12 +84,7 @@ QuestWireEncoder::GoalCompilation QuestOffers::BuildStartGoals(QuestInfo const& 
         goal.Image1 = row.Image1;
         goal.Image2 = row.Image2;
         goal.ClientTags = found->second.ClientTags;
-        Quests::GoalTemplate madlib;
-        madlib.Name = row.Goal;
-        madlib.LocationName = row.LocationKey;
-        if (row.TallyCount > 0)
-            madlib.TallyCounter = Quests::TallyCounterTemplate{ 0.0f, row.TallyDescriptorKey, row.TallyDescriptor2Key, static_cast<int32>(row.TallyCount) };
-        goal.Madlibs = QuestMadlibs::BuildGoal(madlib, 0, goal.Total);
+        goal.Madlibs = QuestBook::GoalMadlibs(row, 0);
         compilation.Goals.push_back(std::move(goal));
     }
     return compilation;
@@ -132,12 +93,12 @@ QuestWireEncoder::GoalCompilation QuestOffers::BuildStartGoals(QuestInfo const& 
 QuestOffers::Encoded QuestOffers::Encode(TypeCatalogPtr const& catalog, QuestInfo const& quest)
 {
     Encoded encoded;
-    encoded.Dialog = Blob(QuestWireEncoder::BuildActorDialog(catalog, BuildPrepDialog(quest)), QuestWireEncoder::ActorDialogMask, "Prep dialog", encoded.Error);
+    encoded.Dialog = QuestBook::Blob(QuestWireEncoder::BuildActorDialog(catalog, BuildPrepDialog(quest)), QuestWireEncoder::ActorDialogMask, "Prep dialog", encoded.Error);
     if (!encoded.Ok())
         return encoded;
-    encoded.GoalData = Blob(QuestWireEncoder::BuildGoalCompilation(catalog, BuildStartGoals(quest)), QuestWireEncoder::GoalsAndRewardsMask, "start goals", encoded.Error);
+    encoded.GoalData = QuestBook::Blob(QuestWireEncoder::BuildGoalCompilation(catalog, BuildStartGoals(quest)), QuestWireEncoder::GoalsAndRewardsMask, "start goals", encoded.Error);
     if (!encoded.Ok())
         return encoded;
-    encoded.Rewards = Blob(QuestWireEncoder::BuildLootInfoList(catalog, QuestRewards::Preview(quest.Results)), QuestWireEncoder::GoalsAndRewardsMask, "rewards", encoded.Error);
+    encoded.Rewards = QuestBook::Blob(QuestWireEncoder::BuildLootInfoList(catalog, QuestRewards::Preview(quest.Results)), QuestWireEncoder::GoalsAndRewardsMask, "rewards", encoded.Error);
     return encoded;
 }

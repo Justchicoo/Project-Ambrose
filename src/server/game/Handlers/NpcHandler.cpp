@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The NPC service menu: after each move the NPCs a wizard sees, objects whose template carries NPCBehavior, are checked against their service range, only an NPC some provider gives an option counting, as only a quest, a shop or a script's option earns a prompt, and a wizard entering one is sent MSG_SENDNPCOPTIONS with the NPC's global id, as the client finds an NPC by it, and the ServiceMementoBase of its menu, the options every NpcScript serving its template offers, and one leaving is sent MSG_LEAVESERVICERANGE, once per crossing. MSG_INTERACTNPC, a click on a menu, is routed by its flat service index to the provider that owns that option, rebuilt as it was offered with its providers, which the menu's entries point at and so live as long as it does; an empty service name closes a shop, and an NPC the wizard is not in range of, or an index past its menu, is logged and ignored. MSG_INTERACTOPTION on an NPC the wizard is in range of is how the client answers its prompt, its options being InteractableOptions, and is routed the same way by option index; on any other object it, and MSG_INTERACTOBJECT, are logged until a provider offers interactables.
+ * The NPC service menu: after each move the NPCs a wizard sees, objects whose template carries NPCBehavior, are checked against their service range, only an NPC some provider gives an option counting, as only a quest, a shop or a script's option earns a prompt, and a wizard entering one is sent MSG_SENDNPCOPTIONS with the NPC's global id, as the client finds an NPC by it, and the ServiceMementoBase of its menu, the options every NpcScript serving its template offers, and one leaving is sent MSG_LEAVESERVICERANGE, once per crossing. MSG_INTERACTNPC, a click on a menu, is routed by its flat service index to the provider that owns that option, rebuilt as it was offered with its providers, which the menu's entries point at and so live as long as it does; an empty service name closes a shop, and an NPC the wizard is not in range of, or an index past its menu, is logged and ignored. MSG_INTERACTOPTION on an NPC the wizard is in range of is how the client answers its prompt, its options being InteractableOptions, and is routed the same way by option index; on any other object it, and MSG_INTERACTOBJECT, are logged until a provider offers interactables. MSG_ACCEPTQUEST for an offer that stands gives the wizard the quest with its start goals, which its quest book is then shown.
  */
 
 #include "GameSession.h"
@@ -275,6 +275,14 @@ void GameSession::HandleAcceptQuest(GameMessages::AcceptQuest& message)
             Ambrose::ForLog(message.QuestName, 128), message.MobileId, QuestOfferCache::GetVerdictName(verdict));
         return;
     }
-    LOG_INFO("server.gamesession", "Session {}'s wizard {} accepted quest {} from NPC {}, an offer that stands", GetSessionId(), _worldGuid, Ambrose::ForLog(message.QuestName, 128),
-        message.MobileId);
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    QuestInfo const* const quest = quests ? quests->Find(message.QuestName) : nullptr;
+    if (!quest || !StartQuest(*quest))
+    {
+        LOG_WARN("server.gamesession", "Session {}'s wizard {} accepted quest {} from NPC {}, which it already holds or which has no template; nothing changes", GetSessionId(), _worldGuid,
+            Ambrose::ForLog(message.QuestName, 128), message.MobileId);
+        return;
+    }
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} accepted quest {} from NPC {} with {} start goal(s)", GetSessionId(), _worldGuid, Ambrose::ForLog(message.QuestName, 128),
+        message.MobileId, quest->StartGoals.size());
 }

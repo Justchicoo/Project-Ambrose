@@ -2033,6 +2033,102 @@ namespace GameMessages
         }
     };
 
+    struct SendQuest
+    {
+        static constexpr uint8 ServiceId = QuestService;
+        static constexpr std::string_view Tag = "MSG_SENDQUEST";
+
+        uint64 QuestId = 0;
+        uint32 QuestNameId = 0;
+        uint32 QuestType = 0;
+        int32 QuestLevel = 0;
+        std::string QuestTitle;
+        std::string QuestInfo;
+        uint8 New = 0;
+        std::string QuestMadlibs;
+        std::string GoalData;
+        std::string Rewards;
+        std::string ClientTags;
+        std::string AssociatedWorlds;
+        uint8 NoQuestHelper = 0;
+        uint8 Mainline = 0;
+        uint8 ReadyToTurnIn = 0;
+        uint8 SkipQhAutoSelect = 0;
+        uint8 PetOnlyQuest = 0;
+        uint8 ActivityType = 0;
+        std::string RequiresMagicWeavingSchool;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("QuestID", &SendQuest::QuestId), DmlField("QuestNameID", &SendQuest::QuestNameId), DmlField("QuestType", &SendQuest::QuestType),
+                DmlField("QuestLevel", &SendQuest::QuestLevel), DmlField("QuestTitle", &SendQuest::QuestTitle), DmlField("QuestInfo", &SendQuest::QuestInfo), DmlField("New", &SendQuest::New),
+                DmlField("QuestMadlibs", &SendQuest::QuestMadlibs), DmlField("GoalData", &SendQuest::GoalData), DmlField("Rewards", &SendQuest::Rewards),
+                DmlField("ClientTags", &SendQuest::ClientTags), DmlField("AssociatedWorlds", &SendQuest::AssociatedWorlds), DmlField("NoQuestHelper", &SendQuest::NoQuestHelper),
+                DmlField("Mainline", &SendQuest::Mainline), DmlField("ReadyToTurnIn", &SendQuest::ReadyToTurnIn), DmlField("SkipQHAutoSelect", &SendQuest::SkipQhAutoSelect),
+                DmlField("PetOnlyQuest", &SendQuest::PetOnlyQuest), DmlField("ActivityType", &SendQuest::ActivityType),
+                DmlField("RequiresMagicWeavingSchool", &SendQuest::RequiresMagicWeavingSchool) };
+        }
+    };
+
+    struct SendGoal
+    {
+        static constexpr uint8 ServiceId = QuestService;
+        static constexpr std::string_view Tag = "MSG_SENDGOAL";
+
+        uint64 QuestId = 0;
+        uint64 GoalId = 0;
+        uint32 GoalNameId = 0;
+        std::string GoalTitle;
+        std::string GoalLocation;
+        std::string GoalDestinationZone;
+        std::string GoalImage1;
+        std::string GoalImage2;
+        std::string PersonaName;
+        uint8 GoalType = 0;
+        uint8 GoalStatus = 0;
+        int32 GoalCount = 0;
+        int32 GoalTotal = 0;
+        int32 SubscriberGoalTotal = 0;
+        uint8 UseTally = 0;
+        std::string TallyText;
+        int32 SendType = 0;
+        std::string GoalMadlibs;
+        std::string ClientTags;
+        std::string PatronIcon;
+        uint8 NoQuestHelper = 0;
+        uint8 PetOnlyQuest = 0;
+        uint8 HasActiveResults = 0;
+        uint8 HideGoalFloatyText = 0;
+        std::string RequiresMagicWeavingSchool;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("QuestID", &SendGoal::QuestId), DmlField("GoalID", &SendGoal::GoalId), DmlField("GoalNameID", &SendGoal::GoalNameId),
+                DmlField("GoalTitle", &SendGoal::GoalTitle), DmlField("GoalLocation", &SendGoal::GoalLocation), DmlField("GoalDestinationZone", &SendGoal::GoalDestinationZone),
+                DmlField("GoalImage1", &SendGoal::GoalImage1), DmlField("GoalImage2", &SendGoal::GoalImage2), DmlField("PersonaName", &SendGoal::PersonaName),
+                DmlField("GoalType", &SendGoal::GoalType), DmlField("GoalStatus", &SendGoal::GoalStatus), DmlField("GoalCount", &SendGoal::GoalCount), DmlField("GoalTotal", &SendGoal::GoalTotal),
+                DmlField("SubscriberGoalTotal", &SendGoal::SubscriberGoalTotal), DmlField("UseTally", &SendGoal::UseTally), DmlField("TallyText", &SendGoal::TallyText),
+                DmlField("SendType", &SendGoal::SendType), DmlField("GoalMadlibs", &SendGoal::GoalMadlibs), DmlField("ClientTags", &SendGoal::ClientTags),
+                DmlField("PatronIcon", &SendGoal::PatronIcon), DmlField("NoQuestHelper", &SendGoal::NoQuestHelper), DmlField("PetOnlyQuest", &SendGoal::PetOnlyQuest),
+                DmlField("HasActiveResults", &SendGoal::HasActiveResults), DmlField("HideGoalFloatyText", &SendGoal::HideGoalFloatyText),
+                DmlField("RequiresMagicWeavingSchool", &SendGoal::RequiresMagicWeavingSchool) };
+        }
+    };
+
+    struct RemoveQuest
+    {
+        static constexpr uint8 ServiceId = QuestService;
+        static constexpr std::string_view Tag = "MSG_REMOVEQUEST";
+
+        uint64 QuestId = 0;
+        uint64 NpcId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("QuestID", &RemoveQuest::QuestId), DmlField("NpcID", &RemoveQuest::NpcId) };
+        }
+    };
+
     struct InteractObject
     {
         static constexpr uint8 ServiceId = GameService;
