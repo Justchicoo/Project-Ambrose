@@ -161,6 +161,33 @@ TEST_F(PanelLaunchSettingsTest, ThePreviewShowsTheExactCommandLineWithOverrides)
     EXPECT_EQ(answer["locked_keys"][0]["layer"], "command-line override");
 }
 
+TEST_F(PanelLaunchSettingsTest, ALaunchedOverrideIsReportedLockedAndALiveEditIsRefusedNamingTheCommandLineOverrideLayer)
+{
+    LaunchSettings settings;
+    settings.Overrides["Rate.Drop.Item"] = "1.5";
+    std::string error;
+    ASSERT_TRUE(_launch->Write("gameserver", settings, Merle, error)) << error;
+    nlohmann::json const answer = _launch->Answer("gameserver", "gameserver", { "--config", "gameserver.conf" }, error);
+    ASSERT_TRUE(error.empty()) << error;
+    ASSERT_EQ(answer["locked_keys"].size(), 1u);
+    EXPECT_EQ(answer["locked_keys"][0]["key"], "Rate.Drop.Item");
+    EXPECT_TRUE(answer["locked_keys"][0]["locked"].get<bool>());
+    EXPECT_EQ(answer["locked_keys"][0]["layer"], "command-line override");
+    EXPECT_NE(answer["preview_command_line"].get<std::string>().find("--set Rate.Drop.Item=1.5"), std::string::npos);
+    LaunchSettings changed = settings;
+    changed.Overrides["Rate.Drop.Item"] = "2.0";
+    EXPECT_FALSE(_launch->Write("gameserver", changed, Merle, error));
+    EXPECT_NE(error.find("command-line override"), std::string::npos) << error;
+    EXPECT_NE(error.find("Rate.Drop.Item"), std::string::npos) << error;
+    LaunchSettings removed = settings;
+    removed.Overrides.erase("Rate.Drop.Item");
+    EXPECT_FALSE(_launch->Write("gameserver", removed, Merle, error));
+    EXPECT_NE(error.find("command-line override"), std::string::npos) << error;
+    LaunchSettings reloaded;
+    ASSERT_TRUE(_launch->Load("gameserver", reloaded, error)) << error;
+    EXPECT_EQ(reloaded.Overrides["Rate.Drop.Item"], "1.5");
+}
+
 TEST_F(PanelLaunchSettingsTest, TheAuditRowShowsOldAndNewValuesWithSecretsMasked)
 {
     LaunchSettings old;
