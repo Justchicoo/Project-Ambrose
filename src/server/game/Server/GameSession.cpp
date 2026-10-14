@@ -1622,6 +1622,7 @@ void GameSession::SendQuestBook()
     _questLog->TakeChanges();
     SendQuestBookUpdate(QuestBookMessages::Resume(sTypeRegistry.GetCatalog(), *quests, *_questLog));
     _questBookShown = true;
+    LOG_INFO("server.gamesession", "Session {} showed wizard {} its quest book of {} quest(s)", GetSessionId(), _worldGuid, _questLog->GetQuests().size());
 }
 
 void GameSession::SyncQuestBook()
