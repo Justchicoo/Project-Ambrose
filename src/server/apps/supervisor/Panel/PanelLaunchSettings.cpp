@@ -184,6 +184,25 @@ bool PanelLaunchSettings::Write(std::string_view app, LaunchSettings const& sett
         error = ClosedStore;
         return false;
     }
+    {
+        LaunchSettings current;
+        std::string loadError;
+        if (LoadLocked(app, current, loadError))
+        {
+            for (auto const& [key, value] : current.Overrides)
+            {
+                auto const updated = settings.Overrides.find(key);
+                if (updated == settings.Overrides.end() || updated->second != value)
+                {
+                    error = fmt::format(
+                        "'{}' is locked by the command-line override layer and cannot be changed while the app uses it",
+                        key);
+                    return false;
+                }
+            }
+        }
+        error.clear();
+    }
     bool const ownTransaction = !transactionAlreadyOpen;
     if (ownTransaction && !_store.Begin(error))
         return false;

@@ -114,3 +114,25 @@ TEST_F(LaunchSettingsTest, LimitsPriorityAndRestartPolicyResolve)
     EXPECT_EQ(resolved.MemoryLimitBytes, 512ull * 1024ull * 1024ull);
     EXPECT_EQ(resolved.CpuLimitPercent, 50u);
 }
+
+TEST_F(LaunchSettingsTest, AnAppPastItsMemoryLimitIsRecordedAsOutOfMemory)
+{
+    ManagedApp app = MakeApp(Definition(_directory.Path()));
+    LaunchSettings settings;
+    settings.MemoryLimitBytes = 256ull * 1024ull * 1024ull;
+    app.SetLaunchSettingsProvider([settings](std::string_view) { return settings; });
+    ResolvedLaunch const resolved = app.ResolveLaunch();
+    EXPECT_EQ(resolved.MemoryLimitBytes, 256ull * 1024ull * 1024ull);
+    AppExit exit;
+    exit.Code = 0;
+    exit.OutOfMemory = true;
+    exit.UptimeMs = 1234;
+    std::string const description = ManagedApp::DescribeExit("gameserver", exit);
+    EXPECT_NE(description.find("out of memory past its limit"), std::string::npos) << description;
+    EXPECT_NE(description.find("gameserver"), std::string::npos) << description;
+    AppExit normalExit;
+    normalExit.Code = 0;
+    normalExit.UptimeMs = 1234;
+    std::string const normalDescription = ManagedApp::DescribeExit("gameserver", normalExit);
+    EXPECT_EQ(normalDescription.find("out of memory"), std::string::npos) << normalDescription;
+}
