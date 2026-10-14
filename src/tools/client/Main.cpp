@@ -2665,6 +2665,11 @@ namespace
                 do
                     heldElsewhere.insert(result->Fetch()[0].Get<std::string>());
                 while (result->NextRow());
+            if (objects.empty() && arguments.Import)
+            {
+                std::cerr << "client: object_template is empty, so no actor or persona could be checked; run extractor templates on this world database first\n";
+                return Failure;
+            }
             if (objects.empty())
                 std::cerr << "client: object_template is empty, so no actor or persona is checked; run extractor templates on this world database first\n";
         }
