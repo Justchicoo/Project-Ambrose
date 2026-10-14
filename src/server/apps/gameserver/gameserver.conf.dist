@@ -61,6 +61,7 @@ Zone.UnloadDelay = 60
 Zone.DoorsIgnoreRequirements = 0
 Npc.InteractRadiusDefault = 300
 Npc.TestGreeter = 0
+Npc.WizbangResendInterval = 1000
 Zone.MobileIdReleaseDelay = 2000
 Player.LinkDeadTime = 60
 Player.AfkWarnTime = 900

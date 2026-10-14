@@ -1548,6 +1548,7 @@ void GameSession::PostQuestEvents()
             fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
     }
     SyncQuestBook();
+    CheckNpcServices();
 }
 
 void GameSession::ApplyDynaMods(std::vector<ZoneDynaMod> const& mods)

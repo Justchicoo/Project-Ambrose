@@ -366,9 +366,11 @@ Walking near any NPC makes the client show its interaction prompt with the NPC's
 
 **Acceptance**
 
-- [ ] CompleteQuestGoal > StartQuest > None
-- [ ] NPC with no options from any provider: no wizbang, no prompt
+- [x] CompleteQuestGoal > StartQuest > None (`NpcWizBangTest.AGoalToCompleteOutranksAQuestToOfferWhichOutranksNone`: a quest to offer gives StartQuest, a goal to complete gives CompleteQuestGoal whichever comes first, a shop gives None, and the ids 432425611 and 660791182 are the client's hashes of the names, as `client hash` prints them)
+- [x] NPC with no options from any provider: no wizbang, no prompt (`NpcWizBangTest.AnNpcWithNoOptionGetsNone`, and `NpcServiceRangeTest.AnNpcThatOffersNothingIsNeverEnteredOrLeftAndOneThatStopsOfferingIsLeftOnce` holds that such an NPC is never sent MSG_SENDNPCOPTIONS)
 - [ ] Real client: '!' over the giver disappears within 1 s after accept
+
+Built in src/server/game/Npc/NpcWizBang.cpp, with GameSession's ShowNpcWizBangs and RefreshNpcWizBangs in NpcHandler.cpp rather than in NpcServiceMemento, since the marker comes from the same menu the service range builds for each NPC the wizard sees. A marker is sent in MSG_WIZBANG when it changes, which a quest accepted, advanced or completed checks at once through PostQuestEvents, and every NPC showing one is sent it again every Npc.WizbangResendInterval, 1000 ms by default. An NPC giving a quest the wizard already holds shows no marker. The client driver's quest-wizbang scenario watches the '!' over Merle Ambrose go on accepting and the '?' over Mr. Lincoln.
 
 ### Detailed spec from QST-9: Wizbang indicators
 

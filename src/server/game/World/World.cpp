@@ -161,6 +161,14 @@ namespace
         }
     }
 
+    void RefreshNpcWizBangs(std::vector<std::shared_ptr<GameSession>> const& sessions)
+    {
+        std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
+        for (std::shared_ptr<GameSession> const& session : sessions)
+            if (session->IsOpen())
+                session->RefreshNpcWizBangs(now);
+    }
+
     void RelayDuels(std::vector<std::shared_ptr<GameSession>> const& sessions)
     {
         for (std::shared_ptr<GameSession> const& session : sessions)
@@ -647,6 +655,7 @@ void World::Update(std::chrono::milliseconds diff)
     sSocialMgr.UpdatePresence(sessions);
     RelayJumps(sessions);
     RelayWizBangs(sessions);
+    RefreshNpcWizBangs(sessions);
     RelayLevelUps(sessions);
     RelayGameEffects(sessions);
     RelayDuels(sessions);

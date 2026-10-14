@@ -23,6 +23,7 @@
 #include "MapObjectSpawner.h"
 #include "MovementRelay.h"
 #include "NpcServiceRange.h"
+#include "NpcWizBang.h"
 #include "PlayerBackpack.h"
 #include "PlayerEquipment.h"
 #include "PlayerMovement.h"
@@ -168,6 +169,7 @@ public:
     void PostQuestEvents();
     void CheckVolumes();
     void CheckNpcServices();
+    void RefreshNpcWizBangs(std::chrono::steady_clock::time_point now);
     void HandleInteractNpc(GameMessages::InteractNpc& message);
     void HandleInteractObject(GameMessages::InteractObject& message);
     void HandleInteractOption(GameMessages::InteractOption& message);
@@ -384,6 +386,7 @@ private:
     void ShowGameEffectsOf(GameSession const& other);
     bool IsNpcTemplate(uint32 templateId);
     void OfferNpcServices(MapObject const& npc, int32 reinteract = 0);
+    void ShowNpcWizBangs(std::map<uint64, NpcWizBang::Marker> const& markers);
     std::vector<std::unique_ptr<NpcServiceProvider>> QuestProvidersFor(uint32 templateId);
     void CompletePersonaGoal(NpcServiceTarget const& target, PersonaGoals::Active const& goal);
     void SendGoalDialog(NpcServiceTarget const& target, PersonaGoals::Active const& goal);
@@ -409,6 +412,9 @@ private:
     QuestOfferCache _questOffers;
     QuestDialogs _questDialogs;
     std::map<uint32, bool> _npcTemplates;
+    std::map<uint64, uint32> _npcWizBangs;
+    std::chrono::steady_clock::time_point _npcWizBangsSentAt{};
+    bool _npcWizBangsDue = false;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
     std::atomic<uint64> _unhandled{ 0 };
