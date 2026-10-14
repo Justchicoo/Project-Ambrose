@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every zone of the user's own install from the gamedata.bin its GameData archive holds: the zone's settings, each named location and one row for each entry of its object list, read through the zone views, with the zone known by the name its own data gives it, which the archive's name must match; then the walk-in volumes of its volumes.xml and the triggers of its triggers.xml, read by property name because their classes are the server's own, which only a supplement to the type dump describes, and the spawners of its spawnData.xml, each with the items it may place, read through the spawn views because the type dump describes them, where a file that does not decode is counted against its zone and the rest is still extracted, and clientSpawnData.xml, which only the client spawns, is never read; and the paths of its pathData.xml, each with its nodes in order taken from the node list its pathNodeData.bin holds as a bare versionable object, so a spawn that stands on a path can be placed on one of its nodes. A part of a zone whose class the type dump cannot describe is reported with its class hash and path rather than guessed at or dropped silently: an object list entry of such a class is left out, and inside an entry that is kept the part is left out of what the row holds; every other problem is reported up to a cap, either from an open GameData folder and catalog or straight from an install folder and type dump, telling a caller that asks how many archives it has read after each one. A sigil entry also keeps the name of the sigil record it places, which its own m_templateName holds, and a ZoneTokenInfo entry keeps the token container its m_pContainer holds.
+ * Extracts every zone of the user's own install from the gamedata.bin its GameData archive holds: the zone's settings, each named location and one row for each entry of its object list, read through the zone views, with the zone known by the name its own data gives it, which the archive's name must match; then the walk-in volumes of its volumes.xml and the triggers of its triggers.xml, read by property name because their classes are the server's own, which only a supplement to the type dump describes, and the spawners of its spawnData.xml, each with the items it may place, read through the spawn views because the type dump describes them, where a file that does not decode is counted against its zone and the rest is still extracted, and clientSpawnData.xml, which only the client spawns, is never read; and the paths of its pathData.xml, each with its nodes in order taken from the node list its pathNodeData.bin holds as a bare versionable object, so a spawn that stands on a path can be placed on one of its nodes. A part of a zone whose class the type dump cannot describe is reported with its class hash and path rather than guessed at or dropped silently: an object list entry of such a class is left out, and inside an entry that is kept the part is left out of what the row holds; a property the type dump does not list on a class it does, in a volume, trigger, spawn or path file, is left out of what is kept and counted by its class and property hash rather than failing the file; every other problem is reported up to a cap, either from an open GameData folder and catalog or straight from an install folder and type dump, telling a caller that asks how many archives it has read after each one. A sigil entry also keeps the name of the sigil record it places, which its own m_templateName holds, and a ZoneTokenInfo entry keeps the token container its m_pContainer holds.
  */
 
 #ifndef AMBROSE_ZONEEXTRACTOR_H
@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -189,6 +190,7 @@ struct ZoneExtraction
 
     std::vector<ExtractedZone> Zones;
     std::vector<SkippedZonePart> Skipped;
+    std::map<std::pair<uint32, uint32>, std::size_t> SkippedProperties;
     std::vector<TriggerFileFailure> TriggerFailures;
     std::size_t Archives = 0;
     std::vector<std::string> Errors;

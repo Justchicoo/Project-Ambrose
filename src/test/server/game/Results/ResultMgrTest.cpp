@@ -72,8 +72,8 @@ TEST(ResultMgrTest, AListStopsAtAResWaitAndHandsBackTheResultsAfterItWithTheWait
     std::vector<std::string> ran;
     sResultMgr.Register(ResultFixtures::FirstTestClass, [&](PropertyObject const& result, ResultContext const&) { ran.push_back(TextOf(result)); });
 
-    ResultList const list{ ResultFixtures::Make(ResultFixtures::FirstTestClass, "storm"), ResultFixtures::Wait(2.5f), ResultFixtures::Make(ResultFixtures::FirstTestClass, "rubble"),
-        ResultFixtures::Wait(1.0f), ResultFixtures::Make(ResultFixtures::FirstTestClass, "walk") };
+    ResultList const list{ ResultFixtures::Make(ResultFixtures::FirstTestClass, "storm"), ResultFixtures::Wait(2.5), ResultFixtures::Make(ResultFixtures::FirstTestClass, "rubble"),
+        ResultFixtures::Wait(1.0), ResultFixtures::Make(ResultFixtures::FirstTestClass, "walk") };
     ResultRun const first = sResultMgr.Run(list, ResultContext{});
     EXPECT_EQ(first.Ran, 1u);
     EXPECT_EQ(ran, std::vector<std::string>{ "storm" }) << "nothing after the wait runs yet";
@@ -99,14 +99,14 @@ TEST(ResultMgrTest, APostEventAndAStagedCinematicReadAsWhatTheyName)
     EXPECT_EQ(CinematicResults::EventOf(*storm.Object), std::optional<std::string>("Storm"));
     EXPECT_FALSE(CinematicResults::EventOf(*ResultFixtures::PostEvent("").Object)) << "an empty event posts nothing";
 
-    ResultEntry const finale = ResultFixtures::StagedCinematic("MR_NorthGateIntroScene", "Stage01", 1);
+    ResultEntry const finale = ResultFixtures::StagedCinematic("MR_NorthGateIntroScene", "Stage01", true);
     std::optional<StagedCinematicResult> const staged = CinematicResults::StagedCinematicOf(*finale.Object);
     ASSERT_TRUE(staged);
     EXPECT_EQ(staged->Cinematic, "MR_NorthGateIntroScene");
     EXPECT_EQ(staged->Stage, "Stage01");
     EXPECT_TRUE(staged->WholeZone);
-    EXPECT_FALSE(CinematicResults::StagedCinematicOf(*ResultFixtures::StagedCinematic("MR_NorthGateIntroScene", "", 0).Object)->WholeZone);
-    EXPECT_FALSE(CinematicResults::StagedCinematicOf(*ResultFixtures::StagedCinematic("", "Stage01", 0).Object)) << "a result naming no cinematic starts none";
+    EXPECT_FALSE(CinematicResults::StagedCinematicOf(*ResultFixtures::StagedCinematic("MR_NorthGateIntroScene", "", false).Object)->WholeZone);
+    EXPECT_FALSE(CinematicResults::StagedCinematicOf(*ResultFixtures::StagedCinematic("", "Stage01", false).Object)) << "a result naming no cinematic starts none";
 }
 
 TEST(ResultMgrTest, AQuestsTeleportReadsAsItsDestinationAndADoorsAsNone)

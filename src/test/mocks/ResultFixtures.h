@@ -44,8 +44,8 @@ namespace ResultFixtures
             { "m_sourceType", Property("std::string", "m_sourceType", 1, 1) }, { "m_magicSchool", Property("std::string", "m_magicSchool", 2, 1) } });
         AddClass(classes, "class ResPostEvent", Json::array({ "PropertyClass" }), { { "m_eventName", Property("std::string", "m_eventName", 0, 1) },
             { "m_subEventName", Property("std::string", "m_subEventName", 1, 1) } });
-        AddClass(classes, "class ResWait", Json::array({ "PropertyClass" }), { { "m_secondsToWait", Property("float", "m_secondsToWait", 0, 1) } });
-        AddClass(classes, "class ResStartStagedCinematic", Json::array({ "PropertyClass" }), { { "m_bIncludeAllPlayersInZone", Property("int", "m_bIncludeAllPlayersInZone", 0, 1) },
+        AddClass(classes, "class ResWait", Json::array({ "PropertyClass" }), { { "m_secondsToWait", Property("double", "m_secondsToWait", 0, 1) } });
+        AddClass(classes, "class ResStartStagedCinematic", Json::array({ "PropertyClass" }), { { "m_bIncludeAllPlayersInZone", Property("bool", "m_bIncludeAllPlayersInZone", 0, 1) },
             { "m_cinematicName", Property("std::string", "m_cinematicName", 1, 1) }, { "m_stageName", Property("std::string", "m_stageName", 2, 1) } });
         AddClass(classes, std::string(FirstTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
         AddClass(classes, std::string(SecondTestClass), Json::array({ "PropertyClass" }), { { "m_text", Property("std::string", "m_text", 0, 7) } });
@@ -103,22 +103,22 @@ namespace ResultFixtures
         return ResultEntry{ "class ResPostEvent", std::shared_ptr<PropertyObject const>(std::move(object)), 0 };
     }
 
-    inline ResultEntry Wait(float seconds)
+    inline ResultEntry Wait(double seconds)
     {
         PropertyObjectPtr object = PropertyObject::Create(Catalog(), "class ResWait");
         if (object)
-            object->Set("m_secondsToWait", float{ seconds });
+            object->Set("m_secondsToWait", double{ seconds });
         return ResultEntry{ "class ResWait", std::shared_ptr<PropertyObject const>(std::move(object)), 0 };
     }
 
-    inline ResultEntry StagedCinematic(std::string const& cinematic, std::string const& stage, int32 wholeZone)
+    inline ResultEntry StagedCinematic(std::string const& cinematic, std::string const& stage, bool wholeZone)
     {
         PropertyObjectPtr object = PropertyObject::Create(Catalog(), "class ResStartStagedCinematic");
         if (object)
         {
             object->Set("m_cinematicName", std::string(cinematic));
             object->Set("m_stageName", std::string(stage));
-            object->Set("m_bIncludeAllPlayersInZone", int32{ wholeZone });
+            object->Set("m_bIncludeAllPlayersInZone", bool{ wholeZone });
         }
         return ResultEntry{ "class ResStartStagedCinematic", std::shared_ptr<PropertyObject const>(std::move(object)), 0 };
     }

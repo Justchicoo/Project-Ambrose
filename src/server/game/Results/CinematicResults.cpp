@@ -34,8 +34,8 @@ namespace CinematicResults
             return std::nullopt;
         cinematic.Stage = TextOf(result, "m_stageName");
         PropertyValue const* const all = result.Get("m_bIncludeAllPlayersInZone");
-        int32 const* const wholeZone = all ? all->GetIf<int32>() : nullptr;
-        cinematic.WholeZone = wholeZone && *wholeZone != 0;
+        bool const* const wholeZone = all ? all->GetIf<bool>() : nullptr;
+        cinematic.WholeZone = wholeZone && *wholeZone;
         return cinematic;
     }
 
