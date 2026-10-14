@@ -1321,6 +1321,19 @@ class EngineTests(TemporaryFolder):
         self.assertIn(f"filmed {len(filmed)} time(s)", running.steps[0]["result"])
         self.assertIn("while the press was made", running.steps[0]["result"])
 
+    def test_a_watched_character_post_films_the_other_client_while_it_is_posted_and_after(self):
+        running = self.build([{"action": "char", "name": "submit the command", "code": 13,
+                               "watch": "companion", "watch_every": 0.1, "watch_after": 0.3}], companion=True)
+        running.run()
+        filmed = [taken for taken in running.screenshots if taken.get("client") == "companion"]
+        self.assertGreaterEqual(len(filmed), 3)
+        self.assertFalse(filmed[-1]["held"])
+        self.assertEqual(len(self.companion.shots), len(filmed))
+        self.assertEqual(self.client.typed, ["\r"])
+        self.assertEqual(self.companion.typed, [])
+        self.assertIn(f"filmed {len(filmed)} time(s)", running.steps[0]["result"])
+        self.assertIn("while the character was posted", running.steps[0]["result"])
+
     def test_several_keys_held_together_go_down_together_and_a_list_is_bounded(self):
         running = self.build([{"action": "hold_key", "name": "circle", "vk": ["0x57", 0x44], "seconds": 0.01}])
         running.run()

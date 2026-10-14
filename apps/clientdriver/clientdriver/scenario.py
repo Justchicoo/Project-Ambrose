@@ -17,7 +17,7 @@ ACTIONS = {
     "db_exec": (("statement",), ("database",)),
     "submit_login": (("password",), ("user",)),
     "type": (("text",), ()),
-    "char": (("code",), ()),
+    "char": (("code",), ("watch", "watch_every", "watch_after")),
     "key": (("vk",), ()),
     "hold_key": (("vk", "seconds"), ("moves", "watch", "watch_every", "watch_after")),
     "click": (("target",), ("attempts", "clicks", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
