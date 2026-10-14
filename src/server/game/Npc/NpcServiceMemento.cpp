@@ -41,6 +41,15 @@ QuestWireEncoder::ServiceMementoBase NpcServiceMemento::Build(NpcServiceMenu con
     return memento;
 }
 
+uint32 NpcServiceMemento::GetWizBangId(NpcServiceMenu const& menu) noexcept
+{
+    NpcWizBang::Id selected = NpcWizBang::Id::None;
+    for (NpcServiceMenu::Entry const& entry : menu.GetEntries())
+        if (NpcWizBang::Priority(entry.WizBang) > NpcWizBang::Priority(selected))
+            selected = entry.WizBang;
+    return static_cast<uint32>(selected);
+}
+
 QuestWireEncoder::BlobEncodeResult NpcServiceMemento::Encode(TypeCatalogPtr const& catalog, NpcServiceMenu const& menu, NpcPresentation const& npc)
 {
     QuestWireEncoder::ObjectBuildResult built = QuestWireEncoder::BuildServiceMementoBase(catalog, Build(menu, npc));

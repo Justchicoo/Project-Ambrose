@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One NPC's menu for one wizard: the options of each provider in turn, providers of higher priority first and equal ones in the order given, numbered from 0 across the whole menu as the client numbers them, so the index a client sends back finds the provider that owns it and that provider's own index; an index past the menu finds nothing. The first provider that sets a radius, a name, text or icon key gives the NPC that one.
+ * One NPC's menu for one wizard: the options of each provider in turn, providers of higher priority first and equal ones in the order given, numbered from 0 across the whole menu as the client numbers them, so the index a client sends back finds the provider that owns it and that provider's own index; an index past the menu finds nothing. The first provider that sets a radius, a name, text or icon key gives the NPC that one, and each option retains its provider's wizbang.
  */
 
 #ifndef AMBROSE_NPCSERVICEMENU_H
@@ -21,6 +21,7 @@ public:
         NpcServiceOption Option;
         NpcServiceProvider* Provider = nullptr;
         uint32 Index = 0;
+        NpcWizBang::Id WizBang = NpcWizBang::Id::None;
     };
 
     static NpcServiceMenu Build(std::span<NpcServiceProvider* const> providers, NpcServiceTarget const& target);

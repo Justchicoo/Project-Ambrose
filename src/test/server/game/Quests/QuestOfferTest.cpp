@@ -150,6 +150,7 @@ TEST(QuestOfferTest, OnlyTheFirstPrepActorOffersAQuestAndOnlyWhileTheWizardCanTa
     EXPECT_EQ(options[0].DisplayKey, "QuestTitle_C");
     EXPECT_EQ(options[0].PrepText, "QuestPrep_Daily");
     EXPECT_EQ(provider.GetPriority(), QuestOfferProvider::Priority);
+    EXPECT_EQ(provider.GetWizBang({ 7, Npc, GiverId }), NpcWizBang::Id::StartQuest);
     provider.OnServiceInteraction({ 7, Npc, GiverId }, 0);
     ASSERT_EQ(offered.size(), 1u);
     EXPECT_EQ(offered[0]->Row.Name, "Daily");

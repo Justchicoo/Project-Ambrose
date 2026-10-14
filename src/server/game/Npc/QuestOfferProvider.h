@@ -26,6 +26,7 @@ public:
 
     std::string_view GetName() const override { return "quest_offer"; }
     int32 GetPriority() const override { return Priority; }
+    NpcWizBang::Id GetWizBang(NpcServiceTarget const& target) const override;
     std::vector<NpcServiceOption> GetServiceOptions(NpcServiceTarget const& target) const override;
     void OnServiceInteraction(NpcServiceTarget const& target, uint32 index) override;
 

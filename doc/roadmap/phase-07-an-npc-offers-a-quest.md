@@ -394,7 +394,8 @@ NPCs show the yellow '!' when they have a quest the player can take and the '?' 
 
 **Risks**
 
-- The wizbang id values are unverified hashes taken from the reference enum. Confirm by trying them against the client.
+- `client wizbangs CompleteQuestGoal StartQuest UnfinishedQuest Training Shopping` on the installed r806919/Wizard_1_610 client confirmed IDs 432425611, 660791182, 747193091, 382045279 and 388577048 respectively; the real-client quest transition still depends on the QST-10 provider from 7.09, which is not built on this branch.
+- The real-client acceptance depends on the QST-10 quest provider from 7.09, which is not built on this branch; a client location alone cannot make the test quest offerable yet.
 
 ## 7.09 Quest offer (QST-10)
 

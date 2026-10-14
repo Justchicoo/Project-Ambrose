@@ -203,6 +203,7 @@ void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
         return;
     if (IsAttached() && _inWorld.load(std::memory_order_relaxed) && GetStatus() == SessionStatus::InWorld)
     {
+        UpdateNpcWizBangs(now);
         if (_player && _player->RefillPotion(now, std::chrono::seconds(sSettings.Get<uint32>("Potion.RefillInterval"))))
         {
             SendPotionUpdate();

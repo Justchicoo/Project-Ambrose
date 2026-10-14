@@ -19,8 +19,9 @@ NpcServiceMenu NpcServiceMenu::Build(std::span<NpcServiceProvider* const> provid
     for (NpcServiceProvider* provider : ordered)
     {
         std::vector<NpcServiceOption> options = provider->GetServiceOptions(target);
+        NpcWizBang::Id const wizBang = options.empty() ? NpcWizBang::Id::None : provider->GetWizBang(target);
         for (uint32 index = 0; index < options.size(); ++index)
-            menu._entries.push_back({ std::move(options[index]), provider, index });
+            menu._entries.push_back({ std::move(options[index]), provider, index, wizBang });
         if (!menu._radius)
             menu._radius = provider->GetInteractionRadius();
         if (!menu._nameKey)

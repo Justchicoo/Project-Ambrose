@@ -107,6 +107,39 @@ TEST(QuestLogTest, CompletingAQuestRemovesItAndSetsItsCompleteEntry)
     EXPECT_EQ(stored.QuestRegistry, (std::vector<CharacterRegistryRow>{ { "KeptQuest", "Complete", 1.0 } }));
 }
 
+TEST(QuestLogTest, StateRevisionAdvancesForMutationsAndNotForNoOps)
+{
+    GuidGenerator gids(ObjectGuid::QuestBase);
+    QuestLog log;
+    EXPECT_EQ(log.GetStateRevision(), 0u);
+    ASSERT_NE(log.Add("KeptQuest", gids, Now), nullptr);
+    uint64 revision = log.GetStateRevision();
+    EXPECT_GT(revision, 0u);
+    EXPECT_EQ(log.Add("KeptQuest", gids, Now), nullptr);
+    EXPECT_EQ(log.GetStateRevision(), revision);
+
+    ASSERT_NE(log.StartGoal("KeptQuest", "DefeatUndead", gids), nullptr);
+    EXPECT_GT(log.GetStateRevision(), revision);
+    revision = log.GetStateRevision();
+    ASSERT_TRUE(log.IncrementGoal("KeptQuest", "DefeatUndead"));
+    EXPECT_GT(log.GetStateRevision(), revision);
+    revision = log.GetStateRevision();
+    ASSERT_TRUE(log.CompleteGoal("KeptQuest", "DefeatUndead"));
+    EXPECT_GT(log.GetStateRevision(), revision);
+    revision = log.GetStateRevision();
+    log.SetQuestRegistry("KeptQuest", "Seen", 1.0);
+    EXPECT_GT(log.GetStateRevision(), revision);
+    revision = log.GetStateRevision();
+    log.SetRegistry("Visited", 1.0);
+    EXPECT_GT(log.GetStateRevision(), revision);
+    revision = log.GetStateRevision();
+    log.SetHidden("KeptQuest", true);
+    EXPECT_GT(log.GetStateRevision(), revision);
+    revision = log.GetStateRevision();
+    EXPECT_TRUE(log.CompleteQuest("KeptQuest"));
+    EXPECT_GT(log.GetStateRevision(), revision);
+}
+
 TEST(QuestLogTest, AnOrphanQuestAndAnOrphanGoalArePrunedOnLoadWithAWarningEach)
 {
     CharacterQuests stored;

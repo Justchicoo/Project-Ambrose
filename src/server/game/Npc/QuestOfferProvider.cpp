@@ -19,6 +19,11 @@ bool QuestOfferProvider::Serves(QuestStore const& quests, uint32 templateId)
     return !quests.GetQuestsOfferedBy(templateId).empty();
 }
 
+NpcWizBang::Id QuestOfferProvider::GetWizBang(NpcServiceTarget const& target) const
+{
+    return Available(target.TemplateId).empty() ? NpcWizBang::Id::None : NpcWizBang::Id::StartQuest;
+}
+
 std::vector<NpcServiceOption> QuestOfferProvider::GetServiceOptions(NpcServiceTarget const& target) const
 {
     std::vector<NpcServiceOption> options;

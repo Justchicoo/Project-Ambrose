@@ -14,6 +14,7 @@
 #include "QuestOfferProvider.h"
 #include "QuestOffers.h"
 #include "ScriptMgr.h"
+#include "Settings.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
 
@@ -111,6 +112,54 @@ void GameSession::CheckNpcServices()
             OfferNpcServices(*npc);
 }
 
+void GameSession::UpdateNpcWizBangs(std::chrono::steady_clock::time_point now)
+{
+    if (!_mapId || !IsShown())
+    {
+        _npcWizBangs.clear();
+        _npcWizBangMapId.reset();
+        _lastNpcWizBangResend = {};
+        return;
+    }
+    Map const* const map = sMapMgr.Find(*_mapId);
+    if (!map)
+    {
+        _npcWizBangs.clear();
+        _npcWizBangMapId.reset();
+        _lastNpcWizBangResend = {};
+        return;
+    }
+
+    bool const mapChanged = !_npcWizBangMapId || *_npcWizBangMapId != *_mapId;
+    uint64 const questRevision = _questLog ? _questLog->GetStateRevision() : 0;
+    bool const questChanged = _npcWizBangQuestRevision != questRevision;
+    std::chrono::milliseconds const resendInterval(sSettings.Get<uint32>("Npc.WizbangResendInterval"));
+    bool const resend = _lastNpcWizBangResend == std::chrono::steady_clock::time_point{} || now - _lastNpcWizBangResend >= resendInterval;
+    if (!mapChanged && !questChanged && !resend)
+        return;
+
+    std::map<uint64, uint32> current;
+    for (MapObject const& object : map->GetObjects())
+    {
+        uint32 const templateId = static_cast<uint32>(object.Spawn.TemplateId);
+        if (!_sight.IsVisible(object.GlobalId) || !IsNpcTemplate(templateId))
+            continue;
+
+        NpcServiceTarget const target{ _worldGuid, object.GlobalId, templateId };
+        uint32 const wizBangId = NpcServiceMemento::GetWizBangId(MenuFor(target, QuestProviderFor(templateId)).Menu);
+        current.emplace(object.GlobalId, wizBangId);
+        auto const previous = _npcWizBangs.find(object.GlobalId);
+        if (mapChanged || resend || previous == _npcWizBangs.end() || previous->second != wizBangId)
+            SendDmlMessage(GameMessages::WizBang{ object.GlobalId, wizBangId });
+    }
+
+    _npcWizBangs = std::move(current);
+    _npcWizBangMapId = _mapId;
+    _npcWizBangQuestRevision = questRevision;
+    if (resend)
+        _lastNpcWizBangResend = now;
+}
+
 void GameSession::OfferNpcServices(MapObject const& npc)
 {
     uint32 const templateId = static_cast<uint32>(npc.Spawn.TemplateId);
@@ -124,6 +173,8 @@ void GameSession::OfferNpcServices(MapObject const& npc)
     NpcServiceTarget const target{ _worldGuid, npc.GlobalId, templateId };
     ServedMenu const served = MenuFor(target, QuestProviderFor(target.TemplateId));
     NpcServiceMenu const& menu = served.Menu;
+    if (menu.GetEntries().empty())
+        return;
     QuestWireEncoder::BlobEncodeResult const encoded = NpcServiceMemento::Encode(sTypeRegistry.GetCatalog(), menu, presentation);
     if (!encoded.Ok())
     {
