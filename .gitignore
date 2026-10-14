@@ -40,3 +40,5 @@ coverage/
 *.tsbuildinfo
 .npm-cache/
 /site/
+data/quests/*
+!data/quests/README.md

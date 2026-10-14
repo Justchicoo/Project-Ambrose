@@ -1,11 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the CSR package quest reader on classes and quest files the test invents: a quest's keys, goals, adjectives, client tags, tally, logic and Prep dialog with its madlib become quest table rows, logic waiting on two goals is attached to both, dialog tags and results the tables cannot hold are counted rather than failing the quest, unknown classes in results are only counted while one in a goal fails it, a persona named by its _Persona template is read as the object it names, a missing actor template, a missing locale key, a name another source holds and a goal the logic names but the quest lacks each fail their quest, and the script replaces only the rows the package's source marks.
+ * Tests the CSR package quest reader on classes and quest files the test invents: a quest's keys, its RequirementList, encoded so it decodes back to the list it was and NULL in the script when the quest lists none or an empty list, with an unknown class or property in it failing the quest, goals, adjectives, client tags, tally, logic and Prep dialog with its madlib become quest table rows, logic waiting on two goals is attached to both, dialog tags and results the tables cannot hold are counted rather than failing the quest, unknown classes in results are only counted while one in a goal fails it, a persona named by its _Persona template is read as the object it names, a missing actor template, a missing locale key, a name another source holds and a goal the logic names but the quest lacks each fail their quest, and the script replaces only the rows the package's source marks.
  */
 
+#include "ObjectSerializer.h"
+#include "PropertyObject.h"
 #include "QuestPackage.h"
 #include "StringHash.h"
 #include "TypeRegistry.h"
+#include "ZoneExtractor.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -133,6 +136,13 @@ namespace
             "</Objects>\r\n";
     }
 
+    std::string WithRequirements(std::string file, std::string const& requirements)
+    {
+        std::size_t const start = file.find("    <m_requirements>");
+        std::size_t const end = file.find('\n', start);
+        return file.replace(start, end - start + 1, requirements.empty() ? std::string() : "    <m_requirements>" + requirements + "</m_requirements>\r\n");
+    }
+
     QuestValidator::Context Install(std::vector<std::string> missingKeys = {})
     {
         return QuestValidator::Context::From({ QuestObjectRow{ ActorId, "TestNpc" } }, [missingKeys](std::string_view key)
@@ -212,7 +222,7 @@ TEST_F(QuestPackageTest, AQuestFileBecomesQuestTableRows)
     EXPECT_EQ(read.RequirementClasses["ReqHasEntry"], 1u);
     EXPECT_EQ(read.UnknownClasses["ResInventedReward"], 1u);
     EXPECT_EQ(read.NotCarried["dialog tag QuestInfo"], 1u);
-    EXPECT_EQ(read.NotCarried["m_requirements"], 1u);
+    EXPECT_FALSE(read.NotCarried.contains("m_requirements"));
     EXPECT_EQ(read.NotCarried["negative m_questRepeat"], 1u);
     EXPECT_TRUE(read.Keys.contains("TestTitle_TEST-001"));
     EXPECT_TRUE(read.Keys.contains("TestLine_0"));
@@ -280,4 +290,54 @@ TEST_F(QuestPackageTest, TheScriptReplacesOnlyThePackagesRowsAndMarksEachWithIts
     EXPECT_EQ(all.find(WorldSqlScript::Literal(std::string("TEST-002"))), std::string::npos);
     std::vector<std::string_view> const tables = QuestPackage::GetTables();
     EXPECT_EQ(tables.size(), 10u);
+}
+
+TEST_F(QuestPackageTest, AQuestsRequirementListIsStoredEncodedAndDecodesBack)
+{
+    std::string const nested = "<Class Name=\"class RequirementList\"><m_requirements><Class Name=\"class ReqHasEntry\"><m_entryName>First</m_entryName></Class></m_requirements>"
+        "<m_requirements><Class Name=\"class RequirementList\"><m_requirements><Class Name=\"class ReqHasEntry\"><m_entryName>Second</m_entryName></Class></m_requirements></Class>"
+        "</m_requirements></Class>";
+    QuestPackageRead read = QuestPackage::Read(_catalog, { QuestPackageEntry{ "gated.xml", WithRequirements(QuestFile("TEST-GATED"), nested) },
+        QuestPackageEntry{ "open.xml", WithRequirements(QuestFile("TEST-OPEN"), {}) },
+        QuestPackageEntry{ "empty.xml", WithRequirements(QuestFile("TEST-EMPTY"), "<Class Name=\"class RequirementList\"></Class>") },
+        QuestPackageEntry{ "unknown.xml", WithRequirements(QuestFile("TEST-UNKNOWN"), "<Class Name=\"class RequirementList\"><m_requirements><Class Name=\"class ReqInvented\"></Class></m_requirements></Class>") },
+        QuestPackageEntry{ "property.xml", WithRequirements(QuestFile("TEST-PROPERTY"), "<Class Name=\"class RequirementList\"><m_requirements><Class Name=\"class ReqHasEntry\"><m_invented>1</m_invented></Class></m_requirements></Class>") } });
+    QuestPackage::Check(read, Install());
+    std::map<std::string, QuestPackageQuest const*> quests;
+    for (QuestPackageQuest const& quest : read.Quests)
+        quests[quest.Name] = &quest;
+    ASSERT_EQ(quests.size(), 5u);
+    EXPECT_EQ(quests["TEST-UNKNOWN"]->Category, "unknown class ReqInvented");
+    EXPECT_EQ(quests["TEST-PROPERTY"]->Category, "requirement not fully read (unknown property)");
+    for (std::string const name : { "TEST-GATED", "TEST-OPEN", "TEST-EMPTY" })
+        ASSERT_TRUE(quests[name]->IsClean()) << name << ": " << (quests[name]->Problems.empty() ? std::string() : quests[name]->Problems.front());
+    EXPECT_TRUE(quests["TEST-OPEN"]->Rows.Quests.front().Requirements.empty());
+    EXPECT_TRUE(quests["TEST-EMPTY"]->Rows.Quests.front().Requirements.empty());
+
+    std::vector<uint8> const& bytes = quests["TEST-GATED"]->Rows.Quests.front().Requirements;
+    ASSERT_FALSE(bytes.empty());
+    DecodeResult const decoded = ObjectSerializer::Decode(_catalog, bytes, ZoneExtractor::DataOptions());
+    ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+    ASSERT_TRUE(decoded.Object);
+    EXPECT_EQ(decoded.Object->GetClass().Name, "class RequirementList");
+    PropertyValue::List const* const outer = decoded.Object->Get("m_requirements")->GetList();
+    ASSERT_TRUE(outer);
+    ASSERT_EQ(outer->size(), 2u);
+    PropertyObject const* const first = (*outer)[0].AsObject();
+    ASSERT_TRUE(first);
+    EXPECT_EQ(first->GetClass().Name, "class ReqHasEntry");
+    EXPECT_EQ(first->Get("m_entryName")->GetIf<std::string>() ? *first->Get("m_entryName")->GetIf<std::string>() : std::string(), "First");
+    PropertyObject const* const inner = (*outer)[1].AsObject();
+    ASSERT_TRUE(inner);
+    EXPECT_EQ(inner->GetClass().Name, "class RequirementList");
+    PropertyValue::List const* const innerList = inner->Get("m_requirements")->GetList();
+    ASSERT_TRUE(innerList);
+    ASSERT_EQ(innerList->size(), 1u);
+    ASSERT_TRUE((*innerList)[0].AsObject());
+    EXPECT_EQ(*(*innerList)[0].AsObject()->Get("m_entryName")->GetIf<std::string>(), "Second");
+
+    std::string const all = fmt::format("{}", fmt::join(QuestPackage::BuildScript(read, QuestPackage::SourceOf("Test.wad")).GetStatements(), "\n"));
+    EXPECT_NE(all.find("`requirements`"), std::string::npos);
+    EXPECT_NE(all.find(WorldSqlScript::Literal(WorldSqlScript::Value{ std::string(bytes.begin(), bytes.end()) })), std::string::npos);
+    EXPECT_EQ(all.find("TEST-UNKNOWN"), std::string::npos);
 }

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, attaching each goal-complete logic entry to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
+ * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements encoded as zone data holds requirements and failing the quest when any of that list does not read, attaching each goal-complete logic entry to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
  */
 
 #include "QuestPackage.h"
@@ -10,6 +10,7 @@
 #include "QuestStore.h"
 #include "Utf.h"
 #include "XmlObjectReader.h"
+#include "ZoneExtractor.h"
 
 #include <fmt/format.h>
 
@@ -26,7 +27,7 @@ namespace
     constexpr std::size_t TextColumn = 255;
     constexpr std::string_view QuestClass = "class QuestTemplate";
     constexpr std::array NotCarriedProperties{ std::string_view("m_startResults"), std::string_view("m_endResults"), std::string_view("m_completeResults"),
-        std::string_view("m_activateResults"), std::string_view("m_tallyResults"), std::string_view("m_requirements"), std::string_view("m_prepRequirements"),
+        std::string_view("m_activateResults"), std::string_view("m_tallyResults"), std::string_view("m_prepRequirements"),
         std::string_view("m_pruneRequirements"), std::string_view("m_goalRequirements"), std::string_view("m_dynaMods"), std::string_view("m_questEffectInfoList"),
         std::string_view("m_behaviors") };
     constexpr std::array<std::string_view, 66> ReadProperties{ "m_questName", "m_questNameID", "m_questTitle", "m_questInfo", "m_questPrep", "m_questUnderway", "m_questComplete",
@@ -201,7 +202,8 @@ namespace
 
             for (std::string const& goal : fields.Texts("m_startGoals"))
                 _quest.Rows.StartGoals.push_back(QuestStartGoalRow{ row.Name, goal });
-            for (std::string_view const list : { "m_requirements", "m_prepRequirements", "m_pruneRequirements" })
+            Gate(fields.Object("m_requirements"), _quest.Rows.Quests.back());
+            for (std::string_view const list : { "m_prepRequirements", "m_pruneRequirements" })
                 Requirements(fields.Object(list), list);
             for (std::string_view const results : { "m_startResults", "m_endResults" })
                 Results(fields.Object(results), results);
@@ -245,6 +247,22 @@ namespace
                 return;
             NotCarried(where);
             CountRequirements(*list);
+        }
+
+        void Gate(PropertyObject const* list, QuestTemplateRow& row)
+        {
+            if (!list)
+                return;
+            CountRequirements(*list);
+            if (Fields(*list).Objects("m_requirements").empty())
+                return;
+            EncodeResult encoded = ObjectSerializer::Encode(list, ZoneExtractor::DataOptions());
+            if (!encoded.Ok())
+            {
+                Fail("requirements that do not encode", encoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(encoded.Status)) : std::move(encoded.Detail));
+                return;
+            }
+            row.Requirements = std::move(encoded.Bytes);
         }
 
         void CountRequirements(PropertyObject const& requirement)
@@ -434,6 +452,12 @@ namespace
         return dot == std::string_view::npos ? path : path.substr(dot + 1);
     }
 
+    bool InRequirements(std::string_view path)
+    {
+        std::size_t const dot = path.find('.');
+        return dot != std::string_view::npos && path.substr(dot + 1).starts_with("m_requirements");
+    }
+
     bool InCarriedPart(std::string_view path)
     {
         return std::none_of(NotCarriedProperties.begin(), NotCarriedProperties.end(), [path](std::string_view property)
@@ -574,6 +598,11 @@ QuestPackageRead QuestPackage::Read(TypeCatalogPtr const& catalog, std::vector<Q
         {
             if (issue.Kind == DecodeIssueKind::UnknownClass)
                 continue;
+            if (InRequirements(issue.Path) && !(issue.Kind == DecodeIssueKind::InvalidValue && issue.Detail.starts_with("holds ''")))
+            {
+                reader.Fail(fmt::format("requirement not fully read ({})", ObjectSerializer::GetIssueName(issue.Kind)), fmt::format("{}: {}", issue.Path, issue.Detail));
+                continue;
+            }
             if (issue.Kind == DecodeIssueKind::UnknownProperty)
             {
                 std::size_t const open = issue.Detail.find('<');
@@ -703,10 +732,11 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
 
     WorldSqlScript script;
     script.ReplaceRows("quest_template", "source", Value{ source }, { "name", "name_id", "title_key", "info_key", "prep_key", "underway_key", "complete_key", "level", "repeat", "mainline",
-        "no_quest_helper", "skip_qh_autoselect", "pet_only", "activity_type", "prep_always", "is_hidden", "source" }, convert(rows.Quests, [&](QuestTemplateRow const& row)
+        "no_quest_helper", "skip_qh_autoselect", "pet_only", "activity_type", "prep_always", "is_hidden", "requirements", "source" }, convert(rows.Quests, [&](QuestTemplateRow const& row)
     {
         return WorldSqlScript::Row{ row.Name, number(row.NameId), row.TitleKey, row.InfoKey, row.PrepKey, row.UnderwayKey, row.CompleteKey, number(row.Level), number(row.Repeat),
-            number(row.Mainline), number(row.NoQuestHelper), number(row.SkipQhAutoselect), number(row.PetOnly), number(row.ActivityType), number(row.PrepAlways), number(row.IsHidden) };
+            number(row.Mainline), number(row.NoQuestHelper), number(row.SkipQhAutoselect), number(row.PetOnly), number(row.ActivityType), number(row.PrepAlways), number(row.IsHidden),
+            row.Requirements.empty() ? Value{ std::monostate{} } : Value{ std::string(row.Requirements.begin(), row.Requirements.end()) } };
     }));
     script.InsertRows("quest_start_goal", { "quest", "goal_name", "source" }, convert(rows.StartGoals, [](QuestStartGoalRow const& row)
     {
