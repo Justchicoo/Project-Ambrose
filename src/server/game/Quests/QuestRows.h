@@ -66,6 +66,8 @@ struct QuestGoalRow
     uint32 Rank = 0;
     bool HideFloatyText = false;
     bool HideLocation = false;
+    std::vector<uint8> Requirements;
+    std::string School;
 };
 
 struct QuestGoalAdjectiveRow
@@ -90,6 +92,7 @@ struct QuestGoalLogicRow
     std::string Goal;
     uint32 Position = 0;
     bool CompleteQuest = false;
+    uint32 RequiredOrCount = 1;
 };
 
 struct QuestGoalLogicMemberRow

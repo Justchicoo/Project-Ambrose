@@ -14,6 +14,7 @@
 #include "QuestRewards.h"
 #include "QuestBook.h"
 #include "QuestBookMessages.h"
+#include "GoalLogic.h"
 #include "CoreObjectSerializer.h"
 #include "DuelMgr.h"
 #include "Frame.h"
@@ -1528,6 +1529,15 @@ void GameSession::PostQuestEvents()
             if (ResultList const* const results = quests ? quests->FindResults(done.Quest, done.Goal) : nullptr; results && !results->empty())
                 sources.push_back(ResultSource{ done.Goal.empty() ? done.Quest : fmt::format("{}/{}", done.Quest, done.Goal), *results });
         RunResults(sources, now);
+        for (QuestCompletion const& done : completed)
+        {
+            QuestInfo const* const quest = quests && !done.Goal.empty() ? quests->Find(done.Quest) : nullptr;
+            if (!quest)
+                continue;
+            GoalLogicOutcome const outcome = GoalLogic::Advance(*_questLog, *quest, done.Goal, ObjectGuid::QuestGuids(), [this](QuestGoal const& goal) { return CanStartGoal(goal); });
+            LOG_INFO("server.gamesession", "Session {}'s wizard {} completed goal {} of {}, which {}", GetSessionId(), _worldGuid, Ambrose::ForLog(done.Goal, 128), Ambrose::ForLog(done.Quest, 128),
+                outcome.CompleteQuest ? std::string("completes the quest") : fmt::format("starts {} goal(s)", outcome.GoalsToStart.size()));
+        }
     }
     for (std::string const& event : _questLog->TakeEvents())
     {
@@ -1610,35 +1620,8 @@ void GameSession::SendQuestBook()
     if (!_questLog || !quests)
         return;
     _questLog->TakeChanges();
-    TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
-    std::size_t goals = 0;
-    for (QuestLogQuest const& held : _questLog->GetQuests())
-    {
-        QuestInfo const* const quest = quests->Find(held.Name);
-        std::string problem;
-        std::optional<GameMessages::SendQuest> const message = quest ? QuestBookMessages::Quest(catalog, *quest, held, false, problem) : std::nullopt;
-        if (!message)
-        {
-            LOG_WARN("server.gamesession", "Session {} cannot show wizard {} its quest {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(held.Name, 128),
-                quest ? problem : std::string("it has no template"));
-            continue;
-        }
-        SendDmlMessage(*message);
-        for (QuestLogGoal const& goal : held.Goals)
-        {
-            if (goal.Complete)
-                continue;
-            if (std::optional<GameMessages::SendGoal> const sent = QuestBookMessages::Goal(catalog, *quest, held, goal, QuestBook::SendResume, problem))
-            {
-                SendDmlMessage(*sent);
-                ++goals;
-            }
-            else
-                LOG_WARN("server.gamesession", "Session {} cannot show wizard {} goal {} of {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(goal.Name, 128), Ambrose::ForLog(held.Name, 128), problem);
-        }
-    }
+    SendQuestBookUpdate(QuestBookMessages::Resume(sTypeRegistry.GetCatalog(), *quests, *_questLog));
     _questBookShown = true;
-    LOG_DEBUG("server.gamesession", "Session {} sent wizard {} its {} quest(s) with {} active goal(s)", GetSessionId(), _worldGuid, _questLog->GetQuests().size(), goals);
 }
 
 void GameSession::SyncQuestBook()
@@ -1647,49 +1630,29 @@ void GameSession::SyncQuestBook()
         return;
     std::vector<QuestLogChange> const changes = _questLog->TakeChanges();
     std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
-    if (!_questBookShown || !quests)
-        return;
-    TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
-    for (QuestLogChange const& change : changes)
-    {
-        if (change.Kind == QuestLogChangeKind::QuestRemoved)
-        {
-            GameMessages::RemoveQuest removed;
-            removed.QuestId = change.QuestGid;
-            SendDmlMessage(removed);
-            LOG_INFO("server.gamesession", "Session {} took quest {} out of wizard {}'s quest book", GetSessionId(), Ambrose::ForLog(change.Quest, 128), _worldGuid);
-            continue;
-        }
-        QuestLogQuest const* const held = _questLog->Find(change.Quest);
-        QuestInfo const* const quest = quests->Find(change.Quest);
-        if (!held || !quest || held->Gid != change.QuestGid)
-            continue;
-        std::string problem;
-        if (change.Kind == QuestLogChangeKind::QuestAdded)
-        {
-            if (std::optional<GameMessages::SendQuest> const message = QuestBookMessages::Quest(catalog, *quest, *held, true, problem))
-                SendDmlMessage(*message);
-            else
-                LOG_WARN("server.gamesession", "Session {} cannot show wizard {} its new quest {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(change.Quest, 128), problem);
-            continue;
-        }
-        QuestLogGoal const* const goal = held->FindGoal(change.Goal);
-        if (!goal)
-            continue;
-        int32 const sendType = change.Kind == QuestLogChangeKind::GoalStarted ? QuestBook::SendStart : QuestBook::SendProgress;
-        if (std::optional<GameMessages::SendGoal> const message = QuestBookMessages::Goal(catalog, *quest, *held, *goal, sendType, problem))
-            SendDmlMessage(*message);
-        else
-            LOG_WARN("server.gamesession", "Session {} cannot show wizard {} goal {} of {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(change.Goal, 128), Ambrose::ForLog(change.Quest, 128), problem);
-    }
+    if (_questBookShown && quests && !changes.empty())
+        SendQuestBookUpdate(QuestBookMessages::Changes(sTypeRegistry.GetCatalog(), *quests, *_questLog, changes));
+}
+
+void GameSession::SendQuestBookUpdate(QuestBookUpdate const& update)
+{
+    for (std::string const& problem : update.Problems)
+        LOG_WARN("server.gamesession", "Session {} cannot show wizard {} its {}", GetSessionId(), _worldGuid, problem);
+    for (QuestBookMessage const& message : update.Messages)
+        std::visit([this](auto const& sent) { SendDmlMessage(sent); }, message);
+    LOG_DEBUG("server.gamesession", "Session {} sent wizard {} {} quest book message(s)", GetSessionId(), _worldGuid, update.Messages.size());
+}
+
+bool GameSession::CanStartGoal(QuestGoal const& goal) const
+{
+    return !goal.Requirements || !_questLog || sRequirementMgr.EvaluateTree(*goal.Requirements, RequirementFacts(*_questLog));
 }
 
 bool GameSession::StartQuest(QuestInfo const& quest)
 {
-    if (!_questLog || !_questLog->Add(quest.Row.Name, ObjectGuid::QuestGuids(), static_cast<uint64>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count())))
+    uint64 const now = static_cast<uint64>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+    if (!_questLog || !GoalLogic::Start(*_questLog, quest, ObjectGuid::QuestGuids(), now, [this](QuestGoal const& goal) { return CanStartGoal(goal); }))
         return false;
-    for (std::string const& goal : quest.StartGoals)
-        _questLog->StartGoal(quest.Row.Name, goal, ObjectGuid::QuestGuids());
     PostQuestEvents();
     SaveQuestLogIfDirty();
     return true;

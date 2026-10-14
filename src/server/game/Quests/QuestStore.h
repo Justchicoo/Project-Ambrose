@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One generation of the authored quests, keyed by quest name, each with the requirement tree decoded from its stored RequirementList, the results it and each of its goals run on completing, its start goals, its goals and their adjectives, client tags and completion logic, and the dialogs of the quest and of each goal in line order, together with the indexes the world asks: which quests a template offers through the first line of the quest's Prep dialog, which persona goals name an object, which usage goals carry a client tag or adjective, which bounty goals an adjective counts toward and which waypoint goals lead to a zone.
+ * One generation of the authored quests, keyed by quest name, each with the requirement tree decoded from its stored RequirementList and each goal's the same way, the results it and each of its goals run on completing, its start goals, its goals and their adjectives, client tags and completion logic with the count of OR goals each entry needs, and the dialogs of the quest and of each goal in line order, together with the indexes the world asks: which quests a template offers through the first line of the quest's Prep dialog, which persona goals name an object, which usage goals carry a client tag or adjective, which bounty goals an adjective counts toward and which waypoint goals lead to a zone.
  */
 
 #ifndef AMBROSE_QUESTSTORE_H
@@ -63,6 +63,7 @@ struct QuestGoalLogic
 {
     uint32 Position = 0;
     bool CompleteQuest = false;
+    uint32 RequiredOrCount = 1;
     std::vector<std::string> RequiresAll;
     std::vector<std::string> RequiresAny;
     std::vector<std::string> GoalsToAdd;
@@ -77,6 +78,7 @@ struct QuestGoal
     std::vector<QuestGoalLogic> Logic;
     std::map<std::string, QuestDialog, std::less<>> Dialogs;
     ResultList Results;
+    std::shared_ptr<RequirementTree const> Requirements;
 };
 
 struct QuestInfo

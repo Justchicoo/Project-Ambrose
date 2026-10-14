@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds MSG_SENDQUEST and MSG_SENDGOAL from a quest's template and the wizard's own quest and goal, with their GIDs, keys, counts and encoded blobs.
+ * Builds MSG_SENDQUEST and MSG_SENDGOAL from a quest's template and the wizard's own quest and goal, with their GIDs, keys, counts and encoded blobs, and turns a quest log, or the changes it handed out, into the quest book messages that show them.
  */
 
 #include "QuestBookMessages.h"
@@ -8,6 +8,8 @@
 #include "QuestRewards.h"
 
 #include <fmt/format.h>
+
+#include <utility>
 
 std::optional<GameMessages::SendQuest> QuestBookMessages::Quest(TypeCatalogPtr const& catalog, QuestInfo const& quest, QuestLogQuest const& held, bool isNew, std::string& error)
 {
@@ -79,4 +81,81 @@ std::optional<GameMessages::SendGoal> QuestBookMessages::Goal(TypeCatalogPtr con
     message.NoQuestHelper = quest.Row.NoQuestHelper ? 1 : 0;
     message.PetOnlyQuest = quest.Row.PetOnly ? 1 : 0;
     return message;
+}
+
+QuestBookUpdate QuestBookMessages::Resume(TypeCatalogPtr const& catalog, QuestStore const& quests, QuestLog const& log)
+{
+    QuestBookUpdate update;
+    for (QuestLogQuest const& held : log.GetQuests())
+    {
+        QuestInfo const* const quest = quests.Find(held.Name);
+        std::string problem;
+        std::optional<GameMessages::SendQuest> message = quest ? Quest(catalog, *quest, held, false, problem) : std::nullopt;
+        if (!message)
+        {
+            update.Problems.push_back(fmt::format("quest {}: {}", held.Name, quest ? problem : std::string("it has no template")));
+            continue;
+        }
+        update.Messages.emplace_back(std::move(*message));
+        for (QuestLogGoal const& goal : held.Goals)
+        {
+            if (goal.Complete)
+                continue;
+            if (std::optional<GameMessages::SendGoal> sent = Goal(catalog, *quest, held, goal, QuestBook::SendResume, problem))
+                update.Messages.emplace_back(std::move(*sent));
+            else
+                update.Problems.push_back(fmt::format("goal {} of {}: {}", goal.Name, held.Name, problem));
+        }
+    }
+    return update;
+}
+
+QuestBookUpdate QuestBookMessages::Changes(TypeCatalogPtr const& catalog, QuestStore const& quests, QuestLog const& log, std::vector<QuestLogChange> const& changes)
+{
+    QuestBookUpdate update;
+    for (QuestLogChange const& change : changes)
+    {
+        QuestInfo const* const quest = quests.Find(change.Quest);
+        switch (change.Kind)
+        {
+            case QuestLogChangeKind::QuestRemoved:
+                update.Messages.emplace_back(GameMessages::RemoveQuest{ change.QuestGid, 0 });
+                continue;
+            case QuestLogChangeKind::QuestCompleted:
+                update.Messages.emplace_back(GameMessages::CompleteQuest{ change.QuestGid, quest ? quest->Row.CompleteKey : std::string() });
+                continue;
+            case QuestLogChangeKind::GoalCompleted:
+            {
+                std::string text;
+                if (quest)
+                    if (auto const goal = quest->Goals.find(change.Goal); goal != quest->Goals.end())
+                        text = goal->second.Row.CompleteKey;
+                update.Messages.emplace_back(GameMessages::CompleteGoal{ change.QuestGid, change.GoalGid, std::move(text) });
+                continue;
+            }
+            default:
+                break;
+        }
+        QuestLogQuest const* const held = log.Find(change.Quest);
+        if (!held || !quest || held->Gid != change.QuestGid)
+            continue;
+        std::string problem;
+        if (change.Kind == QuestLogChangeKind::QuestAdded)
+        {
+            if (std::optional<GameMessages::SendQuest> message = Quest(catalog, *quest, *held, true, problem))
+                update.Messages.emplace_back(std::move(*message));
+            else
+                update.Problems.push_back(fmt::format("new quest {}: {}", change.Quest, problem));
+            continue;
+        }
+        QuestLogGoal const* const goal = held->FindGoal(change.Goal);
+        if (!goal || (goal->Complete && change.Kind != QuestLogChangeKind::GoalStarted))
+            continue;
+        int32 const sendType = change.Kind == QuestLogChangeKind::GoalStarted ? QuestBook::SendStart : QuestBook::SendProgress;
+        if (std::optional<GameMessages::SendGoal> message = Goal(catalog, *quest, *held, *goal, sendType, problem))
+            update.Messages.emplace_back(std::move(*message));
+        else
+            update.Problems.push_back(fmt::format("goal {} of {}: {}", change.Goal, change.Quest, problem));
+    }
+    return update;
 }

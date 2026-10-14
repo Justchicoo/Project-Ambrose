@@ -33,6 +33,7 @@
 #include "QuestOfferCache.h"
 #include "QuestWireEncoder.h"
 #include "QuestLog.h"
+#include "QuestBookMessages.h"
 #include "WizardRequirementContext.h"
 #include "SessionBase.h"
 #include "SightRequirements.h"
@@ -369,6 +370,8 @@ private:
     void SendDynaMods();
     void SendQuestBook();
     void SyncQuestBook();
+    void SendQuestBookUpdate(QuestBookUpdate const& update);
+    bool CanStartGoal(QuestGoal const& goal) const;
     bool StartQuest(QuestInfo const& quest);
     void ShowDynaModState(uint64 id, std::string_view tag);
     void ShowGameEffectsOf(GameSession const& other);

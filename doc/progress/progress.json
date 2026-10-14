@@ -6,9 +6,9 @@
     "percent": 34.0
   },
   "checks": {
-    "done": 1268,
+    "done": 1272,
     "total": 2920,
-    "percent": 43.4
+    "percent": 43.6
   },
   "game": {
     "label": "Game server",
@@ -36,9 +36,9 @@
       "percent": 47.4
     },
     "checks": {
-      "done": 1066,
+      "done": 1070,
       "total": 1807,
-      "percent": 59.0
+      "percent": 59.2
     }
   },
   "panel": {
@@ -115,7 +115,7 @@
       "title": "An npc offers a quest",
       "milestones_done": 6,
       "milestones_total": 13,
-      "checks_done": 53,
+      "checks_done": 57,
       "checks_total": 88
     },
     {
@@ -199,5 +199,5 @@
       "checks_total": 1113
     }
   ],
-  "card": "eddb7411e6"
+  "card": "5eff50a630"
 }

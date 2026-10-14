@@ -112,6 +112,13 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
         QuestGoal next;
         next.Row = row;
         next.Type = *type;
+        if (!row.Requirements.empty())
+        {
+            std::string problem;
+            next.Requirements = std::make_shared<RequirementTree const>(RequirementObjects::Decode(catalog, row.Requirements, problem));
+            if (!problem.empty())
+                store->_problems.push_back(fmt::format("goal {} of quest {} is started for no wizard, since {}", row.Goal, row.Quest, problem));
+        }
         info->Goals.try_emplace(row.Goal, std::move(next));
     }
     for (QuestStartGoalRow const& row : rows.StartGoals)
@@ -134,7 +141,7 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
 
     for (QuestGoalLogicRow const& row : rows.Logic)
         if (QuestGoal* const found = goal(row.Quest, row.Goal))
-            found->Logic.push_back(QuestGoalLogic{ row.Position, row.CompleteQuest, {}, {}, {} });
+            found->Logic.push_back(QuestGoalLogic{ row.Position, row.CompleteQuest, std::max<uint32>(1, row.RequiredOrCount), {}, {}, {} });
     std::vector<QuestGoalLogicMemberRow const*> members;
     for (QuestGoalLogicMemberRow const& row : rows.LogicMembers)
         members.push_back(&row);
