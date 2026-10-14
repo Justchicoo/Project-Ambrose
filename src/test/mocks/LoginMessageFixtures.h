@@ -188,6 +188,9 @@ namespace LoginMessageFixtures
 <MSG_CORE_PIIRADIALMENUEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">23</_MsgOrder><EmoteAnimationName TYPE="STR"></EmoteAnimationName><ExcludeOriginator TYPE="UBYT"></ExcludeOriginator></RECORD></MSG_CORE_PIIRADIALMENUEMOTE>
 <MSG_PIIRADIALMENUPLAYEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">73</_MsgOrder><SourceName TYPE="STR"></SourceName><SourceID TYPE="GID"></SourceID><EmoteAnimationName TYPE="STR"></EmoteAnimationName><EmoteText TYPE="WSTR"></EmoteText></RECORD></MSG_PIIRADIALMENUPLAYEMOTE>
 <MSG_REQUESTPIIRADIALMENUPLAYEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">148</_MsgOrder><EmoteAnimationName TYPE="STR"></EmoteAnimationName><EmoteText TYPE="WSTR"></EmoteText></RECORD></MSG_REQUESTPIIRADIALMENUPLAYEMOTE>
+<MSG_AddZoneToken><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">11</_MsgOrder><GlobalID TYPE="GID"></GlobalID><Add TYPE="STR"></Add></RECORD></MSG_AddZoneToken>
+<MSG_ModifyZoneToken><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">70</_MsgOrder><GlobalID TYPE="GID"></GlobalID><TokenName TYPE="STR"></TokenName><Delta TYPE="INT"></Delta></RECORD></MSG_ModifyZoneToken>
+<MSG_RemoveZoneToken><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">168</_MsgOrder><GlobalID TYPE="GID"></GlobalID><TokenName TYPE="STR"></TokenName></RECORD></MSG_RemoveZoneToken>
 </FixtureWizard3Messages>
 )";
 

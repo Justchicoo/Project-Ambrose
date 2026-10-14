@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Gives a wizard's level, school and zone to the requirement engine, comparing names whatever their case; a wizard with no school known has no school of focus, and a class project is active when Events.ClassProjects names it.
+ * Gives a wizard's level, school and zone to the requirement engine, comparing names whatever their case; a wizard with no school known has no school of focus, a class project is active when Events.ClassProjects names it, and a zone token is held when it is among the tokens its session handed in.
  */
 
 #include "WizardRequirementContext.h"
@@ -31,4 +31,9 @@ std::optional<bool> WizardRequirementContext::IsClassProjectActive(std::string_v
         if (Ambrose::EqualsIgnoreCase(Ambrose::Trim(project), projectName))
             return true;
     return false;
+}
+
+std::optional<bool> WizardRequirementContext::HasZoneToken(std::string_view tokenName) const
+{
+    return _zoneTokens.contains(tokenName);
 }

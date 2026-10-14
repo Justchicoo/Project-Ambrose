@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, and quest gold and experience, which it gives at the live quest rates and shows in one MSG_LOOT, its quest book sent at each entry with every quest it holds and their active goals, and each quest it gains or loses and goal it starts, moves or completes shown as it happens, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, and quest gold and experience, which it gives at the live quest rates and shows in one MSG_LOOT, its quest book sent at each entry with every quest it holds and their active goals, and each quest it gains or loses and goal it starts, moves or completes shown as it happens, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns, and the zone tokens a trigger result changes are kept with the session or its zone instance by their storage and shown to the client as additions, moves and removals each tick and when the wizard leaves the zone.
  */
 
 #include "GameSession.h"
@@ -51,6 +51,8 @@
 #include "TypeRegistry.h"
 #include "ZoneMgr.h"
 #include "ZoneTeleportMgr.h"
+#include "ZoneTokenMessages.h"
+#include "ZoneTokenMgr.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -62,6 +64,7 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <set>
 #include <span>
 #include <utility>
 #include <vector>
@@ -215,6 +218,8 @@ void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
             SendPotionUpdate();
             SaveStatsIfDirty();
         }
+        if (_mapId)
+            SyncZoneTokens();
         if (!_afkTimerStarted)
         {
             _afkStarted = now;
@@ -1575,6 +1580,84 @@ void GameSession::RegisterResultHandlers()
         experience->Experience = grant.Amount;
         context.Session->_resultLoot.Loot.emplace_back(std::move(*experience));
     });
+    auto const token = [](PropertyObject const& result, ResultContext const& context) { context.Session->ChangeZoneToken(result, context); };
+    sResultMgr.Register(ZoneTokenMgr::EnableResultClass, token);
+    sResultMgr.Register(ZoneTokenMgr::DisableResultClass, token);
+    sResultMgr.Register(ZoneTokenMgr::ModifyResultClass, token);
+}
+
+void GameSession::ChangeZoneToken(PropertyObject const& result, ResultContext const& context)
+{
+    std::shared_ptr<ZoneTokenSet const> const tokens = sZoneTokenMgr.Find(context.Zone);
+    PropertyValue const* const named = result.Get("m_tokenName");
+    std::string const* const name = named ? named->GetIf<std::string>() : nullptr;
+    ZoneTokenDefinition const* const token = tokens && name ? tokens->Find(*name) : nullptr;
+    if (!token)
+    {
+        LOG_WARN("server.gamesession", "Session {}'s trigger {} in {} changes the zone token {}, which the zone does not hold", GetSessionId(), Ambrose::ForLog(context.Source, 128),
+            Ambrose::ForLog(context.Zone, 128), name ? Ambrose::ForLog(*name, 128) : std::string("(unnamed)"));
+        return;
+    }
+    std::string_view const change = result.GetClass().Name;
+    int32 delta = 0;
+    if (change == ZoneTokenMgr::ModifyResultClass)
+    {
+        PropertyValue const* const value = result.Get("m_delta");
+        int32 const* const held = value ? value->GetIf<int32>() : nullptr;
+        delta = held ? *held : 0;
+    }
+    ZoneTokenStates* const own = token->Storage == ZoneTokenStorage::Player ? &_zoneTokens[context.Zone] : nullptr;
+    bool changed = false;
+    if (change == ZoneTokenMgr::EnableResultClass)
+        changed = own ? own->Enable(*token) : sZoneTokenMgr.EnableInInstance(context.MapId, *token);
+    else if (change == ZoneTokenMgr::DisableResultClass)
+        changed = own ? own->Disable(*token) : sZoneTokenMgr.DisableInInstance(context.MapId, *token);
+    else
+        changed = own ? own->Modify(*token, delta) : sZoneTokenMgr.ModifyInInstance(context.MapId, *token, delta);
+    if (changed)
+    {
+        ZoneTokenState const state = ZoneTokenStateOf(*token);
+        LOG_INFO("server.gamesession", "Session {}'s trigger {} in {} {} the {} zone token {}{}", GetSessionId(), Ambrose::ForLog(context.Source, 128), Ambrose::ForLog(context.Zone, 128),
+            change == ZoneTokenMgr::EnableResultClass ? "enabled" : change == ZoneTokenMgr::DisableResultClass ? "disabled" : "moved", own ? "wizard's" : "instance's",
+            Ambrose::ForLog(token->Name, 128), token->Kind == ZoneTokenKind::Boolean ? fmt::format(", now {}", state.Set ? "set" : "clear") : fmt::format(", now {}", state.Value));
+    }
+    SyncZoneTokens();
+}
+
+ZoneTokenState GameSession::ZoneTokenStateOf(ZoneTokenDefinition const& token) const
+{
+    if (token.Storage == ZoneTokenStorage::Zone)
+        return sZoneTokenMgr.GetInstanceState(_mapId.value_or(0), token);
+    auto const own = _zoneTokens.find(_zonePath);
+    return own == _zoneTokens.end() ? ZoneTokenStates().Get(token) : own->second.Get(token);
+}
+
+void GameSession::SyncZoneTokens()
+{
+    std::shared_ptr<ZoneTokenSet const> const tokens = _mapId ? sZoneTokenMgr.Find(_zonePath) : nullptr;
+    std::vector<ZoneTokenChange> const changes = _zoneTokenView.Update(_mapId ? std::string_view(_zonePath) : std::string_view(), tokens.get(),
+        [this](ZoneTokenDefinition const& token) { return ZoneTokenStateOf(token); });
+    for (ZoneTokenChange const& change : changes)
+    {
+        if (change.Change == ZoneTokenChange::Kind::Add)
+        {
+            std::string problem;
+            if (std::optional<GameMessages::AddZoneToken> const message = ZoneTokenMessages::Add(_worldGuid, *change.Token, change.State, problem))
+                SendDmlMessage(*message);
+            else
+            {
+                LOG_WARN("server.gamesession", "Session {} cannot show wizard {} the zone token {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(change.Name, 128), problem);
+                continue;
+            }
+        }
+        else if (change.Change == ZoneTokenChange::Kind::Modify)
+            SendDmlMessage(ZoneTokenMessages::Modify(_worldGuid, change));
+        else
+            SendDmlMessage(ZoneTokenMessages::Remove(_worldGuid, change));
+        LOG_INFO("server.gamesession", "Session {} {} wizard {}'s zone token {}{}", GetSessionId(),
+            change.Change == ZoneTokenChange::Kind::Add ? "showed" : change.Change == ZoneTokenChange::Kind::Modify ? "moved" : "took away", _worldGuid, Ambrose::ForLog(change.Name, 128),
+            change.Change == ZoneTokenChange::Kind::Modify ? fmt::format(" by {}", change.Delta) : std::string());
+    }
 }
 
 void GameSession::ShowNotifyText(ZoneNotifyText const& text)
@@ -1902,13 +1985,25 @@ WizardRequirementContext GameSession::RequirementFacts(QuestLog const& log) cons
 {
     std::shared_ptr<PlayerLevelSet const> const levels = sPlayerLevelMgr.GetLevels();
     MagicSchool const* const school = levels ? levels->FindSchool(_player->GetStats().GetSchoolId()) : nullptr;
-    return WizardRequirementContext(log, school ? school->Name : std::string(), _player->GetStats().GetLevel(), _zonePath);
+    WizardRequirementContext facts(log, school ? school->Name : std::string(), _player->GetStats().GetLevel(), _zonePath);
+    if (std::shared_ptr<ZoneTokenSet const> const tokens = sZoneTokenMgr.Find(_zonePath))
+    {
+        std::set<std::string, std::less<>> held;
+        for (ZoneTokenDefinition const& token : tokens->Tokens)
+            if (ZoneTokenStateOf(token).Enabled)
+                held.insert(token.Name);
+        facts.SetZoneTokens(std::move(held));
+    }
+    return facts;
 }
 
 uint64 GameSession::GetSightProgress()
 {
-    std::tuple<uint64, int32, uint32, uint32, std::size_t> const facts{ _questLog ? _questLog->GetChangeCount() : 0, _player ? _player->GetStats().GetLevel() : 0,
-        _player ? _player->GetStats().GetSchoolId() : 0, _mapId.value_or(0), std::hash<std::string>{}(sSettings.Get<std::string>("Events.ClassProjects")) };
+    uint64 tokenChanges = _mapId ? sZoneTokenMgr.GetInstanceChangeCount(*_mapId) : 0;
+    if (auto const own = _zoneTokens.find(_zonePath); own != _zoneTokens.end())
+        tokenChanges += own->second.GetChangeCount();
+    std::tuple<uint64, int32, uint32, uint32, std::size_t, uint64> const facts{ _questLog ? _questLog->GetChangeCount() : 0, _player ? _player->GetStats().GetLevel() : 0,
+        _player ? _player->GetStats().GetSchoolId() : 0, _mapId.value_or(0), std::hash<std::string>{}(sSettings.Get<std::string>("Events.ClassProjects")), tokenChanges };
     if (facts != _sightFacts)
     {
         _sightFacts = facts;
@@ -2462,6 +2557,7 @@ void GameSession::LeaveWorld()
     if (Map* const map = sMapMgr.Find(*_mapId))
         sMapMgr.RemovePlayer(*map, _worldGuid);
     _mapId.reset();
+    SyncZoneTokens();
 }
 
 void GameSession::TransferWorldStateTo(GameSession& replacement)
@@ -2478,6 +2574,8 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
     replacement._questRevision = _questRevision;
     replacement._arrived = _arrived;
     replacement._effects = std::move(_effects);
+    replacement._zoneTokens = std::move(_zoneTokens);
+    replacement._zoneTokenView = std::move(_zoneTokenView);
     _effects.Clear();
     _effectChanges.clear();
     _superseded.store(true, std::memory_order_relaxed);

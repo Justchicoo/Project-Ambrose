@@ -104,6 +104,10 @@ namespace
         classProject.ClassProjectName = "DuelArena";
         rows.Requirements.push_back(classProject);
 
+        RequirementRow zoneToken = Requirement("ReqZoneToken", 12);
+        zoneToken.TokenName = "ZT_Clue01";
+        rows.Requirements.push_back(zoneToken);
+
         return rows;
     }
 
@@ -194,6 +198,12 @@ namespace
             return ClassProject;
         }
 
+        std::optional<bool> HasZoneToken(std::string_view tokenName) const override
+        {
+            LastZoneToken = tokenName;
+            return ZoneToken;
+        }
+
         std::map<std::string, bool, std::less<>> Quests;
         std::optional<RequirementGoalStatus> GoalStatus = RequirementGoalStatus::Complete;
         std::optional<bool> RegistryEntry = true;
@@ -204,6 +214,7 @@ namespace
         std::optional<bool> Gender = true;
         std::optional<bool> Badge = true;
         std::optional<bool> ClassProject = true;
+        std::optional<bool> ZoneToken = true;
         mutable std::string LastQuest;
         mutable std::string LastGoal;
         mutable std::string LastEntry;
@@ -216,6 +227,7 @@ namespace
         mutable std::string LastGender;
         mutable std::string LastBadge;
         mutable std::string LastClassProject;
+        mutable std::string LastZoneToken;
         mutable std::uint8_t LastTargetType = 255;
         mutable bool LastIsQuestRegistry = false;
         mutable bool LastHasEntryIsQuestRegistry = false;
@@ -294,6 +306,7 @@ TEST_F(RequirementTest, EveryBuiltInTypeUsesItsMatchingWizardFact)
     EXPECT_EQ(context.LastGender, "Female");
     EXPECT_EQ(context.LastBadge, "Badge1");
     EXPECT_EQ(context.LastClassProject, "DuelArena");
+    EXPECT_EQ(context.LastZoneToken, "ZT_Clue01");
 }
 
 TEST_F(RequirementTest, EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold)
@@ -312,6 +325,7 @@ TEST_F(RequirementTest, EachBuiltInTypeFailsTheListWhenItsOwnFactDoesNotHold)
         { "ReqIsGender", [](FakeRequirementContext& context) { context.Gender = false; } },
         { "ReqHasBadge", [](FakeRequirementContext& context) { context.Badge = false; } },
         { "ReqClassProjectActive", [](FakeRequirementContext& context) { context.ClassProject = false; } },
+        { "ReqZoneToken", [](FakeRequirementContext& context) { context.ZoneToken = false; } },
         { "an unanswered fact", [](FakeRequirementContext& context) { context.Badge = std::nullopt; } }
     };
     for (auto const& [name, breakFact] : breaks)

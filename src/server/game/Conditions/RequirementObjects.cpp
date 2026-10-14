@@ -132,6 +132,7 @@ RequirementRow RequirementObjects::RowOf(PropertyObject const* requirement)
     row.ZoneName = TextOf(object, "m_zoneName");
     row.Gender = TextOf(object, "m_playerGender");
     row.ClassProjectName = TextOf(object, "m_classProjectName");
+    row.TokenName = TextOf(object, "m_tokenName");
     return row;
 }
 

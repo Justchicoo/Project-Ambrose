@@ -90,6 +90,16 @@ namespace
             row.SpawnRequirements = std::move(encoded.Bytes);
         }
         row.LoadingType = info.GetLoadingType();
+        if (PropertyValue const* const container = info.Target().Get("m_pContainer"); container && container->AsObject())
+        {
+            EncodeResult encoded = ObjectSerializer::Encode(container->AsObject(), ZoneExtractor::DataOptions());
+            if (!encoded.Ok())
+            {
+                error = encoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(encoded.Status)) : std::move(encoded.Detail);
+                return std::nullopt;
+            }
+            row.TokenContainer = std::move(encoded.Bytes);
+        }
         return row;
     }
 
@@ -511,7 +521,7 @@ void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view arc
         std::optional<ExtractedObject> row = ObjectValues(*info, error);
         if (!row)
         {
-            extraction.AddError(fmt::format("{}: the spawn requirements of object list entry {} do not encode: {}", path, index, error));
+            extraction.AddError(fmt::format("{}: the spawn requirements or token container of object list entry {} do not encode: {}", path, index, error));
             continue;
         }
         if (sigil)

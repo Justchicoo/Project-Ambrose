@@ -152,6 +152,11 @@ std::optional<bool> RequirementContext::IsClassProjectActive(std::string_view) c
     return std::nullopt;
 }
 
+std::optional<bool> RequirementContext::HasZoneToken(std::string_view) const
+{
+    return std::nullopt;
+}
+
 void RequirementMgr::RegisterReloadTargets()
 {
     sReloadMgr.Register(std::string(Target), [this](std::vector<std::string>& errors) { return Load(errors); });
@@ -496,6 +501,8 @@ std::optional<bool> RequirementMgr::EvaluateRequirement(RequirementRow const& ro
         result = context.HasBadge(row.BadgeName);
     else if (row.Type == "ReqClassProjectActive")
         result = context.IsClassProjectActive(row.ClassProjectName);
+    else if (row.Type == "ReqZoneToken")
+        result = context.HasZoneToken(row.TokenName);
     else
     {
         result = sScriptMgr.EvaluateCondition(row, context);
