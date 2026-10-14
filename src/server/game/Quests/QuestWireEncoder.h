@@ -62,6 +62,12 @@ namespace QuestWireEncoder
         std::string PrepText;
     };
 
+    struct UnderwayEntry : ServiceOptionFields
+    {
+        std::string UnderwayText;
+        uint64 QuestId = 0;
+    };
+
     struct GoalEntry : ServiceOptionFields
     {
         uint64 QuestId = 0;
@@ -94,7 +100,7 @@ namespace QuestWireEncoder
         std::optional<QuestMadlibs::Block> Madlibs;
     };
 
-    using ServiceOption = std::variant<PrepEntry, GoalEntryFull, InteractableOption>;
+    using ServiceOption = std::variant<PrepEntry, UnderwayEntry, GoalEntryFull, InteractableOption>;
 
     struct GoalCompilation
     {
@@ -153,6 +159,7 @@ namespace QuestWireEncoder
     ObjectBuildResult BuildLootInfoList(TypeCatalogPtr const& catalog, LootInfoList const& loot);
     ObjectBuildResult BuildActorDialog(TypeCatalogPtr const& catalog, Dialogs::ActorDialog const& dialog);
     ObjectBuildResult BuildPrepEntry(TypeCatalogPtr const& catalog, PrepEntry const& entry);
+    ObjectBuildResult BuildUnderwayEntry(TypeCatalogPtr const& catalog, UnderwayEntry const& entry);
     ObjectBuildResult BuildGoalEntryFull(TypeCatalogPtr const& catalog, GoalEntryFull const& entry);
     ObjectBuildResult BuildInteractableOption(TypeCatalogPtr const& catalog, InteractableOption const& option);
     ObjectBuildResult BuildServiceMementoBase(TypeCatalogPtr const& catalog, ServiceMementoBase const& memento);

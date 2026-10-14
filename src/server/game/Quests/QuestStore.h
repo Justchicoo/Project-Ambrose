@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One generation of the authored quests, keyed by quest name, each with the requirement tree decoded from its stored RequirementList and each goal's the same way, the results it and each of its goals run on completing, its start goals, its goals and their adjectives, client tags and completion logic with the count of OR goals each entry needs, and the dialogs of the quest and of each goal in line order, together with the indexes the world asks: which quests a template offers through the first line of the quest's Prep dialog, which persona goals name an object, by its object name or by the template carrying that name, never by its display name, which usage goals carry a client tag or adjective, which bounty goals an adjective counts toward and which waypoint goals lead to a zone.
+ * One generation of the authored quests, keyed by quest name, each with the requirement tree decoded from its stored RequirementList and each goal's and each dialog line's the same way, the results it and each of its goals run on completing, its start goals, its goals and their adjectives, client tags and completion logic with the count of OR goals each entry needs, and the dialogs of the quest and of each goal in line order, together with the indexes the world asks: which quests a template offers through the first line of the quest's Prep dialog, which persona goals name an object, by its object name or by the template carrying that name, never by its display name, which usage goals carry a client tag or adjective, which bounty goals an adjective counts toward and which waypoint goals lead to a zone.
  */
 
 #ifndef AMBROSE_QUESTSTORE_H
@@ -51,6 +51,7 @@ struct QuestDialogLine
 {
     QuestDialogEntryRow Row;
     std::vector<QuestMadlib> Madlibs;
+    std::shared_ptr<RequirementTree const> Requirements;
 };
 
 struct QuestDialog
@@ -102,6 +103,8 @@ public:
     static constexpr std::string_view KindAdd = "ADD";
     static constexpr std::string_view TagStart = "Start";
     static constexpr std::string_view TagPrep = "Prep";
+    static constexpr std::string_view TagUnderway = "Underway";
+    static constexpr std::string_view TagComplete = "Complete";
 
     QuestStore() = default;
     QuestStore(QuestStore const&) = delete;

@@ -97,6 +97,8 @@ namespace QuestWireEncoder
                 using Value = std::remove_cvref_t<decltype(entry)>;
                 if constexpr (std::is_same_v<Value, PrepEntry>)
                     return BuildPrepEntry(catalog, entry);
+                else if constexpr (std::is_same_v<Value, UnderwayEntry>)
+                    return BuildUnderwayEntry(catalog, entry);
                 else if constexpr (std::is_same_v<Value, GoalEntryFull>)
                     return BuildGoalEntryFull(catalog, entry);
                 else
@@ -359,6 +361,19 @@ namespace QuestWireEncoder
         std::string error;
         if (!SetServiceFields(*result.Object, entry, error) ||
             !SetValue(*result.Object, "m_prepText", entry.PrepText, error))
+            return Failure(std::move(error));
+        return result;
+    }
+
+    ObjectBuildResult BuildUnderwayEntry(TypeCatalogPtr const& catalog, UnderwayEntry const& entry)
+    {
+        ObjectBuildResult result = Create(catalog, "class UnderwayEntry");
+        if (!result.Ok())
+            return result;
+        std::string error;
+        if (!SetServiceFields(*result.Object, entry, error) ||
+            !SetValue(*result.Object, "m_underwayText", entry.UnderwayText, error) ||
+            !SetValue(*result.Object, "m_questID", entry.QuestId, error))
             return Failure(std::move(error));
         return result;
     }

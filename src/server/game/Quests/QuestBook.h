@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The pieces the quest offer and the client's quest book build from a quest's rows: a goal type as the client numbers it, a goal's madlibs at a count, a built object encoded bare into a message blob, the worlds a quest's goals lead to, and a quest's or goal's dialog of one tag as the client's ActorDialog; with the send types and goal statuses MSG_SENDGOAL carries.
+ * The pieces the quest offer and the client's quest book build from a quest's rows: a goal type as the client numbers it, a goal's madlibs at a count, a built object encoded bare into a message blob, the worlds a quest's goals lead to, and a quest's or goal's dialog of one tag as the client's ActorDialog, without the lines whose requirements the wizard fails; with the send types and goal statuses MSG_SENDGOAL carries.
  */
 
 #ifndef AMBROSE_QUESTBOOK_H
@@ -9,6 +9,7 @@
 #include "ActorDialog.h"
 #include "QuestStore.h"
 #include "QuestWireEncoder.h"
+#include "RequirementMgr.h"
 
 #include <map>
 #include <string>
@@ -27,7 +28,7 @@ namespace QuestBook
     QuestMadlibs::Block GoalMadlibs(QuestGoalRow const& row, int32 count);
     std::string Blob(QuestWireEncoder::ObjectBuildResult const& built, uint32 mask, std::string_view what, std::string& error);
     std::vector<std::string> AssociatedWorlds(QuestInfo const& quest);
-    Dialogs::ActorDialog Dialog(std::map<std::string, QuestDialog, std::less<>> const& dialogs, std::string_view tag);
+    Dialogs::ActorDialog Dialog(std::map<std::string, QuestDialog, std::less<>> const& dialogs, std::string_view tag, RequirementContext const& facts);
 }
 
 #endif

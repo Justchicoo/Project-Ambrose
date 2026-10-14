@@ -164,6 +164,10 @@ TEST_F(MessageDefinitionClientTest, OrdinalSpotChecks)
     EXPECT_EQ(Get(52, "MSG_COMPLETEQUEST").Order, 5);
     EXPECT_EQ(Get(52, "MSG_COMPLETEPERSONA").Order, 4);
     EXPECT_EQ(Get(12, "MSG_INTERACTCOMPLETEGOAL").Order, 71);
+    EXPECT_EQ(Get(12, "MSG_COMPLETEDIALOG").Order, 35);
+    EXPECT_EQ(Get(12, "MSG_INTERACTUNDERWAYQUEST").Order, 72);
+    EXPECT_EQ(Get(12, "MSG_REQUESTQUESTDIALOG").Order, 176);
+    EXPECT_EQ(Get(12, "MSG_QUESTDIALOG").Order, 144);
     EXPECT_EQ(_set->Find(5, 7)->Tag, "MSG_ATTACH");
     EXPECT_EQ(_set->Find(7, 27)->Tag, "MSG_USER_AUTHEN_V3");
 }
