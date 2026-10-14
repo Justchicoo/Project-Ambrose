@@ -105,6 +105,14 @@ TEST(DynaModMessagesTest, AReplacedModDropsTheOldByIndexAndAddsTheNewWhileOthers
     ASSERT_TRUE(decoded.Ok() && decoded.Object) << decoded.Detail;
     ExpectMod(*decoded.Object, *replaced.Added);
 
+    DynaModChange dropped;
+    dropped.Removed = replaced.Added;
+    std::optional<GameMessages::DynaModBehaviorUpdateMods> const drop = DynaModMessages::Change(catalog, Player, Hub, dropped, problem);
+    ASSERT_TRUE(drop) << problem;
+    EXPECT_EQ(drop->Remove, 1);
+    EXPECT_EQ(drop->Index, 3);
+    EXPECT_EQ(drop->Add, 0) << "a mod a quest result takes away is dropped by its index and nothing is added";
+
     DynaModChange removal;
     removal.Added = DynaMod{ std::string(Hub), "PetParkCollision", "", true, 4, 9 };
     EXPECT_FALSE(DynaModMessages::Change(catalog, Player, Hub, removal, problem));

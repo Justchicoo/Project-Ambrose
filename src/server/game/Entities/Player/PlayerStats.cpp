@@ -152,6 +152,83 @@ bool PlayerStats::SetShowItemLock(bool value) noexcept
     return true;
 }
 
+LevelProgress PlayerStats::GiveExperience(int32 amount, PlayerLevelSet const& levels) noexcept
+{
+    LevelProgress progress{ _level, _level, _experience, _experience, 0, 0 };
+    int64 remaining = std::max(amount, 0);
+    int64 const cap = levels.GetMaxLevel();
+    while (remaining > 0)
+    {
+        PlayerLevelInfo const* const row = levels.GetInfo(_schoolId, _level);
+        PlayerLevelInfo const* const next = levels.GetInfo(_schoolId, _level + 1);
+        bool const hasNext = _level < cap && row && row->Level == static_cast<uint32>(_level) && next && next->Level == static_cast<uint32>(_level + 1);
+        int64 const room = hasNext ? std::max<int64>(int64{ row->XpToLevel } - _experience, 0) : 0;
+        if (!hasNext || _stored.LevelLocked)
+        {
+            int64 const kept = std::min(room, remaining);
+            _experience = static_cast<int32>(_experience + kept);
+            int64 const overflow = std::min<int64>(remaining - kept, std::numeric_limits<int32>::max() - _stored.OverflowXp);
+            _stored.OverflowXp = static_cast<int32>(_stored.OverflowXp + overflow);
+            progress.OverflowGained = static_cast<int32>(progress.OverflowGained + overflow);
+            break;
+        }
+        int64 const step = std::min(room, remaining);
+        _experience = static_cast<int32>(_experience + step);
+        remaining -= step;
+        if (_experience < row->XpToLevel)
+            break;
+        ++_level;
+        EnterLevel(*next);
+        int64 const points = std::min<int64>(std::max(next->TrainingPoints, 0), std::numeric_limits<int32>::max() - _stored.TrainingPoints);
+        _stored.TrainingPoints = static_cast<int32>(_stored.TrainingPoints + points);
+        progress.TrainingPointsGained = static_cast<int32>(progress.TrainingPointsGained + points);
+    }
+    progress.NewLevel = _level;
+    progress.NewExperience = _experience;
+    return progress;
+}
+
+std::optional<LevelProgress> PlayerStats::SetLevel(int32 level, PlayerLevelSet const& levels) noexcept
+{
+    if (level < 1 || static_cast<int64>(level) > levels.GetMaxLevel())
+        return std::nullopt;
+    PlayerLevelInfo const* const row = levels.GetInfo(_schoolId, level);
+    if (!row || row->Level != static_cast<uint32>(level))
+        return std::nullopt;
+    LevelProgress progress{ _level, level, _experience, _experience, 0, 0 };
+    int64 points = _stored.TrainingPoints;
+    for (int32 step = std::min(_level, level) + 1; step <= std::max(_level, level); ++step)
+        if (PlayerLevelInfo const* const passed = levels.GetInfo(_schoolId, step); passed && passed->Level == static_cast<uint32>(step))
+            points += level > _level ? std::max(passed->TrainingPoints, 0) : -std::max(passed->TrainingPoints, 0);
+    int32 const clamped = static_cast<int32>(std::clamp<int64>(points, 0, std::numeric_limits<int32>::max()));
+    progress.TrainingPointsGained = clamped - _stored.TrainingPoints;
+    _stored.TrainingPoints = clamped;
+    PlayerLevelInfo const* const previous = level > 1 ? levels.GetInfo(_schoolId, level - 1) : nullptr;
+    _experience = previous && previous->Level == static_cast<uint32>(level - 1) ? std::max(previous->XpToLevel, 0) : 0;
+    _level = level;
+    EnterLevel(*row);
+    progress.NewExperience = _experience;
+    return progress;
+}
+
+bool PlayerStats::SetLevelLocked(bool locked) noexcept
+{
+    if (_stored.LevelLocked == locked)
+        return false;
+    _stored.LevelLocked = locked;
+    return true;
+}
+
+void PlayerStats::EnterLevel(PlayerLevelInfo const& row) noexcept
+{
+    _base = row;
+    _powerPip = static_cast<float>(row.PipChance);
+    _shadowPipRating = row.ShadowPipRating;
+    _hitpoints = std::max(GetMaxHitpoints(), 0);
+    _mana = std::max(GetMaxMana(), 0);
+    _stored.Gold = std::clamp(_stored.Gold, 0, std::max(row.Gold, 0));
+}
+
 CharacterStats PlayerStats::ToStored() const
 {
     CharacterStats stored = _stored;

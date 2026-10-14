@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook, backpack, quest log with its Dynamods, and live player stats stay with the world thread, a finished quest goal posts its event into the wizard's zone triggers, and the results of every trigger it fires run in order through the results runner, stat changes update the HUD and character persistence, and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it, as are the game effects its wizard carries, each added or taken away on the world thread and shown to the wizard and every wizard in its instance at the next tick, and to each that comes to see it after the object. Its friend, best-friend, friend-cap and ignore messages are answered through the social manager, and the display name of the zone its wizard stands in is kept for the presence its friends are shown. Its backpack holds as many items as Inventory.Slots, read as it enters and shown to its client, and the live Inventory.ExtraSlots allow, read at each add, so an add to a full one is refused with MSG_ITEMDROP and stores nothing, and an item it trashes is taken only from its own backpack. The items it wears are read as it enters and shown in its equipment behavior; an equip or unequip its client asks for moves an item between its backpack and a slot, is stored and shown to its client, and the change to what it publicly wears is queued for the world to show the wizards that see it, while the object newcomers are shown is encoded again so they see it too. A duel in its instance is shown to it once the circle and every participant are in its sight: its own wizard is sent to its circle with MSG_AGGRO, each participant is added with MSG_COMBATADD, a dueling wizard is sent the planning phase with itself as the player, which shows the plates over every participant, and each participant is put in the Sigil and Stationary states; when the duel ends it is shown the match result, the Ended phase and MSG_ENDDUEL, and every participant goes back to Idle. A wizard that leaves the world ends its duel. The objects its zone placed with spawn requirements are shown to it only while its quests, level, school and zone meet them, asked again whenever any of those changes, so its world follows its own progress rather than every other wizard's.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook, backpack, quest log with its Dynamods, and live player stats stay with the world thread, a finished quest goal posts its event into the wizard's zone triggers, and the results of every trigger it fires run in order through the results runner, stat changes update the HUD and character persistence, experience it is given passes through its source's rate and carries it up levels the zone is shown, with its level and experience saved under their own revision, and a client may lock its level, and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it, as are the game effects its wizard carries, each added or taken away on the world thread and shown to the wizard and every wizard in its instance at the next tick, and to each that comes to see it after the object. Its friend, best-friend, friend-cap and ignore messages are answered through the social manager, and the display name of the zone its wizard stands in is kept for the presence its friends are shown. Its backpack holds as many items as Inventory.Slots, read as it enters and shown to its client, and the live Inventory.ExtraSlots allow, read at each add, so an add to a full one is refused with MSG_ITEMDROP and stores nothing, and an item it trashes is taken only from its own backpack. The items it wears are read as it enters and shown in its equipment behavior; an equip or unequip its client asks for moves an item between its backpack and a slot, is stored and shown to its client, and the change to what it publicly wears is queued for the world to show the wizards that see it, while the object newcomers are shown is encoded again so they see it too. A duel in its instance is shown to it once the circle and every participant are in its sight: its own wizard is sent to its circle with MSG_AGGRO, each participant is added with MSG_COMBATADD, a dueling wizard is sent the planning phase with itself as the player, which shows the plates over every participant, and each participant is put in the Sigil and Stationary states; when the duel ends it is shown the match result, the Ended phase and MSG_ENDDUEL, and every participant goes back to Idle. A wizard that leaves the world ends its duel. The objects its zone placed with spawn requirements are shown to it only while its quests, level, school and zone meet them, asked again whenever any of those changes, so its world follows its own progress rather than every other wizard's.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -27,6 +27,7 @@
 #include "PlayerEquipment.h"
 #include "PlayerMovement.h"
 #include "Player.h"
+#include "PlayerLevel.h"
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
 #include "QuestOfferCache.h"
@@ -212,6 +213,10 @@ public:
     bool SetMana(int32 value);
     bool SetGold(int64 value);
     int64 ModifyGold(int64 amount);
+    XpGrant GiveExperience(int32 amount, XpSource source);
+    std::optional<LevelProgress> SetLevel(int32 level);
+    std::optional<GameMessages::LevelUp> TakeLevelUp() noexcept { return std::exchange(_pendingLevelUp, std::nullopt); }
+    void ShowLevelUpOf(GameMessages::LevelUp const& levelUp);
     bool SetPotionCapacity(uint32 capacity);
     bool SetPowerPip(float value);
     bool SetShadowPipRating(float value);
@@ -256,6 +261,7 @@ public:
     void HandlePatchingBlocked(GameMessages::PatchingBlocked& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
     void HandleUsePotion(GameMessages::UsePotion& message);
+    void HandleLockLevel(GameMessages::LockLevel& message);
     void SendBadges();
     void HandlePlayerWizBang(GameMessages::PlayerWizBang& message);
 
@@ -317,6 +323,9 @@ private:
         std::vector<CharacterItem> const& items, std::vector<CharacterEquippedItem> const& equipped, CharacterQuests const& quests);
     void SaveStats();
     void SaveStatsIfDirty();
+    void SaveProgress();
+    void SaveProgressIfDirty();
+    void ShowLevelChange(LevelProgress const& progress);
     void SaveQuestLog();
     void SaveSpell(CharacterSpell const& spell);
     void SaveNewItem(CharacterItem const& item);
@@ -351,6 +360,7 @@ private:
     void FollowReloadedVolumes();
     void WalkThroughDoor(std::vector<std::string> const& doors);
     void ApplyDynaMods(std::vector<ZoneDynaMod> const& mods);
+    void EraseDynaMods(std::string_view tag);
     static void RegisterResultHandlers();
     void ShowNotifyText(ZoneNotifyText const& text);
     void SendDynaMods();
@@ -404,6 +414,7 @@ private:
     uint64 _worldGuid = 0;
     uint32 _wizBangId = 0;
     std::optional<uint32> _pendingWizBang;
+    std::optional<GameMessages::LevelUp> _pendingLevelUp;
     std::optional<Player> _player;
     uint64 _statsRevision = 0;
     std::optional<PlayerSpellbook> _spellbook;

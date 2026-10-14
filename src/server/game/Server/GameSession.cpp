@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -1443,6 +1443,12 @@ void GameSession::RegisterResultHandlers()
             mod->Zone = context.Zone;
         context.Session->ApplyDynaMods({ *mod });
     });
+    sResultMgr.Register(ZoneTriggerMgr::RemoveDynaModClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::string error;
+        if (std::optional<std::string> const tag = ZoneTriggerMgr::RemoveDynaModTagOf(result, error))
+            context.Session->EraseDynaMods(*tag);
+    });
     sResultMgr.Register(LootMgr::ResultClass, [](PropertyObject const& result, ResultContext const& context)
     {
         PropertyValue const* const value = result.Get("m_lootTable");
@@ -1526,6 +1532,26 @@ void GameSession::ApplyDynaMods(std::vector<ZoneDynaMod> const& mods)
                         ShowDynaModState(object.GlobalId, object.Spawn.Tag);
     }
     SaveQuestLogIfDirty();
+}
+
+void GameSession::EraseDynaMods(std::string_view tag)
+{
+    if (!_questLog)
+        return;
+    std::vector<DynaMod> const erased = _questLog->EraseDynaMods(tag);
+    for (DynaMod const& mod : erased)
+    {
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} dropped the Dynamod {} in {}", GetSessionId(), _worldGuid, Ambrose::ForLog(mod.Tag, 128), Ambrose::ForLog(mod.Zone, 128));
+        if (!_dynaModsShown)
+            continue;
+        std::string problem;
+        DynaModChange change;
+        change.Removed = mod;
+        if (std::optional<GameMessages::DynaModBehaviorUpdateMods> const message = DynaModMessages::Change(sTypeRegistry.GetCatalog(), _worldGuid, _zonePath, change, problem))
+            SendDmlMessage(*message);
+    }
+    if (!erased.empty())
+        SaveQuestLogIfDirty();
 }
 
 void GameSession::SendDynaMods()
@@ -1930,6 +1956,93 @@ bool GameSession::SetShadowPipRating(float value)
     return true;
 }
 
+XpGrant GameSession::GiveExperience(int32 amount, XpSource source)
+{
+    XpGrant grant;
+    std::shared_ptr<PlayerLevelSet const> const levels = sPlayerLevelMgr.GetLevels();
+    if (!_player || !levels)
+        return grant;
+    grant.Amount = PlayerLevel::ScaleExperience(amount, source);
+    if (grant.Amount <= 0)
+        return grant;
+    int32 const oldOverflow = _player->GetStats().GetOverflowXp();
+    grant.Progress = _player->GiveExperience(grant.Amount, *levels);
+    LevelProgress const& progress = grant.Progress;
+    if (progress.NewExperience != progress.OldExperience)
+    {
+        GameMessages::UpdateXp message;
+        message.GlobalId = _worldGuid;
+        message.Xp = progress.NewExperience - progress.OldExperience;
+        message.OldXp = progress.OldExperience;
+        SendDmlMessage(message);
+    }
+    if (_player->GetStats().GetOverflowXp() != oldOverflow)
+    {
+        GameMessages::UpdateOverflowXp message;
+        message.OverflowXp = static_cast<uint32>(std::max(_player->GetStats().GetOverflowXp(), 0));
+        SendDmlMessage(message);
+    }
+    sScriptMgr.OnGiveXp(*_player, grant.Amount, source);
+    if (progress.LeveledUp())
+        ShowLevelChange(progress);
+    LOG_DEBUG("server.gamesession", "Session {}'s wizard {} gained {} experience from a {} ({} asked), standing at level {} with {} experience and {} overflow", GetSessionId(), _worldGuid,
+        grant.Amount, PlayerLevel::Name(source), amount, progress.NewLevel, progress.NewExperience, _player->GetStats().GetOverflowXp());
+    SaveStatsIfDirty();
+    SaveProgressIfDirty();
+    return grant;
+}
+
+std::optional<LevelProgress> GameSession::SetLevel(int32 level)
+{
+    std::shared_ptr<PlayerLevelSet const> const levels = sPlayerLevelMgr.GetLevels();
+    if (!_player || !levels)
+        return std::nullopt;
+    std::optional<LevelProgress> const progress = _player->SetLevel(level, *levels);
+    if (!progress)
+        return std::nullopt;
+    ShowLevelChange(*progress);
+    SaveStatsIfDirty();
+    SaveProgressIfDirty();
+    return progress;
+}
+
+void GameSession::ShowLevelChange(LevelProgress const& progress)
+{
+    PlayerStats const& stats = _player->GetStats();
+    GameMessages::LevelUp levelUp;
+    levelUp.GlobalId = _worldGuid;
+    levelUp.Data = "0000000000";
+    levelUp.NewLevel = progress.NewLevel;
+    levelUp.Xp = progress.NewExperience;
+    levelUp.TrainingPoints = stats.GetTrainingPoints();
+    _pendingLevelUp = std::move(levelUp);
+    GameMessages::UpdateTraining training;
+    training.TrainingPoints = stats.GetTrainingPoints();
+    SendDmlMessage(training);
+    SendHealthUpdate(1);
+    SendManaUpdate(1);
+    SendGoldUpdate();
+    GameMessages::UpdatePowerPip powerPip;
+    powerPip.PowerPip = stats.GetPowerPip();
+    SendDmlMessage(powerPip);
+    sScriptMgr.OnLevelChanged(*_player, progress.OldLevel, progress.NewLevel);
+}
+
+void GameSession::ShowLevelUpOf(GameMessages::LevelUp const& levelUp)
+{
+    SendDmlMessage(levelUp);
+}
+
+void GameSession::HandleLockLevel(GameMessages::LockLevel& message)
+{
+    if (!_player)
+        return;
+    bool const locked = message.Unlock == 0;
+    if (_player->SetLevelLocked(locked))
+        SaveStatsIfDirty();
+    LOG_DEBUG("server.gamesession", "Session {}'s wizard {} {} its level at {}", GetSessionId(), _worldGuid, locked ? "locked" : "unlocked", _player->GetStats().GetLevel());
+}
+
 void GameSession::SendElixirStateChange(uint64 parentId, uint8 effectEnabled)
 {
     if (!_player)
@@ -2042,6 +2155,24 @@ void GameSession::SaveStatsIfDirty()
         SaveStats();
 }
 
+void GameSession::SaveProgress()
+{
+    if (!_player || !CharacterDatabase.IsOpen())
+        return;
+    PlayerStats const& stats = _player->GetStats();
+    if (CharacterRepository::Statement statement = CharacterRepository::PrepareSaveProgress(_worldGuid, stats.GetLevel(), stats.GetExperience(), ++_statsRevision))
+    {
+        CharacterDatabase.Execute(std::move(statement));
+        _player->ClearDirtyProgress();
+    }
+}
+
+void GameSession::SaveProgressIfDirty()
+{
+    if (_player && _player->HasDirtyProgress())
+        SaveProgress();
+}
+
 void GameSession::SaveQuestLog()
 {
     if (!_questLog || !CharacterDatabase.IsOpen())
@@ -2130,6 +2261,7 @@ void GameSession::LeaveWorld()
     _zoneDisplay.clear();
     _wizBangId = 0;
     _pendingWizBang.reset();
+    _pendingLevelUp.reset();
     _sight.Clear();
     _sightRequirements.Clear();
     _shownDuels.clear();

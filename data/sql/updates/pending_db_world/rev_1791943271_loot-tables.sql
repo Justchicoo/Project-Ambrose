@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS `creature_loot` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `server_class` (`hash`, `name`, `source`, `evidence`) VALUES
-    (475964190, 'class ResLoot', 'authored', 'A result only the server defines, for the loot a quest or goal gives from the world database''s loot tables, which the client never reads. m_lootTable names the loot_table to roll, with the hash and type m_lootTable has in the classes the install places.')
+    (475964190, 'class ResLoot', 'authored', 'A result only the server defines, for the loot a quest or goal gives from the world database''s loot tables, which the client never reads, named and laid out as the quest files of a CSR package write it. m_lootTable names the loot_table to roll, with the hash and type m_lootTable has in the classes the install places.')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `source` = VALUES(`source`), `evidence` = VALUES(`evidence`);
 
 INSERT INTO `server_class_base` (`class_hash`, `position`, `base_name`) VALUES

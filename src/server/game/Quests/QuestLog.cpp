@@ -236,6 +236,14 @@ DynaModChange QuestLog::ApplyDynaMod(std::string_view zone, std::string_view tag
     return change;
 }
 
+std::vector<DynaMod> QuestLog::EraseDynaMods(std::string_view tag)
+{
+    std::vector<DynaMod> erased = _dynaMods.Erase(tag);
+    if (!erased.empty())
+        MarkChanged();
+    return erased;
+}
+
 std::vector<std::string> QuestLog::TakeEvents()
 {
     return std::exchange(_events, {});

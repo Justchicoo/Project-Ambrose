@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Changes a wizard's backpack on the world thread: an item is added only while the backpack has room for it under the capacity read at that moment, and an add to a full one sends MSG_ITEMDROP naming the template and stores nothing; an added item is stored with its instance and backpack row together and shown with GAME MSG_INVENTORYBEHAVIOR_ADDITEM; an item taken away or trashed is deleted only from the wizard that owns it and shown gone with MSG_INVENTORYBEHAVIOR_REMOVEITEM; MSG_TRASHINVENTORYITEM for an item the wizard does not hold, of another template, or locked is refused and logged; MSG_REQUESTTOGGLELOCKITEM locks or unlocks an item the wizard holds, stores it, and answers with the item's pattern word carrying the lock in its top bit; a loot table is rolled for the wizard by its own facts and its gold, items and spells given, its gold scaled by Rate.Gold.Quest, while XP, reagents and treasure cards are logged as not given yet; and MSG_LOOT shows the wizard the items it was given.
+ * Changes a wizard's backpack on the world thread: an item is added only while the backpack has room for it under the capacity read at that moment, and an add to a full one sends MSG_ITEMDROP naming the template and stores nothing; an added item is stored with its instance and backpack row together and shown with GAME MSG_INVENTORYBEHAVIOR_ADDITEM; an item taken away or trashed is deleted only from the wizard that owns it and shown gone with MSG_INVENTORYBEHAVIOR_REMOVEITEM; MSG_TRASHINVENTORYITEM for an item the wizard does not hold, of another template, or locked is refused and logged; MSG_REQUESTTOGGLELOCKITEM locks or unlocks an item the wizard holds, stores it, and answers with the item's pattern word carrying the lock in its top bit; a loot table is rolled for the wizard by its own facts and its gold, experience, items and spells given, its gold scaled by Rate.Gold.Quest and its experience as a quest's, while reagents and treasure cards are logged as not given yet; and MSG_LOOT shows the wizard the items it was given.
  */
 
 #include "CharacterRepository.h"
@@ -16,7 +16,9 @@
 #include <fmt/format.h>
 
 #include <chrono>
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 
 namespace
@@ -205,6 +207,9 @@ void GameSession::GiveLoot(std::string_view tableId, std::string_view source)
                     LOG_WARN(InventoryLog, "{} gave wizard {} {} of {} {} from loot table {}, since its backpack is full", source, _worldGuid, given, drop.Count, item->ObjectName, tableId);
                 break;
             }
+            case LootType::Xp:
+                GiveExperience(static_cast<int32>(std::min<uint32>(drop.Count, std::numeric_limits<int32>::max())), XpSource::Quest);
+                break;
             case LootType::Spell:
                 LearnSpell(drop.TemplateId);
                 break;
