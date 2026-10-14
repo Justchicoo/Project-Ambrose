@@ -446,6 +446,17 @@ class WorldEntryTests(TemporaryFolder):
                     scenario.load("settle.json", search=search)
                 self.assertIn("settle for 0 to 30 seconds", str(raised.exception))
 
+    def test_a_seeded_wizard_may_have_completed_quests_named_in_a_list(self):
+        steps = [{"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1}]
+        search = (os.path.join(self.folder, "scenarios"),)
+        self.scenario_file("done.json", {"title": "done", "requires": {"gameserver": True}, "wizard": dict(self.WIZARD, completed_quests=["WC-COMMONS-MAIN-001"]), "steps": steps})
+        self.assertEqual(scenario.load("done.json", search=search).wizard["completed_quests"], ["WC-COMMONS-MAIN-001"])
+        for bad in ("WC-COMMONS-MAIN-001", [1], [""]):
+            self.scenario_file("bad.json", {"title": "bad", "requires": {"gameserver": True}, "wizard": dict(self.WIZARD, completed_quests=bad), "steps": steps})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("bad.json", search=search)
+            self.assertIn("completed_quests must be a list of quest names", str(raised.exception))
+
     def test_a_kept_name_and_a_restart_wait_are_checked_before_anything_starts(self):
         search = (os.path.join(self.folder, "scenarios"),)
         wait = {"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1}
