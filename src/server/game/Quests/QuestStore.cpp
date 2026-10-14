@@ -67,7 +67,7 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
     {
         if (row.Name.empty() || skipped.contains(row.Name))
             continue;
-        auto const [added, inserted] = store->_quests.try_emplace(row.Name, QuestInfo{ row, {}, {}, {}, 0, nullptr, {} });
+        auto const [added, inserted] = store->_quests.try_emplace(row.Name, QuestInfo{ row, {}, {}, {}, 0, nullptr, {}, {} });
         if (!inserted || row.Requirements.empty())
             continue;
         std::string problem;
