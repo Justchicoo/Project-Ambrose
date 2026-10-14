@@ -1,9 +1,13 @@
 {
-  "title": "Two wizards in the Commons see each other appear, move, jump, lose a client process and resume",
+  "title": "Two wizards in the Commons see each other appear, level up, move, jump, lose a client process and resume",
   "include": "parts/common.json",
   "notes": [
     "Two clients enter WizardCity/WC_Hub on accounts and wizards of their own. The main wizard enters first and backs",
     "away from the zone's Start, so the companion appears in front of it; the game server shows each to the other.",
+    "The main wizard starts at level 1 with low health and mana, then .character xp 1000 crosses a level threshold;",
+    "the main client's character sheet shows the new level and refilled vitals while the companion is filmed through",
+    "the instant the command is submitted, so its frames can show the level-up effect on the other wizard. The driver",
+    "does not capture audio, so an operator must listen for the level-up sound during the run.",
     "The companion turns around to face the main wizard, which a right turn held 1.27 s does at the 2.47 rad/s the saved",
     "facings of an earlier run measured, then runs a full circle with W and D held together for 2.5 s, stops and jumps while the main",
     "client is filmed every quarter second, which shows the moves and movement states the main client is sent.",
@@ -37,6 +41,12 @@
     "first": 1,
     "middle": 1,
     "last": 1,
+    "level": 1,
+    "experience": 0,
+    "stats": {
+      "health": 1,
+      "mana": 1
+    },
     "appearance": {
       "gender": 1,
       "race": 79806088,
@@ -74,6 +84,13 @@
     }
   },
   "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
     {
       "action": "wait_client_log",
       "name": "the client brings its renderer up",
@@ -269,6 +286,69 @@
       "name": "the main wizard sees the companion arrive",
       "file": "main-sees-companion",
       "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "open the main wizard's character sheet before the level-up",
+      "vk": "0x43"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard's level and vitals before XP",
+      "file": "level-before-xp",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "close the character sheet before typing the command",
+      "vk": "0x43"
+    },
+    {
+      "action": "key",
+      "name": "open chat to type .character xp 1000",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "remove the slash before .character xp 1000",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .character xp 1000",
+      "text": ".character xp 1000"
+    },
+    {
+      "action": "char",
+      "name": "send .character xp 1000 while filming the companion",
+      "code": 13,
+      "watch": "companion",
+      "watch_every": 0.15,
+      "watch_after": 4
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the main wizard crosses an XP threshold",
+      "pattern": "Session \\d+'s wizard {wizard_guid} gained 1000 experience from a command \\(1000 asked\\), standing at level ([2-9]\\d*) with",
+      "timeout": 10,
+      "record": true,
+      "keep": "level_after_xp"
+    },
+    {
+      "action": "key",
+      "name": "open the main wizard's character sheet after the level-up",
+      "vk": "0x43"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard's level and refilled vitals after XP",
+      "file": "level-after-xp",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "close the character sheet after the level-up",
+      "vk": "0x43"
     },
     {
       "action": "hold_key",
