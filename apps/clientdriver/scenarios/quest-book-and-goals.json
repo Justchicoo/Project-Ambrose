@@ -336,6 +336,14 @@
     },
     {
       "action": "wait_game_log",
+      "name": "the quest book comes back with the quest",
+      "pattern": "showed wizard {wizard_guid} its quest book of (\\d+) quest",
+      "timeout": 60,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
       "name": "the game server puts the wizard back where it stood",
       "pattern": "put wizard {wizard_guid} in \\S+ instance \\d+ at \\((\\S+, \\S+, \\S+)\\)",
       "timeout": 60,
@@ -356,14 +364,6 @@
       "name": "the wizard standing in the house again",
       "file": "standing-again",
       "settle": 3
-    },
-    {
-      "action": "wait_game_log",
-      "name": "the quest book comes back with the quest",
-      "pattern": "showed wizard {wizard_guid} its quest book of (\\d+) quest",
-      "timeout": 60,
-      "expect": "1",
-      "record": true
     },
     {
       "action": "key",
