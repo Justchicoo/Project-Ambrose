@@ -221,6 +221,9 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
         }
     }
     store->Index();
+    for (QuestObjectRow const& row : rows.Objects)
+        if (auto const named = store->_personaGoalsByObjectName.find(row.ObjectName); named != store->_personaGoalsByObjectName.end())
+            store->_personaGoalsByTemplateId[row.TemplateId] = named->second;
     return store;
 }
 
@@ -302,6 +305,12 @@ std::vector<QuestGoalRef> QuestStore::Lookup(GoalIndex const& index, std::string
 std::vector<QuestGoalRef> QuestStore::GetPersonaGoals(std::string_view objectName) const
 {
     return Lookup(_personaGoalsByObjectName, objectName);
+}
+
+std::vector<QuestGoalRef> QuestStore::GetPersonaGoals(uint32 templateId) const
+{
+    auto const found = _personaGoalsByTemplateId.find(templateId);
+    return found == _personaGoalsByTemplateId.end() ? std::vector<QuestGoalRef>{} : found->second;
 }
 
 std::vector<QuestGoalRef> QuestStore::GetUsageGoalsByTag(std::string_view tag) const

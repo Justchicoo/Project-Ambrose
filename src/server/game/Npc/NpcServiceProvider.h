@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * What an NPC offers a wizard standing near it: each provider names the options it has for that wizard and that NPC, an option with Prep text being a quest it offers, shown as the client's PrepEntry, and any other an interactable option, hears which of its own options the wizard picked, counted from 0 within the provider, and may set the NPC's name, text and icon keys, its interaction radius and how early its options come in the menu; ScriptNpcProvider makes an NpcScript one, and a script that throws is reported by name and offers nothing.
+ * What an NPC offers a wizard standing near it: each provider names the options it has for that wizard and that NPC, an option with Prep text being a quest it offers, shown as the client's PrepEntry, one with a goal a goal of the wizard's it completes, shown as a GoalEntryFull, and any other an interactable option, hears which of its own options the wizard picked, counted from 0 within the provider, and may set the NPC's name, text and icon keys, its interaction radius and how early its options come in the menu; ScriptNpcProvider makes an NpcScript one, and a script that throws is reported by name and offers nothing.
  */
 
 #ifndef AMBROSE_NPCSERVICEPROVIDER_H
 #define AMBROSE_NPCSERVICEPROVIDER_H
 
+#include "QuestWireEncoder.h"
 #include "Types.h"
 
 #include <optional>
@@ -21,6 +22,7 @@ struct NpcServiceOption
     std::string IconKey;
     std::string DisplayKey;
     std::optional<std::string> PrepText;
+    std::optional<QuestWireEncoder::GoalEntryFull> Goal;
 };
 
 struct NpcServiceTarget

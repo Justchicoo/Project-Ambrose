@@ -23,7 +23,7 @@ std::vector<NpcServiceOption> QuestOfferProvider::GetServiceOptions(NpcServiceTa
 {
     std::vector<NpcServiceOption> options;
     for (QuestInfo const* const quest : Available(target.TemplateId))
-        options.push_back({ std::string(QuestOffers::ServiceName), std::string(QuestOffers::PrepIcon), quest->Row.TitleKey, quest->Row.PrepKey });
+        options.push_back({ std::string(QuestOffers::ServiceName), std::string(QuestOffers::PrepIcon), quest->Row.TitleKey, quest->Row.PrepKey, std::nullopt });
     return options;
 }
 

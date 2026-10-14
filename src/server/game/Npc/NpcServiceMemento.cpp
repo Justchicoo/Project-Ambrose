@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Turns an NPC's menu and presentation into the ServiceMementoBase MSG_SENDNPCOPTIONS carries, a quest offered as a PrepEntry and any other option as an InteractableOption, and encodes it as the bare object, as the client reads its first four bytes as the class hash and a BlobEnvelope header fails it with "Failed to find type by name hash".
+ * Turns an NPC's menu and presentation into the ServiceMementoBase MSG_SENDNPCOPTIONS carries, a quest offered as a PrepEntry, a goal completed as a GoalEntryFull and any other option as an InteractableOption, and encodes it as the bare object, as the client reads its first four bytes as the class hash and a BlobEnvelope header fails it with "Failed to find type by name hash".
  */
 
 #include "NpcServiceMemento.h"
@@ -22,6 +22,16 @@ QuestWireEncoder::ServiceMementoBase NpcServiceMemento::Build(NpcServiceMenu con
             prep.ServiceIndex = index;
             prep.PrepText = *entries[index].Option.PrepText;
             memento.Options.emplace_back(std::move(prep));
+            continue;
+        }
+        if (entries[index].Option.Goal)
+        {
+            QuestWireEncoder::GoalEntryFull goal = *entries[index].Option.Goal;
+            goal.ServiceName = entries[index].Option.ServiceName;
+            goal.IconKey = entries[index].Option.IconKey;
+            goal.DisplayKey = entries[index].Option.DisplayKey;
+            goal.ServiceIndex = index;
+            memento.Options.emplace_back(std::move(goal));
             continue;
         }
         QuestWireEncoder::InteractableOption option;

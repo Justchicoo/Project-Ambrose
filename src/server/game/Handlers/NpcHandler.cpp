@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The NPC service menu: after each move the NPCs a wizard sees, objects whose template carries NPCBehavior, are checked against their service range, only an NPC some provider gives an option counting, as only a quest, a shop or a script's option earns a prompt, and a wizard entering one is sent MSG_SENDNPCOPTIONS with the NPC's global id, as the client finds an NPC by it, and the ServiceMementoBase of its menu, the options every NpcScript serving its template offers, and one leaving is sent MSG_LEAVESERVICERANGE, once per crossing. MSG_INTERACTNPC, a click on a menu, is routed by its flat service index to the provider that owns that option, rebuilt as it was offered with its providers, which the menu's entries point at and so live as long as it does; an empty service name closes a shop, and an NPC the wizard is not in range of, or an index past its menu, is logged and ignored. MSG_INTERACTOPTION on an NPC the wizard is in range of is how the client answers its prompt, its options being InteractableOptions, and is routed the same way by option index; on any other object it, and MSG_INTERACTOBJECT, are logged until a provider offers interactables. MSG_ACCEPTQUEST for an offer that stands gives the wizard the quest with its start goals, which its quest book is then shown.
+ * The NPC service menu: after each move the NPCs a wizard sees, objects whose template carries NPCBehavior, are checked against their service range, only an NPC some provider gives an option counting, as only a quest, a shop or a script's option earns a prompt, and a wizard entering one is sent MSG_SENDNPCOPTIONS with the NPC's global id, as the client finds an NPC by it, and the ServiceMementoBase of its menu, the options every NpcScript serving its template offers, and one leaving is sent MSG_LEAVESERVICERANGE, once per crossing. MSG_INTERACTNPC, a click on a menu, is routed by its flat service index to the provider that owns that option, rebuilt as it was offered with its providers, which the menu's entries point at and so live as long as it does; an empty service name closes a shop, and an NPC the wizard is not in range of, or an index past its menu, is logged and ignored. MSG_INTERACTOPTION on an NPC the wizard is in range of is how the client answers its prompt, its options being InteractableOptions, and is routed the same way by option index; on any other object it, and MSG_INTERACTOBJECT, are logged until a provider offers interactables. MSG_ACCEPTQUEST for an offer that stands gives the wizard the quest with its start goals, which its quest book is then shown. An NPC a talk-to goal names lists the goal first; picking it plays the goal's Completion dialog and completes it, and when that completes the quest the NPC's menu is sent again with Reinteract 2 so its next quest can be offered. MSG_INTERACTCOMPLETEGOAL asks for that dialog and MSG_COMPLETEPERSONA completes the goal, each only for an active persona goal the wizard holds that names this NPC, in range.
  */
 
 #include "GameSession.h"
@@ -11,6 +11,8 @@
 #include "ObjectViews.h"
 #include "QuestLogContext.h"
 #include "QuestMgr.h"
+#include "PersonaGoalProvider.h"
+#include "QuestBook.h"
 #include "QuestOfferProvider.h"
 #include "QuestOffers.h"
 #include "ScriptMgr.h"
@@ -39,12 +41,12 @@ namespace
         NpcServiceMenu Menu;
     };
 
-    ServedMenu MenuFor(NpcServiceTarget const& target, std::unique_ptr<NpcServiceProvider> quests)
+    ServedMenu MenuFor(NpcServiceTarget const& target, std::vector<std::unique_ptr<NpcServiceProvider>> quests)
     {
         ServedMenu served;
         served.Providers = ProvidersFor(target.TemplateId);
-        if (quests)
-            served.Providers.push_back(std::move(quests));
+        for (std::unique_ptr<NpcServiceProvider>& provider : quests)
+            served.Providers.push_back(std::move(provider));
         std::vector<NpcServiceProvider*> pointers;
         for (std::unique_ptr<NpcServiceProvider> const& provider : served.Providers)
             pointers.push_back(provider.get());
@@ -79,8 +81,8 @@ void GameSession::CheckNpcServices()
         uint32 const templateId = static_cast<uint32>(object.Spawn.TemplateId);
         if (!_sight.IsVisible(object.GlobalId) || !IsNpcTemplate(templateId))
             continue;
-        bool const served = !sScriptMgr.GetNpcScripts(templateId).empty() || (quests && QuestOfferProvider::Serves(*quests, templateId));
-        bool const offers = served && !MenuFor({ _worldGuid, object.GlobalId, templateId }, QuestProviderFor(templateId)).Menu.GetEntries().empty();
+        bool const served = !sScriptMgr.GetNpcScripts(templateId).empty() || (quests && (QuestOfferProvider::Serves(*quests, templateId) || PersonaGoalProvider::Serves(*quests, templateId)));
+        bool const offers = served && !MenuFor({ _worldGuid, object.GlobalId, templateId }, QuestProvidersFor(templateId)).Menu.GetEntries().empty();
         npcs.push_back({ object.GlobalId, { object.Spawn.Position.X, object.Spawn.Position.Y, object.Spawn.Position.Z }, radius, offers });
     }
     PlayerPosition const& at = _movement.GetPosition();
@@ -111,7 +113,7 @@ void GameSession::CheckNpcServices()
             OfferNpcServices(*npc);
 }
 
-void GameSession::OfferNpcServices(MapObject const& npc)
+void GameSession::OfferNpcServices(MapObject const& npc, int32 reinteract)
 {
     uint32 const templateId = static_cast<uint32>(npc.Spawn.TemplateId);
     NpcPresentation presentation;
@@ -122,7 +124,7 @@ void GameSession::OfferNpcServices(MapObject const& npc)
             presentation.Icon = view->GetIcon();
         }
     NpcServiceTarget const target{ _worldGuid, npc.GlobalId, templateId };
-    ServedMenu const served = MenuFor(target, QuestProviderFor(target.TemplateId));
+    ServedMenu const served = MenuFor(target, QuestProvidersFor(target.TemplateId));
     NpcServiceMenu const& menu = served.Menu;
     QuestWireEncoder::BlobEncodeResult const encoded = NpcServiceMemento::Encode(sTypeRegistry.GetCatalog(), menu, presentation);
     if (!encoded.Ok())
@@ -130,7 +132,7 @@ void GameSession::OfferNpcServices(MapObject const& npc)
         LOG_ERROR("server.gamesession", "Session {} could not show wizard {} the services of NPC {} (template {}): {}", GetSessionId(), _worldGuid, npc.GlobalId, templateId, encoded.Error);
         return;
     }
-    SendDmlMessage(GameMessages::SendNpcOptions{ npc.GlobalId, std::string(encoded.Bytes.begin(), encoded.Bytes.end()), 0 });
+    SendDmlMessage(GameMessages::SendNpcOptions{ npc.GlobalId, std::string(encoded.Bytes.begin(), encoded.Bytes.end()), reinteract });
     LOG_INFO("server.gamesession", "Session {}'s wizard {} entered the service range of NPC {} (template {}, mobile id {}, {} with icon {}) and was shown {} option(s)", GetSessionId(),
         _worldGuid, npc.GlobalId, templateId, npc.MobileId, Ambrose::ForLog(presentation.DisplayKey, 64), Ambrose::ForLog(presentation.Icon, 128), menu.GetEntries().size());
 }
@@ -153,7 +155,7 @@ void GameSession::HandleInteractNpc(GameMessages::InteractNpc& message)
         return;
     }
     NpcServiceTarget const target{ _worldGuid, npc->GlobalId, static_cast<uint32>(npc->Spawn.TemplateId) };
-    ServedMenu const served = MenuFor(target, QuestProviderFor(target.TemplateId));
+    ServedMenu const served = MenuFor(target, QuestProvidersFor(target.TemplateId));
     NpcServiceMenu const& menu = served.Menu;
     NpcServiceMenu::Entry const* const entry = menu.Find(message.ServiceIndex);
     if (!entry)
@@ -180,7 +182,7 @@ void GameSession::HandleInteractOption(GameMessages::InteractOption& message)
     if (npc)
     {
         NpcServiceTarget const target{ _worldGuid, npc->GlobalId, static_cast<uint32>(npc->Spawn.TemplateId) };
-        ServedMenu const served = MenuFor(target, QuestProviderFor(target.TemplateId));
+        ServedMenu const served = MenuFor(target, QuestProvidersFor(target.TemplateId));
         NpcServiceMenu const& menu = served.Menu;
         NpcServiceMenu::Entry const* const entry = message.OptionIndex >= 0 ? menu.Find(static_cast<uint32>(message.OptionIndex)) : nullptr;
         if (!entry)
@@ -197,12 +199,17 @@ void GameSession::HandleInteractOption(GameMessages::InteractOption& message)
     LOG_INFO("server.gamesession", "Session {}'s wizard {} picked option {} of object {}, which offers no options yet", GetSessionId(), _worldGuid, message.OptionIndex, message.ObjectId);
 }
 
-std::unique_ptr<NpcServiceProvider> GameSession::QuestProviderFor(uint32 templateId)
+std::vector<std::unique_ptr<NpcServiceProvider>> GameSession::QuestProvidersFor(uint32 templateId)
 {
+    std::vector<std::unique_ptr<NpcServiceProvider>> providers;
     std::shared_ptr<QuestStore const> quests = sQuestMgr.GetQuests();
-    if (!_questLog || !quests || !QuestOfferProvider::Serves(*quests, templateId))
-        return nullptr;
-    return std::make_unique<QuestOfferProvider>(std::move(quests), *_questLog, [this](NpcServiceTarget const& target, QuestInfo const& quest) { OfferQuest(target, quest); });
+    if (!_questLog || !quests)
+        return providers;
+    if (PersonaGoalProvider::Serves(*quests, templateId))
+        providers.push_back(std::make_unique<PersonaGoalProvider>(quests, *_questLog, [this](NpcServiceTarget const& target, PersonaGoals::Active const& goal) { CompletePersonaGoal(target, goal); }));
+    if (QuestOfferProvider::Serves(*quests, templateId))
+        providers.push_back(std::make_unique<QuestOfferProvider>(std::move(quests), *_questLog, [this](NpcServiceTarget const& target, QuestInfo const& quest) { OfferQuest(target, quest); }));
+    return providers;
 }
 
 void GameSession::OfferQuest(NpcServiceTarget const& target, QuestInfo const& quest)
@@ -285,4 +292,84 @@ void GameSession::HandleAcceptQuest(GameMessages::AcceptQuest& message)
     }
     LOG_INFO("server.gamesession", "Session {}'s wizard {} accepted quest {} from NPC {} with {} start goal(s)", GetSessionId(), _worldGuid, Ambrose::ForLog(message.QuestName, 128),
         message.MobileId, quest->StartGoals.size());
+}
+
+void GameSession::SendGoalDialog(NpcServiceTarget const& target, PersonaGoals::Active const& goal)
+{
+    Dialogs::ActorDialog const lines = QuestBook::Dialog(goal.Goal->Dialogs, PersonaGoals::CompletionType);
+    if (lines.Entries.empty())
+        return;
+    std::string problem;
+    std::string const blob = QuestBook::Blob(QuestWireEncoder::BuildActorDialog(sTypeRegistry.GetCatalog(), lines), QuestWireEncoder::ActorDialogMask, "Completion dialog", problem);
+    if (!problem.empty())
+    {
+        LOG_ERROR("server.gamesession", "Session {} could not show wizard {} the Completion dialog of goal {} of {}: {}", GetSessionId(), _worldGuid, goal.HeldGoal->Name, goal.Held->Name, problem);
+        return;
+    }
+    GameMessages::ActorDialog dialog;
+    dialog.MobileId = target.Npc;
+    dialog.QuestId = goal.Held->Gid;
+    dialog.GoalId = goal.HeldGoal->Gid;
+    dialog.CompletionType = std::string(PersonaGoals::CompletionType);
+    dialog.Dialog = blob;
+    dialog.RangeCheck = 1;
+    SendDmlMessage(dialog);
+}
+
+void GameSession::CompletePersonaGoal(NpcServiceTarget const& target, PersonaGoals::Active const& goal)
+{
+    std::string const quest = goal.Held->Name;
+    std::string const name = goal.HeldGoal->Name;
+    SendGoalDialog(target, goal);
+    if (!_questLog || !_questLog->CompleteGoal(quest, name))
+        return;
+    PostQuestEvents();
+    SaveQuestLogIfDirty();
+    bool const questDone = !_questLog->HasQuest(quest);
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} talked to NPC {} (template {}) for goal {} of {}{}", GetSessionId(), _worldGuid, target.Npc, target.TemplateId,
+        Ambrose::ForLog(name, 128), Ambrose::ForLog(quest, 128), questDone ? ", which completes the quest" : "");
+    Map const* const map = questDone && _mapId ? sMapMgr.Find(*_mapId) : nullptr;
+    if (MapObject const* const npc = map ? map->FindObject(target.Npc) : nullptr)
+        OfferNpcServices(*npc, PersonaGoals::ReinteractAfterQuest);
+}
+
+void GameSession::HandleInteractCompleteGoal(GameMessages::InteractCompleteGoal& message)
+{
+    Map const* const map = _mapId ? sMapMgr.Find(*_mapId) : nullptr;
+    MapObject const* const npc = map ? map->FindObject(message.MobileId) : nullptr;
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    PersonaGoals::Active goal;
+    PersonaGoals::Verdict const verdict = npc && quests && _questLog ? PersonaGoals::Check(*quests, *_questLog, message.QuestId, message.GoalId, static_cast<uint32>(npc->Spawn.TemplateId),
+        _npcRange.IsInside(message.MobileId), goal) : PersonaGoals::Verdict::WrongNpc;
+    if (verdict != PersonaGoals::Verdict::Accepted)
+    {
+        LOG_INFO("server.gamesession", "HandleInteractCompleteGoal: session {}'s wizard {} asked NPC {} for the dialog of goal {} of quest {}, {}; ignored", GetSessionId(), _worldGuid,
+            message.MobileId, message.GoalId, message.QuestId, PersonaGoals::GetVerdictName(verdict));
+        return;
+    }
+    SendGoalDialog({ _worldGuid, npc->GlobalId, static_cast<uint32>(npc->Spawn.TemplateId) }, goal);
+}
+
+void GameSession::HandleCompletePersona(GameMessages::CompletePersona& message)
+{
+    Map const* const map = _mapId ? sMapMgr.Find(*_mapId) : nullptr;
+    MapObject const* const npc = map ? map->FindObject(message.MobileId) : nullptr;
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    PersonaGoals::Active goal;
+    PersonaGoals::Verdict const verdict = npc && quests && _questLog ? PersonaGoals::Check(*quests, *_questLog, message.QuestId, message.GoalId, static_cast<uint32>(npc->Spawn.TemplateId),
+        _npcRange.IsInside(message.MobileId), goal) : PersonaGoals::Verdict::WrongNpc;
+    if (verdict != PersonaGoals::Verdict::Accepted)
+    {
+        LOG_WARN("server.gamesession", "HandleCompletePersona: session {}'s wizard {} claimed to talk to NPC {} for goal {} of quest {}, {}; refused and nothing changes", GetSessionId(), _worldGuid,
+            message.MobileId, message.GoalId, message.QuestId, PersonaGoals::GetVerdictName(verdict));
+        return;
+    }
+    std::string const quest = goal.Held->Name;
+    std::string const name = goal.HeldGoal->Name;
+    if (!_questLog->CompleteGoal(quest, name))
+        return;
+    PostQuestEvents();
+    SaveQuestLogIfDirty();
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} completed goal {} of {} by talking to NPC {}", GetSessionId(), _worldGuid, Ambrose::ForLog(name, 128), Ambrose::ForLog(quest, 128),
+        message.MobileId);
 }

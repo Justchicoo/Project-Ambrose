@@ -561,9 +561,11 @@ Completing a goal advances the quest through its GoalCompleteLogic chain, activa
 
 **Acceptance**
 
-- [ ] m_personaName 'WC-RAV-NPC06' binds to template 38232, not a display-name twin
-- [ ] COMPLETEPERSONA for inactive goal, wrong NPC or out of range rejected
+- [x] m_personaName 'WC-RAV-NPC06' binds to template 38232, not a display-name twin (`PersonaGoalsTest.AGoalNamingWcRavNpc06BindsToItsTemplateAndNotToADisplayNameTwin`: the quest store maps a persona goal to the template whose object name it names, so 38232 lists the goal as a GoalEntryFull with the quest's and goal's GIDs and a twin template under another object name lists nothing; `NpcServiceMementoClientTest.TheMenuIsSentAsTheBareObjectWithItsClassHashFirst` checks the option is sent as a GoalEntryFull the client's type dump knows)
+- [x] COMPLETEPERSONA for inactive goal, wrong NPC or out of range rejected (`PersonaGoalsTest.CompletePersonaIsRefusedForAnyGoalNpcOrPlaceItDoesNotFit` refuses a goal not held, one complete, one not a persona goal, a wrong NPC and a wizard out of range, with the quest log's change count unchanged)
 - [ ] Real client: '?' NPC plays completion lines and opens the follow-up offer
+
+Built in src/server/game/Quests/PersonaGoals.cpp and src/server/game/Npc/PersonaGoalProvider.cpp, with GameSession's CompletePersonaGoal and its MSG_INTERACTCOMPLETEGOAL and MSG_COMPLETEPERSONA handlers in NpcHandler.cpp. The option is a GoalEntryFull, since GoalEntry is only a base the client's type dump does not list. Picking it plays the goal's Completion dialog, completes the goal through 7.11's logic, and when that completes the quest sends the NPC's menu again with Reinteract 2, so a follow-up quest it gives shows in it; holding the offer until the dialog closes waits for 7.13's MSG_COMPLETEDIALOG. MSG_PERSONAINFO and m_usePatron are left, as the spec's risks note.
 
 ### Detailed spec from QST-13: Persona (talk to NPC) goals
 
@@ -588,8 +590,8 @@ The NPC named by a persona goal shows '?', offers the goal in its menu, and talk
 
 **Acceptance**
 
-- [ ] Unit test: a persona goal with m_personaName 'WC-RAV-NPC06' binds to template 38232 (object_name WC-RAV-NPC06), not to an NPC that merely shares the display name.
-- [ ] Unit test: MSG_COMPLETEPERSONA for an inactive goal, a wrong NPC or out of range is rejected with no state change.
+- [x] Unit test: a persona goal with m_personaName 'WC-RAV-NPC06' binds to template 38232 (object_name WC-RAV-NPC06), not to an NPC that merely shares the display name.
+- [x] Unit test: MSG_COMPLETEPERSONA for an inactive goal, a wrong NPC or out of range is rejected with no state change.
 - [ ] Client: with a 'Talk To' goal active, the target NPC shows '?'. Clicking it plays the completion lines, the goal completes, and if that NPC gives the follow-up quest its offer window opens right after the dialog closes.
 
 **Risks**

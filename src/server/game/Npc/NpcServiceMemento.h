@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The ServiceMementoBase a wizard entering an NPC's range is sent in MSG_SENDNPCOPTIONS: each option of the NPC's menu as an InteractableOption carrying its flat index, the persona madlibs as an NPC block whose NAME is the NPC's display key, the name key NPCFormats_Name and text key GUI_NPCInteractText unless a provider sets its own, and the icon its template's m_sIcon names, encoded with the service memento mask in its SerializerBinary header.
+ * The ServiceMementoBase a wizard entering an NPC's range is sent in MSG_SENDNPCOPTIONS: each option of the NPC's menu carrying its flat index, a quest offered as a PrepEntry, a goal it completes as a GoalEntryFull and any other as an InteractableOption, the persona madlibs as an NPC block whose NAME is the NPC's display key, the name key NPCFormats_Name and text key GUI_NPCInteractText unless a provider sets its own, and the icon its template's m_sIcon names, encoded with the service memento mask in its SerializerBinary header.
  */
 
 #ifndef AMBROSE_NPCSERVICEMEMENTO_H

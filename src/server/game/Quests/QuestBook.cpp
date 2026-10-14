@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Maps a quest's goal types to the client's, builds a goal's madlibs, encodes a built object bare, and gathers the worlds a quest's goals lead to.
+ * Maps a quest's goal types to the client's, builds a goal's madlibs, encodes a built object bare, gathers the worlds a quest's goals lead to, and turns a stored dialog's lines into an ActorDialog.
  */
 
 #include "QuestBook.h"
@@ -8,6 +8,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <utility>
 
 Quests::GoalType QuestBook::WireType(QuestGoalType type) noexcept
 {
@@ -61,4 +62,27 @@ std::vector<std::string> QuestBook::AssociatedWorlds(QuestInfo const& quest)
             worlds.push_back(world);
     }
     return worlds;
+}
+
+Dialogs::ActorDialog QuestBook::Dialog(std::map<std::string, QuestDialog, std::less<>> const& dialogs, std::string_view tag)
+{
+    Dialogs::ActorDialog dialog;
+    dialog.Tag = std::string(tag);
+    auto const found = dialogs.find(tag);
+    if (found == dialogs.end())
+        return dialog;
+    for (QuestDialogLine const& line : found->second.Lines)
+    {
+        Dialogs::ActorDialogEntry entry;
+        entry.ActorTemplateId = line.Row.ActorTemplateId;
+        entry.DialogKey = line.Row.DialogKey;
+        entry.Picture = line.Row.Picture;
+        entry.Sound = line.Row.Sound;
+        entry.Action = line.Row.Action;
+        entry.DialogEvent = line.Row.DialogEvent;
+        if (!line.Row.Animation.empty())
+            entry.Animations.push_back(line.Row.Animation);
+        dialog.Entries.push_back(std::move(entry));
+    }
+    return dialog;
 }

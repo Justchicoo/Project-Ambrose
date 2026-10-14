@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the NPC service menu's dispatch: MSG_INTERACTNPC, GAME's MSG_INTERACTOBJECT and MSG_INTERACTOPTION, WIZARD's MSG_INTERACTAVAILABLEQUEST and QUEST's MSG_DECLINEQUEST and MSG_ACCEPTQUEST are queued for the world thread once a wizard is in the world, and MSG_SENDNPCOPTIONS, MSG_LEAVESERVICERANGE, MSG_SENDINTERACTOPTIONS, MSG_ACTORDIALOG, MSG_QUESTOFFER, MSG_SENDQUEST, MSG_SENDGOAL, MSG_REMOVEQUEST, MSG_COMPLETEGOAL and MSG_COMPLETEQUEST are declared as ones the server sends and refused from clients.
+ * Checks the NPC service menu's dispatch: MSG_INTERACTNPC, GAME's MSG_INTERACTOBJECT and MSG_INTERACTOPTION, WIZARD's MSG_INTERACTAVAILABLEQUEST and MSG_INTERACTCOMPLETEGOAL and QUEST's MSG_DECLINEQUEST, MSG_ACCEPTQUEST and MSG_COMPLETEPERSONA are queued for the world thread once a wizard is in the world, and MSG_SENDNPCOPTIONS, MSG_LEAVESERVICERANGE, MSG_SENDINTERACTOPTIONS, MSG_ACTORDIALOG, MSG_QUESTOFFER, MSG_SENDQUEST, MSG_SENDGOAL, MSG_REMOVEQUEST, MSG_COMPLETEGOAL and MSG_COMPLETEQUEST are declared as ones the server sends and refused from clients.
  */
 
 #include "GameMessageTable.h"
@@ -20,7 +20,8 @@ TEST(NpcDispatchTest, ClicksAreQueuedInWorldAndTheMenuMessagesAreServerSent)
 
     for (auto const& [service, tag] : { std::pair<uint8, std::string_view>{ GameMessages::QuestService, "MSG_INTERACTNPC" }, { GameMessages::GameService, "MSG_INTERACTOBJECT" },
              { GameMessages::GameService, "MSG_INTERACTOPTION" }, { GameMessages::WizardService, "MSG_INTERACTAVAILABLEQUEST" }, { GameMessages::QuestService, "MSG_DECLINEQUEST" },
-             { GameMessages::QuestService, "MSG_ACCEPTQUEST" } })
+             { GameMessages::QuestService, "MSG_ACCEPTQUEST" },
+             { GameMessages::WizardService, "MSG_INTERACTCOMPLETEGOAL" }, { GameMessages::QuestService, "MSG_COMPLETEPERSONA" } })
     {
         MessageInfo const* const info = catalog->Find(service, tag);
         ASSERT_NE(info, nullptr) << tag;

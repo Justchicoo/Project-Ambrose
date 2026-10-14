@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Uses the user's client type dump to check that the ServiceMementoBase MSG_SENDNPCOPTIONS carries is the bare object, its class hash first, as the client reads it.
+ * Uses the user's client type dump to check that the ServiceMementoBase MSG_SENDNPCOPTIONS carries is the bare object, its class hash first, as the client reads it, and that a talk-to goal's option goes in it as a GoalEntryFull.
  */
 
 #include "Environment.h"
@@ -28,7 +28,13 @@ namespace
         std::vector<NpcServiceOption> GetServiceOptions(NpcServiceTarget const& target) const override
         {
             (void)target;
-            return { { "Talk", "", "Talk_Key", std::nullopt } };
+            QuestWireEncoder::GoalEntryFull goal;
+            goal.QuestId = 100;
+            goal.GoalId = 200;
+            goal.GoalTitle = "WizardQuestGoals_TalkNPC";
+            goal.PersonaName = "WC-RAV-NPC06";
+            goal.Type = Quests::GoalType::Persona;
+            return { { "Talk", "", "Talk_Key", std::nullopt, std::nullopt }, { "QuestPersonaGoalService", "Complete", "QuestTitle_Errand", std::nullopt, goal } };
         }
 
         void OnServiceInteraction(NpcServiceTarget const& target, uint32 index) override
@@ -70,4 +76,15 @@ TEST(NpcServiceMementoClientTest, TheMenuIsSentAsTheBareObjectWithItsClassHashFi
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
     ASSERT_NE(decoded.Object, nullptr);
     EXPECT_EQ(decoded.Object->GetClass().Hash, memento->Hash);
+
+    ClassInfo const* const goalEntry = catalog->FindClass("class GoalEntryFull");
+    ASSERT_NE(goalEntry, nullptr);
+    bool carriesGoal = false;
+    for (std::size_t at = 0; at + sizeof(uint32) <= encoded.Bytes.size() && !carriesGoal; ++at)
+    {
+        uint32 hash = 0;
+        std::memcpy(&hash, encoded.Bytes.data() + at, sizeof(hash));
+        carriesGoal = hash == goalEntry->Hash;
+    }
+    EXPECT_TRUE(carriesGoal) << "a talk-to goal's option is sent as a GoalEntryFull";
 }
