@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The client catalog: every template id the user's own install lists, sorted into a category such as Mobs, NPCs, Equipment, Housing, Pets or Spells by its class and behaviors and into a group by the folder below ObjectData that holds it, each with its object name, class, behaviors, display key and the text that key holds in one locale, and every zone with its display name, named locations and the template ids it places, written as an index and one JSON file per category, split into numbered parts where a file would pass a size cap, in a folder named by the client revision, which replaces the folder a run before it wrote whole.
+ * The client catalog: every template id the user's own install lists, sorted into a category such as Mobs, NPCs, Equipment, Housing, Pets or Spells by its class and behaviors and into a group by the folder below ObjectData that holds it, each with its object name, class, behaviors, display key and the text that key holds in one locale, and every zone with its display name, named locations and the template ids it places, written as an index and one JSON file per category, split into numbered parts where a file would pass a size cap, in a folder named by the client revision, which replaces the folder a run before it wrote whole, and read back from such a folder.
  */
 
 #ifndef AMBROSE_CLIENTCATALOG_H
@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -71,6 +72,7 @@ public:
     static ClientCatalog Build(TemplateExtraction const& templates, ZoneExtraction const& zones, LocaleTable const* locale, std::string revision);
 
     bool Write(std::filesystem::path const& folder, std::string& error) const;
+    static std::optional<ClientCatalog> Read(std::filesystem::path const& revisionFolder, std::string& error);
 
     std::string const& GetLocale() const noexcept { return _locale; }
     std::vector<CatalogCategory> const& GetCategories() const noexcept { return _categories; }

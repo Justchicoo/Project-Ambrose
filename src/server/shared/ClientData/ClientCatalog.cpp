@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds the client catalog from a template and zone extraction, sorting each template into a category by its class and the behaviors that mark what it is, a mob's deck, a mount, furniture, a pet, and into a group by the folder that holds it, naming each display key through the locale table given, and writes it to a partial folder first that then takes the revision folder's place.
+ * Builds the client catalog from a template and zone extraction, sorting each template into a category by its class and the behaviors that mark what it is, a mob's deck, a mount, furniture, a pet, and into a group by the folder that holds it, naming each display key through the locale table given, and writes it to a partial folder first that then takes the revision folder's place; reading a revision folder back takes the files its index lists.
  */
 
 #include "ClientCatalog.h"
@@ -199,6 +199,103 @@ std::size_t ClientCatalog::GetNamedCount() const noexcept
     for (CatalogCategory const& category : _categories)
         count += static_cast<std::size_t>(std::count_if(category.Templates.begin(), category.Templates.end(), [](CatalogTemplate const& entry) { return !entry.DisplayName.empty(); }));
     return count;
+}
+
+std::optional<ClientCatalog> ClientCatalog::Read(std::filesystem::path const& revisionFolder, std::string& error)
+{
+    auto const load = [&error](std::filesystem::path const& file) -> std::optional<Json>
+    {
+        std::ifstream in(file, std::ios::binary);
+        if (!in)
+        {
+            error = fmt::format("cannot read {}", ConfigMgr::PathToUtf8(file));
+            return std::nullopt;
+        }
+        Json parsed = Json::parse(in, nullptr, false);
+        if (parsed.is_discarded())
+        {
+            error = fmt::format("{} is not JSON", ConfigMgr::PathToUtf8(file));
+            return std::nullopt;
+        }
+        return parsed;
+    };
+    std::optional<Json> const index = load(revisionFolder / IndexFile);
+    if (!index)
+        return std::nullopt;
+    if (!index->is_object() || !index->contains("categories") || !(*index)["categories"].is_array())
+    {
+        error = fmt::format("{} lists no categories", ConfigMgr::PathToUtf8(revisionFolder / IndexFile));
+        return std::nullopt;
+    }
+    ClientCatalog catalog;
+    catalog._revision = index->value("revision", std::string());
+    catalog._locale = index->value("locale", std::string());
+    auto const text = [](Json const& row, char const* key) { return row.contains(key) && row[key].is_string() ? row[key].get<std::string>() : std::string(); };
+    for (Json const& listed : (*index)["categories"])
+    {
+        CatalogCategory category{ text(listed, "name"), {} };
+        if (listed.contains("files") && listed["files"].is_array())
+            for (Json const& file : listed["files"])
+            {
+                std::optional<Json> const rows = file.is_string() ? load(revisionFolder / ConfigMgr::PathFromUtf8(file.get<std::string>())) : std::nullopt;
+                if (!rows || !rows->is_array())
+                {
+                    if (error.empty())
+                        error = fmt::format("{} lists a file that holds no rows", ConfigMgr::PathToUtf8(revisionFolder / IndexFile));
+                    return std::nullopt;
+                }
+                for (Json const& row : *rows)
+                {
+                    if (!row.is_object() || !row.contains("id") || !row["id"].is_number_unsigned())
+                        continue;
+                    CatalogTemplate entry;
+                    entry.TemplateId = row["id"].get<uint32>();
+                    entry.ObjectName = text(row, "name");
+                    entry.DisplayName = text(row, "display");
+                    entry.ClassName = text(row, "class");
+                    entry.Group = text(row, "group");
+                    entry.DisplayKey = text(row, "displayKey");
+                    entry.Archive = text(row, "archive");
+                    entry.Path = text(row, "path");
+                    if (row.contains("behaviors") && row["behaviors"].is_array())
+                        for (Json const& behavior : row["behaviors"])
+                            if (behavior.is_string())
+                                entry.Behaviors.push_back(behavior.get<std::string>());
+                    category.Templates.push_back(std::move(entry));
+                }
+            }
+        catalog._categories.push_back(std::move(category));
+    }
+    if (index->contains("zoneFiles") && (*index)["zoneFiles"].is_array())
+        for (Json const& file : (*index)["zoneFiles"])
+        {
+            std::optional<Json> const rows = file.is_string() ? load(revisionFolder / ConfigMgr::PathFromUtf8(file.get<std::string>())) : std::nullopt;
+            if (!rows || !rows->is_array())
+            {
+                if (error.empty())
+                    error = fmt::format("{} lists a zone file that holds no rows", ConfigMgr::PathToUtf8(revisionFolder / IndexFile));
+                return std::nullopt;
+            }
+            for (Json const& row : *rows)
+            {
+                if (!row.is_object())
+                    continue;
+                CatalogZone zone;
+                zone.Path = text(row, "path");
+                zone.DisplayName = text(row, "display");
+                zone.DisplayKey = text(row, "displayKey");
+                if (row.contains("locations") && row["locations"].is_array())
+                    for (Json const& location : row["locations"])
+                        if (location.is_object())
+                            zone.Locations.push_back({ text(location, "name"), location.value("x", 0.0f), location.value("y", 0.0f), location.value("z", 0.0f), location.value("direction", 0.0f) });
+                if (row.contains("templates") && row["templates"].is_array())
+                    for (Json const& id : row["templates"])
+                        if (id.is_number_unsigned())
+                            zone.Templates.push_back(id.get<uint32>());
+                catalog._zones.push_back(std::move(zone));
+            }
+        }
+    return catalog;
 }
 
 bool ClientCatalog::Write(std::filesystem::path const& folder, std::string& error) const

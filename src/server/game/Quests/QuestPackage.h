@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -33,8 +34,17 @@ struct QuestPackageQuest
     QuestRows Rows;
     std::string Category;
     std::vector<std::string> Problems;
+    std::map<std::string, std::size_t, std::less<>> SkippedResults;
+    bool SchoolGated = false;
 
     bool IsClean() const noexcept { return Category.empty(); }
+};
+
+struct QuestFolderCounts
+{
+    std::size_t Read = 0;
+    std::size_t Clean = 0;
+    std::size_t Started = 0;
 };
 
 struct QuestPackageRead
@@ -53,6 +63,7 @@ struct QuestPackageRead
 
     std::size_t GetCleanCount() const noexcept;
     Counts GetCategories() const;
+    Counts GetSkippedResults() const;
 };
 
 class QuestPackage
@@ -61,12 +72,16 @@ public:
     static constexpr std::string_view QuestFolder = "QuestData/";
     static constexpr std::string_view SourcePrefix = "package:";
     static constexpr std::string_view PersonaSuffix = "_Persona";
+    static constexpr std::string_view DefaultPackage = "CSR.wad";
 
     QuestPackage() = delete;
 
     static std::vector<std::string> GetQuestEntries(KiwadArchive const& archive);
     static QuestPackageRead Read(TypeCatalogPtr const& catalog, std::vector<QuestPackageEntry> const& entries);
     static void Check(QuestPackageRead& read, QuestValidator::Context const& context, std::set<std::string, std::less<>> const& heldElsewhere = {});
+    static std::optional<uint32> StarterOf(QuestPackageQuest const& quest);
+    static bool HasStarter(QuestPackageQuest const& quest);
+    static std::map<std::string, QuestFolderCounts, std::less<>> CountByFolder(QuestPackageRead const& read);
     static std::size_t CountMissingKeys(QuestPackageRead const& read, QuestValidator::KeyLookup const& hasKey);
     static std::string SourceOf(std::string_view packageName);
     static WorldSqlScript BuildScript(QuestPackageRead const& read, std::string const& source);

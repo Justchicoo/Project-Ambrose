@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements, each goal's m_goalRequirements and each dialog line's m_requirements encoded as zone data holds requirements and failing the quest when any of those lists does not read, attaching each goal-complete logic entry, with the count of its OR goals it needs, to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
+ * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements, each goal's m_goalRequirements and each dialog line's m_requirements encoded as zone data holds requirements and failing the quest when any of those lists does not read, the results its end and each goal's completion run encoded the same way, a result whose class the type dump lacks skipped and counted as the result manager skips it at run time, keeping each goal's quest events, attaching each goal-complete logic entry, with the count of its OR goals it needs, to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
  */
 
 #include "QuestPackage.h"
@@ -26,8 +26,7 @@ namespace
     constexpr std::size_t NameColumn = 128;
     constexpr std::size_t TextColumn = 255;
     constexpr std::string_view QuestClass = "class QuestTemplate";
-    constexpr std::array NotCarriedProperties{ std::string_view("m_startResults"), std::string_view("m_endResults"), std::string_view("m_completeResults"),
-        std::string_view("m_activateResults"), std::string_view("m_tallyResults"), std::string_view("m_prepRequirements"),
+    constexpr std::array NotCarriedProperties{ std::string_view("m_startResults"), std::string_view("m_activateResults"), std::string_view("m_tallyResults"), std::string_view("m_prepRequirements"),
         std::string_view("m_pruneRequirements"), std::string_view("m_goalRequirements"), std::string_view("m_dynaMods"), std::string_view("m_questEffectInfoList"),
         std::string_view("m_behaviors") };
     constexpr std::array<std::string_view, 67> ReadProperties{ "m_questName", "m_questNameID", "m_questTitle", "m_questInfo", "m_questPrep", "m_questUnderway", "m_questComplete",
@@ -202,11 +201,13 @@ namespace
 
             for (std::string const& goal : fields.Texts("m_startGoals"))
                 _quest.Rows.StartGoals.push_back(QuestStartGoalRow{ row.Name, goal });
-            Gate(fields.Object("m_requirements"), _quest.Rows.Quests.back().Requirements);
+            PropertyObject const* const requirements = fields.Object("m_requirements");
+            _quest.SchoolGated = requirements && NamesSchool(*requirements);
+            Gate(requirements, _quest.Rows.Quests.back().Requirements);
             for (std::string_view const list : { "m_prepRequirements", "m_pruneRequirements" })
                 Requirements(fields.Object(list), list);
-            for (std::string_view const results : { "m_startResults", "m_endResults" })
-                Results(fields.Object(results), results);
+            Results(fields.Object("m_startResults"), "m_startResults");
+            StoreResults(fields.Object("m_endResults"), {});
             for (std::string_view const script : { "m_onStartQuestScript", "m_onEndQuestScript" })
                 if (!fields.Text(script).empty())
                     NotCarried(script);
@@ -273,6 +274,33 @@ namespace
                 CountRequirements(*child);
         }
 
+        static bool NamesSchool(PropertyObject const& requirement)
+        {
+            std::string_view const name = ShortName(requirement.GetClass().Name);
+            if (name == "ReqSchoolOfFocus" || name == "ReqIsSchool")
+                return true;
+            std::vector<PropertyObject const*> const children = Fields(requirement).Objects("m_requirements");
+            return std::any_of(children.begin(), children.end(), [](PropertyObject const* child) { return NamesSchool(*child); });
+        }
+
+        void StoreResults(PropertyObject const* list, std::string const& goal)
+        {
+            if (!list)
+                return;
+            std::vector<PropertyObject const*> const results = Fields(*list).Objects("m_results");
+            for (std::size_t index = 0; index < results.size(); ++index)
+            {
+                EncodeResult encoded = ObjectSerializer::Encode(results[index], ZoneExtractor::DataOptions());
+                if (!encoded.Ok())
+                {
+                    Fail("result that does not encode", fmt::format("{} {}: {}", goal.empty() ? std::string("quest") : fmt::format("goal {}", goal), ShortName(results[index]->GetClass().Name),
+                        encoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(encoded.Status)) : std::move(encoded.Detail)));
+                    return;
+                }
+                _quest.Rows.Results.push_back(QuestResultRow{ _quest.Name, goal, static_cast<uint32>(index), results[index]->GetClass().Name, std::move(encoded.Bytes) });
+            }
+        }
+
         void Results(PropertyObject const* list, std::string_view where)
         {
             if (list && !Fields(*list).Objects("m_results").empty())
@@ -337,11 +365,9 @@ namespace
                 NotCarried("m_hyperlink");
             if (!fields.Text("m_requiresMagicWeavingSchool").empty())
                 NotCarried("m_requiresMagicWeavingSchool");
-            if (!fields.Texts("m_genericEvents").empty())
-                NotCarried("m_genericEvents");
             Gate(fields.Object("m_goalRequirements"), row.Requirements);
-            for (std::string_view const results : { "m_completeResults", "m_activateResults" })
-                Results(fields.Object(results), results);
+            StoreResults(fields.Object("m_completeResults"), row.Goal);
+            Results(fields.Object("m_activateResults"), "m_activateResults");
             _quest.Rows.Goals.push_back(row);
 
             uint32 position = 0;
@@ -351,6 +377,9 @@ namespace
             position = 0;
             for (std::string const& tag : fields.Texts("m_clientTags"))
                 _quest.Rows.ClientTags.push_back(QuestGoalClientTagRow{ quest, row.Goal, position++, tag });
+            position = 0;
+            for (std::string const& event : fields.Texts("m_genericEvents"))
+                _quest.Rows.Events.push_back(QuestGoalEventRow{ quest, row.Goal, position++, event });
             Dialogs(fields.Object("m_dialogList"), std::string(QuestStore::OwnerGoal), row.Goal);
         }
 
@@ -458,6 +487,27 @@ namespace
         return dot != std::string_view::npos && path.substr(dot + 1).starts_with("m_requirements");
     }
 
+    bool InStoredResults(std::string_view path)
+    {
+        std::size_t const dot = path.find('.');
+        if (dot == std::string_view::npos)
+            return false;
+        std::string_view const rest = path.substr(dot + 1);
+        if (rest.starts_with("m_endResults"))
+            return true;
+        if (!rest.starts_with("m_goals["))
+            return false;
+        std::size_t const close = rest.find("].");
+        return close != std::string_view::npos && rest.substr(close + 2).starts_with("m_completeResults");
+    }
+
+    bool IsStoredResult(std::string_view path)
+    {
+        constexpr std::string_view Entry = ".m_results[";
+        std::size_t const at = path.rfind(Entry);
+        return InStoredResults(path) && at != std::string_view::npos && path.back() == ']' && path.find('.', at + Entry.size()) == std::string_view::npos;
+    }
+
     bool InCarriedPart(std::string_view path)
     {
         return std::none_of(NotCarriedProperties.begin(), NotCarriedProperties.end(), [path](std::string_view property)
@@ -494,6 +544,7 @@ namespace
             { "proximity_tag", row.ProximityTag, TextColumn }, { "school", row.School, NameColumn } }; });
         Lengths(quest, rows.Adjectives, "quest_goal_adjective", [](QuestGoalAdjectiveRow const& row) { return std::vector<Column>{ { "adjective", row.Adjective, TextColumn } }; });
         Lengths(quest, rows.ClientTags, "quest_goal_client_tag", [](QuestGoalClientTagRow const& row) { return std::vector<Column>{ { "tag", row.Tag, TextColumn } }; });
+        Lengths(quest, rows.Events, "quest_goal_event", [](QuestGoalEventRow const& row) { return std::vector<Column>{ { "event", row.Event, TextColumn } }; });
         Lengths(quest, rows.LogicMembers, "quest_goal_logic_member", [](QuestGoalLogicMemberRow const& row) { return std::vector<Column>{ { "goal_name", row.Goal, NameColumn },
             { "member_goal", row.Member, NameColumn } }; });
         Lengths(quest, rows.DialogEntries, "quest_dialog_entry", [](QuestDialogEntryRow const& row) { return std::vector<Column>{ { "dialog_key", row.DialogKey, TextColumn },
@@ -520,6 +571,16 @@ namespace
 std::size_t QuestPackageRead::GetCleanCount() const noexcept
 {
     return static_cast<std::size_t>(std::count_if(Quests.begin(), Quests.end(), [](QuestPackageQuest const& quest) { return quest.IsClean(); }));
+}
+
+QuestPackageRead::Counts QuestPackageRead::GetSkippedResults() const
+{
+    Counts skipped;
+    for (QuestPackageQuest const& quest : Quests)
+        if (quest.IsClean())
+            for (auto const& [name, count] : quest.SkippedResults)
+                skipped[name] += count;
+    return skipped;
 }
 
 QuestPackageRead::Counts QuestPackageRead::GetCategories() const
@@ -564,13 +625,16 @@ QuestPackageRead QuestPackage::Read(TypeCatalogPtr const& catalog, std::vector<Q
         }
         bool unknownInCarried = false;
         std::string firstUnknown;
+        QuestPackageRead::Counts skippedResults;
         for (DecodeIssue const& issue : xml.Issues)
         {
             if (issue.Kind != DecodeIssueKind::UnknownClass)
                 continue;
             std::string const name = UnknownClassName(issue);
             ++read.UnknownClasses[name];
-            if (InCarriedPart(issue.Path) && !unknownInCarried)
+            if (IsStoredResult(issue.Path))
+                ++skippedResults[name];
+            else if (InCarriedPart(issue.Path) && !unknownInCarried)
             {
                 unknownInCarried = true;
                 firstUnknown = fmt::format("{} at {}", name, issue.Path);
@@ -590,6 +654,7 @@ QuestPackageRead QuestPackage::Read(TypeCatalogPtr const& catalog, std::vector<Q
         }
         QuestPackageQuest& quest = read.Quests.emplace_back();
         quest.Entry = entry.Name;
+        quest.SkippedResults = std::move(skippedResults);
         QuestReader reader(read, quest);
         reader.Read(root);
         if (unknownInCarried)
@@ -601,6 +666,11 @@ QuestPackageRead QuestPackage::Read(TypeCatalogPtr const& catalog, std::vector<Q
             if (InRequirements(issue.Path) && !(issue.Kind == DecodeIssueKind::InvalidValue && issue.Detail.starts_with("holds ''")))
             {
                 reader.Fail(fmt::format("requirement not fully read ({})", ObjectSerializer::GetIssueName(issue.Kind)), fmt::format("{}: {}", issue.Path, issue.Detail));
+                continue;
+            }
+            if (InStoredResults(issue.Path) && issue.Kind == DecodeIssueKind::InvalidValue && !issue.Detail.starts_with("holds ''"))
+            {
+                reader.Fail("result value that does not read", fmt::format("{}: {}", issue.Path, issue.Detail));
                 continue;
             }
             if (issue.Kind == DecodeIssueKind::UnknownProperty)
@@ -679,6 +749,41 @@ void QuestPackage::Check(QuestPackageRead& read, QuestValidator::Context const& 
     }
 }
 
+std::optional<uint32> QuestPackage::StarterOf(QuestPackageQuest const& quest)
+{
+    for (QuestDialogEntryRow const& line : quest.Rows.DialogEntries)
+        if (line.Owner == QuestStore::OwnerQuest && line.Goal.empty() && line.Tag == "Prep" && line.Position == 0 && line.ActorTemplateId != 0)
+            return line.ActorTemplateId;
+    if (!quest.Rows.Quests.empty() && quest.Rows.Quests.front().StarterTemplateId != 0)
+        return quest.Rows.Quests.front().StarterTemplateId;
+    return std::nullopt;
+}
+
+bool QuestPackage::HasStarter(QuestPackageQuest const& quest)
+{
+    return StarterOf(quest).has_value();
+}
+
+std::map<std::string, QuestFolderCounts, std::less<>> QuestPackage::CountByFolder(QuestPackageRead const& read)
+{
+    std::map<std::string, QuestFolderCounts, std::less<>> folders;
+    for (QuestPackageQuest const& quest : read.Quests)
+    {
+        std::string_view folder = quest.Entry;
+        if (folder.starts_with(QuestFolder))
+            folder.remove_prefix(QuestFolder.size());
+        std::size_t const slash = folder.find('/');
+        QuestFolderCounts& counts = folders[std::string(slash == std::string_view::npos ? std::string_view() : folder.substr(0, slash))];
+        ++counts.Read;
+        if (!quest.IsClean())
+            continue;
+        ++counts.Clean;
+        if (HasStarter(quest))
+            ++counts.Started;
+    }
+    return folders;
+}
+
 std::size_t QuestPackage::CountMissingKeys(QuestPackageRead const& read, QuestValidator::KeyLookup const& hasKey)
 {
     if (!hasKey)
@@ -693,8 +798,8 @@ std::string QuestPackage::SourceOf(std::string_view packageName)
 
 std::vector<std::string_view> QuestPackage::GetTables()
 {
-    return { "quest_template", "quest_start_goal", "quest_goal", "quest_goal_adjective", "quest_goal_client_tag", "quest_goal_logic", "quest_goal_logic_member", "quest_dialog",
-        "quest_dialog_entry", "quest_dialog_madlib" };
+    return { "quest_template", "quest_start_goal", "quest_goal", "quest_goal_adjective", "quest_goal_client_tag", "quest_goal_event", "quest_goal_logic", "quest_goal_logic_member", "quest_dialog",
+        "quest_dialog_entry", "quest_dialog_madlib", "quest_result" };
 }
 
 WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::string const& source)
@@ -709,11 +814,13 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
         Append(rows.Goals, quest.Rows.Goals);
         Append(rows.Adjectives, quest.Rows.Adjectives);
         Append(rows.ClientTags, quest.Rows.ClientTags);
+        Append(rows.Events, quest.Rows.Events);
         Append(rows.Logic, quest.Rows.Logic);
         Append(rows.LogicMembers, quest.Rows.LogicMembers);
         Append(rows.Dialogs, quest.Rows.Dialogs);
         Append(rows.DialogEntries, quest.Rows.DialogEntries);
         Append(rows.Madlibs, quest.Rows.Madlibs);
+        Append(rows.Results, quest.Rows.Results);
     }
     using Value = WorldSqlScript::Value;
     auto const number = [](auto value) { return Value{ static_cast<uint64>(value) }; };
@@ -732,11 +839,12 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
 
     WorldSqlScript script;
     script.ReplaceRows("quest_template", "source", Value{ source }, { "name", "name_id", "title_key", "info_key", "prep_key", "underway_key", "complete_key", "level", "repeat", "mainline",
-        "no_quest_helper", "skip_qh_autoselect", "pet_only", "activity_type", "prep_always", "is_hidden", "requirements", "source" }, convert(rows.Quests, [&](QuestTemplateRow const& row)
+        "no_quest_helper", "skip_qh_autoselect", "pet_only", "activity_type", "prep_always", "is_hidden", "requirements", "starter_template_id", "source" }, convert(rows.Quests, [&](QuestTemplateRow const& row)
     {
         return WorldSqlScript::Row{ row.Name, number(row.NameId), row.TitleKey, row.InfoKey, row.PrepKey, row.UnderwayKey, row.CompleteKey, number(row.Level), number(row.Repeat),
             number(row.Mainline), number(row.NoQuestHelper), number(row.SkipQhAutoselect), number(row.PetOnly), number(row.ActivityType), number(row.PrepAlways), number(row.IsHidden),
-            row.Requirements.empty() ? Value{ std::monostate{} } : Value{ std::string(row.Requirements.begin(), row.Requirements.end()) } };
+            row.Requirements.empty() ? Value{ std::monostate{} } : Value{ std::string(row.Requirements.begin(), row.Requirements.end()) },
+            row.StarterTemplateId == 0 ? Value{ std::monostate{} } : number(row.StarterTemplateId) };
     }));
     script.InsertRows("quest_start_goal", { "quest", "goal_name", "source" }, convert(rows.StartGoals, [](QuestStartGoalRow const& row)
     {
@@ -758,6 +866,10 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
     script.InsertRows("quest_goal_client_tag", { "quest", "goal_name", "position", "tag", "source" }, convert(rows.ClientTags, [&](QuestGoalClientTagRow const& row)
     {
         return WorldSqlScript::Row{ row.Quest, row.Goal, number(row.Position), row.Tag };
+    }));
+    script.InsertRows("quest_goal_event", { "quest", "goal_name", "position", "event", "source" }, convert(rows.Events, [&](QuestGoalEventRow const& row)
+    {
+        return WorldSqlScript::Row{ row.Quest, row.Goal, number(row.Position), row.Event };
     }));
     script.InsertRows("quest_goal_logic", { "quest", "goal_name", "position", "complete_quest", "required_or_count", "source" }, convert(rows.Logic, [&](QuestGoalLogicRow const& row)
     {
@@ -781,5 +893,10 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
     {
         return WorldSqlScript::Row{ row.Quest, row.Owner, row.Goal, row.Tag, number(row.Entry), row.Identifier, row.Value };
     }));
+    std::vector<WorldSqlScript::Row> results;
+    results.reserve(rows.Results.size());
+    for (QuestResultRow const& row : rows.Results)
+        results.push_back(WorldSqlScript::Row{ row.Quest, row.Goal, number(row.Position), row.Class, std::string(row.Data.begin(), row.Data.end()) });
+    script.InsertRows("quest_result", { "quest", "goal_name", "position", "class_name", "data" }, results);
     return script;
 }

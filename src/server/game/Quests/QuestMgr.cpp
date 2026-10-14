@@ -93,6 +93,10 @@ bool QuestMgr::ReadWorldRows(QuestRows& rows, std::vector<std::string>& errors)
     {
         rows.ClientTags.push_back(QuestGoalClientTagRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<std::string>() });
     });
+    ok &= Select("quest_goal_event", "SELECT `quest`, `goal_name`, `position`, `event` FROM `quest_goal_event` ORDER BY `quest`, `goal_name`, `position`", errors, [&rows](Field const* f)
+    {
+        rows.Events.push_back(QuestGoalEventRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<std::string>() });
+    });
     ok &= Select("quest_goal_logic", "SELECT `quest`, `goal_name`, `position`, `complete_quest`, `required_or_count` FROM `quest_goal_logic` ORDER BY `quest`, `goal_name`, `position`", errors, [&rows](Field const* f)
     {
         rows.Logic.push_back(QuestGoalLogicRow{ f[0].Get<std::string>(), f[1].Get<std::string>(), f[2].Get<uint32>(), f[3].Get<bool>(), f[4].Get<uint32>() });

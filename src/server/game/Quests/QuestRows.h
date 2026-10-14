@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The rows of the world database's quest tables as plain records, one struct per table, together with each quest's and each dialog line's optional requirement-list reference and the encoded RequirementList it may carry from the client's own quest data, the template of the NPC that offers it when no Prep line names one, the results a quest or goal runs when it completes, and the object_template ids and names they are checked against, gathered into one set that the database reader or a test fills and the validator and the quest store read.
+ * The rows of the world database's quest tables as plain records, one struct per table, together with each quest's and each dialog line's optional requirement-list reference and the encoded RequirementList it may carry from the client's own quest data, the template of the NPC that offers it when no Prep line names one, the quest events that count toward a goal, the results a quest or goal runs when it completes, and the object_template ids and names they are checked against, gathered into one set that the database reader or a test fills and the validator and the quest store read.
  */
 
 #ifndef AMBROSE_QUESTROWS_H
@@ -86,6 +86,14 @@ struct QuestGoalClientTagRow
     std::string Tag;
 };
 
+struct QuestGoalEventRow
+{
+    std::string Quest;
+    std::string Goal;
+    uint32 Position = 0;
+    std::string Event;
+};
+
 struct QuestGoalLogicRow
 {
     std::string Quest;
@@ -163,6 +171,7 @@ struct QuestRows
     std::vector<QuestGoalRow> Goals;
     std::vector<QuestGoalAdjectiveRow> Adjectives;
     std::vector<QuestGoalClientTagRow> ClientTags;
+    std::vector<QuestGoalEventRow> Events;
     std::vector<QuestGoalLogicRow> Logic;
     std::vector<QuestGoalLogicMemberRow> LogicMembers;
     std::vector<QuestDialogRow> Dialogs;
