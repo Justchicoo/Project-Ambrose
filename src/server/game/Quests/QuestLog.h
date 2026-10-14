@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A wizard's quest log: its active quests in the order it took them, each with the GID it keeps for life and its goals by their own GIDs, status and count, its per-quest registry, where a completed quest leaves 'Complete' = 1, its other registry entries, the quests it hid and the Dynamods its progress made, and the quest events its changes publish, such as GoalComplete_<quest>_<goal>, held until the wizard's zone takes them, with each goal and quest it completes held until its session runs their results. Built from the stored rows, dropping with a warning each quest whose template is gone and each goal its quest no longer has, and turned back into rows under a save's revision; any change marks it for saving and is counted, so what depends on it can tell it moved.
+ * A wizard's quest log: its active quests in the order it took them, each with the GID it keeps for life and its goals by their own GIDs, status and count, its per-quest registry, where a completed quest leaves 'Complete' = 1, its other registry entries, the quests it hid and the Dynamods its progress made, and the quest events its changes publish, such as GoalComplete_<quest>_<goal>, held until the wizard's zone takes them, with each goal and quest it completes held until its session runs their results, and each quest added or removed and goal started, moved or completed held until its session shows the client's quest book. Built from the stored rows, dropping with a warning each quest whose template is gone and each goal its quest no longer has, and turned back into rows under a save's revision; any change marks it for saving and is counted, so what depends on it can tell it moved.
  */
 
 #ifndef AMBROSE_QUESTLOG_H
@@ -30,6 +30,23 @@ struct QuestLogGoal
 struct QuestCompletion
 {
     std::string Quest;
+    std::string Goal;
+};
+
+enum class QuestLogChangeKind : uint8
+{
+    QuestAdded,
+    GoalStarted,
+    GoalProgressed,
+    GoalCompleted,
+    QuestRemoved
+};
+
+struct QuestLogChange
+{
+    QuestLogChangeKind Kind = QuestLogChangeKind::QuestAdded;
+    std::string Quest;
+    uint64 QuestGid = 0;
     std::string Goal;
 };
 
@@ -78,6 +95,7 @@ public:
     std::vector<DynaMod> EraseDynaMods(std::string_view tag);
     std::vector<std::string> TakeEvents();
     std::vector<QuestCompletion> TakeCompletions();
+    std::vector<QuestLogChange> TakeChanges();
 
     bool IsDirty() const noexcept { return _dirty; }
     void MarkSaved() noexcept { _dirty = false; }
@@ -95,6 +113,7 @@ private:
     WizardDynaMods _dynaMods;
     std::vector<std::string> _events;
     std::vector<QuestCompletion> _completions;
+    std::vector<QuestLogChange> _changeFeed;
     bool _dirty = false;
     uint64 _changes = 0;
 };

@@ -367,6 +367,9 @@ private:
     void ShowNotifyText(ZoneNotifyText const& text);
     bool SendLoot(PropertyObject const* list, std::string problem);
     void SendDynaMods();
+    void SendQuestBook();
+    void SyncQuestBook();
+    bool StartQuest(QuestInfo const& quest);
     void ShowDynaModState(uint64 id, std::string_view tag);
     void ShowGameEffectsOf(GameSession const& other);
     bool IsNpcTemplate(uint32 templateId);
@@ -428,6 +431,7 @@ private:
     uint64 _questRevision = 0;
     std::optional<QuestLog> _questLog;
     bool _dynaModsShown = false;
+    bool _questBookShown = false;
     std::vector<std::string> _resultDoors;
     std::vector<std::string> _resultSpawns;
     QuestWireEncoder::LootInfoList _resultLoot;

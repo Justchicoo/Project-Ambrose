@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, and quest gold and experience, which it gives at the live quest rates and shows in one MSG_LOOT, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, and quest gold and experience, which it gives at the live quest rates and shows in one MSG_LOOT, its quest book sent at each entry with every quest it holds and their active goals, and each quest it gains or loses and goal it starts, moves or completes shown as it happens, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -9,8 +9,11 @@
 #include "CharacterQuestRepository.h"
 #include "CharacterRepository.h"
 #include "DynaModMessages.h"
+#include "ObjectGuid.h"
 #include "QuestMgr.h"
 #include "QuestRewards.h"
+#include "QuestBook.h"
+#include "QuestBookMessages.h"
 #include "CoreObjectSerializer.h"
 #include "DuelMgr.h"
 #include "Frame.h"
@@ -912,6 +915,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         SendMuteNotice();
     SendBadges();
     SendDynaMods();
+    SendQuestBook();
     std::size_t const objectsInSight = UpdateSight(*map, InstanceSight(*map, SightRangeOf(*map)), {}).New.size();
     ShowGameEffectsOf(*this);
     SendCustomEmotes();
@@ -1511,6 +1515,7 @@ void GameSession::PostQuestEvents()
 {
     if (!_questLog)
         return;
+    SyncQuestBook();
     std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
     std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
     for (std::size_t round = 0; round < MaxQuestResultRounds; ++round)
@@ -1532,6 +1537,7 @@ void GameSession::PostQuestEvents()
         LOG_INFO("server.gamesession", "Session {}'s wizard {} posted {} in {}, which fired {}", GetSessionId(), _worldGuid, Ambrose::ForLog(event, 128), Ambrose::ForLog(_zonePath, 128),
             fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
     }
+    SyncQuestBook();
 }
 
 void GameSession::ApplyDynaMods(std::vector<ZoneDynaMod> const& mods)
@@ -1596,6 +1602,97 @@ void GameSession::SendDynaMods()
     SendDmlMessage(*message);
     _dynaModsShown = true;
     LOG_DEBUG("server.gamesession", "Session {} sent wizard {} its {} Dynamod(s) in {}", GetSessionId(), _worldGuid, armed.size(), Ambrose::ForLog(_zonePath, 128));
+}
+
+void GameSession::SendQuestBook()
+{
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    if (!_questLog || !quests)
+        return;
+    _questLog->TakeChanges();
+    TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+    std::size_t goals = 0;
+    for (QuestLogQuest const& held : _questLog->GetQuests())
+    {
+        QuestInfo const* const quest = quests->Find(held.Name);
+        std::string problem;
+        std::optional<GameMessages::SendQuest> const message = quest ? QuestBookMessages::Quest(catalog, *quest, held, false, problem) : std::nullopt;
+        if (!message)
+        {
+            LOG_WARN("server.gamesession", "Session {} cannot show wizard {} its quest {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(held.Name, 128),
+                quest ? problem : std::string("it has no template"));
+            continue;
+        }
+        SendDmlMessage(*message);
+        for (QuestLogGoal const& goal : held.Goals)
+        {
+            if (goal.Complete)
+                continue;
+            if (std::optional<GameMessages::SendGoal> const sent = QuestBookMessages::Goal(catalog, *quest, held, goal, QuestBook::SendResume, problem))
+            {
+                SendDmlMessage(*sent);
+                ++goals;
+            }
+            else
+                LOG_WARN("server.gamesession", "Session {} cannot show wizard {} goal {} of {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(goal.Name, 128), Ambrose::ForLog(held.Name, 128), problem);
+        }
+    }
+    _questBookShown = true;
+    LOG_DEBUG("server.gamesession", "Session {} sent wizard {} its {} quest(s) with {} active goal(s)", GetSessionId(), _worldGuid, _questLog->GetQuests().size(), goals);
+}
+
+void GameSession::SyncQuestBook()
+{
+    if (!_questLog)
+        return;
+    std::vector<QuestLogChange> const changes = _questLog->TakeChanges();
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    if (!_questBookShown || !quests)
+        return;
+    TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+    for (QuestLogChange const& change : changes)
+    {
+        if (change.Kind == QuestLogChangeKind::QuestRemoved)
+        {
+            GameMessages::RemoveQuest removed;
+            removed.QuestId = change.QuestGid;
+            SendDmlMessage(removed);
+            LOG_INFO("server.gamesession", "Session {} took quest {} out of wizard {}'s quest book", GetSessionId(), Ambrose::ForLog(change.Quest, 128), _worldGuid);
+            continue;
+        }
+        QuestLogQuest const* const held = _questLog->Find(change.Quest);
+        QuestInfo const* const quest = quests->Find(change.Quest);
+        if (!held || !quest || held->Gid != change.QuestGid)
+            continue;
+        std::string problem;
+        if (change.Kind == QuestLogChangeKind::QuestAdded)
+        {
+            if (std::optional<GameMessages::SendQuest> const message = QuestBookMessages::Quest(catalog, *quest, *held, true, problem))
+                SendDmlMessage(*message);
+            else
+                LOG_WARN("server.gamesession", "Session {} cannot show wizard {} its new quest {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(change.Quest, 128), problem);
+            continue;
+        }
+        QuestLogGoal const* const goal = held->FindGoal(change.Goal);
+        if (!goal)
+            continue;
+        int32 const sendType = change.Kind == QuestLogChangeKind::GoalStarted ? QuestBook::SendStart : QuestBook::SendProgress;
+        if (std::optional<GameMessages::SendGoal> const message = QuestBookMessages::Goal(catalog, *quest, *held, *goal, sendType, problem))
+            SendDmlMessage(*message);
+        else
+            LOG_WARN("server.gamesession", "Session {} cannot show wizard {} goal {} of {}: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(change.Goal, 128), Ambrose::ForLog(change.Quest, 128), problem);
+    }
+}
+
+bool GameSession::StartQuest(QuestInfo const& quest)
+{
+    if (!_questLog || !_questLog->Add(quest.Row.Name, ObjectGuid::QuestGuids(), static_cast<uint64>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count())))
+        return false;
+    for (std::string const& goal : quest.StartGoals)
+        _questLog->StartGoal(quest.Row.Name, goal, ObjectGuid::QuestGuids());
+    PostQuestEvents();
+    SaveQuestLogIfDirty();
+    return true;
 }
 
 void GameSession::ShowDynaModState(uint64 id, std::string_view tag)
@@ -2310,6 +2407,7 @@ void GameSession::LeaveWorld()
     SaveQuestLogIfDirty();
     _questLog.reset();
     _dynaModsShown = false;
+    _questBookShown = false;
     _effects.Clear();
     _effectChanges.clear();
     if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())
