@@ -22,6 +22,7 @@
     "zone": "WizardCity/Interiors/WC_Headmistress_House",
     "zone_display": "WizardCity/Interiors/WC_Headmistress_House",
     "locale": "en-US",
+    "completed_quests": ["WC-COMMONS-MAIN-001"],
     "first": 1,
     "middle": 1,
     "last": 1,

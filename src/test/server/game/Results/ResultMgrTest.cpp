@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the results runner: a list runs its results in order through the handlers registered for their classes, skipping a class nobody handles, and handing each the context it runs for; a list stops at a ResWait and hands back the results after it with the wait, and a cinematic list's ResPostEvent and ResStartStagedCinematic read as the event and the cinematic, stage and reach they name; a quest's ResTeleport reads as its destination and a door's as none; reading rows keeps their order and refuses a row that does not decode or holds another class than it names.
+ * Tests the results runner: a list runs its results in order through the handlers registered for their classes, skipping a class nobody handles, and handing each the context it runs for; a list stops at a ResWait and hands back the results after it with the wait, and a cinematic list's ResPostEvent and ResStartStagedCinematic read as the event and the cinematic, stage and reach they name; a quest's ResTeleport reads as its destination and a door's as none, and the bytes `client encode` wrote for Unicorn Way's start read as Unicorn Way's Start; reading rows keeps their order and refuses a row that does not decode or holds another class than it names.
  */
 
 #include "CinematicResults.h"
+#include "Hex.h"
 #include "ResultFixtures.h"
 
 #include <gtest/gtest.h>
@@ -117,4 +118,17 @@ TEST(ResultMgrTest, AQuestsTeleportReadsAsItsDestinationAndADoorsAsNone)
     EXPECT_EQ(teleport->Zone, "GrizzleheimLite/GH_GrizzleheimHubLite");
     EXPECT_EQ(teleport->Location, "Start");
     EXPECT_FALSE(CinematicResults::TeleportOf(*ResultFixtures::Make("class ResTeleport").Object)) << "a zone door writes no destination, so zone_teleport answers for it";
+}
+
+TEST(ResultMgrTest, UnicornWaysStartTeleportBytesReadAsUnicornWaysStart)
+{
+    std::optional<std::vector<uint8>> const bytes = Hex::Decode("7D20A30DE80100005001000079944A9B200057697A617264436974792F57435F537472656574732F57435F556E69636F726E780000003B53465B05005374617274");
+    ASSERT_TRUE(bytes);
+    std::string error;
+    std::shared_ptr<PropertyObject const> const object = ResultMgr::Decode(ResultFixtures::Catalog(), *bytes, error);
+    ASSERT_TRUE(object) << error;
+    std::optional<TeleportResult> const teleport = CinematicResults::TeleportOf(*object);
+    ASSERT_TRUE(teleport);
+    EXPECT_EQ(teleport->Zone, "WizardCity/WC_Streets/WC_Unicorn");
+    EXPECT_EQ(teleport->Location, "Start");
 }

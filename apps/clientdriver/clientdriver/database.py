@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# The scratch databases a run owns: it touches only names starting with ambrose_driver_, lets the server's own updater create them, loads the zone rows the game server stands wizards in, seeds the wizard a scenario enters the world with, its level, experience and any stats it carries, and reads its name back from the name tables the game server extracted, copies another database's wizard with its stats when that database has them, reads a value for an assertion, and drops them when the run ends; and it keeps a WSL distribution attached for the whole run when the database lives in one, because WSL stops a distribution, and the MariaDB in it, once no wsl.exe is attached.
+# The scratch databases a run owns: it touches only names starting with ambrose_driver_, lets the server's own updater create them, loads the zone rows the game server stands wizards in, seeds the wizard a scenario enters the world with, its level, experience, any stats it carries and the quests it has already completed, and reads its name back from the name tables the game server extracted, copies another database's wizard with its stats when that database has them, reads a value for an assertion, and drops them when the run ends; and it keeps a WSL distribution attached for the whole run when the database lives in one, because WSL stops a distribution, and the MariaDB in it, once no wsl.exe is attached.
 import atexit
 import socket
 import subprocess
@@ -169,6 +169,9 @@ class Scratch:
                     cursor.execute(f"INSERT INTO character_stats (guid, {', '.join(stats)}) VALUES (%s{', %s' * len(stats)})", [guid] + list(stats.values()))
                 cursor.execute(f"INSERT INTO character_appearance (guid, {', '.join(APPEARANCE)}) VALUES (%s{', %s' * len(APPEARANCE)})",
                                [guid] + [look[key] for key in APPEARANCE])
+                for quest in wizard.get("completed_quests") or []:
+                    cursor.execute("INSERT INTO character_quest_registry (guid, quest_name, entry, value) VALUES (%s, %s, 'Complete', 1)", (guid, quest))
+                    cursor.execute("INSERT INTO character_registry (guid, entry, value) VALUES (%s, %s, 1)", (guid, f"{quest}_Complete"))
                 cursor.execute("INSERT INTO id_sequences (name, highest) VALUES ('character', %s) ON DUPLICATE KEY UPDATE highest = GREATEST(highest, VALUES(highest))",
                                (guid,))
             connection.commit()

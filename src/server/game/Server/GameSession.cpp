@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, and quest gold and experience, which it gives at the live quest rates and shows in one MSG_LOOT, its quest book sent at each entry with every quest it holds and their active goals, and each quest it gains or loses and goal it starts, moves or completes shown as it happens, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns, and the zone tokens a trigger result changes are kept with the session or its zone instance by their storage and shown to the client as additions, moves and removals each tick and when the wizard leaves the zone.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, with its level and experience saved under their own revision as experience moves them, the backpack it enters with, read after its spellbook and put into its object, its quest log, read after its backpack in one batch, pruned with a warning of quests and goals whose templates are gone and saved whole when it changes and when the wizard leaves, the results of the triggers its arrival, walk and finished quest goals fire, the Start dialog of a quest whose start results sent it to another zone, held across the transfer and shown when it arrives or its client refuses to go, run in order through the handlers it registers for notify texts, Dynamods, doors, spawns and loot tables, and quest gold and experience, which it gives at the live quest rates and shows in one MSG_LOOT, its quest book sent at each entry with every quest it holds and their active goals, and each quest it gains or loses and goal it starts, moves or completes shown as it happens, the Dynamods they make for it loaded into its client once it has its object and changed there as they change, a tagged object it is shown entering the state its mod names, chat, outbound instance updates with the moves and walking states of the objects that walk a path, the duels its wizard is shown start and end, and the custom emotes a wizard owns, and the zone tokens a trigger result changes are kept with the session or its zone instance by their storage and shown to the client as additions, moves and removals each tick and when the wizard leaves the zone.
  */
 
 #include "GameSession.h"
@@ -112,6 +112,32 @@ namespace
         auto const found = PendingTransfers.find({ accountId, characterId });
         if (found != PendingTransfers.end() && found->second.Key == key)
             PendingTransfers.erase(found);
+    }
+
+    struct HeldArrival
+    {
+        std::string Quest;
+        int64 Expires = 0;
+    };
+    std::mutex HeldArrivalMutex;
+    std::map<uint64, HeldArrival> HeldArrivals;
+
+    void HoldArrivalDialog(uint64 characterId, std::string quest, int64 expires)
+    {
+        std::lock_guard const lock(HeldArrivalMutex);
+        HeldArrivals[characterId] = HeldArrival{ std::move(quest), expires };
+    }
+
+    std::optional<std::string> TakeArrivalDialog(uint64 characterId, int64 now)
+    {
+        std::lock_guard const lock(HeldArrivalMutex);
+        std::erase_if(HeldArrivals, [now](auto const& entry) { return entry.second.Expires <= now; });
+        auto const found = HeldArrivals.find(characterId);
+        if (found == HeldArrivals.end())
+            return std::nullopt;
+        std::string quest = std::move(found->second.Quest);
+        HeldArrivals.erase(found);
+        return quest;
     }
 
     int64 NowEpochSeconds()
@@ -910,6 +936,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         SaveQuestLogIfDirty();
     }
     ArriveInVolumes();
+    if (std::optional<std::string> const arrival = TakeArrivalDialog(GetCharacterId(), NowEpochSeconds()))
+        ShowArrivalDialog(*arrival);
     if (resumed)
     {
         _movement = std::move(movement);
@@ -1296,6 +1324,23 @@ void GameSession::HandleZoneTransferNack(GameMessages::ZoneTransferNack&)
 {
     if (_transfers.Nack())
         LOG_INFO("server.gamesession", "Session {}'s client refused its zone transfer, so the wizard stays in {}", GetSessionId(), Ambrose::ForLog(_zonePath, 128));
+    if (std::optional<std::string> const arrival = TakeArrivalDialog(GetCharacterId(), NowEpochSeconds()))
+        ShowArrivalDialog(*arrival);
+}
+
+void GameSession::HoldStartDialogForArrival(QuestInfo const& quest)
+{
+    HoldArrivalDialog(GetCharacterId(), quest.Row.Name, NowEpochSeconds() + TransferKeyLifetimeSeconds);
+}
+
+void GameSession::ShowArrivalDialog(std::string const& questName)
+{
+    std::shared_ptr<QuestStore const> const quests = sQuestMgr.GetQuests();
+    QuestInfo const* const quest = quests ? quests->Find(questName) : nullptr;
+    QuestLogQuest const* const held = quest && _questLog ? _questLog->Find(questName) : nullptr;
+    bool const shown = held && PlayQuestDialog(0, QuestDialogs::QuestStart, *quest, quest->Dialogs, QuestStore::TagStart, held->Gid, 0);
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} arrived in {} where quest {} sent it{}", GetSessionId(), _worldGuid, Ambrose::ForLog(_zonePath, 128),
+        Ambrose::ForLog(questName, 128), shown ? " and was shown its Start dialog" : ", whose Start dialog it no longer has to see");
 }
 
 void GameSession::HandleRetryTeleport(GameMessages::RetryTeleport&)
