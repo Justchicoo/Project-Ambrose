@@ -45,6 +45,13 @@ namespace
     }
 }
 
+bool QuestOffers::Qualifies(QuestInfo const& quest, RequirementContext const& context)
+{
+    if (quest.Requirements && !sRequirementMgr.EvaluateTree(*quest.Requirements, context))
+        return false;
+    return quest.Row.RequirementListId.empty() || sRequirementMgr.Evaluate(quest.Row.RequirementListId, context);
+}
+
 std::vector<QuestInfo const*> QuestOffers::Available(QuestStore const& quests, uint32 templateId, QuestLog const& log, RequirementContext const& context)
 {
     std::vector<QuestInfo const*> available;
@@ -53,7 +60,7 @@ std::vector<QuestInfo const*> QuestOffers::Available(QuestStore const& quests, u
         QuestInfo const* const quest = quests.Find(name);
         if (!quest || log.HasQuest(name) || (log.HasCompletedQuest(name) && quest->Row.Repeat == 0))
             continue;
-        if (!quest->Row.RequirementListId.empty() && !sRequirementMgr.Evaluate(quest->Row.RequirementListId, context))
+        if (!Qualifies(*quest, context))
             continue;
         available.push_back(quest);
     }
