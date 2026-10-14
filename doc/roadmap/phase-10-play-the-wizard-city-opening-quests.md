@@ -26,7 +26,7 @@
 | 10.18 | Quest helper extras (QST-24) | M | 7.11, 7.06 |
 | 10.19 | Path actions (WLD-17 part 2) | M | 10.14 |
 | 10.20 | Zone tokens | M | 10.01, 7.04 |
-| 10.21 | Interactive world objects | M | 10.01, 10.03, 10.04, 10.07 |
+| 10.21 | Interactive world objects | M | 10.01, 10.03, 10.04, 10.07, 13.04 |
 | 10.22 | Lua script host | L | 10.01, 6.16 |
 
 ## Review notes for this phase
@@ -1169,25 +1169,26 @@ ZoneTokenBoolean, ZoneTokenCount and ZoneTokenTimer sit in a placement's token c
 
 **Goal:** Ritual objects, hot-and-cold objects, proximity and area behaviors, timed despawns and effect timers work for each wizard.
 
-**Size:** M. **Depends on:** 10.01, 10.03, 10.04, 10.07
+**Size:** M. **Depends on:** 10.01, 10.03, 10.04, 10.07, 13.04
 
-**Client messages:** MSG_CANTRIPHOTCOLD, MSG_ENTERSTATE
+**Client messages:** MSG_CASTRITUAL, MSG_CANTRIPHOTCOLD, MSG_ENTERSTATE
 
 **Acceptance**
 
-- [ ] A ritual object runs its results and loot for a wizard who meets its requirements
-- [ ] Hot-and-cold answers with the distance band
+- [ ] A ritual cantrip cast at a ritual object gives its loot and state to a wizard who meets its requirements
+- [ ] The server sends hot-and-cold the distance band
 - [ ] Area, proximity, timed despawn and effect timer behaviors run
 - [ ] Real client: a ritual object is used and changes state for that wizard only
 
 ### Detailed spec: Interactive world objects
 
-RitualObjectBehavior has 82 placements in 10 zones, each with requirements, results, loot, states and a required cantrip or school. HotColdObjectBehavior answers MSG_CANTRIPHOTCOLD, BeneficialProximityBehavior applies an effect near the object, AreaBehavior turns on behind m_enableReqs, DespawnTimedBehavior removes an object after its time, GameEffectTimerDisplayBehavior (43 placements in 9 zones) shows a timer, and ZoneTickEffectTemplate is the environmental damage a zone ticks.
+RitualObjectBehavior has 82 placements in 10 zones, each with requirements, results, loot, states and a required cantrip or school. A ritual starts when the wizard casts a ritual cantrip at the object, which the client sends as MSG_CASTRITUAL, so casting cantrips (13.04) comes first. Every shipped ritual's result list is null, so a ritual's effect is its loot and its state change. HotColdObjectBehavior has the server send MSG_CANTRIPHOTCOLD, BeneficialProximityBehavior applies an effect near the object, AreaBehavior turns on behind m_enableReqs, DespawnTimedBehavior removes an object after its time, GameEffectTimerDisplayBehavior (43 placements in 9 zones) shows a timer, and ZoneTickEffectTemplate is the environmental damage a zone ticks.
 
 **Deliverables**
 
 - Each behavior read from its template with the fields the server runs.
-- Using a ritual object: its requirements through the requirement engine, its results through the results runner, its loot through LootMgr, and its state change for that wizard through its Dynamods.
+- A ritual cast with MSG_CASTRITUAL: its requirements through the requirement engine, its loot through LootMgr, its state change for that wizard through its Dynamods, and its result list through the results runner should a zone fill one.
+- MSG_CANTRIPHOTCOLD sent by the server as a wizard nears or leaves a hot-and-cold object.
 - Hot-and-cold, proximity, area, timed despawn, effect timer and zone tick behaviors run in the zone's update.
 
 **Data sources**
@@ -1198,14 +1199,14 @@ RitualObjectBehavior has 82 placements in 10 zones, each with requirements, resu
 **Acceptance**
 
 - [ ] Unit: every behavior class here is read with the fields the server runs
-- [ ] Unit: a wizard who meets a ritual object's requirements and holds its cantrip or school gets its results, loot and state; one who does not is refused and nothing changes
-- [ ] Unit: MSG_CANTRIPHOTCOLD is answered with the band of the wizard's distance to the object
+- [ ] Unit: a MSG_CASTRITUAL from a wizard who meets a ritual object's requirements and casts its cantrip or school gives its loot and state; one who does not is refused and nothing changes
+- [ ] Unit: the server sends MSG_CANTRIPHOTCOLD with the band of the wizard's distance to the object as it moves
 - [ ] Unit: an area behavior turns on only for wizards meeting m_enableReqs, a proximity effect applies inside its range only, a timed despawn removes its object on time, and a zone tick effect damages on its period
-- [ ] Real client: using a ritual object plays its state change and gives its loot to that wizard, while a second client sees it unchanged
+- [ ] Real client: casting a ritual cantrip at a ritual object plays its state change and gives its loot to that wizard, while a second client sees it unchanged
 
 **Risks**
 
-- The required cantrip needs cantrips (phase 13); until then a ritual object that requires one is refused with a message naming it.
+- Rituals wait on 13.04's cantrip casting; the other behaviors here do not.
 
 ## 10.22 Lua script host
 
