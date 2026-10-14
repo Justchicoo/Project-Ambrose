@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the CSR package quest reader on classes and quest files the test invents: a quest's keys, its RequirementList, encoded so it decodes back to the list it was and NULL in the script when the quest lists none or an empty list, with an unknown class or property in it failing the quest, goals, adjectives, client tags, quest events, tally, logic and Prep dialog with its madlib become quest table rows, logic waiting on two goals is attached to both, dialog tags and results the tables cannot hold are counted rather than failing the quest, a quest's and its goals' completion results are stored in order, a result of a class the dump lacks skipped and counted while one nested inside a result or in a goal fails the quest, a starter template written only when one is set, a persona named by its _Persona template is read as the object it names, a missing actor template, a missing locale key, a name another source holds and a goal the logic names but the quest lacks each fail their quest, and the script replaces only the rows the package's source marks.
+ * Tests the CSR package quest reader on classes and quest files the test invents: a quest's keys, its RequirementList, encoded so it decodes back to the list it was and NULL in the script when the quest lists none or an empty list, with an unknown class or property in it failing the quest, goals, adjectives, client tags, quest events, tally, logic and Prep dialog with its madlib become quest table rows, logic waiting on two goals is attached to both, dialog tags and results the tables cannot hold are counted rather than failing the quest, a quest's start results apart from its end results, a quest's and its goals' completion results are stored in order, a result of a class the dump lacks skipped and counted while one nested inside a result or in a goal fails the quest, a starter template written only when one is set, a persona named by its _Persona template is read as the object it names, a missing actor template, a missing locale key, a name another source holds and a goal the logic names but the quest lacks each fail their quest, and the script replaces only the rows the package's source marks.
  */
 
 #include "ObjectSerializer.h"
@@ -93,7 +93,7 @@ namespace
         derived("class BountyGoalTemplate", { { "std::string", "m_npcAdjectives", "List" }, { "int", "m_bountyTotal", "Static" } });
         add("class QuestTemplate", Json::array({ "PropertyClass" }), props({ { "std::string", "m_questName", "Static" }, { "unsigned int", "m_questNameID", "Static" },
             { "std::string", "m_questTitle", "Static" }, { "std::string", "m_questInfo", "Static" }, { "std::string", "m_startGoals", "List" },
-            { "class GoalTemplate*", "m_goals", "List" }, { "class ResultList*", "m_endResults", "Static" }, { "class RequirementList*", "m_requirements", "Static" },
+            { "class GoalTemplate*", "m_goals", "List" }, { "class ResultList*", "m_endResults", "Static" }, { "class ResultList*", "m_startResults", "Static" }, { "class RequirementList*", "m_requirements", "Static" },
             { "class GoalCompleteLogic*", "m_goalLogic", "List" }, { "int", "m_questLevel", "Static" }, { "int", "m_questRepeat", "Static" }, { "bool", "m_mainline", "Static" },
             { "class ActorDialogList*", "m_dialogList", "Static" } }));
         TypeRegistry registry;
@@ -394,6 +394,33 @@ TEST_F(QuestPackageTest, ResultsAreStoredInOrderAndOnesOfUnknownClassAreSkippedA
     std::string const all = fmt::format("{}", fmt::join(QuestPackage::BuildScript(read, QuestPackage::SourceOf("Test.wad")).GetStatements(), "\n"));
     EXPECT_NE(all.find("INSERT INTO `quest_result`"), std::string::npos);
     EXPECT_EQ(all.find("TEST-NESTED"), std::string::npos);
+}
+
+TEST_F(QuestPackageTest, StartResultsAreStoredApartFromEndResultsAndMarkedAsRunOnStart)
+{
+    std::string file = WithEndResults(QuestFile("TEST-START"), Gold(5));
+    file.replace(file.find("    <m_endResults>"), 0, "    <m_startResults><Class Name=\"class ResultList\">" + Gold(3) + "</Class></m_startResults>\r\n");
+    QuestPackageRead read = QuestPackage::Read(_catalog, { QuestPackageEntry{ "start.xml", file } });
+    QuestPackage::Check(read, Install());
+    ASSERT_EQ(read.Quests.size(), 1u);
+    QuestPackageQuest const& quest = read.Quests[0];
+    ASSERT_TRUE(quest.IsClean()) << quest.Problems.front();
+    EXPECT_FALSE(read.NotCarried.contains("m_startResults"));
+
+    std::vector<std::tuple<bool, uint32, int32>> rows;
+    for (QuestResultRow const& row : quest.Rows.Results)
+    {
+        EXPECT_TRUE(row.Goal.empty());
+        DecodeResult const decoded = ObjectSerializer::Decode(_catalog, row.Data, ZoneExtractor::DataOptions());
+        ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+        int32 const* const amount = decoded.Object->Get("m_amount")->GetIf<int32>();
+        rows.emplace_back(row.Start, row.Position, amount ? *amount : -1);
+    }
+    std::sort(rows.begin(), rows.end());
+    EXPECT_EQ(rows, (std::vector<std::tuple<bool, uint32, int32>>{ { false, 0, 5 }, { true, 0, 3 } })) << "each list keeps its own positions";
+
+    std::string const all = fmt::format("{}", fmt::join(QuestPackage::BuildScript(read, QuestPackage::SourceOf("Test.wad")).GetStatements(), "\n"));
+    EXPECT_NE(all.find("`on_start`"), std::string::npos);
 }
 
 TEST_F(QuestPackageTest, TheScriptWritesAStarterTemplateOnlyWhenOneIsSet)

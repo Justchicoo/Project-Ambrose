@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's and each dialog line's stored RequirementList with the type dump it is given, a list it cannot read closing the quest or hiding the line and naming why, reads the results of each quest and goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog or else from its stored starter template, and fills the lookups by template, object name, tag, adjective and zone.
+ * Builds a quest generation from the quest table rows, leaving out the quests it is told to skip and any row that names a quest or goal it does not hold, decodes each quest's and each dialog line's stored RequirementList with the type dump it is given, a list it cannot read closing the quest or hiding the line and naming why, reads the results of each quest's start and end and of each goal in position order, naming each one that does not read and leaving it out, puts adjectives, client tags, logic, dialog lines and madlibs in their authored order, takes each quest's starter from the first line of its Prep dialog or else from its stored starter template, and fills the lookups by template, object name, tag, adjective and zone.
  */
 
 #include "QuestStore.h"
@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <tuple>
 #include <utility>
 
 namespace
@@ -196,23 +197,25 @@ std::shared_ptr<QuestStore const> QuestStore::Build(QuestRows const& rows, std::
                 line.Madlibs.push_back(QuestMadlib{ row.Identifier, row.Value });
     }
 
-    std::map<std::pair<std::string, std::string>, std::vector<ResultRow>> results;
+    std::map<std::tuple<std::string, std::string, bool>, std::vector<ResultRow>> results;
     for (QuestResultRow const& row : rows.Results)
-        results[{ row.Quest, row.Goal }].push_back(ResultRow{ row.Position, row.Class, row.Data });
+        results[{ row.Quest, row.Start ? std::string() : row.Goal, row.Start }].push_back(ResultRow{ row.Position, row.Class, row.Data });
     for (auto& [key, list] : results)
     {
+        auto const& [questName, goalName, start] = key;
         ResultList* target = nullptr;
-        if (key.second.empty())
+        if (goalName.empty())
         {
-            QuestInfo* const info = quest(key.first);
-            target = info ? &info->Results : nullptr;
+            QuestInfo* const info = quest(questName);
+            target = info ? (start ? &info->StartResults : &info->Results) : nullptr;
         }
-        else if (QuestGoal* const found = goal(key.first, key.second))
+        else if (QuestGoal* const found = goal(questName, goalName))
             target = &found->Results;
         if (!target)
             continue;
         std::stable_sort(list.begin(), list.end(), [](ResultRow const& left, ResultRow const& right) { return left.Position < right.Position; });
-        *target = ResultMgr::Read(catalog, list, key.second.empty() ? fmt::format("quest {}", key.first) : fmt::format("goal {} of quest {}", key.second, key.first), store->_problems);
+        *target = ResultMgr::Read(catalog, list, start ? fmt::format("start of quest {}", questName) : goalName.empty() ? fmt::format("quest {}", questName)
+            : fmt::format("goal {} of quest {}", goalName, questName), store->_problems);
     }
 
     auto const sortDialogs = [](std::map<std::string, QuestDialog, std::less<>>& owned)

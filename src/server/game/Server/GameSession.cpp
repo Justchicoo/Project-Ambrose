@@ -1458,7 +1458,10 @@ std::size_t GameSession::RunResults(std::vector<ResultSource> const& sources, st
     if (!spawns.empty() && _mapId)
         if (Map* const map = sMapMgr.Find(*_mapId))
             sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, spawns, _worldGuid, now, std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
-    if (walkDoors && !doors.empty())
+    std::optional<ResultTeleport> const teleport = std::exchange(_resultTeleport, std::nullopt);
+    if (teleport && _mapId)
+        TeleportFromResult(teleport->Destination, teleport->Source);
+    else if (walkDoors && !doors.empty())
         WalkThroughDoor(doors);
     return ran;
 }
@@ -1548,7 +1551,14 @@ void GameSession::RegisterResultHandlers()
         }
         context.Session->GiveLoot(*table, context.Source);
     });
-    sResultMgr.Register(ZoneTriggerMgr::TeleportClass, [](PropertyObject const&, ResultContext const& context) { context.Session->_resultDoors.push_back(context.Source); });
+    sResultMgr.Register(CinematicResults::TeleportClass, [](PropertyObject const& result, ResultContext const& context)
+    {
+        std::optional<TeleportResult> teleport = CinematicResults::TeleportOf(result);
+        if (!teleport)
+            context.Session->_resultDoors.push_back(context.Source);
+        else if (!context.Session->_resultTeleport)
+            context.Session->_resultTeleport = ResultTeleport{ std::move(*teleport), context.Source };
+    });
     auto const spawn = [](PropertyObject const&, ResultContext const& context)
     {
         std::vector<std::string>& spawns = context.Session->_resultSpawns;
@@ -1814,6 +1824,8 @@ bool GameSession::StartQuest(QuestInfo const& quest)
         return false;
     PostQuestEvents();
     SaveQuestLogIfDirty();
+    if (!quest.StartResults.empty() && _mapId)
+        RunResults({ ResultSource{ fmt::format("{} start", quest.Row.Name), quest.StartResults } }, std::chrono::steady_clock::now());
     return true;
 }
 
@@ -1835,25 +1847,45 @@ void GameSession::WalkThroughDoor(std::vector<std::string> const& doors)
             fmt::format("{}", fmt::join(doors, ", ")), Ambrose::ForLog(_zonePath, 128));
         return;
     }
-    ZonePlace const place = sZoneMgr.FindPlace(door->DestZone, door->DestLocation);
+    std::string problem;
+    std::string const from = _zonePath;
+    if (SendTo(door->DestZone, door->DestLocation, door->SameZone, problem))
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {} to {} in {}", GetSessionId(), _worldGuid, door->TriggerName, Ambrose::ForLog(from, 128),
+            door->DestLocation, door->DestZone);
+    else
+        LOG_WARN("server.gamesession", "Session {}'s wizard {} walked through {} in {} to {} in {}, which did not happen: {}", GetSessionId(), _worldGuid, door->TriggerName,
+            Ambrose::ForLog(from, 128), door->DestLocation, door->DestZone, problem);
+}
+
+void GameSession::TeleportFromResult(TeleportResult const& teleport, std::string_view source)
+{
+    std::string problem;
+    std::string const from = _zonePath;
+    std::string const place = teleport.Location.empty() ? std::string("the start") : Ambrose::ForLog(teleport.Location, 128);
+    if (SendTo(teleport.Zone, teleport.Location, teleport.Zone == _zonePath, problem))
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} was sent from {} to {} in {} by {}", GetSessionId(), _worldGuid, Ambrose::ForLog(from, 128), place,
+            Ambrose::ForLog(teleport.Zone, 128), Ambrose::ForLog(source, 128));
+    else
+        LOG_WARN("server.gamesession", "Session {}'s wizard {} was to be sent from {} to {} in {} by {}, which did not happen: {}", GetSessionId(), _worldGuid, Ambrose::ForLog(from, 128),
+            place, Ambrose::ForLog(teleport.Zone, 128), Ambrose::ForLog(source, 128), problem);
+}
+
+bool GameSession::SendTo(std::string const& zone, std::string const& location, bool sameZone, std::string& problem)
+{
+    ZonePlace const place = sZoneMgr.FindPlace(zone, location);
     if (place.Result != ZoneLookup::Ok)
     {
-        LOG_WARN("server.gamesession", "Session {}'s door {} in {} leads to {} in {}, which the zones no longer hold", GetSessionId(), door->TriggerName,
-            Ambrose::ForLog(_zonePath, 128), door->DestLocation, door->DestZone);
-        return;
+        problem = fmt::format("the zones hold no {} in {}", location, zone);
+        return false;
     }
     PlayerPosition const target{ place.Location.X, place.Location.Y, place.Location.Z, place.Location.Yaw };
-    std::string problem;
     GameSession::OnlookerSource source;
     {
         std::lock_guard const lock(OnlookerMutex);
         source = Onlookers;
     }
     std::vector<std::shared_ptr<GameSession>> const onlookers = source ? source() : std::vector<std::shared_ptr<GameSession>>{ SharedSelf() };
-    bool const moved = door->SameZone ? TeleportWithinMap(target, onlookers, problem)
-                                      : RequestZoneTransfer(ZoneTransfer{ door->DestZone, door->DestZone, door->DestLocation, target }, problem);
-    LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {} to {} in {}{}", GetSessionId(), _worldGuid, door->TriggerName, Ambrose::ForLog(_zonePath, 128),
-        door->DestLocation, door->DestZone, moved ? std::string() : fmt::format(", which did not happen: {}", problem));
+    return sameZone ? TeleportWithinMap(target, onlookers, problem) : RequestZoneTransfer(ZoneTransfer{ zone, zone, location, target }, problem);
 }
 
 void GameSession::FollowReloadedVolumes()

@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests quest results: a quest's and each goal's result rows read into lists in position order, a row that does not read and a goal the quest does not hold are left out with the bad row named, and a quest log keeps each goal and quest it completes, once, until its session takes them to run their results.
+ * Tests quest results: a quest's and each goal's result rows read into lists in position order, a quest's start results apart from its end results, a row that does not read and a goal the quest does not hold are left out with the bad row named, and a quest log keeps each goal and quest it completes, once, until its session takes them to run their results.
  */
 
+#include "CinematicResults.h"
 #include "ObjectGuid.h"
 #include "QuestLog.h"
 #include "QuestStore.h"
@@ -11,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -62,6 +64,28 @@ TEST(QuestResultTest, AQuestAndItsGoalsReadTheirResultsInOrderAndNameARowThatDoe
     EXPECT_EQ(store->FindResults("Missing", ""), nullptr);
     ASSERT_EQ(store->GetProblems().size(), 1u);
     EXPECT_NE(store->GetProblems().front().find("goal TalkToHeadmaster of quest Chain"), std::string::npos) << store->GetProblems().front();
+}
+
+TEST(QuestResultTest, AQuestsStartResultsAreKeptApartFromItsEndResultsWithTheirOwnPositions)
+{
+    QuestRows rows;
+    QuestTemplateRow quest;
+    quest.Name = "Chain";
+    rows.Quests.push_back(quest);
+    QuestResultRow start = Row("", 0, "class ResTeleport", ResultFixtures::Encode(ResultFixtures::Teleport("WizardCity/WC_Streets/WC_Unicorn", "Start")));
+    start.Start = true;
+    rows.Results = { start, Row("", 0, ResultFixtures::FirstTestClass, ResultFixtures::Encode(ResultFixtures::Make(ResultFixtures::FirstTestClass, "done"))) };
+
+    std::shared_ptr<QuestStore const> const store = QuestStore::Build(rows, {}, ResultFixtures::Catalog());
+    QuestInfo const* const info = store->Find("Chain");
+    ASSERT_NE(info, nullptr);
+    ASSERT_EQ(info->StartResults.size(), 1u) << "a start result runs when the quest is accepted";
+    std::optional<TeleportResult> const teleport = CinematicResults::TeleportOf(*info->StartResults[0].Object);
+    ASSERT_TRUE(teleport);
+    EXPECT_EQ(teleport->Zone, "WizardCity/WC_Streets/WC_Unicorn");
+    ASSERT_EQ(info->Results.size(), 1u) << "the end list at the same position is its own";
+    EXPECT_EQ(TextOf(info->Results[0]), "done");
+    EXPECT_TRUE(store->GetProblems().empty()) << store->GetProblems().front();
 }
 
 TEST(QuestResultTest, AQuestLogKeepsEachCompletionOnceUntilItIsTaken)

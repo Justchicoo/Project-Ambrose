@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The rows of the world database's quest tables as plain records, one struct per table, together with each quest's and each dialog line's optional requirement-list reference and the encoded RequirementList it may carry from the client's own quest data, the template of the NPC that offers it when no Prep line names one, the quest events that count toward a goal, the results a quest or goal runs when it completes, and the object_template ids and names they are checked against, gathered into one set that the database reader or a test fills and the validator and the quest store read.
+ * The rows of the world database's quest tables as plain records, one struct per table, together with each quest's and each dialog line's optional requirement-list reference and the encoded RequirementList it may carry from the client's own quest data, the template of the NPC that offers it when no Prep line names one, the quest events that count toward a goal, the results a quest runs when it is accepted or completes and a goal runs when it completes, and the object_template ids and names they are checked against, gathered into one set that the database reader or a test fills and the validator and the quest store read.
  */
 
 #ifndef AMBROSE_QUESTROWS_H
@@ -156,6 +156,7 @@ struct QuestResultRow
     uint32 Position = 0;
     std::string Class;
     std::vector<uint8> Data;
+    bool Start = false;
 };
 
 struct QuestObjectRow

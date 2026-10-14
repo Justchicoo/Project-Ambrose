@@ -2543,13 +2543,14 @@ namespace
         PrintCounts("classes the type dump does not list", read.UnknownClasses);
         PrintCounts("what the quest tables have no place for, by occurrence", read.NotCarried);
         PrintCounts("what was read another way, by occurrence", read.Adjusted);
+        std::size_t startResults = 0;
         std::size_t questResults = 0;
         std::size_t goalResults = 0;
         for (QuestPackageQuest const& quest : read.Quests)
             if (quest.IsClean())
                 for (QuestResultRow const& row : quest.Rows.Results)
-                    ++(row.Goal.empty() ? questResults : goalResults);
-        std::cout << fmt::format("quest_result rows of the clean quests: {} on quests, {} on goals\n", questResults, goalResults);
+                    ++(row.Start ? startResults : row.Goal.empty() ? questResults : goalResults);
+        std::cout << fmt::format("quest_result rows of the clean quests: {} on starts, {} on quests, {} on goals\n", startResults, questResults, goalResults);
         PrintCounts("results skipped, since the type dump lists no class for them", read.GetSkippedResults());
 
         std::filesystem::path const dataFile = arguments.Data ? LogConfig::Utf8Path(*arguments.Data) : QuestsFolder() / ConfigMgr::PathFromUtf8(std::string(QuestWikiData::DefaultFile));

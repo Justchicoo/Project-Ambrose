@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements, each goal's m_goalRequirements and each dialog line's m_requirements encoded as zone data holds requirements and failing the quest when any of those lists does not read, the results its end and each goal's completion run encoded the same way, a result whose class the type dump lacks skipped and counted as the result manager skips it at run time, keeping each goal's quest events, attaching each goal-complete logic entry, with the count of its OR goals it needs, to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
+ * Reads a CSR package's QuestData plain-XML quest templates by property name into quest table rows, its m_requirements, each goal's m_goalRequirements and each dialog line's m_requirements encoded as zone data holds requirements and failing the quest when any of those lists does not read, the results its start, its end and each goal's completion run encoded the same way, a result whose class the type dump lacks skipped and counted as the result manager skips it at run time, keeping each goal's quest events, attaching each goal-complete logic entry, with the count of its OR goals it needs, to every goal it waits on, keeping the dialog tags the tables hold and counting the rest, then checks each quest against the install, the names other sources hold and the quest validator, and writes the clean ones marked with the package as their source.
  */
 
 #include "QuestPackage.h"
@@ -26,7 +26,7 @@ namespace
     constexpr std::size_t NameColumn = 128;
     constexpr std::size_t TextColumn = 255;
     constexpr std::string_view QuestClass = "class QuestTemplate";
-    constexpr std::array NotCarriedProperties{ std::string_view("m_startResults"), std::string_view("m_activateResults"), std::string_view("m_tallyResults"), std::string_view("m_prepRequirements"),
+    constexpr std::array NotCarriedProperties{ std::string_view("m_activateResults"), std::string_view("m_tallyResults"), std::string_view("m_prepRequirements"),
         std::string_view("m_pruneRequirements"), std::string_view("m_goalRequirements"), std::string_view("m_dynaMods"), std::string_view("m_questEffectInfoList"),
         std::string_view("m_behaviors") };
     constexpr std::array<std::string_view, 67> ReadProperties{ "m_questName", "m_questNameID", "m_questTitle", "m_questInfo", "m_questPrep", "m_questUnderway", "m_questComplete",
@@ -206,7 +206,7 @@ namespace
             Gate(requirements, _quest.Rows.Quests.back().Requirements);
             for (std::string_view const list : { "m_prepRequirements", "m_pruneRequirements" })
                 Requirements(fields.Object(list), list);
-            Results(fields.Object("m_startResults"), "m_startResults");
+            StoreResults(fields.Object("m_startResults"), {}, true);
             StoreResults(fields.Object("m_endResults"), {});
             for (std::string_view const script : { "m_onStartQuestScript", "m_onEndQuestScript" })
                 if (!fields.Text(script).empty())
@@ -283,7 +283,7 @@ namespace
             return std::any_of(children.begin(), children.end(), [](PropertyObject const* child) { return NamesSchool(*child); });
         }
 
-        void StoreResults(PropertyObject const* list, std::string const& goal)
+        void StoreResults(PropertyObject const* list, std::string const& goal, bool start = false)
         {
             if (!list)
                 return;
@@ -293,11 +293,11 @@ namespace
                 EncodeResult encoded = ObjectSerializer::Encode(results[index], ZoneExtractor::DataOptions());
                 if (!encoded.Ok())
                 {
-                    Fail("result that does not encode", fmt::format("{} {}: {}", goal.empty() ? std::string("quest") : fmt::format("goal {}", goal), ShortName(results[index]->GetClass().Name),
+                    Fail("result that does not encode", fmt::format("{} {}: {}", start ? std::string("quest start") : goal.empty() ? std::string("quest") : fmt::format("goal {}", goal), ShortName(results[index]->GetClass().Name),
                         encoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(encoded.Status)) : std::move(encoded.Detail)));
                     return;
                 }
-                _quest.Rows.Results.push_back(QuestResultRow{ _quest.Name, goal, static_cast<uint32>(index), results[index]->GetClass().Name, std::move(encoded.Bytes) });
+                _quest.Rows.Results.push_back(QuestResultRow{ _quest.Name, goal, static_cast<uint32>(index), results[index]->GetClass().Name, std::move(encoded.Bytes), start });
             }
         }
 
@@ -493,7 +493,7 @@ namespace
         if (dot == std::string_view::npos)
             return false;
         std::string_view const rest = path.substr(dot + 1);
-        if (rest.starts_with("m_endResults"))
+        if (rest.starts_with("m_endResults") || rest.starts_with("m_startResults"))
             return true;
         if (!rest.starts_with("m_goals["))
             return false;
@@ -896,7 +896,7 @@ WorldSqlScript QuestPackage::BuildScript(QuestPackageRead const& read, std::stri
     std::vector<WorldSqlScript::Row> results;
     results.reserve(rows.Results.size());
     for (QuestResultRow const& row : rows.Results)
-        results.push_back(WorldSqlScript::Row{ row.Quest, row.Goal, number(row.Position), row.Class, std::string(row.Data.begin(), row.Data.end()) });
-    script.InsertRows("quest_result", { "quest", "goal_name", "position", "class_name", "data" }, results);
+        results.push_back(WorldSqlScript::Row{ row.Quest, row.Goal, number(row.Position), row.Class, std::string(row.Data.begin(), row.Data.end()), number(row.Start ? 1 : 0) });
+    script.InsertRows("quest_result", { "quest", "goal_name", "position", "class_name", "data", "on_start" }, results);
     return script;
 }

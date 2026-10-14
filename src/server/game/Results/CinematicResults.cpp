@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a ResPostEvent's m_eventName and a ResStartStagedCinematic's m_cinematicName, m_stageName and m_bIncludeAllPlayersInZone, giving nothing for one that names no event or cinematic.
+ * Reads a ResPostEvent's m_eventName and a ResStartStagedCinematic's m_cinematicName, m_stageName and m_bIncludeAllPlayersInZone, and a ResTeleport's m_destinationZone and m_destinationLoc, giving nothing for one that names no event, cinematic or zone.
  */
 
 #include "CinematicResults.h"
@@ -37,5 +37,13 @@ namespace CinematicResults
         int32 const* const wholeZone = all ? all->GetIf<int32>() : nullptr;
         cinematic.WholeZone = wholeZone && *wholeZone != 0;
         return cinematic;
+    }
+
+    std::optional<TeleportResult> TeleportOf(PropertyObject const& result)
+    {
+        TeleportResult teleport{ TextOf(result, "m_destinationZone"), TextOf(result, "m_destinationLoc") };
+        if (teleport.Zone.empty())
+            return std::nullopt;
+        return teleport;
     }
 }

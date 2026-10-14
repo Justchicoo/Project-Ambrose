@@ -12,6 +12,7 @@
 #include "CharacterSpell.h"
 #include "CharacterStats.h"
 #include "CharacterSummary.h"
+#include "CinematicResults.h"
 #include "ChatMgr.h"
 #include "GameEffectHolder.h"
 #include "GameMessages.h"
@@ -375,6 +376,8 @@ private:
     std::vector<std::string> PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now, bool walkDoors = true);
     void FollowReloadedVolumes();
     void WalkThroughDoor(std::vector<std::string> const& doors);
+    void TeleportFromResult(TeleportResult const& teleport, std::string_view source);
+    bool SendTo(std::string const& zone, std::string const& location, bool sameZone, std::string& problem);
     void ApplyDynaMods(std::vector<ZoneDynaMod> const& mods);
     void EraseDynaMods(std::string_view tag);
     static void RegisterResultHandlers();
@@ -463,6 +466,12 @@ private:
     bool _dynaModsShown = false;
     bool _questBookShown = false;
     std::vector<std::string> _resultDoors;
+    struct ResultTeleport
+    {
+        TeleportResult Destination;
+        std::string Source;
+    };
+    std::optional<ResultTeleport> _resultTeleport;
     std::vector<std::string> _resultSpawns;
     QuestWireEncoder::LootInfoList _resultLoot;
     std::vector<std::string> _resultEvents;

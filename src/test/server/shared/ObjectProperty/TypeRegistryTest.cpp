@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, decodes and encodes versionable objects, decodes from a BINd file inside a list of the dump class it extends, where a catalog without it reports an unknown class, hashes a pointer property's type as written as the dump does, checks a property nobody can name by the hash its # name carries, gives way to the dump where the dump describes the same class, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
+ * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, decodes and encodes versionable objects, decodes from a BINd file inside a list of the dump class it extends, where a catalog without it reports an unknown class, hashes a pointer property's type as written as the dump does, checks a property nobody can name by the hash its # name carries, gives way to the dump where the dump describes the same class, except that it gives its properties to a class the dump lists with none, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
  */
 
 #include "BindFile.h"
@@ -774,4 +774,30 @@ TEST_F(TypeRegistryTest, TheDumpsOwnDescriptionWinsOverTheSupplements)
     ASSERT_NE(kept, nullptr);
     EXPECT_EQ(kept->Properties.size(), _active->FindClass("class TestBase")->Properties.size());
     EXPECT_FALSE(_registry.IsFromSupplement(kept->Hash));
+}
+
+TEST_F(TypeRegistryTest, ASupplementGivesItsPropertiesToAClassTheDumpListsWithNone)
+{
+    ASSERT_NO_FATAL_FAILURE(Activate());
+    ASSERT_TRUE(_active->FindClass("struct TestOpaqueEvent")->Properties.empty());
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_registry.SetSupplement(Supplement("struct TestOpaqueEvent", "class PropertyClass"), "test rows", errors)) << (errors.empty() ? std::string() : errors.front());
+    TypeCatalogPtr const catalog = _registry.GetCatalog();
+    ClassInfo const* const filled = catalog->FindClass("struct TestOpaqueEvent");
+    ASSERT_NE(filled, nullptr);
+    EXPECT_EQ(filled->Properties.size(), 2u) << "the client lists a server-only result with no properties, so the server's own description of them is used";
+    EXPECT_TRUE(filled->Bases.empty()) << "the dump's own bases are kept";
+    EXPECT_FALSE(_registry.IsFromSupplement(filled->Hash));
+
+    PropertyObjectPtr object = PropertyObject::Create(catalog, "struct TestOpaqueEvent");
+    ASSERT_TRUE(object);
+    ASSERT_EQ(object->Set("m_name", std::string("WC_Streets")), PropertySetResult::Ok);
+    SerializerOptions options;
+    options.Versionable = true;
+    EncodeResult const encoded = ObjectSerializer::Encode(object.get(), options);
+    ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
+    DecodeResult const decoded = ObjectSerializer::Decode(catalog, encoded.Bytes, options);
+    ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+    ASSERT_NE(decoded.Object->Get("m_name"), nullptr);
+    EXPECT_EQ(*decoded.Object->Get("m_name")->GetIf<std::string>(), "WC_Streets");
 }

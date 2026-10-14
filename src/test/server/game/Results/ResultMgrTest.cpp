@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the results runner: a list runs its results in order through the handlers registered for their classes, skipping a class nobody handles, and handing each the context it runs for; a list stops at a ResWait and hands back the results after it with the wait, and a cinematic list's ResPostEvent and ResStartStagedCinematic read as the event and the cinematic, stage and reach they name; reading rows keeps their order and refuses a row that does not decode or holds another class than it names.
+ * Tests the results runner: a list runs its results in order through the handlers registered for their classes, skipping a class nobody handles, and handing each the context it runs for; a list stops at a ResWait and hands back the results after it with the wait, and a cinematic list's ResPostEvent and ResStartStagedCinematic read as the event and the cinematic, stage and reach they name; a quest's ResTeleport reads as its destination and a door's as none; reading rows keeps their order and refuses a row that does not decode or holds another class than it names.
  */
 
 #include "CinematicResults.h"
@@ -106,4 +106,15 @@ TEST(ResultMgrTest, APostEventAndAStagedCinematicReadAsWhatTheyName)
     EXPECT_TRUE(staged->WholeZone);
     EXPECT_FALSE(CinematicResults::StagedCinematicOf(*ResultFixtures::StagedCinematic("MR_NorthGateIntroScene", "", 0).Object)->WholeZone);
     EXPECT_FALSE(CinematicResults::StagedCinematicOf(*ResultFixtures::StagedCinematic("", "Stage01", 0).Object)) << "a result naming no cinematic starts none";
+}
+
+TEST(ResultMgrTest, AQuestsTeleportReadsAsItsDestinationAndADoorsAsNone)
+{
+    ResultEntry const wayOut = ResultFixtures::Teleport("GrizzleheimLite/GH_GrizzleheimHubLite", "Start");
+    ASSERT_TRUE(wayOut.Object);
+    std::optional<TeleportResult> const teleport = CinematicResults::TeleportOf(*wayOut.Object);
+    ASSERT_TRUE(teleport);
+    EXPECT_EQ(teleport->Zone, "GrizzleheimLite/GH_GrizzleheimHubLite");
+    EXPECT_EQ(teleport->Location, "Start");
+    EXPECT_FALSE(CinematicResults::TeleportOf(*ResultFixtures::Make("class ResTeleport").Object)) << "a zone door writes no destination, so zone_teleport answers for it";
 }
