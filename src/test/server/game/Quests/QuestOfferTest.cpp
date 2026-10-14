@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the quest offer without a client: an accept is refused for a quest never offered, for one offered by an NPC the wizard has walked away from and for one declined since, and taken once for an offer that stands; an NPC whose template is only a later actor of a quest's Prep dialog offers nothing, while the first actor offers it until the wizard holds it or has completed it, unless it repeats, in the order of the quests' title keys, as Prep options; and the offer's Prep dialog keeps its lines in order with their actors and its start goals carry their keys, persona and tally.
+ * Tests the quest offer without a client: an accept is refused for a quest never offered, for one offered by an NPC the wizard has walked away from and for one declined since, and taken once for an offer that stands; an NPC whose template is only a later actor of a quest's Prep dialog offers nothing, while the first actor offers it until the wizard holds it or has completed it, unless it repeats, in the order of the quests' title keys, as Prep options; and the offer's Prep dialog keeps its lines in order with their actors and its start goals carry their keys, persona and tally; and a quest a school requirement gates is offered only to a wizard of that school, judged by the session's own facts, and a school chain's next quest waits for the global '<quest>_Complete' entry its prior quest leaves.
  */
 
 #include "NpcServiceMemento.h"
@@ -11,6 +11,7 @@
 #include "QuestOfferProvider.h"
 #include "QuestOffers.h"
 #include "QuestStore.h"
+#include "WizardRequirementContext.h"
 
 #include <gtest/gtest.h>
 
@@ -142,7 +143,7 @@ TEST(QuestOfferTest, OnlyTheFirstPrepActorOffersAQuestAndOnlyWhileTheWizardCanTa
         << "a quest held is not offered again, nor one completed, unless it repeats";
 
     std::vector<QuestInfo const*> offered;
-    QuestOfferProvider provider(quests, log, [&offered](NpcServiceTarget const&, QuestInfo const& quest) { offered.push_back(&quest); });
+    QuestOfferProvider provider(quests, log, std::make_shared<QuestLogContext const>(log), [&offered](NpcServiceTarget const&, QuestInfo const& quest) { offered.push_back(&quest); });
     std::vector<NpcServiceOption> const options = provider.GetServiceOptions({ 7, Npc, GiverId });
     ASSERT_EQ(options.size(), 1u);
     EXPECT_EQ(options[0].ServiceName, QuestOffers::ServiceName);
@@ -194,4 +195,39 @@ TEST(QuestOfferTest, TheOfferCarriesThePrepLinesInOrderAndTheStartGoals)
     EXPECT_EQ(goals.Goals[1].TallyText, "Undead");
     ASSERT_TRUE(goals.Goals[1].Madlibs.has_value());
     EXPECT_EQ(goals.Goals[1].Madlibs->BlockToken, "GOAL");
+}
+
+TEST(QuestOfferTest, ASchoolQuestIsOfferedOnlyToAWizardOfThatSchool)
+{
+    std::shared_ptr<QuestStore const> const quests = Store();
+    QuestInfo spell = *quests->Find("First");
+    RequirementRow focus;
+    focus.ListId = "root";
+    focus.Type = "ReqSchoolOfFocus";
+    focus.MagicSchool = "Fire";
+    spell.Requirements = std::make_shared<RequirementTree const>(RequirementTree{ RequirementListRow{ "root", "AND", false, std::nullopt }, { focus }, {} });
+    QuestLog log;
+
+    EXPECT_TRUE(QuestOffers::Qualifies(spell, WizardRequirementContext(log, "Fire", 1, "WizardCity/WC_Ravenwood")));
+    EXPECT_FALSE(QuestOffers::Qualifies(spell, WizardRequirementContext(log, "Ice", 1, "WizardCity/WC_Ravenwood")));
+    EXPECT_FALSE(QuestOffers::Qualifies(spell, QuestLogContext(log))) << "facts that do not know the school offer the quest to no one";
+}
+
+TEST(QuestOfferTest, ASchoolChainQuestWaitsForItsPriorQuestsGlobalCompleteEntry)
+{
+    std::shared_ptr<QuestStore const> const quests = Store();
+    QuestInfo next = *quests->Find("Second");
+    RequirementRow prior;
+    prior.ListId = "root";
+    prior.Type = "ReqHasEntry";
+    prior.EntryName = "First_Complete";
+    next.Requirements = std::make_shared<RequirementTree const>(RequirementTree{ RequirementListRow{ "root", "AND", false, std::nullopt }, { prior }, {} });
+    GuidGenerator gids(ObjectGuid::QuestBase);
+    QuestLog log;
+    QuestLogContext const facts(log);
+
+    EXPECT_FALSE(QuestOffers::Qualifies(next, facts));
+    ASSERT_NE(log.Add("First", gids, 1), nullptr);
+    ASSERT_TRUE(log.CompleteQuest("First"));
+    EXPECT_TRUE(QuestOffers::Qualifies(next, facts));
 }

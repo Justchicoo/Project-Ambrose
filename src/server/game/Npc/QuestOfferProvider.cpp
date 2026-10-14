@@ -4,13 +4,12 @@
  */
 
 #include "QuestOfferProvider.h"
-#include "QuestLogContext.h"
 #include "QuestOffers.h"
 
 #include <utility>
 
-QuestOfferProvider::QuestOfferProvider(std::shared_ptr<QuestStore const> quests, QuestLog const& log, OfferSink offer)
-    : _quests(std::move(quests)), _log(log), _offer(std::move(offer))
+QuestOfferProvider::QuestOfferProvider(std::shared_ptr<QuestStore const> quests, QuestLog const& log, std::shared_ptr<RequirementContext const> facts, OfferSink offer)
+    : _quests(std::move(quests)), _log(log), _facts(std::move(facts)), _offer(std::move(offer))
 {
 }
 
@@ -23,7 +22,7 @@ std::vector<NpcServiceOption> QuestOfferProvider::GetServiceOptions(NpcServiceTa
 {
     std::vector<NpcServiceOption> options;
     for (QuestInfo const* const quest : Available(target.TemplateId))
-        options.push_back({ std::string(QuestOffers::ServiceName), std::string(QuestOffers::PrepIcon), quest->Row.TitleKey, quest->Row.PrepKey });
+        options.push_back({ std::string(QuestOffers::ServiceName), std::string(QuestOffers::PrepIcon), quest->Row.TitleKey, quest->Row.PrepKey, std::nullopt });
     return options;
 }
 
@@ -36,8 +35,7 @@ void QuestOfferProvider::OnServiceInteraction(NpcServiceTarget const& target, ui
 
 std::vector<QuestInfo const*> QuestOfferProvider::Available(uint32 templateId) const
 {
-    if (!_quests)
+    if (!_quests || !_facts)
         return {};
-    QuestLogContext const context(_log);
-    return QuestOffers::Available(*_quests, templateId, _log, context);
+    return QuestOffers::Available(*_quests, templateId, _log, *_facts);
 }

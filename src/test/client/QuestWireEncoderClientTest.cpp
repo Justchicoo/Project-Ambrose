@@ -219,14 +219,14 @@ TEST(QuestWireEncoderClientTest, ClientFacingQuestBlobsRoundTripWithExpectedClas
     ASSERT_NE(decodedPrep, nullptr);
     ExpectProperty(*decodedPrep, "m_forceInteract", prep.ForceInteract);
 
-    QuestWireEncoder::GoalEntry goal;
+    QuestWireEncoder::GoalEntryFull goal;
     static_cast<QuestWireEncoder::ServiceOptionFields&>(goal) = prep;
     goal.QuestId = 100;
     goal.GoalId = 200;
     goal.GoalTitle = "goal";
     goal.QuestTitle = "quest title";
     goal.GoalNameId = 300;
-    PropertyObjectPtr goalObject = Build(QuestWireEncoder::BuildGoalEntry(catalog, goal));
+    PropertyObjectPtr goalObject = Build(QuestWireEncoder::BuildGoalEntryFull(catalog, goal));
     ASSERT_NE(goalObject, nullptr);
     ExpectRoundTrip(catalog, *goalObject, QuestWireEncoder::ServiceMementoMask);
 

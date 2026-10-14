@@ -1,0 +1,349 @@
+{
+  "title": "A wizard that accepted WC-MAIN-C01-001 goes to Ravenwood and talks to Mr. Lincoln, the NPC its talk-to goal names, which completes the goal and the quest",
+  "include": "parts/common.json",
+  "notes": [
+    "7.12: WC-MAIN-C01-001_Goal0 is a persona goal naming WC-GTW-Registrar (template 39088) in WizardCity/WC_Ravenwood. Walking up to him lists the goal as a GoalEntryFull; taking it plays the goal's Completion lines and completes the goal, which completes the quest, and the NPC's menu is sent again with Reinteract 2."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/Interiors/WC_Headmistress_House",
+    "zone_display": "WizardCity/Interiors/WC_Headmistress_House",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_COMPLETEDIALOG",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in Merle Ambrose's house",
+      "pattern": "put wizard {wizard_guid} in WizardCity/Interiors/WC_Headmistress_House instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/Interiors/WC_Headmistress_House"
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the wizard stands 200 units from Merle Ambrose, facing him",
+      "npc": "WC-HUB-NPC01",
+      "distance": 200
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles by Merle Ambrose",
+      "file": "ambrose-arrived",
+      "settle": 3
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard takes a step toward Merle Ambrose",
+      "vk": "0x57",
+      "seconds": 0.3,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "walking up to Merle Ambrose offers WC-MAIN-C01-001",
+      "pattern": "wizard {wizard_guid} entered the service range of NPC \\d+ \\(template (\\d+), mobile id \\d+, \\S+ with icon \\S+\\) and was shown 1 option",
+      "timeout": 20,
+      "expect": "38168",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the prompt of Merle Ambrose",
+      "file": "ambrose-prompt",
+      "settle": 2
+    },
+    {
+      "action": "key",
+      "name": "press X, as the prompt asks",
+      "vk": "0x58"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the server offers WC-MAIN-C01-001",
+      "pattern": "offered wizard {wizard_guid} quest (\\S+) ",
+      "timeout": 20,
+      "expect": "WC-MAIN-C01-001",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the first Prep line",
+      "file": "prep-1",
+      "settle": 3
+    },
+    {
+      "action": "click",
+      "name": "MORE shows the second Prep line beside the offer window",
+      "target": "quest_dialog_more"
+    },
+    {
+      "action": "shot",
+      "name": "the second Prep line and the offer window",
+      "file": "offer",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "ACCEPT takes the quest",
+      "target": "quest_offer_accept",
+      "attempts": 2,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "wizard {wizard_guid} accepted quest (\\S+) from NPC \\d+ with 1 start goal",
+        "timeout": 10,
+        "expect": "WC-MAIN-C01-001"
+      }
+    },
+    {
+      "action": "shot",
+      "name": "the dialogue and offer window close on ACCEPT",
+      "file": "accepted",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele zone WizardCity/WC_Ravenwood",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "clear the slash the key typed before .tele zone WizardCity/WC_Ravenwood",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele zone WizardCity/WC_Ravenwood",
+      "text": ".tele zone WizardCity/WC_Ravenwood"
+    },
+    {
+      "action": "char",
+      "name": "send .tele zone WizardCity/WC_Ravenwood",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client is asked to leave the house for Ravenwood",
+      "pattern": "Session \\d+ asked its client to leave WizardCity/Interiors/WC_Headmistress_House for WizardCity/WC_Ravenwood",
+      "timeout": 20
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client is sent to Ravenwood with a transfer key",
+      "pattern": "sent wizard {wizard_guid} from WizardCity/Interiors/WC_Headmistress_House to WizardCity/WC_Ravenwood at (\\S+) with a single-use transfer key",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client attaches again with the transfer key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard arrives in Ravenwood",
+      "pattern": "put wizard {wizard_guid} in (\\S+) instance \\d+ at",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads Ravenwood",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood"
+    },
+    {
+      "action": "go_to_npc",
+      "name": "the wizard stands 200 units from Mr. Lincoln, facing him",
+      "npc": "WC-GTW-Registrar",
+      "distance": 200
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles by Mr. Lincoln with the goal marker over him",
+      "file": "lincoln-arrived",
+      "settle": 3
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard takes a step toward Mr. Lincoln",
+      "vk": "0x57",
+      "seconds": 0.3,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "walking up to Mr. Lincoln lists the talk-to goal",
+      "pattern": "wizard {wizard_guid} entered the service range of NPC \\d+ \\(template (\\d+), mobile id \\d+, \\S+ with icon \\S+\\) and was shown 1 option",
+      "timeout": 20,
+      "expect": "39088",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the prompt of Mr. Lincoln",
+      "file": "lincoln-prompt",
+      "settle": 2
+    },
+    {
+      "action": "key",
+      "name": "press X at Mr. Lincoln's prompt",
+      "vk": "0x58"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "talking to Mr. Lincoln completes the goal and the quest",
+      "pattern": "wizard {wizard_guid} talked to NPC \\d+ \\(template 39088\\) for goal WC-MAIN-C01-001_Goal0 of WC-MAIN-C01-001(, which completes the quest)",
+      "timeout": 20,
+      "expect": ", which completes the quest",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the goal's Completion lines and the quest complete popup",
+      "file": "talked-to-lincoln",
+      "settle": 3
+    },
+    {
+      "action": "wait_db",
+      "name": "the completed quest leaves the saved quest book",
+      "database": "characters",
+      "query": "SELECT COUNT(*) FROM `character_quest` WHERE `guid` = {wizard_guid} AND `quest_name` = 'WC-MAIN-C01-001'",
+      "expect": "0",
+      "timeout": 30
+    }
+  ]
+}

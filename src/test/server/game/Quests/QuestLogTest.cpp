@@ -105,6 +105,7 @@ TEST(QuestLogTest, CompletingAQuestRemovesItAndSetsItsCompleteEntry)
     EXPECT_TRUE(stored.Quests.empty());
     EXPECT_TRUE(stored.Goals.empty());
     EXPECT_EQ(stored.QuestRegistry, (std::vector<CharacterRegistryRow>{ { "KeptQuest", "Complete", 1.0 } }));
+    EXPECT_EQ(log.GetRegistry("KeptQuest_Complete"), 1.0) << "school quest chains gate on the global '<quest>_Complete' entry";
 }
 
 TEST(QuestLogTest, AnOrphanQuestAndAnOrphanGoalArePrunedOnLoadWithAWarningEach)

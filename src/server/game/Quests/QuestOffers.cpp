@@ -39,25 +39,7 @@ std::vector<QuestInfo const*> QuestOffers::Available(QuestStore const& quests, u
 
 Dialogs::ActorDialog QuestOffers::BuildPrepDialog(QuestInfo const& quest)
 {
-    Dialogs::ActorDialog dialog;
-    dialog.Tag = std::string(QuestStore::TagPrep);
-    auto const prep = quest.Dialogs.find(QuestStore::TagPrep);
-    if (prep == quest.Dialogs.end())
-        return dialog;
-    for (QuestDialogLine const& line : prep->second.Lines)
-    {
-        Dialogs::ActorDialogEntry entry;
-        entry.ActorTemplateId = line.Row.ActorTemplateId;
-        entry.DialogKey = line.Row.DialogKey;
-        entry.Picture = line.Row.Picture;
-        entry.Sound = line.Row.Sound;
-        entry.Action = line.Row.Action;
-        entry.DialogEvent = line.Row.DialogEvent;
-        if (!line.Row.Animation.empty())
-            entry.Animations.push_back(line.Row.Animation);
-        dialog.Entries.push_back(std::move(entry));
-    }
-    return dialog;
+    return QuestBook::Dialog(quest.Dialogs, QuestStore::TagPrep);
 }
 
 QuestWireEncoder::GoalCompilation QuestOffers::BuildStartGoals(QuestInfo const& quest)

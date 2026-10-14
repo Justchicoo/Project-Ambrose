@@ -34,6 +34,7 @@
 #include "QuestWireEncoder.h"
 #include "QuestLog.h"
 #include "QuestBookMessages.h"
+#include "PersonaGoals.h"
 #include "WizardRequirementContext.h"
 #include "SessionBase.h"
 #include "SightRequirements.h"
@@ -172,6 +173,8 @@ public:
     void HandleInteractAvailableQuest(GameMessages::InteractAvailableQuest& message);
     void HandleDeclineQuest(GameMessages::DeclineQuest& message);
     void HandleAcceptQuest(GameMessages::AcceptQuest& message);
+    void HandleInteractCompleteGoal(GameMessages::InteractCompleteGoal& message);
+    void HandleCompletePersona(GameMessages::CompletePersona& message);
     NpcServiceRange const& GetNpcRange() const noexcept { return _npcRange; }
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
@@ -376,8 +379,10 @@ private:
     void ShowDynaModState(uint64 id, std::string_view tag);
     void ShowGameEffectsOf(GameSession const& other);
     bool IsNpcTemplate(uint32 templateId);
-    void OfferNpcServices(MapObject const& npc);
-    std::unique_ptr<NpcServiceProvider> QuestProviderFor(uint32 templateId);
+    void OfferNpcServices(MapObject const& npc, int32 reinteract = 0);
+    std::vector<std::unique_ptr<NpcServiceProvider>> QuestProvidersFor(uint32 templateId);
+    void CompletePersonaGoal(NpcServiceTarget const& target, PersonaGoals::Active const& goal);
+    void SendGoalDialog(NpcServiceTarget const& target, PersonaGoals::Active const& goal);
     void OfferQuest(NpcServiceTarget const& target, QuestInfo const& quest);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
