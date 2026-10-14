@@ -245,6 +245,14 @@
     },
     {
       "action": "wait_game_log",
+      "name": "the wizard is put at Unicorn Way's Target location Landing",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Streets/WC_Unicorn instance \\d+ at \\((-?\\d+)\\.",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "-949"
+    },
+    {
+      "action": "wait_game_log",
       "name": "the client loads Unicorn Way and the wizard stands in it",
       "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
       "timeout": 300,
