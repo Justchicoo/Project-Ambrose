@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Changes a wizard's backpack on the world thread: an item is added only while the backpack has room for it under the capacity read at that moment, and an add to a full one sends MSG_ITEMDROP naming the template and stores nothing; an added item is stored with its instance and backpack row together and shown with GAME MSG_INVENTORYBEHAVIOR_ADDITEM; an item taken away or trashed is deleted only from the wizard that owns it and shown gone with MSG_INVENTORYBEHAVIOR_REMOVEITEM; MSG_TRASHINVENTORYITEM for an item the wizard does not hold, of another template, or locked is refused and logged; MSG_REQUESTTOGGLELOCKITEM locks or unlocks an item the wizard holds, stores it, and answers with the item's pattern word carrying the lock in its top bit; a loot table is rolled for the wizard by its own facts and its gold, experience, items and spells given, its gold scaled by Rate.Gold.Quest and its experience as a quest's, while reagents and treasure cards are logged as not given yet; and MSG_LOOT shows the wizard the items it was given.
+ * Changes a wizard's backpack on the world thread: an item is added only while the backpack has room for it under the capacity read at that moment, and an add to a full one sends MSG_ITEMDROP naming the template and stores nothing; an added item is stored with its instance and backpack row together and shown with GAME MSG_INVENTORYBEHAVIOR_ADDITEM; an item taken away or trashed is deleted only from the wizard that owns it and shown gone with MSG_INVENTORYBEHAVIOR_REMOVEITEM; MSG_TRASHINVENTORYITEM for an item the wizard does not hold, of another template, or locked is refused and logged; MSG_REQUESTTOGGLELOCKITEM locks or unlocks an item the wizard holds, stores it, and answers with the item's pattern word carrying the lock in its top bit; a loot table is rolled for the wizard by its own facts and its gold, experience, items and spells given, its gold scaled by Rate.Gold.Quest and its experience as a quest's, while reagents and treasure cards are logged as not given yet; and MSG_LOOT shows the wizard the items it was given, or the gold and experience a quest gave it.
  */
 
 #include "CharacterRepository.h"
@@ -20,6 +20,7 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <utility>
 
 namespace
 {
@@ -159,6 +160,17 @@ bool GameSession::ShowLoot(std::vector<LootItem> const& items)
 {
     std::string problem;
     PropertyObjectPtr const list = LootListBuilder::Build(sTypeRegistry.GetCatalog(), items, problem);
+    return SendLoot(list.get(), std::move(problem));
+}
+
+bool GameSession::ShowLoot(QuestWireEncoder::LootInfoList const& loot)
+{
+    QuestWireEncoder::ObjectBuildResult built = QuestWireEncoder::BuildLootInfoList(sTypeRegistry.GetCatalog(), loot);
+    return SendLoot(built.Ok() ? built.Object.get() : nullptr, std::move(built.Error));
+}
+
+bool GameSession::SendLoot(PropertyObject const* list, std::string problem)
+{
     std::optional<std::string> const encoded = list ? LootListBuilder::Encode(GameMessages::Loot::Tag, *list, problem) : std::nullopt;
     if (!encoded)
     {
