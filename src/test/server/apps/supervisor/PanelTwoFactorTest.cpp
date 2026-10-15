@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests two-factor sign-in against a real panel listener with a clock the test moves: a correct password alone opens no session, a wrong code is refused and the challenge dies after its attempts, a code accepted once is refused the second time on sign-in, on enabling and on a step-up check, and each recovery code works once, typed in any case with or without its dash, and never for another operator; requiring it for everyone sends a signed-in operator without it to enrollment on their next request, whether it comes as a route, a socket or a request carrying the operator without a cookie, while bearer-token requests are refused too, and the routes that turn it on still answer, each requirement covers the operators it names, and a requirement the panel does not know stops the start and a reload that names one keeps the old; disabling needs the password and a current code, is refused while the requirement covers the operator, and ends every other session; moving to another authenticator app takes a current code or recovery code from the app in use as well as the password and a code from the new app, after which the old app and the old recovery codes sign nobody in; a recovery code appears in no answer, log line, audit row or stored file after the answer that issued it, which only its keyed hash does; and the one-time password link, the second factor's own throttle, the window, a pending secret and the console reset each behave as the panel promises.
+ * Tests two-factor sign-in against a real panel listener with a clock the test moves: a correct password alone opens no session, a wrong code is refused and the challenge dies after its attempts, a code accepted once is refused the second time on sign-in, on enabling and on a step-up check, and each recovery code works once, typed in any case with or without its dash, and never for another operator; requiring it for everyone sends a signed-in operator without it to enrollment on their next request, whether it comes as a route, a socket or a request carrying the operator without a cookie, while bearer-token requests are refused too, and an API key whose owner the requirement covers answers 403 until they enroll, and the routes that turn it on still answer, each requirement covers the operators it names, and a requirement the panel does not know stops the start and a reload that names one keeps the old; disabling needs the password and a current code, is refused while the requirement covers the operator, and ends every other session; moving to another authenticator app takes a current code or recovery code from the app in use as well as the password and a code from the new app, after which the old app and the old recovery codes sign nobody in; a recovery code appears in no answer, log line, audit row or stored file after the answer that issued it, which only its keyed hash does; and the one-time password link, the second factor's own throttle, the window, a pending secret and the console reset each behave as the panel promises.
  */
 
 #include "AdminTestClient.h"
@@ -314,6 +314,29 @@ TEST_F(PanelTwoFactorTest, ARequestCarryingTheUserWithoutACookieAnswers403TwoFac
 
     ASSERT_TRUE(Enroll(*_panel, owner, _now).has_value());
     EXPECT_FALSE(_panel->Admit(request).has_value());
+}
+
+TEST_F(PanelTwoFactorTest, AnApiKeyWhoseOwnerTheRequirementCoversAnswers403TwoFactorRequired)
+{
+    Start();
+    Browser owner;
+    ASSERT_TRUE(ClaimOwner(*_panel, _harness, owner));
+
+    nlohmann::json const draft = { { "name", "two-factor-probe" }, { "permissions", { "panel.settings" } }, { "scopes", { "panel" } } };
+    AdminClientResponse const made = Send(*_panel, "POST", "/api/panel/apikeys", draft, &owner);
+    ASSERT_EQ(made.Status, 201) << made.Body;
+    std::string const keyText = nlohmann::json::parse(made.Body).value("key", "");
+    ASSERT_FALSE(keyText.empty()) << "the key text is handed out once at creation";
+
+    ASSERT_TRUE(Reload("Panel.TwoFactorRequired = everyone\n"));
+
+    AdminTest::HttpReply const held = AdminTest::Ask(_panel->GetPort(), "GET", "/api/panel/settings", keyText);
+    EXPECT_EQ(held.Status, 403) << held.Body;
+    EXPECT_EQ(nlohmann::json::parse(held.Body)["error"], "two_factor_required");
+
+    ASSERT_TRUE(Enroll(*_panel, owner, _now).has_value()) << "the enrollment routes stay open to an operator the requirement covers";
+    AdminTest::HttpReply const open = AdminTest::Ask(_panel->GetPort(), "GET", "/api/panel/settings", keyText);
+    EXPECT_EQ(open.Status, 200) << open.Body;
 }
 
 TEST_F(PanelTwoFactorTest, APanelTokenRequestAnswers403TwoFactorRequired)
