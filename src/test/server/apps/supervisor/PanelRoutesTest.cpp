@@ -8,10 +8,12 @@
 #include "AdminClientView.h"
 #include "AdminCommand.h"
 #include "AdminConfigView.h"
+#include "AdminDataView.h"
 #include "AdminGraphsView.h"
 #include "AdminMetricsView.h"
 #include "AdminRealmsView.h"
 #include "AdminReloadView.h"
+#include "TypeRegistry.h"
 #include "AdminSettingsView.h"
 #include "AdminRouter.h"
 #include "AdminStatus.h"
@@ -62,6 +64,8 @@ namespace
         routes.AddGuarded("GET", "/api/tick-profile/trace", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
         AdminActivityView::Register(routes, "activity.jsonl");
         AdminClientView::Register(routes, [] { return AdminClientView::Answer{ NoClient(), {} }; });
+        TypeRegistry registry;
+        AdminDataView::Register(routes, [] { return AdminDataView::Stamp{ "r1", "abc", 1 }; }, registry);
         AdminCommand::Register(routes, commands, "gameserver", "activity.jsonl");
         AdminRealmsView::Register(routes);
         OnlinePlayersView::Register(routes);
@@ -152,8 +156,13 @@ TEST(PanelRoutesTest, AWriteTheRelayDoesNotKnowOrASignInIsNeverRelayed)
     EXPECT_FALSE(Supervisor::PermissionFor("DELETE", "/api/settings").has_value());
     EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/nothing").has_value()) << "a path the relay does not know is not relayed under a looser permission";
     EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/database/apply").has_value());
-    for (std::string_view const key : { "database.read", "updates.apply", "reload.run", "console.read", "power.stop", "settings.edit", "clientdata.read", "activity.read", "metrics.read", "metrics.profile" })
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/data/types"), std::optional<std::string_view>("clientdata.browse"));
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/data/types/SomeClass"), std::optional<std::string_view>("clientdata.browse"));
+    EXPECT_FALSE(Supervisor::PermissionFor("POST", "/api/data/types").has_value()) << "a data route is not a write route";
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/capabilities"), std::optional<std::string_view>("status.read"));
+    for (std::string_view const key : { "database.read", "updates.apply", "reload.run", "console.read", "power.stop", "settings.edit", "clientdata.read", "clientdata.browse", "activity.read", "metrics.read", "metrics.profile" })
         EXPECT_TRUE(PanelPermissions::Holds(key)) << key;
+    EXPECT_TRUE(PanelPermissions::Find("clientdata.browse")->SessionOnly);
 }
 
 TEST(PanelRoutesTest, ASettingsRelayNamesTheCallerAndForwardsOnlyTheRightsTheyHold)
