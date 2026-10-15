@@ -202,6 +202,8 @@ namespace
             Sends<ClientDisconnect>();
             Sends<ZoneTransferRequest>();
             Sends<ServerTransfer>();
+            Sends<GameMessages::ZoneTransfer>();
+            Sends<UpdateZoneCounter>();
             Sends<ClientNotifyText>();
             Sends<ZombiePlayer>();
             Sends<DisconnectAfk>();

@@ -1356,6 +1356,11 @@ void GameSession::HandleZoneTransferAck(GameMessages::ZoneTransferAck&)
     std::optional<ZoneTransfer> const transfer = _transfers.Ack();
     if (!transfer)
         return;
+    if (sSettings.Get<std::string>("Zone.TransferMode") == "inprocess")
+    {
+        TransferInProcess(*transfer);
+        return;
+    }
     std::string const from = _zonePath;
     int32 key = 0;
     while (key == 0)
@@ -1432,6 +1437,107 @@ void GameSession::HandleZoneTransferAck(GameMessages::ZoneTransferAck&)
                 Ambrose::ForLog(from, 128), Ambrose::ForLog(message.ZoneName, 128), message.Location);
         }));
     }));
+}
+
+void GameSession::TransferInProcess(ZoneTransfer transfer)
+{
+    std::string const from = _zonePath;
+    if (_mapId)
+    {
+        if (Map* const old = sMapMgr.Find(*_mapId))
+            sMapMgr.RemovePlayer(*old, _worldGuid);
+        _mapId.reset();
+    }
+    _sight.Clear();
+    _sightRequirements.Clear();
+    _npcRange.Clear();
+    _volumeData.reset();
+    _volumePresence.clear();
+
+    ZonePlace const start = sZoneMgr.FindPlace(transfer.Zone, ZoneLocations::StartName);
+    if (!start.Found())
+    {
+        _transfers.Finish();
+        LOG_WARN("server.gamesession", "Session {} cannot move wizard {} to {} in place: {}", GetSessionId(), _worldGuid,
+            Ambrose::ForLog(transfer.Zone, 128), ZoneMgr::GetLookupName(start.Result));
+        return;
+    }
+    Map& map = sMapMgr.FindOrCreatePublic(transfer.Zone);
+    std::optional<uint16> const addedMobile = sMapMgr.AddPlayer(map, _worldGuid);
+    if (!addedMobile)
+    {
+        _transfers.Finish();
+        LOG_WARN("server.gamesession", "Session {} cannot move wizard {} to {} in place: instance {} has no mobile id left", GetSessionId(), _worldGuid,
+            Ambrose::ForLog(transfer.Zone, 128), map.GetDynamicZoneId());
+        return;
+    }
+    uint16 const mobileId = *addedMobile;
+    uint8 const zoneCounter = static_cast<uint8>(_movement.GetZoneCounter() + 1);
+    PlayerPosition const place{ transfer.Place.X, transfer.Place.Y, transfer.Place.Z, transfer.Place.Yaw };
+
+    _mapId = map.GetDynamicZoneId();
+    _zonePath = transfer.Zone;
+    _zoneDisplay = transfer.ZoneDisplay.empty() ? transfer.Zone : transfer.ZoneDisplay;
+    _mobileId = mobileId;
+    _movement.Reset(place, zoneCounter);
+    _relay.Reset(_movement);
+
+    if (_playerObject)
+    {
+        _playerObject->Set("m_location", PropertyTypes::Vector3D{ place.X, place.Y, place.Z });
+        _playerObject->Set("m_orientation", PropertyTypes::Vector3D{ 0.0f, 0.0f, place.Yaw });
+        _playerObject->Set("m_nMobileID", mobileId);
+    }
+
+    GameMessages::ZoneTransfer message;
+    message.ZoneName = transfer.Zone;
+    message.ZoneId = StringHash::KiStringHash(transfer.Zone);
+    message.DynamicZoneId = map.GetDynamicZoneId();
+    message.DynamicServerProcId = map.GetDynamicZoneId();
+    message.ZoneCounter = zoneCounter;
+    message.TransitionId = 1;
+    SendDmlMessage(message);
+
+    TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+    CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
+    ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
+    EncodeResult const data = _playerObject && field ? CoreObjectSerializer::EncodeField(*field, *_playerObject, *types) : EncodeResult{};
+    std::string criticalProblem;
+    std::vector<uint8> const critical = MapObjectSpawner::EncodeCriticalObjects(catalog, map, criticalProblem);
+    if (!criticalProblem.empty())
+        LOG_WARN("server.gamesession", "Session {} sends wizard {} no critical objects for {}: {}", GetSessionId(), _worldGuid, transfer.Zone, criticalProblem);
+
+    uint32 const permissions = ChatMgr::PermissionsForMode(AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions")), _chatMode);
+    GameMessages::LoginComplete complete;
+    complete.ZoneName = transfer.Zone;
+    if (data.Ok())
+        complete.Data.assign(data.Bytes.begin(), data.Bytes.end());
+    complete.ServerTime = static_cast<uint32>(NowEpochSeconds());
+    complete.ZoneId = message.ZoneId;
+    complete.DynamicZoneId = map.GetDynamicZoneId();
+    complete.DynamicServerProcId = map.GetDynamicZoneId();
+    complete.Permissions = permissions;
+    _chatFilter = ChatMgr::FilterFor(complete.Permissions);
+    complete.RealmName = sSettings.Get<std::string>("Realm.Name");
+    complete.CriticalObjects.assign(critical.begin(), critical.end());
+    if (!data.Ok())
+        LOG_WARN("server.gamesession", "Session {} cannot rebuild wizard {}'s object for {}: {}", GetSessionId(), _worldGuid, transfer.Zone,
+            field ? data.Detail : std::string("MSG_LOGINCOMPLETE's Data is not declared"));
+    SendDmlMessage(complete);
+
+    ObjectField const* const shownField = ObjectFields::Find("MSG_NEWOBJECT", "Data");
+    SerializerOptions shownOptions;
+    shownOptions.Mask = SerializerOptions::PublicMask;
+    EncodeResult const shown = _playerObject && shownField ? CoreObjectSerializer::EncodeField(*shownField, *_playerObject, *types, shownOptions) : EncodeResult{};
+    _publicObject = shown.Ok() ? std::move(shown.Bytes) : std::vector<uint8>();
+
+    _transfers.Finish();
+    _arrived = true;
+    UpdateSight(map, InstanceSight(map, SightRangeOf(map)), {});
+    ArriveInVolumes();
+    LOG_INFO("server.gamesession", "Session {} moved wizard {} from {} to {} instance {} at ({}, {}, {}) with mobile id {} and zone counter {} on the same connection",
+        GetSessionId(), _worldGuid, Ambrose::ForLog(from, 128), Ambrose::ForLog(transfer.Zone, 128), map.GetDynamicZoneId(), place.X, place.Y, place.Z,
+        mobileId, zoneCounter);
 }
 
 void GameSession::ArriveInVolumes()
