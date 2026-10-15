@@ -211,6 +211,15 @@ export const routes: Route[] = [
         view: { kind: "page", load: () => import("./pages/ClientData.svelte") },
     },
     {
+        path: "types",
+        title: "Types",
+        icon: DatabaseIcon,
+        permission: "clientdata.browse",
+        nav: true,
+        group: "Game",
+        view: { kind: "page", load: () => import("./pages/Types.svelte") },
+    },
+    {
         path: "users",
         title: "Panel users",
         icon: UsersIcon,
