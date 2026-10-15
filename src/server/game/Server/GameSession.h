@@ -166,6 +166,7 @@ public:
     void HandleRetryTeleport(GameMessages::RetryTeleport& message);
     bool RequestZoneTransfer(ZoneTransfer transfer, std::string& problem);
     bool IsTransferring() const noexcept { return _transfers.Busy(); }
+    void TransferInProcess(ZoneTransfer transfer);
     void HandlePostZoneEventFromClient(GameMessages::PostZoneEventFromClient& message);
     void ArriveInVolumes();
     void PostQuestEvents();
