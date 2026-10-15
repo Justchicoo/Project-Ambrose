@@ -4,6 +4,7 @@
  */
 
 #include "AdminStatus.h"
+#include "AdminDataView.h"
 #include "AdminRouter.h"
 #include "Log.h"
 #include "LogRedaction.h"
@@ -151,6 +152,10 @@ std::string AdminStatus::CapabilitiesJson()
     for (auto const& [code, description] : sAdminCapabilities.ProblemCodes())
         codes.push_back({ { "code", code }, { "description", description } });
     body["problem_codes"] = std::move(codes);
+    nlohmann::json kinds = nlohmann::json::array();
+    for (auto const& [kind, generation] : AdminDataView::DataKinds())
+        kinds.push_back({ { "kind", kind }, { "generation", generation } });
+    body["data_kinds"] = std::move(kinds);
     return body.dump();
 }
 

@@ -7,6 +7,7 @@
 #include "AdminCapabilities.h"
 #include "AdminActivityView.h"
 #include "AdminClientView.h"
+#include "AdminDataView.h"
 #include "AdminMetricsView.h"
 #include "AdminCommand.h"
 #include "AdminConfigView.h"
@@ -480,6 +481,8 @@ void ServerApp::SetClientSetup(ClientSetupResult setup)
     _usesClient = true;
     if (_admin)
         AdminClientView::Register(_admin->Routes(), [this] { return ClientAnswer(); });
+    if (_admin)
+        AdminDataView::Register(_admin->Routes(), [this] { return DataStamp(); }, sTypeRegistry);
 }
 
 AdminClientView::Answer ServerApp::ClientAnswer() const
@@ -491,6 +494,25 @@ AdminClientView::Answer ServerApp::ClientAnswer() const
     }
     answer.Revision = GetRevisionStatus();
     return answer;
+}
+
+AdminDataView::Stamp ServerApp::DataStamp() const
+{
+    AdminDataView::Stamp stamp;
+    std::optional<std::filesystem::path> dump;
+    {
+        std::lock_guard const lock(_clientSetupMutex);
+        if (_clientSetup.Install)
+            stamp.Revision = _clientSetup.Install->Revision;
+        dump = _clientSetup.TypeDump;
+    }
+    if (dump)
+    {
+        if (std::optional<TypeDumpHeader> const header = TypeDumpCache::ReadHeader(*dump))
+            stamp.ProgramSha256 = header->ExecutableSha256;
+    }
+    stamp.Generation = sTypeRegistry.GetGeneration();
+    return stamp;
 }
 
 ClientRevisionStatus ServerApp::GetRevisionStatus() const
@@ -697,6 +719,8 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
     AdminActivityView::Register(routes, CommandAuditFile());
     if (_usesClient)
         AdminClientView::Register(routes, [this] { return ClientAnswer(); });
+    if (_usesClient)
+        AdminDataView::Register(routes, [this] { return DataStamp(); }, sTypeRegistry);
     RegisterAdminCommand(routes);
     routes.AddGuarded("POST", "/api/shutdown", "power.stop", [this](AdminRequest const& request)
     {

@@ -410,6 +410,10 @@ std::optional<std::string_view> Supervisor::PermissionFor(std::string_view metho
         return "players.read";
     if (tail == "/api/client")
         return "clientdata.read";
+    if (tail == "/api/data/types" || tail.starts_with("/api/data/types/"))
+        return read ? std::optional<std::string_view>("clientdata.browse") : std::nullopt;
+    if (tail == "/api/capabilities")
+        return read ? std::optional<std::string_view>("status.read") : std::nullopt;
     if (tail == "/api/activity")
         return "activity.read";
     if (tail == "/api/metrics" || tail == "/metrics")
@@ -508,6 +512,9 @@ AdminResponse Supervisor::AnswerCore(AdminRequest const& request, AdminRouter co
         return std::move(*asked);
     if (method == "POST" && tail == "/api/settings/batch")
         if (std::optional<AdminResponse> held = router.Charge(request, AdminSettingsView::BatchCost))
+            return std::move(*held);
+    if (method == "GET" && (tail == "/api/data/types" || tail.starts_with("/api/data/types/")))
+        if (std::optional<AdminResponse> held = router.Charge(request, 5))
             return std::move(*held);
     std::string const actor = _hooks.NameOf ? _hooks.NameOf(request) : std::string();
     AdminResponse response = Relay(*app, request, tail, ForwardedHeaders(request, router, method, tail, *permission, actor));

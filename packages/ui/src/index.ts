@@ -39,6 +39,9 @@ export { default as StatTile } from "./components/StatTile.svelte";
 export { default as LogList } from "./components/LogList.svelte";
 export { default as Sparkline } from "./components/Sparkline.svelte";
 export { default as TimeSeries } from "./components/TimeSeries.svelte";
+export { default as ObjectTree } from "./components/ObjectTree.svelte";
+export { default as RecordLink } from "./components/RecordLink.svelte";
+export type { TreeNode } from "./components/ObjectTree.svelte";
 
 export { classes } from "./internal/classes";
 export { motion, motionSettings, durationMs, easing } from "./motion/motion.svelte";

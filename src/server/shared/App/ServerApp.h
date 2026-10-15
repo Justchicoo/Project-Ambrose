@@ -7,6 +7,7 @@
 #define AMBROSE_SERVERAPP_H
 
 #include "AdminClientView.h"
+#include "AdminDataView.h"
 #include "AdminStatus.h"
 #include "TerminalDashboard.h"
 #include "ClientRevisionWatch.h"
@@ -159,6 +160,7 @@ private:
     void StartRevisionUpdate(ClientFingerprint fingerprint);
     void FinishRevisionUpdate(RevisionUpdate update);
     AdminClientView::Answer ClientAnswer() const;
+    AdminDataView::Stamp DataStamp() const;
 
     ClientFollow _follow;
     ClientRevisionWatch _revisionWatch;

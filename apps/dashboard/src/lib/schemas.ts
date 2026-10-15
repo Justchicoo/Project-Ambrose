@@ -1026,3 +1026,66 @@ export type InviteCreatedAnswer = v.InferOutput<typeof InviteCreatedAnswer>;
 export type InvitePeekAnswer = v.InferOutput<typeof InvitePeekAnswer>;
 export type PermissionCatalogEntry = v.InferOutput<typeof PermissionCatalogEntry>;
 export type PermissionCatalogAnswer = v.InferOutput<typeof PermissionCatalogAnswer>;
+
+export const TypeStamp = v.object({
+    revision: v.string(),
+    program_sha256: v.string(),
+    generation: v.number(),
+});
+
+export const TypeSummary = v.object({
+    name: v.string(),
+    hash: v.number(),
+    kind: v.string(),
+    property_count: v.number(),
+    from_server_class: v.boolean(),
+});
+
+export const TypeListAnswer = v.looseObject({
+    schema: v.number(),
+    stamp: TypeStamp,
+    rows: v.array(TypeSummary),
+    total: v.number(),
+    has_more: v.boolean(),
+    cursor: v.optional(v.string()),
+});
+
+export const TypeProperty = v.object({
+    id: v.number(),
+    name: v.string(),
+    type: v.string(),
+    container: v.string(),
+    flags: v.array(v.string()),
+    offset: v.number(),
+    hash: v.number(),
+    enum_options: v.array(v.object({ name: v.string(), value: v.number() })),
+    default: v.optional(v.union([v.number(), v.string()])),
+    option_base_class: v.optional(v.string()),
+});
+
+export const TypeDetailAnswer = v.looseObject({
+    schema: v.number(),
+    stamp: TypeStamp,
+    name: v.string(),
+    hash: v.number(),
+    kind: v.string(),
+    property_count: v.number(),
+    from_server_class: v.boolean(),
+    bases: v.array(v.string()),
+    derived: v.array(v.string()),
+    properties: v.array(TypeProperty),
+    provenance: v.string(),
+    typed_views: v.array(v.string()),
+});
+
+export const CapabilitiesAnswer = v.looseObject({
+    schema: v.number(),
+    data_kinds: v.optional(v.array(v.object({ kind: v.string(), generation: v.number() })), []),
+});
+
+export type TypeStamp = v.InferOutput<typeof TypeStamp>;
+export type TypeSummary = v.InferOutput<typeof TypeSummary>;
+export type TypeListAnswer = v.InferOutput<typeof TypeListAnswer>;
+export type TypeProperty = v.InferOutput<typeof TypeProperty>;
+export type TypeDetailAnswer = v.InferOutput<typeof TypeDetailAnswer>;
+export type CapabilitiesAnswer = v.InferOutput<typeof CapabilitiesAnswer>;

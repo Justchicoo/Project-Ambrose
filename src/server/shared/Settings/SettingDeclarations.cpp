@@ -226,6 +226,13 @@ namespace
                 "The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown."),
             Unsigned("Files.ListMaxEntries", "100000", "1000", "10000000", "entries", "Files", Supervisor, Live,
                 "The most entries a folder listing reads before it stops and says the folder held more."),
+
+            Unsigned("Data.TimeBudgetMs", "5000", "0", "60000", "ms", "Data", Game | Login, Live,
+                "How long a /api/data/ request may build its answer before it is refused naming this budget; 0 turns the check off."),
+            Unsigned("Data.ByteBudgetBytes", "1048576", "0", "1073741824", "bytes", "Data", Game | Login, Live,
+                "How large a /api/data/ answer may be before it is refused naming this budget; 0 turns the check off."),
+            Unsigned("Data.MaxConcurrentDecodes", "2", "0", "64", "decodes", "Data", Game | Login, Live,
+                "How many /api/data/ decodes run at once per app; a request past it is refused naming this budget; 0 turns the check off."),
         };
         std::sort(table.begin(), table.end(), [](SettingDeclaration const& left, SettingDeclaration const& right) { return left.Key < right.Key; });
         return table;
