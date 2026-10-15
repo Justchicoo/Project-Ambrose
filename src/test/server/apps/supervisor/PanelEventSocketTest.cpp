@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the panel's event socket end to end over a real panel listener on a loopback port: an upgrade from a foreign origin is refused before it becomes a socket while the panel's own page signs in with its cookie and CSRF token and gets ready with its permissions, apps and this run's instance; a script's ticket works once and a second use closes with 4401; a ticket in the address is refused, burned and never written to the log; a page that comes back resumes after the last sequence it saw and gets exactly the records it missed, or a dropped frame naming the range the backlog no longer holds and then the rest; an internal failure shows its text only to a holder of debug.errors while everyone gets a correlation id the supervisor log repeats; a handler that answers with a type the catalog does not mark as sent fails instead of writing it; a first frame that is not hello closes with 4400 and a socket silent for ten seconds with 4401; ping answers pong with its id; and a message the panel does not take yet, one it never takes and a stream it cannot serve are each answered with their own code, and an operator the two-factor requirement holds back is closed with 4403 before any ready.
+ * Runs the panel's event socket end to end over a real panel listener on a loopback port: an upgrade from a foreign origin is refused before it becomes a socket while the panel's own page signs in with its cookie and CSRF token and gets ready with its permissions, apps and this run's instance; a script's ticket works once and a second use closes with 4401; a ticket in the address is refused, burned and never written to the log; a page that comes back resumes after the last sequence it saw and gets exactly the records it missed, or a dropped frame naming the range the backlog no longer holds and then the rest; an internal failure shows its text only to a holder of debug.errors while everyone gets a correlation id the supervisor log repeats; a handler that answers with a type the catalog does not mark as sent fails instead of writing it; a first frame that is not hello closes with 4400 and a socket silent for ten seconds with 4401; ping answers pong with its id; and a message the panel does not take yet, one it never takes and a stream it cannot serve are each answered with their own code, and an operator the two-factor requirement holds back is closed with 4403 before any ready; ending one operator's session closes only their sockets with 4401 while another operator's socket stays open, and a session nearing its idle end warns the page with session.expiring so a refresh keeps the socket open.
  */
 
 #include "AdminClient.h"
@@ -732,4 +732,84 @@ TEST_F(PanelEventSocketTest, SubscribeChecksPermissionLikeARoute)
     ASSERT_TRUE(forbidden.has_value());
     EXPECT_EQ((*forbidden)["type"], "error");
     EXPECT_EQ((*forbidden)["data"]["code"], "forbidden") << "a token holding nothing is forbidden the status stream";
+}
+
+TEST_F(PanelEventSocketTest, EndingASessionClosesOnlyThatUsersSocketsWith4401)
+{
+    Start();
+    MakeUser("owner", true);
+    MakeUser("second", false);
+    Browser const ownerBrowser = SignIn("owner");
+    Browser const secondBrowser = SignIn("second");
+
+    AdminTest::SocketClient ownerPage;
+    ASSERT_TRUE(SignedInSocket(ownerPage, ownerBrowser).has_value());
+    AdminTest::SocketClient secondPage;
+    ASSERT_TRUE(SignedInSocket(secondPage, secondBrowser).has_value());
+
+    AdminClient const client("127.0.0.1", Port(), "");
+    AdminClientRequest request;
+    request.Method = "DELETE";
+    request.Path = "/api/panel/session";
+    request.Headers.emplace_back("Cookie", secondBrowser.Cookie);
+    request.Headers.emplace_back("Origin", OwnOrigin());
+    request.Headers.emplace_back("X-CSRF-Token", secondBrowser.Csrf);
+    AdminClientResponse const signedOut = client.Send(request, 20s);
+    EXPECT_EQ(signedOut.Status, 200) << signedOut.Body;
+
+    std::optional<std::pair<uint16, std::string>> const closed = secondPage.ReadClose();
+    ASSERT_TRUE(closed.has_value()) << "the ended session's socket is closed";
+    EXPECT_EQ(closed->first, 4401) << "with the session-ended code";
+
+    ASSERT_TRUE(ownerPage.SendText(Frame("ping", "still-here", nlohmann::json::object())));
+    std::optional<nlohmann::json> const pong = Read(ownerPage);
+    ASSERT_TRUE(pong.has_value()) << "the other user's socket is untouched";
+    EXPECT_EQ(pong->value("type", ""), "pong");
+}
+
+TEST_F(PanelEventSocketTest, ASessionExpiringWarningArrivesBeforeTheIdleLifetimeEnds)
+{
+    Start();
+    MakeUser("owner", true);
+    Browser const browser = SignIn("owner");
+
+    AdminTest::SocketClient page;
+    ASSERT_TRUE(SignedInSocket(page, browser).has_value());
+
+    {
+        std::string error;
+        std::optional<PanelStore::Statement> update = _panel->Store().Prepare(
+            "UPDATE panel_session SET idle_expires_epoch_ms = ? WHERE ended_epoch_ms IS NULL", error);
+        ASSERT_TRUE(update) << error;
+        update->Bind(1, PanelStore::NowEpochMs() + 45000);
+        ASSERT_TRUE(update->Run(error)) << error;
+    }
+
+    std::this_thread::sleep_for(3s);
+    std::vector<nlohmann::json> const frames = ReadUntilPong(page, "find-warning");
+    std::optional<nlohmann::json> warning;
+    for (nlohmann::json const& frame : frames)
+    {
+        if (frame.value("type", "") == "session.expiring")
+        {
+            warning = frame;
+            break;
+        }
+    }
+    ASSERT_TRUE(warning.has_value()) << "the page is warned before the session ends";
+    EXPECT_LE(warning->at("data").value("expires_in", 999), 60) << "the warning names the seconds left";
+
+    AdminClient const client("127.0.0.1", Port(), "");
+    AdminClientRequest refresh;
+    refresh.Method = "GET";
+    refresh.Path = "/api/panel/me";
+    refresh.Headers.emplace_back("Cookie", browser.Cookie);
+    AdminClientResponse const me = client.Send(refresh, 20s);
+    ASSERT_EQ(me.Status, 200) << me.Body;
+
+    std::this_thread::sleep_for(2s);
+    ASSERT_TRUE(page.SendText(Frame("ping", "after-refresh", nlohmann::json::object())));
+    std::optional<nlohmann::json> const pong = Read(page);
+    ASSERT_TRUE(pong.has_value()) << "the refreshed session keeps the socket open";
+    EXPECT_EQ(pong->value("type", ""), "pong");
 }
