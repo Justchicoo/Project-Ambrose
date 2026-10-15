@@ -743,6 +743,11 @@ PanelApiKeyResult PanelApiKeys::Rotate(PanelApiKeyCall const& call, std::string_
 bool PanelApiKeys::KeyAllows(std::string_view principal, std::string_view permission, std::string_view app, std::string& error)
 {
     error.clear();
+    if (PanelPermission const* catalog = PanelPermissions::Find(permission))
+    {
+        if (catalog->SessionOnly)
+            return false;
+    }
     std::string_view const publicId = PublicIdOfPrincipal(principal);
     if (publicId.empty())
         return false;
@@ -776,7 +781,14 @@ std::set<std::string, std::less<>> PanelApiKeys::EffectiveRights(std::string_vie
     if (!key || !error.empty() || !key->Live(PanelStore::NowEpochMs()))
         return rights;
     for (std::string const& permission : key->Permissions)
+    {
+        if (PanelPermission const* catalog = PanelPermissions::Find(permission))
+        {
+            if (catalog->SessionOnly)
+                continue;
+        }
         if (ownerRights.contains(permission))
             rights.insert(permission);
+    }
     return rights;
 }

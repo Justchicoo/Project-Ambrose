@@ -29,6 +29,7 @@ struct PanelPermission
     bool Danger = false;
     bool OwnerOnly = false;
     bool OptIn = false;
+    bool SessionOnly = false;
 };
 
 class PanelPermissions

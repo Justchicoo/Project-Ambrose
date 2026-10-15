@@ -79,6 +79,7 @@ namespace
             { "clientdata", "clientdata.read", "See which client install and type dump are in use", false, false, false },
             { "clientdata", "clientdata.rebuild", "Build the type dump again from the install", false, false, false },
             { "clientdata", "clientdata.switch", "Use a different client install", false, false, false },
+            { "clientdata", "clientdata.browse", "Browse the game data decoded from the client install", false, false, false, true },
 
             { "patch", "patch.read", "See the patch manifest and its revisions", false, false, false },
             { "patch", "patch.publish", "Publish a patch revision to players", Danger, Owner, false },
@@ -178,7 +179,7 @@ namespace
         "status.read", "console.read", "console.write", "power.start", "power.stop", "power.restart",
         "settings.read", "reload.read", "reload.run", "files.list", "files.read", "files.download",
         "backups.read", "backups.create", "schedules.read", "schedules.edit", "schedules.run",
-        "clientdata.read", "database.read", "realms.read", "players.read", "players.kick",
+        "clientdata.read", "clientdata.browse", "database.read", "realms.read", "players.read", "players.kick",
         "metrics.read", "metrics.profile", "alerts.read", "activity.read", "users.read", "nodes.read", "updates.read", "launch.read", "network.read", "errors.read", "errors.clear", "errors.report"
     };
 
@@ -187,12 +188,12 @@ namespace
         "accounts.read", "accounts.ban", "accounts.unban", "characters.read", "characters.rename", "characters.restore",
         "players.read", "players.kick", "players.mute", "players.teleport",
         "reports.read", "reports.claim", "reports.action", "announcements.send", "events.manage",
-        "metrics.read", "activity.read"
+        "metrics.read", "activity.read", "clientdata.browse"
     };
 
     std::vector<std::string_view> const ViewerKeys{
         "status.read", "console.read", "settings.read", "reload.read", "files.list", "files.read", "files.download",
-        "backups.read", "schedules.read", "updates.read", "clientdata.read", "database.read", "world.read",
+        "backups.read", "schedules.read", "updates.read", "clientdata.read", "clientdata.browse", "database.read", "world.read",
         "realms.read", "accounts.read", "characters.read", "players.read", "reports.read",
         "metrics.read", "alerts.read", "activity.read", "users.read", "nodes.read", "launch.read", "network.read", "errors.read"
     };
