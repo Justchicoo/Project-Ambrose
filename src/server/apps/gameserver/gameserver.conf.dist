@@ -59,6 +59,7 @@ Realm.HeartbeatInterval = 30
 World.UpdateInterval = 50
 Zone.UnloadDelay = 60
 Zone.DoorsIgnoreRequirements = 0
+Zone.TransferMode = reconnect
 Npc.InteractRadiusDefault = 300
 Npc.TestGreeter = 0
 Npc.WizbangResendInterval = 1000
